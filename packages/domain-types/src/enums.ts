@@ -169,12 +169,32 @@ export const workflowEventTypeSchema = z.enum([
   'issue.resolved',
   'box.label_printed',
   'box.sealed',
+  'print.job_created',
+  'print.job_completed',
+  'print.job_failed',
   'case.completed',
   'case.partially_completed',
   'zst.created',
+  'zst.exported',
   'assignment.overridden',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
 
 export const actorTypeSchema = z.enum(['system', 'employee', 'teamlead', 'admin']);
 export type ActorType = z.infer<typeof actorTypeSchema>;
+
+/** Printable artefact kinds (§13.4 Drucker und Etiketten). */
+export const printJobTypeSchema = z.enum(['price_label', 'box_slip']);
+export type PrintJobType = z.infer<typeof printJobTypeSchema>;
+
+/** Output format the print service emits (§E.1: PDF default; ZPL/EPL only if printer supports it). */
+export const printPayloadFormatSchema = z.enum(['pdf', 'zpl', 'epl']);
+export type PrintPayloadFormat = z.infer<typeof printPayloadFormatSchema>;
+
+/** Lifecycle of a print job. MVP = enqueue + report result (§13.4 Erfolg/Fehler). */
+export const printJobStatusSchema = z.enum(['queued', 'sent', 'succeeded', 'failed']);
+export type PrintJobStatus = z.infer<typeof printJobStatusSchema>;
+
+/** Reporting granularity for KPI rollups (§15.2). */
+export const kpiGranularitySchema = z.enum(['employee', 'team', 'section', 'day']);
+export type KpiGranularity = z.infer<typeof kpiGranularitySchema>;
