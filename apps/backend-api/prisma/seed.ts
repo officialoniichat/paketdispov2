@@ -249,18 +249,28 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
 }
 
 // --- Case details (header + positions + box targets for the PWA aggregate) -
-// The /api/me/cases/:id/aggregate endpoint (§14.2) needs a non-empty aggregate.
-// Seed a work-instruction header, two receipt positions and one transport box
-// for the first two cases. Idempotent via natural keys: WorkInstructionHeader
+// The /api/me/cases/:id/aggregate endpoint (§14.2) needs a non-empty aggregate,
+// and a FULL ZST-Teilabschluss requires every box verplombt / position confirmed,
+// which is impossible with zero boxes/positions. So EVERY ready case gets a
+// work-instruction header, 1-2 receipt positions and 1-2 transport boxes whose
+// planned quantities sum to the case totalQuantity (so the full-ZST gate can be
+// satisfied in the UI). Idempotent via natural keys: WorkInstructionHeader
 // (PK caseId), ReceiptPosition (@@unique [caseId, positionNo]), TransportBox
 // (@@unique [caseId, boxNo]).
-const DETAIL_WE_BELEG_NOS = ['WE-2026-000123', 'WE-2026-000124'];
+
+/** Split a total into 1-2 positive box quantities (deterministic from total). */
+function splitQuantity(total: number): number[] {
+  if (total <= 1) return [Math.max(total, 1)];
+  const first = Math.ceil(total / 2);
+  return [first, total - first];
+}
 
 async function seedCaseDetails(): Promise<void> {
-  for (const weBelegNo of DETAIL_WE_BELEG_NOS) {
-    const c = await prisma.goodsReceiptCase.findUnique({ where: { weBelegNo } });
-    if (!c) continue;
+  // Cover ALL ready cases so any case the engine assigns to ma-101/102/103 has
+  // a completable aggregate (positions + boxes), not just the first two.
+  const cases = await prisma.goodsReceiptCase.findMany({ where: { status: 'ready' } });
 
+  for (const c of cases) {
     await prisma.workInstructionHeader.upsert({
       where: { caseId: c.id },
       update: {
@@ -280,10 +290,13 @@ async function seedCaseDetails(): Promise<void> {
       },
     });
 
+    // 1-2 positions; larger cases get a second position to exercise multi-pos UI.
     const positions = [
       { positionNo: 1, wgr: '4711', supplierArticleNo: 'ART-001', supplierColor: 'schwarz' },
-      { positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau' },
     ];
+    if (c.totalQuantity >= 24) {
+      positions.push({ positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau' });
+    }
     for (const p of positions) {
       await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
@@ -300,17 +313,22 @@ async function seedCaseDetails(): Promise<void> {
       });
     }
 
-    await prisma.transportBox.upsert({
-      where: { box_case_no: { caseId: c.id, boxNo: 1 } },
-      update: { plannedQuantity: c.totalQuantity, branchNo: '001', shopAreaNo: '21' },
-      create: {
-        caseId: c.id,
-        boxNo: 1,
-        branchNo: '001',
-        shopAreaNo: '21',
-        plannedQuantity: c.totalQuantity,
-      },
-    });
+    // 1-2 boxes whose planned quantities sum to totalQuantity (full-ZST gate).
+    const boxQuantities = splitQuantity(c.totalQuantity);
+    for (const [index, plannedQuantity] of boxQuantities.entries()) {
+      const boxNo = index + 1;
+      await prisma.transportBox.upsert({
+        where: { box_case_no: { caseId: c.id, boxNo } },
+        update: { plannedQuantity, branchNo: '001', shopAreaNo: '21' },
+        create: {
+          caseId: c.id,
+          boxNo,
+          branchNo: '001',
+          shopAreaNo: '21',
+          plannedQuantity,
+        },
+      });
+    }
   }
 }
 
@@ -322,15 +340,17 @@ async function main(): Promise<void> {
   await seedCases(locationIds);
   await seedCaseDetails();
 
-  const [users, shifts, locations, readyCases] = await Promise.all([
+  const [users, shifts, locations, readyCases, positions, boxes] = await Promise.all([
     prisma.user.count(),
     prisma.shift.count({ where: { date: asDate(SEED_DATE), active: true } }),
     prisma.location.count({ where: { active: true } }),
     prisma.goodsReceiptCase.count({ where: { status: 'ready' } }),
+    prisma.receiptPosition.count(),
+    prisma.transportBox.count(),
   ]);
   // eslint-disable-next-line no-console
   console.log(
-    `[seed] users=${users} shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCases}`,
+    `[seed] users=${users} shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCases} positions=${positions} boxes=${boxes}`,
   );
 }
 

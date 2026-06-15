@@ -8,7 +8,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Tab from '@mui/material/Tab';
@@ -18,6 +17,7 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
@@ -300,7 +300,15 @@ function DocumentsTab({
       {documents.map((d) => (
         <Stack key={d.id} direction="row" spacing={1} alignItems="center">
           <Chip size="small" label={labels[d.kind] ?? d.kind} />
-          <Link href={d.url}>{d.fileName}</Link>
+          <Tooltip title="Dokumentvorschau folgt (EPIC 3)">
+            <Typography
+              component="span"
+              color="text.disabled"
+              sx={{ textDecoration: 'line-through', cursor: 'not-allowed' }}
+            >
+              {d.fileName}
+            </Typography>
+          </Tooltip>
         </Stack>
       ))}
     </Stack>

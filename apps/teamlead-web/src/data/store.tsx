@@ -30,7 +30,6 @@ import type {
   Lane,
   OperationsDataset,
   RuleConfig,
-  SimulationResult,
 } from './types.js';
 
 export { CURRENT_TEAMLEAD_ID };
@@ -72,18 +71,6 @@ function emptyCockpit(date: string): CockpitSummary {
   };
 }
 
-const EMPTY_SIMULATION: SimulationResult = {
-  newlyAssigned: 0,
-  reassigned: 0,
-  reserveBeforeMinutes: 0,
-  reserveAfterMinutes: 0,
-  reserveDeltaMinutes: 0,
-  utilisationBeforePct: 0,
-  utilisationAfterPct: 0,
-  unassignedRemaining: 0,
-  perEmployee: [],
-};
-
 export interface CockpitApi {
   /** Live read state. */
   isLoading: boolean;
@@ -105,12 +92,10 @@ export interface CockpitApi {
   releaseCase(caseId: string, reason: string): void;
   prioritiseCase(caseId: string, reason: string): void;
   /** No backend endpoint yet — gated off (MANUAL_OVERRIDES_ENABLED). */
-  simulate(): SimulationResult;
   withdrawCase(caseId: string, bundleId: string, reason: string): void;
   addCaseToBundle(caseId: string, bundleId: string, reason: string): void;
   reorderBundle(bundleId: string, caseIds: string[], reason: string): void;
   pauseBundle(bundleId: string, reason: string): void;
-  commitSimulation(result: SimulationResult, reason: string): void;
   /** §11 Regelpflege – local-only config edits for now. */
   updateRules(rules: RuleConfig): void;
   setLocations(locations: LocationMaster[]): void;
@@ -202,12 +187,10 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
 
       // No backend endpoint yet — gated off (MANUAL_OVERRIDES_ENABLED === false).
-      simulate: () => EMPTY_SIMULATION,
       withdrawCase: noop,
       addCaseToBundle: noop,
       reorderBundle: noop,
       pauseBundle: noop,
-      commitSimulation: noop,
 
       updateRules: (rules) => setDataset((ds) => ({ ...ds, rules })),
       setLocations: (locations) => setDataset((ds) => ({ ...ds, locations })),
