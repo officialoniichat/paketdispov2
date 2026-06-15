@@ -2,15 +2,21 @@
  * Tagescockpit (§10.1 / Anhang E.4 "Operations cockpit statt Liste").
  *
  * Capacity, open prio/CatMan/overdue, reserve, problems and ZST progress at a
- * glance, plus the entry points for „Neu berechnen" (Simulation) and a live
- * teamlead override audit trail (§8.4).
+ * glance from the LIVE backend, plus „Neu berechnen" which runs the real
+ * assignment engine (`/assignments/recalculate`) and a live teamlead override
+ * audit trail (§8.4). Loading and error states are first-class.
  */
-import { useState, type JSX } from 'react';
+import { type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
 import Paper from '@mui/material/Paper';
+import Skeleton from '@mui/material/Skeleton';
+import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CalculateIcon from '@mui/icons-material/Calculate';
@@ -24,14 +30,29 @@ import {
   formatPct,
 } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
-import { SimulationPanel } from '../simulation/SimulationPanel.js';
 
 export function CockpitPage(): JSX.Element {
-  const { cockpit, recentOverrides } = useCockpitData();
-  const [simOpen, setSimOpen] = useState(false);
+  const { cockpit, recentOverrides, isLoading, error, refetch, recalculate } = useCockpitData();
   const navigate = useNavigate();
   const { capacity, pool, zst } = cockpit;
   const zstPct = zst.totalCases === 0 ? 0 : (zst.completedCases / zst.totalCases) * 100;
+  const recalcResult = recalculate.data;
+
+  if (error) {
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button color="inherit" size="small" onClick={refetch}>
+            Erneut versuchen
+          </Button>
+        }
+      >
+        <AlertTitle>Cockpit konnte nicht geladen werden</AlertTitle>
+        {error.message}
+      </Alert>
+    );
+  }
 
   return (
     <Stack spacing={3}>
@@ -51,13 +72,20 @@ export function CockpitPage(): JSX.Element {
         <Stack direction="row" spacing={1} flexWrap="wrap">
           <Button
             variant="contained"
-            startIcon={<CalculateIcon />}
-            onClick={() => setSimOpen(true)}
+            startIcon={
+              recalculate.isPending ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <CalculateIcon />
+              )
+            }
+            disabled={recalculate.isPending}
+            onClick={() => recalculate.mutate()}
           >
             Neu berechnen
           </Button>
           <Button variant="outlined" onClick={() => navigate('/board')}>
-            Starterpakete
+            Zum Board
           </Button>
           <Button variant="outlined" startIcon={<DownloadIcon />}>
             Export
@@ -70,19 +98,32 @@ export function CockpitPage(): JSX.Element {
           Kapazität
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap">
-          <MetricCard label="Geplante MA" value={capacity.plannedEmployees} />
-          <MetricCard label="Netto-Kapazität" value={formatMinutes(capacity.netCapacityMinutes)} />
-          <MetricCard
-            label="Verplant"
-            value={formatMinutes(capacity.plannedMinutes)}
-            tone="accent"
-          />
-          <MetricCard
-            label="Reserve"
-            value={formatMinutes(capacity.reserveMinutes)}
-            tone={capacity.reserveMinutes <= 0 ? 'danger' : 'positive'}
-          />
-          <MetricCard label="Auslastung" value={formatPct(capacity.utilisationPct)} tone="accent" />
+          {isLoading ? (
+            <KpiSkeletons count={5} />
+          ) : (
+            <>
+              <MetricCard label="Geplante MA" value={capacity.plannedEmployees} />
+              <MetricCard
+                label="Netto-Kapazität"
+                value={formatMinutes(capacity.netCapacityMinutes)}
+              />
+              <MetricCard
+                label="Verplant"
+                value={formatMinutes(capacity.plannedMinutes)}
+                tone="accent"
+              />
+              <MetricCard
+                label="Reserve"
+                value={formatMinutes(capacity.reserveMinutes)}
+                tone={capacity.reserveMinutes <= 0 ? 'danger' : 'positive'}
+              />
+              <MetricCard
+                label="Auslastung"
+                value={formatPct(capacity.utilisationPct)}
+                tone="accent"
+              />
+            </>
+          )}
         </Stack>
       </Box>
 
@@ -90,25 +131,41 @@ export function CockpitPage(): JSX.Element {
         <Typography variant="overline" color="text.secondary">
           Offener Pool
         </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <MetricCard label="Offene Belege" value={pool.openCases} />
-          <MetricCard
-            label="Überfällig"
-            value={pool.overdue}
-            tone={pool.overdue > 0 ? 'danger' : 'neutral'}
-          />
-          <MetricCard label="Prio" value={pool.prio} tone={pool.prio > 0 ? 'danger' : 'neutral'} />
-          <MetricCard
-            label="CatMan fällig"
-            value={pool.catManDue}
-            tone={pool.catManDue > 0 ? 'warning' : 'neutral'}
-          />
-          <MetricCard
-            label="Probleme offen"
-            value={pool.openIssues}
-            tone={pool.openIssues > 0 ? 'danger' : 'positive'}
-          />
-        </Stack>
+        {!isLoading && pool.openCases === 0 ? (
+          <Alert severity="success" sx={{ mt: 0.5 }}>
+            Kein offener Pool – alle Belege sind verteilt.
+          </Alert>
+        ) : (
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {isLoading ? (
+              <KpiSkeletons count={5} />
+            ) : (
+              <>
+                <MetricCard label="Offene Belege" value={pool.openCases} />
+                <MetricCard
+                  label="Überfällig"
+                  value={pool.overdue}
+                  tone={pool.overdue > 0 ? 'danger' : 'neutral'}
+                />
+                <MetricCard
+                  label="Prio"
+                  value={pool.prio}
+                  tone={pool.prio > 0 ? 'danger' : 'neutral'}
+                />
+                <MetricCard
+                  label="CatMan fällig"
+                  value={pool.catManDue}
+                  tone={pool.catManDue > 0 ? 'warning' : 'neutral'}
+                />
+                <MetricCard
+                  label="Probleme offen"
+                  value={pool.openIssues}
+                  tone={pool.openIssues > 0 ? 'danger' : 'positive'}
+                />
+              </>
+            )}
+          </Stack>
+        )}
       </Box>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -116,15 +173,21 @@ export function CockpitPage(): JSX.Element {
           ZST-Fortschritt
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
-          <MetricCard
-            label="Belege fertig"
-            value={`${zst.completedCases} / ${zst.totalCases}`}
-            tone="positive"
-          />
-          <MetricCard label="Teile fertig" value={formatNumber(zst.completedParts)} />
-          <MetricCard label="Aufwandspunkte" value={formatNumber(zst.effortPoints)} />
-          <MetricCard label="Teile/h" value={formatNumber(zst.partsPerHour)} tone="accent" />
-          <MetricCard label="Punkte/h" value={zst.effortPointsPerHour} tone="accent" />
+          {isLoading ? (
+            <KpiSkeletons count={5} />
+          ) : (
+            <>
+              <MetricCard
+                label="Belege fertig"
+                value={`${zst.completedCases} / ${zst.totalCases}`}
+                tone="positive"
+              />
+              <MetricCard label="Teile fertig" value={formatNumber(zst.completedParts)} />
+              <MetricCard label="Aufwandspunkte" value={formatNumber(zst.effortPoints)} />
+              <MetricCard label="Teile/h" value={formatNumber(zst.partsPerHour)} tone="accent" />
+              <MetricCard label="Punkte/h" value={zst.effortPointsPerHour} tone="accent" />
+            </>
+          )}
         </Stack>
         <LinearProgress variant="determinate" value={zstPct} sx={{ height: 10, borderRadius: 5 }} />
       </Paper>
@@ -133,7 +196,9 @@ export function CockpitPage(): JSX.Element {
         <Typography variant="overline" color="text.secondary">
           Letzte Teamlead-Eingriffe (Audit §8.4)
         </Typography>
-        {recentOverrides.length === 0 ? (
+        {isLoading ? (
+          <Skeleton variant="rounded" height={64} sx={{ mt: 1 }} />
+        ) : recentOverrides.length === 0 ? (
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             Noch keine manuellen Eingriffe heute.
           </Typography>
@@ -153,7 +218,41 @@ export function CockpitPage(): JSX.Element {
         )}
       </Paper>
 
-      <SimulationPanel open={simOpen} onClose={() => setSimOpen(false)} />
+      <Snackbar
+        open={recalculate.isSuccess && Boolean(recalcResult)}
+        autoHideDuration={6000}
+        onClose={() => recalculate.reset()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" onClose={() => recalculate.reset()} variant="filled">
+          {recalcResult
+            ? `Neu berechnet: ${recalcResult.assignedCaseCount} zugewiesen, ` +
+              `${recalcResult.unassignedCaseCount} offen, ${recalcResult.bundleCount} Bündel, ` +
+              `Reserve ${formatMinutes(recalcResult.reserveMinutes)} (${recalcResult.durationMs} ms).`
+            : 'Neu berechnet.'}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={recalculate.isError}
+        autoHideDuration={8000}
+        onClose={() => recalculate.reset()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => recalculate.reset()} variant="filled">
+          Neuberechnung fehlgeschlagen: {recalculate.error?.message}
+        </Alert>
+      </Snackbar>
     </Stack>
+  );
+}
+
+function KpiSkeletons({ count }: { count: number }): JSX.Element {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} variant="rounded" width={150} height={84} />
+      ))}
+    </>
   );
 }

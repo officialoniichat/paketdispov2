@@ -1,26 +1,29 @@
 /**
- * In-memory cockpit store (React context). Single source of UI state for the
- * teamlead surface; every mutation is an audited teamlead override (§8.4) that
- * appends a WorkflowEvent and returns a new immutable dataset.
+ * Cockpit store (React context) — now backed by the live backend.
  *
- * Today the initial snapshot comes from `loadMockDataset()`; in EPIC 3/6 the
- * provider seeds from @paket/api-client reads and the mutators POST commands.
+ * `cockpit`, `board`, `lanes` and `recentOverrides` come from a TanStack Query
+ * read of the teamlead endpoints (see {@link fetchCockpit}); "Neu berechnen"
+ * runs the real assignment engine via `/assignments/recalculate`, and the
+ * audited overrides with backend endpoints (prioritize/park/unpark) are POSTed
+ * and then invalidate the cockpit query.
+ *
+ * Surfaces without a backend endpoint yet (Belegdetails, Admin/Regelpflege,
+ * positions/boxes/documents) still read the in-memory `dataset` mock so they
+ * keep compiling; their manual-override controls are gated behind
+ * {@link MANUAL_OVERRIDES_ENABLED}.
  */
 import { createContext, useContext, useMemo, useState, type JSX, type ReactNode } from 'react';
-import type {
-  AssignmentBundle,
-  GoodsReceiptCase,
-  LocationMaster,
-  WorkflowEvent,
-} from '@paket/domain-types';
-import { createOverrideEvent, type OverrideAction } from './audit.js';
-import { loadMockDataset } from './mock.js';
 import {
-  buildBoardRows,
-  buildCockpitSummary,
-  buildLanes,
-  simulateRecalculation,
-} from './selectors.js';
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query';
+import type { LocationMaster, WorkflowEvent } from '@paket/domain-types';
+import type { components } from '@paket/api-client';
+import { api, CURRENT_TEAMLEAD_ID } from './api.js';
+import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
+import { loadMockDataset } from './mock.js';
 import type {
   BoardRow,
   CockpitSummary,
@@ -30,196 +33,188 @@ import type {
   SimulationResult,
 } from './types.js';
 
-/** Logged-in teamlead; replaced by the OIDC subject in EPIC 3 (§16.1). */
-export const CURRENT_TEAMLEAD_ID = 'tl-001';
+export { CURRENT_TEAMLEAD_ID };
+
+/** No backend endpoint for free-form bundle edits yet — keep the code, hide the UI. */
+export const MANUAL_OVERRIDES_ENABLED = false;
+
+type RecalculateResultDto = components['schemas']['RecalculateResultDto'];
+
+/** Today's planning date (YYYY-MM-DD), local time. */
+function today(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Empty cockpit shown while the first read is in flight. */
+function emptyCockpit(date: string): CockpitSummary {
+  return {
+    date,
+    capacity: {
+      plannedEmployees: 0,
+      netCapacityMinutes: 0,
+      plannedMinutes: 0,
+      reserveMinutes: 0,
+      utilisationPct: 0,
+    },
+    pool: { openCases: 0, overdue: 0, prio: 0, catManDue: 0, openIssues: 0 },
+    zst: {
+      completedCases: 0,
+      totalCases: 0,
+      completedParts: 0,
+      effortPoints: 0,
+      partsPerHour: 0,
+      effortPointsPerHour: 0,
+    },
+  };
+}
+
+const EMPTY_SIMULATION: SimulationResult = {
+  newlyAssigned: 0,
+  reassigned: 0,
+  reserveBeforeMinutes: 0,
+  reserveAfterMinutes: 0,
+  reserveDeltaMinutes: 0,
+  utilisationBeforePct: 0,
+  utilisationAfterPct: 0,
+  unassignedRemaining: 0,
+  perEmployee: [],
+};
 
 export interface CockpitApi {
-  dataset: OperationsDataset;
+  /** Live read state. */
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
+  /** Live view-models (from the backend). */
   cockpit: CockpitSummary;
-  lanes: Lane[];
   board: BoardRow[];
+  lanes: Lane[];
   recentOverrides: WorkflowEvent[];
-  simulate(): SimulationResult;
+  /** Mock fallback for surfaces without a backend read yet (details/admin). */
+  dataset: OperationsDataset;
+  /** §E.4 "Neu berechnen" → real assignment engine. */
+  recalculate: UseMutationResult<RecalculateResultDto, Error, void>;
+  /** Feature flag for the not-yet-wired manual overrides. */
+  manualOverridesEnabled: boolean;
+  /** Audited overrides backed by a real endpoint. */
   parkCase(caseId: string, reason: string): void;
   releaseCase(caseId: string, reason: string): void;
   prioritiseCase(caseId: string, reason: string): void;
+  /** No backend endpoint yet — gated off (MANUAL_OVERRIDES_ENABLED). */
+  simulate(): SimulationResult;
   withdrawCase(caseId: string, bundleId: string, reason: string): void;
   addCaseToBundle(caseId: string, bundleId: string, reason: string): void;
   reorderBundle(bundleId: string, caseIds: string[], reason: string): void;
   pauseBundle(bundleId: string, reason: string): void;
   commitSimulation(result: SimulationResult, reason: string): void;
-  /** §11 Regelpflege – config edits (not an override; persisted by Admin-API in EPIC 3). */
+  /** §11 Regelpflege – local-only config edits for now. */
   updateRules(rules: RuleConfig): void;
-  /** §11.2 LocationMaster-Pflege. */
   setLocations(locations: LocationMaster[]): void;
 }
 
 const CockpitContext = createContext<CockpitApi | null>(null);
 
-function mapCases(
-  ds: OperationsDataset,
-  caseId: string,
-  fn: (c: GoodsReceiptCase) => GoodsReceiptCase,
-): GoodsReceiptCase[] {
-  return ds.cases.map((c) => (c.id === caseId ? fn(c) : c));
-}
-
-function mapBundles(
-  ds: OperationsDataset,
-  bundleId: string,
-  fn: (b: AssignmentBundle) => AssignmentBundle,
-): AssignmentBundle[] {
-  return ds.bundles.map((b) => (b.id === bundleId ? fn(b) : b));
-}
-
-interface OverrideExtra {
-  previousBundleId?: string;
-  newBundleId?: string;
-  previousState?: string;
-  newState?: string;
-  entityType?: string;
-}
-
 export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.Element {
+  const [date] = useState<string>(() => today());
+  const queryClient = useQueryClient();
+
+  const query = useQuery<CockpitSnapshot, Error>({
+    queryKey: ['cockpit', date],
+    queryFn: () => fetchCockpit(date),
+  });
+
+  // Mock-only state for surfaces the backend does not expose yet.
   const [dataset, setDataset] = useState<OperationsDataset>(() => loadMockDataset());
 
-  const api = useMemo<CockpitApi>(() => {
-    /** Append an audit event and apply the matching immutable dataset change. */
-    function override(
-      action: OverrideAction,
-      entityId: string,
-      reason: string,
-      mutate: (ds: OperationsDataset) => Partial<OperationsDataset>,
-      extra: OverrideExtra = {},
-    ): void {
-      const event = createOverrideEvent({
-        action,
-        entityId,
-        reason,
-        actorId: CURRENT_TEAMLEAD_ID,
-        ...extra,
+  const invalidateCockpit = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['cockpit'] });
+  };
+
+  const recalculate = useMutation<RecalculateResultDto, Error, void>({
+    mutationFn: async () => {
+      const { data, error } = await api.POST('/api/teamlead/assignments/recalculate', {
+        body: { date },
       });
-      setDataset((ds) => ({ ...ds, ...mutate(ds), events: [event, ...ds.events] }));
-    }
+      if (error || !data) {
+        throw new Error(`recalculate failed (${JSON.stringify(error)})`);
+      }
+      return data;
+    },
+    onSettled: invalidateCockpit,
+  });
 
+  const prioritiseMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/prioritize', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`prioritize failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpit,
+  });
+
+  const parkMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/park', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`park failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpit,
+  });
+
+  const unparkMutation = useMutation<unknown, Error, { caseId: string }>({
+    mutationFn: async ({ caseId }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/unpark', {
+        params: { path: { caseId } },
+        body: undefined,
+      });
+      if (error) throw new Error(`unpark failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpit,
+  });
+
+  const cockpitApi = useMemo<CockpitApi>(() => {
+    const noop = (): void => undefined;
     return {
+      isLoading: query.isLoading,
+      error: query.error ?? null,
+      refetch: () => void query.refetch(),
+      cockpit: query.data?.cockpit ?? emptyCockpit(date),
+      board: query.data?.board ?? [],
+      lanes: query.data?.lanes ?? [],
+      recentOverrides: query.data?.recentOverrides ?? [],
       dataset,
-      cockpit: buildCockpitSummary(dataset),
-      lanes: buildLanes(dataset),
-      board: buildBoardRows(dataset),
-      recentOverrides: dataset.events.filter((e) => e.actorType === 'teamlead'),
-      simulate: () => simulateRecalculation(dataset),
+      recalculate,
+      manualOverridesEnabled: MANUAL_OVERRIDES_ENABLED,
 
-      parkCase: (caseId, reason) =>
-        override(
-          'parken',
-          caseId,
-          reason,
-          (ds) => ({ cases: mapCases(ds, caseId, (c) => ({ ...c, status: 'parked' })) }),
-          { previousState: 'ready', newState: 'parked' },
-        ),
+      prioritiseCase: (caseId, reason) => prioritiseMutation.mutate({ caseId, reason }),
+      parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
+      releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
 
-      releaseCase: (caseId, reason) =>
-        override(
-          'freigeben',
-          caseId,
-          reason,
-          (ds) => ({ cases: mapCases(ds, caseId, (c) => ({ ...c, status: 'ready' })) }),
-          { previousState: 'parked', newState: 'ready' },
-        ),
-
-      prioritiseCase: (caseId, reason) =>
-        override('priorisieren', caseId, reason, (ds) => ({
-          cases: mapCases(ds, caseId, (c) =>
-            c.priorityFlags.includes('manual_teamlead_priority')
-              ? c
-              : { ...c, priorityFlags: [...c.priorityFlags, 'manual_teamlead_priority'] },
-          ),
-        })),
-
-      withdrawCase: (caseId, bundleId, reason) =>
-        override(
-          'entziehen',
-          caseId,
-          reason,
-          (ds) => ({
-            bundles: mapBundles(ds, bundleId, (b) => ({
-              ...b,
-              caseIds: b.caseIds.filter((id) => id !== caseId),
-            })),
-            cases: mapCases(ds, caseId, (c) => ({
-              ...c,
-              status: 'ready',
-              assignedBundleId: undefined,
-            })),
-          }),
-          { previousBundleId: bundleId },
-        ),
-
-      addCaseToBundle: (caseId, bundleId, reason) =>
-        override(
-          'hinzufuegen',
-          caseId,
-          reason,
-          (ds) => ({
-            bundles: mapBundles(ds, bundleId, (b) =>
-              b.caseIds.includes(caseId) ? b : { ...b, caseIds: [...b.caseIds, caseId] },
-            ),
-            cases: mapCases(ds, caseId, (c) => ({
-              ...c,
-              status: 'assigned',
-              assignedBundleId: bundleId,
-            })),
-          }),
-          { newBundleId: bundleId },
-        ),
-
-      reorderBundle: (bundleId, caseIds, reason) =>
-        override(
-          'reihenfolge',
-          bundleId,
-          reason,
-          (ds) => ({ bundles: mapBundles(ds, bundleId, (b) => ({ ...b, caseIds })) }),
-          { entityType: 'bundle', previousBundleId: bundleId },
-        ),
-
-      pauseBundle: (bundleId, reason) =>
-        override(
-          'pause',
-          bundleId,
-          reason,
-          (ds) => ({
-            bundles: mapBundles(ds, bundleId, (b) => ({
-              ...b,
-              status: b.status === 'paused' ? 'active' : 'paused',
-            })),
-          }),
-          { entityType: 'bundle' },
-        ),
-
-      commitSimulation: (result, reason) =>
-        override(
-          'neuverteilen',
-          'pool',
-          reason,
-          (ds) => {
-            const byEmp = new Map(result.perEmployee.map((p) => [p.employeeId, p.afterMinutes]));
-            return {
-              bundles: ds.bundles.map((b) => ({
-                ...b,
-                plannedEffortMinutes: byEmp.get(b.employeeId) ?? b.plannedEffortMinutes,
-              })),
-            };
-          },
-          { entityType: 'pool', newState: `assigned:${result.newlyAssigned}` },
-        ),
+      // No backend endpoint yet — gated off (MANUAL_OVERRIDES_ENABLED === false).
+      simulate: () => EMPTY_SIMULATION,
+      withdrawCase: noop,
+      addCaseToBundle: noop,
+      reorderBundle: noop,
+      pauseBundle: noop,
+      commitSimulation: noop,
 
       updateRules: (rules) => setDataset((ds) => ({ ...ds, rules })),
       setLocations: (locations) => setDataset((ds) => ({ ...ds, locations })),
     };
-  }, [dataset]);
+  }, [query, dataset, recalculate, prioritiseMutation, parkMutation, unparkMutation, date]);
 
-  return <CockpitContext.Provider value={api}>{children}</CockpitContext.Provider>;
+  return <CockpitContext.Provider value={cockpitApi}>{children}</CockpitContext.Provider>;
 }
 
 export function useCockpitData(): CockpitApi {

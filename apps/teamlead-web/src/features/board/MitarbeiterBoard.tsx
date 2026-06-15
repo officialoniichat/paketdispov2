@@ -16,6 +16,7 @@ import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -67,7 +68,8 @@ interface EmployeeRowProps {
 }
 
 function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
-  const { dataset, withdrawCase, addCaseToBundle, reorderBundle, pauseBundle } = useCockpitData();
+  const { dataset, withdrawCase, addCaseToBundle, reorderBundle, pauseBundle, manualOverridesEnabled } =
+    useCockpitData();
   const navigate = useNavigate();
   const bundle = dataset.bundles.find((b) => b.id === row.bundleId);
   const bundleKey = bundle?.caseIds.join() ?? '';
@@ -131,6 +133,26 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
         </Stack>
       </AccordionSummary>
       <AccordionDetails>
+        {!manualOverridesEnabled ? (
+          <Stack spacing={1}>
+            {row.bundleSize ? (
+              <Typography variant="body2" color="text.secondary">
+                {row.bundleSize} Paket(e) zugewiesen · {formatMinutes(row.assignedMinutes)} verplant.
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Kein Paket zugewiesen.
+              </Typography>
+            )}
+            <Tooltip title="kommt später">
+              <span>
+                <Button size="small" variant="outlined" disabled>
+                  Manuelle Eingriffe (Entziehen / Hinzufügen / Reihenfolge / Pause)
+                </Button>
+              </span>
+            </Tooltip>
+          </Stack>
+        ) : (
         <Stack spacing={1}>
           {draftCases.length === 0 && (
             <Typography variant="body2" color="text.secondary">
@@ -255,6 +277,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             </Button>
           </Stack>
         </Stack>
+        )}
       </AccordionDetails>
     </Accordion>
   );

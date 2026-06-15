@@ -28,6 +28,19 @@ async function main(): Promise<void> {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+
+  // Dev-only CORS so the Vite frontends (teamlead :5174, employee :5173) can call
+  // the API cross-origin. Guarded to non-production; prod is same-origin / gateway.
+  if (config.env !== 'production') {
+    app.enableCors({
+      origin: ['http://localhost:5173', 'http://localhost:5174'],
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'x-correlation-id'],
+      credentials: true,
+    });
+    logger.info('dev CORS enabled for http://localhost:5173 and :5174');
+  }
+
   app.enableShutdownHooks();
 
   if (config.swagger.enabled) {
