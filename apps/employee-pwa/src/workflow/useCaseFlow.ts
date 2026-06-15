@@ -1,14 +1,14 @@
 /**
- * Binds the pure workflow model to the offline store and outbox. Each action
+ * Binds the pure workflow model to the local store and event log. Each action
  * applies an immutable transition, persists it under optimistic locking and
- * appends an audit event. Reads are live (Dexie useLiveQuery) so the UI always
- * reflects the latest local state; the SyncEngine ships the events later.
+ * appends an audit event to the local log. Reads are live (Dexie useLiveQuery)
+ * so the UI always reflects the latest local state.
  */
 import { useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { AppEventType } from '../offline/types.js';
-import { createEventDraft } from '../offline/eventDraft.js';
-import { enqueue } from '../offline/outboxStore.js';
+import type { AppEventType } from '../events/types.js';
+import { createEventDraft } from '../events/eventDraft.js';
+import { append } from '../events/eventLog.js';
 import { getAggregate, getProgress, OptimisticLockError, saveProgress } from '../db/repository.js';
 import type { CaseAggregate, CaseProgress } from '../db/types.js';
 import { buildSkipEvent, type SkipInput } from './skip.js';
@@ -45,7 +45,7 @@ export interface CaseFlow {
   setZst: () => Promise<void>;
   complete: () => Promise<void>;
   partialComplete: (reason: string) => Promise<void>;
-  skip: (input: Omit<SkipInput, 'expectedVersion'>) => Promise<void>;
+  skip: (input: SkipInput) => Promise<void>;
 }
 
 interface EventMeta {
@@ -66,17 +66,16 @@ export function useCaseFlow(caseId: string): CaseFlow {
       const next = transition(current);
       try {
         await saveProgress(next, current.version);
-        await enqueue(
+        await append(
           createEventDraft({
             eventType: meta.eventType,
             entityType: meta.entityType,
             entityId: meta.entityId,
-            expectedVersion: current.version,
             payload: meta.payload,
           }),
         );
       } catch (err) {
-        // Stale base: the live query will refresh and the worker retries.
+        // Stale base: the live query will refresh and the action can be retried.
         if (!(err instanceof OptimisticLockError)) throw err;
       }
     },
@@ -189,12 +188,11 @@ export function useCaseFlow(caseId: string): CaseFlow {
   );
 
   const skip = useCallback(
-    async (input: Omit<SkipInput, 'expectedVersion'>): Promise<void> => {
-      const current = await getProgress(caseId);
-      const event = buildSkipEvent({ ...input, expectedVersion: current?.version });
-      await enqueue(event);
+    async (input: SkipInput): Promise<void> => {
+      const event = buildSkipEvent(input);
+      await append(event);
     },
-    [caseId],
+    [],
   );
 
   return {

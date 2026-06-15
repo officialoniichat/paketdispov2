@@ -1,8 +1,8 @@
 /**
- * Seeds the offline store with the already-assigned example package on first
+ * Seeds the local store with the already-assigned example package on first
  * run. In production the bundle would arrive from the assignment endpoint
- * (EPIC 3/4) while online; here we provide the Anhang G beleg so the flow works
- * end-to-end during the pilot.
+ * (EPIC 3/4); here we provide the Anhang G beleg so the flow works end-to-end
+ * during the pilot.
  */
 import { db as defaultDb, type PaketDb } from './db.js';
 import { getActiveBundle, putAggregate, putBundle, putProgress } from './repository.js';

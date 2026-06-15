@@ -1,12 +1,11 @@
 /**
- * Mitarbeiter-App router shell. Seeds the offline package once, shows the sticky
- * Sync-Banner and routes the task-first screens (§9.2–9.9). Navigation is flat
- * (§E.6): bundle → case steps → problem, no deep menus.
+ * Mitarbeiter-App router shell. Seeds the local store once and routes the
+ * task-first screens (§9.2–9.9). Navigation is flat (§E.6): bundle → case
+ * steps → problem, no deep menus.
  */
 import { useEffect, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import { SyncBanner } from './components/SyncBanner.js';
 import { seedIfEmpty } from './db/seed.js';
 import { TagesstartScreen } from './screens/TagesstartScreen.js';
 import { PaketReihenfolgeScreen } from './screens/PaketReihenfolgeScreen.js';
@@ -24,7 +23,6 @@ export function App(): JSX.Element {
 
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
-      <SyncBanner />
       <Routes>
         <Route path="/" element={<TagesstartScreen />} />
         <Route path="/paket" element={<PaketReihenfolgeScreen />} />

@@ -1,5 +1,5 @@
 /**
- * Read/write access to the offline store with optimistic locking.
+ * Read/write access to the local store with optimistic locking.
  *
  * saveProgress enforces the version the caller read against the on-disk value,
  * mirroring the backend's optimistic-locking contract (§12.4) so local writes

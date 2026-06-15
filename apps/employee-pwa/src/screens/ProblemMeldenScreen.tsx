@@ -1,7 +1,7 @@
 /**
  * 9.7 Screen: Problem melden. Always reachable (exception-first, §E.3). The
- * issue is queued as an `issue.created` event so the Teamlead inbox sees it; the
- * worker can keep going with "Restware weiter bearbeiten".
+ * issue is recorded as an `issue.created` event in the local log so the Teamlead
+ * inbox sees it; the worker can keep going with "Restware weiter bearbeiten".
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,8 +18,8 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { TouchButton } from '@paket/ui';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
-import { createEventDraft } from '../offline/eventDraft.js';
-import { enqueue } from '../offline/outboxStore.js';
+import { createEventDraft } from '../events/eventDraft.js';
+import { append } from '../events/eventLog.js';
 
 const SCOPES = [
   { value: 'position', label: 'Position' },
@@ -47,12 +47,11 @@ export function ProblemMeldenScreen(): JSX.Element {
   const [comment, setComment] = useState('');
 
   const send = async (): Promise<void> => {
-    await enqueue(
+    await append(
       createEventDraft({
         eventType: 'issue.created',
         entityType: 'case',
         entityId: caseId,
-        expectedVersion: flow.progress?.version,
         payload: { scope, issueType, comment: comment.trim() },
       }),
     );

@@ -16,7 +16,6 @@ describe('buildSkipEvent', () => {
       skipped: 'position',
     });
     expect(event.eventType).toBe('step.skipped');
-    expect(event.status).toBe('pending');
     expect((event.payload as { reason: string }).reason).toBe('beschädigt');
   });
 });

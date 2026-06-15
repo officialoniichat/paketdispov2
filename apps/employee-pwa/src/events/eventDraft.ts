@@ -1,14 +1,13 @@
 /**
- * Factory for immutable outbox event drafts. One place that stamps the
- * client id, timestamp and initial status so every producer is consistent.
+ * Factory for immutable local event records. One place that stamps the
+ * client id and timestamp so every producer is consistent.
  */
-import type { AppEventType, OutboxEntry } from './types.js';
+import type { AppEventType, LocalEvent } from './types.js';
 
 export interface EventDraftInput {
   eventType: AppEventType;
   entityType: string;
   entityId: string;
-  expectedVersion?: number;
   payload?: unknown;
 }
 
@@ -24,16 +23,13 @@ function localId(): string {
   return `evt-local-${fallbackCounter}`;
 }
 
-export function createEventDraft(input: EventDraftInput): OutboxEntry {
+export function createEventDraft(input: EventDraftInput): LocalEvent {
   return {
     id: localId(),
     eventType: input.eventType,
     entityType: input.entityType,
     entityId: input.entityId,
-    expectedVersion: input.expectedVersion,
     payload: input.payload ?? null,
     createdAt: new Date().toISOString(),
-    status: 'pending',
-    attempts: 0,
   };
 }

@@ -29,7 +29,7 @@ export function AbschlussScreen(): JSX.Element {
   const openIssues =
     useLiveQuery(
       () =>
-        db.outbox
+        db.events
           .toArray()
           .then(
             (entries) =>
