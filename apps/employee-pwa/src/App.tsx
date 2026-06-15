@@ -1,33 +1,41 @@
-import type { JSX } from 'react';
-import Container from '@mui/material/Container';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import { StatusChip, PriorityChip, SyncChip, TouchButton, CaseCardSkeleton } from '@paket/ui';
-import { samplePrioCase } from '@paket/test-fixtures';
-
 /**
- * Foundation showcase for the Mitarbeiter-App surface. Renders the shared
- * design-system core components under the L&T theme; the full task-first
- * screens are built in the Mitarbeiter-App EPIC.
+ * Mitarbeiter-App router shell. Seeds the offline package once, shows the sticky
+ * Sync-Banner and routes the task-first screens (§9.2–9.9). Navigation is flat
+ * (§E.6): bundle → case steps → problem, no deep menus.
  */
+import { useEffect, type JSX } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import Box from '@mui/material/Box';
+import { SyncBanner } from './components/SyncBanner.js';
+import { seedIfEmpty } from './db/seed.js';
+import { TagesstartScreen } from './screens/TagesstartScreen.js';
+import { PaketReihenfolgeScreen } from './screens/PaketReihenfolgeScreen.js';
+import { LagerplatzScanScreen } from './screens/LagerplatzScanScreen.js';
+import { VorbereitungScreen } from './screens/VorbereitungScreen.js';
+import { PositionScreen } from './screens/PositionScreen.js';
+import { BoxabschlussScreen } from './screens/BoxabschlussScreen.js';
+import { AbschlussScreen } from './screens/AbschlussScreen.js';
+import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
+
 export function App(): JSX.Element {
+  useEffect(() => {
+    void seedIfEmpty();
+  }, []);
+
   return (
-    <Container maxWidth="sm" sx={{ py: 3 }}>
-      <Typography variant="h1" gutterBottom>
-        Mitarbeiter-App
-      </Typography>
-      <Stack spacing={2}>
-        <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
-          <Typography>Beleg {samplePrioCase.weBelegNo}:</Typography>
-          <StatusChip status={samplePrioCase.status} />
-          {samplePrioCase.priorityFlags.map((flag) => (
-            <PriorityChip key={flag} flag={flag} />
-          ))}
-          <SyncChip state="pending" />
-        </Stack>
-        <CaseCardSkeleton />
-        <TouchButton emphasis="primary">Nächsten Lagerplatz anfahren</TouchButton>
-      </Stack>
-    </Container>
+    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
+      <SyncBanner />
+      <Routes>
+        <Route path="/" element={<TagesstartScreen />} />
+        <Route path="/paket" element={<PaketReihenfolgeScreen />} />
+        <Route path="/case/:caseId/pickup" element={<LagerplatzScanScreen />} />
+        <Route path="/case/:caseId/prepare" element={<VorbereitungScreen />} />
+        <Route path="/case/:caseId/positions" element={<PositionScreen />} />
+        <Route path="/case/:caseId/boxing" element={<BoxabschlussScreen />} />
+        <Route path="/case/:caseId/complete" element={<AbschlussScreen />} />
+        <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Box>
   );
 }

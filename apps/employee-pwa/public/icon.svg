@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Warenauszeichnung">
+  <rect width="512" height="512" rx="96" fill="#0a3d62" />
+  <path d="M256 96 432 184 256 272 80 184Z" fill="#ffffff" />
+  <path d="M80 184 256 272 256 432 80 344Z" fill="#cfe3f2" />
+  <path d="M432 184 256 272 256 432 432 344Z" fill="#9bbfdc" />
+</svg>
