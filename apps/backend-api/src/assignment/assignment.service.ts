@@ -13,6 +13,16 @@ import type { RecalculateResultDto } from './assignment.dto.js';
 const POOL_STATUS = 'ready' as const;
 
 /**
+ * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
+ * the freed `ready` pool), preview also re-includes cases already placed in today's
+ * plan but not yet started (`assigned`). After a commit the `ready` pool is empty, so
+ * a `ready`-only preview would return an empty proposal; including `assigned` lets
+ * "Simulieren" meaningfully re-propose today's plan. Cases an employee has begun
+ * (picking/.../completed) are intentionally excluded — they are no longer re-planable.
+ */
+const PREVIEW_POOL_STATUSES = ['ready', 'assigned'] as const;
+
+/**
  * Assignment engine wiring (§8.3, Anhang E.5). Reads the ready pool + the day's
  * shifts + location master, runs the pure deterministic engine, and persists the
  * resulting bundles/route-stops transactionally with audit events. Teamlead
@@ -104,14 +114,21 @@ export class AssignmentService {
       this.prisma.shift.findMany({ where: { date: { gte: dayStart, lte: dayEnd }, active: true } }),
       this.prisma.location.findMany({ where: { active: true } }),
       this.prisma.goodsReceiptCase.findMany({
-        where: { status: POOL_STATUS },
+        where: { status: { in: [...PREVIEW_POOL_STATUSES] } },
         include: { storageLocation: true },
       }),
     ]);
 
+    // The engine's §8.1 eligibility is `ready`/`partially_completed`; an already
+    // committed-but-not-started case is `assigned`. For the simulation we present
+    // those `assigned` cases to the pure engine AS `ready` so it re-proposes today's
+    // plan (recalculate is untouched — this normalisation is preview-only and never
+    // persisted). Started/finished cases were already excluded by the read filter.
     const input: EngineInput = {
       date: day,
-      cases: casesRows.map(toGoodsReceiptCase),
+      cases: casesRows
+        .map(toGoodsReceiptCase)
+        .map((c) => (c.status === 'assigned' ? { ...c, status: 'ready' as const } : c)),
       shifts: shiftRows.map(toEmployeeShift),
       locations: locationRows.map(toLocationMaster),
     };

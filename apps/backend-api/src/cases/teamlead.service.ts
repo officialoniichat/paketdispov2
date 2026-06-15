@@ -204,9 +204,11 @@ export class TeamleadService {
       );
     }
 
-    // One row per employee (the engine may split an employee's work across
-    // several bundles; merge them so the board mirrors the §10.3 per-employee
-    // view and capacity is counted once).
+    // One row per employee. The engine now emits exactly ONE bundle per employee
+    // per day, so this grouping is a 1:1 map (one bundle in → one row out) and
+    // `row.bundleId` owns precisely `row.cases` — which is what withdraw/add/
+    // reorder/pause/resume target. The per-employee fold is kept defensively so a
+    // legacy multi-bundle day (pre-migration) still renders coherently.
     const rowByEmployee = new Map<string, BoardRowDto>();
     for (const b of bundles) {
       let row = rowByEmployee.get(b.employeeId);
@@ -634,13 +636,18 @@ export class TeamleadService {
     return this.setBundleStatus(principal, bundleId, 'paused', 'pause', dto.reason);
   }
 
-  /** §8.4 Resume a paused bundle (→ active). Blocked once completed/cancelled. */
+  /**
+   * §8.4 Resume a paused bundle. Restores the engine's active value `assigned`
+   * (recalculate persists bundles as `assigned`, and the board maps
+   * `paused = status === 'paused'`), so pause → resume round-trips cleanly back to
+   * the same not-paused state the plan started in. Blocked once completed/cancelled.
+   */
   resumeBundle(
     principal: Principal,
     bundleId: string,
     dto: BundlePauseDto,
   ): Promise<BundleMutationResultDto> {
-    return this.setBundleStatus(principal, bundleId, 'active', 'resume', dto.reason);
+    return this.setBundleStatus(principal, bundleId, 'assigned', 'resume', dto.reason);
   }
 
   private setBundleStatus(

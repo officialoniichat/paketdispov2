@@ -246,7 +246,7 @@ describe('§8.4 reorder', () => {
 });
 
 describe('§8.4 pause / resume', () => {
-  it('toggles the bundle status active ↔ paused', async () => {
+  it('toggles the bundle status assigned ↔ paused (resume restores the engine value)', async () => {
     const bundle = await aBundle();
 
     const paused = await teamleadSvc.pauseBundle(teamlead, bundle.id, { reason: 'Pause' });
@@ -254,10 +254,12 @@ describe('§8.4 pause / resume', () => {
     let row = await prisma.assignmentBundle.findUniqueOrThrow({ where: { id: bundle.id } });
     expect(row.status).toBe('paused');
 
+    // Resume restores `assigned` — the same not-paused value recalculate persists, so
+    // the board's `paused = status === 'paused'` flag round-trips cleanly to false.
     const resumed = await teamleadSvc.resumeBundle(teamlead, bundle.id, { reason: 'Weiter' });
-    expect(resumed.bundleStatus).toBe('active');
+    expect(resumed.bundleStatus).toBe('assigned');
     row = await prisma.assignmentBundle.findUniqueOrThrow({ where: { id: bundle.id } });
-    expect(row.status).toBe('active');
+    expect(row.status).toBe('assigned');
 
     const pauseEv = await prisma.workflowEvent.findFirst({
       where: { eventType: 'assignment.overridden', entityId: bundle.id },
@@ -275,6 +277,6 @@ describe('§8.4 pause / resume', () => {
     });
     await expect(teamleadSvc.pauseBundle(teamlead, bundle.id, {})).rejects.toThrow();
     // restore for any later tests
-    await prisma.assignmentBundle.update({ where: { id: bundle.id }, data: { status: 'active' } });
+    await prisma.assignmentBundle.update({ where: { id: bundle.id }, data: { status: 'assigned' } });
   });
 });
