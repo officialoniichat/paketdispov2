@@ -52,6 +52,24 @@ export async function putProgress(progress: CaseProgress, db: PaketDb = defaultD
 }
 
 /**
+ * Reconcile the local progress version with the backend's authoritative version
+ * after a server transition. The backend owns the case version (§12.4); once a
+ * transition is persisted we adopt its value so the local row no longer drifts.
+ * No-op when the row is missing or the version is unchanged.
+ */
+export async function reconcileVersion(
+  caseId: string,
+  serverVersion: number,
+  db: PaketDb = defaultDb,
+): Promise<void> {
+  await db.transaction('rw', db.progress, async () => {
+    const current = await db.progress.get(caseId);
+    if (!current || current.version === serverVersion) return;
+    await db.progress.put({ ...current, version: serverVersion });
+  });
+}
+
+/**
  * Persist a new progress revision. `expectedVersion` is the version the caller
  * read; the stored row is written at `expectedVersion + 1`. Throws
  * OptimisticLockError when the on-disk version moved underneath the caller.

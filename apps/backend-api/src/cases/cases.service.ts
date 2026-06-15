@@ -220,6 +220,52 @@ export class CasesService {
     return this.finish(principal, result);
   }
 
+  /**
+   * §7.1 work chain an employee drives while preparing a package, in order.
+   * complete/partialComplete walk this chain up to `boxing` via structural hops
+   * (no milestone events) so the documented "Complete a package" endpoints work
+   * from any active work state without weakening the transition graph.
+   */
+  private static readonly WORK_CHAIN: readonly CaseStatus[] = [
+    'assigned',
+    'picking',
+    'preparing',
+    'sorting',
+    'checking',
+    'boxing',
+  ];
+
+  /**
+   * Advance the case along the legal work chain to `boxing` if it is not there
+   * yet, performing each edge as a structural hop. Returns the version after the
+   * last hop (or the input version when already at/after boxing).
+   */
+  private async advanceToBoxing(
+    principal: Principal,
+    caseId: string,
+    fromStatus: CaseStatus,
+    fromVersion: number,
+  ): Promise<{ version: number }> {
+    const startIndex = CasesService.WORK_CHAIN.indexOf(fromStatus);
+    const boxingIndex = CasesService.WORK_CHAIN.indexOf('boxing');
+    // Unknown state (e.g. labeling/securing/released) or already at boxing: the
+    // terminal transition below validates the edge and fails fast if illegal.
+    if (startIndex < 0 || startIndex >= boxingIndex) {
+      return { version: fromVersion };
+    }
+    let version = fromVersion;
+    for (let i = startIndex + 1; i <= boxingIndex; i += 1) {
+      const result = await this.workflow.transition({
+        caseId,
+        toStatus: CasesService.WORK_CHAIN[i] as CaseStatus,
+        actor: { actorType: 'employee', actorId: principal.sub },
+        expectedVersion: version,
+      });
+      version = result.version;
+    }
+    return { version };
+  }
+
   async complete(principal: Principal, caseId: string): Promise<TransitionResultDto> {
     const owned = await this.requireOwnedCase(principal, caseId);
     const employee = await this.resolveEmployee(principal);
@@ -227,12 +273,18 @@ export class CasesService {
       where: { id: owned.id },
       select: { totalQuantity: true, effortPoints: true },
     });
+    const { version } = await this.advanceToBoxing(
+      principal,
+      owned.id,
+      owned.status,
+      owned.version,
+    );
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'completed',
       eventType: 'case.completed',
       actor: { actorType: 'employee', actorId: principal.sub },
-      expectedVersion: owned.version,
+      expectedVersion: version,
     });
     // §17.1 ZST: digital completion produces the ZST record + KPI basis.
     await this.writeZst(principal, owned.id, employee.id, {
@@ -253,13 +305,19 @@ export class CasesService {
       where: { id: owned.id },
       select: { totalQuantity: true, effortPoints: true },
     });
+    const { version } = await this.advanceToBoxing(
+      principal,
+      owned.id,
+      owned.status,
+      owned.version,
+    );
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'partially_completed',
       eventType: 'case.partially_completed',
       actor: { actorType: 'employee', actorId: principal.sub },
       payload: { reason: dto.reason, completedQuantity: dto.completedQuantity },
-      expectedVersion: owned.version,
+      expectedVersion: version,
     });
     // Partial ZST: prorate the effort by the completed share (§4.6, §15).
     const completedQuantity = dto.completedQuantity ?? 0;

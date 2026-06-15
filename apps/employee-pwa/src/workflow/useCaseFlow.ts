@@ -9,8 +9,21 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { AppEventType } from '../events/types.js';
 import { createEventDraft } from '../events/eventDraft.js';
 import { append } from '../events/eventLog.js';
-import { getAggregate, getProgress, OptimisticLockError, saveProgress } from '../db/repository.js';
+import {
+  getAggregate,
+  getProgress,
+  OptimisticLockError,
+  reconcileVersion,
+  saveProgress,
+} from '../db/repository.js';
 import type { CaseAggregate, CaseProgress } from '../db/types.js';
+import {
+  persistComplete,
+  persistIssue,
+  persistPartialComplete,
+  persistStartPreparation,
+  type IssueInput,
+} from '../data/persist.js';
 import { buildSkipEvent, type SkipInput } from './skip.js';
 import {
   checkQuantity as checkQuantityTx,
@@ -45,6 +58,7 @@ export interface CaseFlow {
   setZst: () => Promise<void>;
   complete: () => Promise<void>;
   partialComplete: (reason: string) => Promise<void>;
+  reportIssue: (input: IssueInput) => Promise<void>;
   skip: (input: SkipInput) => Promise<void>;
 }
 
@@ -60,7 +74,17 @@ export function useCaseFlow(caseId: string): CaseFlow {
   const progress = useLiveQuery(() => getProgress(caseId), [caseId]);
 
   const commit = useCallback(
-    async (transition: (p: CaseProgress) => CaseProgress, meta: EventMeta): Promise<void> => {
+    async (
+      transition: (p: CaseProgress) => CaseProgress,
+      meta: EventMeta,
+      /**
+       * Optional backend persistence run AFTER the local write succeeds. It
+       * returns the server's authoritative version (or undefined offline) which
+       * is reconciled into the local row. A failing POST is non-fatal: the local
+       * state and event log are kept so the action can be retried.
+       */
+      persist?: () => Promise<number | undefined>,
+    ): Promise<void> => {
       const current = await getProgress(caseId);
       if (!current) return;
       const next = transition(current);
@@ -77,6 +101,17 @@ export function useCaseFlow(caseId: string): CaseFlow {
       } catch (err) {
         // Stale base: the live query will refresh and the action can be retried.
         if (!(err instanceof OptimisticLockError)) throw err;
+        return;
+      }
+      if (persist) {
+        try {
+          const serverVersion = await persist();
+          if (typeof serverVersion === 'number') {
+            await reconcileVersion(caseId, serverVersion);
+          }
+        } catch {
+          // Non-fatal: local state persists; surface nothing destructive.
+        }
       }
     },
     [caseId],
@@ -84,12 +119,17 @@ export function useCaseFlow(caseId: string): CaseFlow {
 
   const confirmPickup = useCallback(
     (scannedCode?: string) =>
-      commit(confirmPickupTx, {
-        eventType: 'pickup.location_scanned',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { scannedCode: scannedCode ?? null },
-      }),
+      commit(
+        confirmPickupTx,
+        {
+          eventType: 'pickup.location_scanned',
+          entityType: 'case',
+          entityId: caseId,
+          payload: { scannedCode: scannedCode ?? null },
+        },
+        // Mark the case in-progress on the backend (assigned → picking).
+        () => persistStartPreparation(caseId),
+      ),
     [commit, caseId],
   );
 
@@ -168,23 +208,47 @@ export function useCaseFlow(caseId: string): CaseFlow {
 
   const complete = useCallback(
     () =>
-      commit((p) => completeCaseTx(setZstTx(p)), {
-        eventType: 'case.completed',
-        entityType: 'case',
-        entityId: caseId,
-      }),
+      commit(
+        (p) => completeCaseTx(setZstTx(p)),
+        { eventType: 'case.completed', entityType: 'case', entityId: caseId },
+        () => persistComplete(caseId),
+      ),
     [commit, caseId],
   );
 
   const partialComplete = useCallback(
     (reason: string) =>
-      commit((p) => partialCompleteTx(enterComplete(p)), {
-        eventType: 'case.partially_completed',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { reason },
-      }),
+      commit(
+        (p) => partialCompleteTx(enterComplete(p)),
+        {
+          eventType: 'case.partially_completed',
+          entityType: 'case',
+          entityId: caseId,
+          payload: { reason },
+        },
+        () => persistPartialComplete(caseId, reason),
+      ),
     [commit, caseId],
+  );
+
+  const reportIssue = useCallback(
+    async (input: IssueInput): Promise<void> => {
+      // Local audit record first, then best-effort server persist (non-fatal).
+      await append(
+        createEventDraft({
+          eventType: 'issue.created',
+          entityType: 'case',
+          entityId: input.caseId,
+          payload: input,
+        }),
+      );
+      try {
+        await persistIssue(input);
+      } catch {
+        // Non-fatal: the local issue record is kept.
+      }
+    },
+    [],
   );
 
   const skip = useCallback(
@@ -211,6 +275,7 @@ export function useCaseFlow(caseId: string): CaseFlow {
     setZst,
     complete,
     partialComplete,
+    reportIssue,
     skip,
   };
 }

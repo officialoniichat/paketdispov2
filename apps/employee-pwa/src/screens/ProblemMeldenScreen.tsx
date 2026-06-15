@@ -18,8 +18,6 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { TouchButton } from '@paket/ui';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
-import { createEventDraft } from '../events/eventDraft.js';
-import { append } from '../events/eventLog.js';
 
 const SCOPES = [
   { value: 'position', label: 'Position' },
@@ -47,14 +45,12 @@ export function ProblemMeldenScreen(): JSX.Element {
   const [comment, setComment] = useState('');
 
   const send = async (): Promise<void> => {
-    await append(
-      createEventDraft({
-        eventType: 'issue.created',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { scope, issueType, comment: comment.trim() },
-      }),
-    );
+    await flow.reportIssue({
+      caseId,
+      scope,
+      issueType,
+      description: comment.trim() || undefined,
+    });
     navigate(-1);
   };
 

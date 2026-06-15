@@ -1,12 +1,16 @@
 /**
- * Mitarbeiter-App router shell. Seeds the local store once and routes the
- * task-first screens (§9.2–9.9). Navigation is flat (§E.6): bundle → case
- * steps → problem, no deep menus.
+ * Mitarbeiter-App router shell. Bootstraps the local store once — from the
+ * backend when VITE_API_BASE_URL is set (loadAssignedWork), otherwise from the
+ * offline-demo seed — and routes the task-first screens (§9.2–9.9). Navigation
+ * is flat (§E.6): bundle → case steps → problem, no deep menus.
  */
-import { useEffect, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import { seedIfEmpty } from './db/seed.js';
+import { loadAssignedWork } from './db/sync.js';
+import { isBackendEnabled } from './data/api.js';
+import { BootstrapProvider } from './data/bootstrapContext.js';
 import { TagesstartScreen } from './screens/TagesstartScreen.js';
 import { PaketReihenfolgeScreen } from './screens/PaketReihenfolgeScreen.js';
 import { LagerplatzScanScreen } from './screens/LagerplatzScanScreen.js';
@@ -17,13 +21,39 @@ import { AbschlussScreen } from './screens/AbschlussScreen.js';
 import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
 
 export function App(): JSX.Element {
+  // Backend mode loads the engine-assigned bundle; demo mode seeds the example.
+  const [loading, setLoading] = useState<boolean>(isBackendEnabled);
+  const [error, setError] = useState<string | undefined>(undefined);
+
   useEffect(() => {
-    void seedIfEmpty();
+    let cancelled = false;
+    async function bootstrap(): Promise<void> {
+      if (!isBackendEnabled) {
+        await seedIfEmpty();
+        return;
+      }
+      setLoading(true);
+      try {
+        await loadAssignedWork();
+        if (!cancelled) setError(undefined);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Laden fehlgeschlagen');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
-      <Routes>
+    <BootstrapProvider value={{ loading, error }}>
+      <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
+        <Routes>
         <Route path="/" element={<TagesstartScreen />} />
         <Route path="/paket" element={<PaketReihenfolgeScreen />} />
         <Route path="/case/:caseId/pickup" element={<LagerplatzScanScreen />} />
@@ -32,8 +62,9 @@ export function App(): JSX.Element {
         <Route path="/case/:caseId/boxing" element={<BoxabschlussScreen />} />
         <Route path="/case/:caseId/complete" element={<AbschlussScreen />} />
         <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Box>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Box>
+    </BootstrapProvider>
   );
 }
