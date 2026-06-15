@@ -2,7 +2,9 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type { CaseStatus } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
+import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
+import { proratedEffort } from '../modules/completion/completion-logic.js';
 import type { Principal } from '../auth/rbac.js';
 import { assertCanAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
 import {
@@ -40,6 +42,7 @@ export class CasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflow: WorkflowService,
+    private readonly events: EventLogService,
     private readonly live: LiveStatusService,
   ) {}
 
@@ -105,12 +108,22 @@ export class CasesService {
 
   async complete(principal: Principal, caseId: string): Promise<TransitionResultDto> {
     const owned = await this.requireOwnedCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+    const caseRow = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
+      where: { id: owned.id },
+      select: { totalQuantity: true, effortPoints: true },
+    });
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'completed',
       eventType: 'case.completed',
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
+    });
+    // §17.1 ZST: digital completion produces the ZST record + KPI basis.
+    await this.writeZst(principal, owned.id, employee.id, {
+      completedQuantity: caseRow.totalQuantity,
+      effortPoints: caseRow.effortPoints,
     });
     return this.finish(principal, result);
   }
@@ -121,6 +134,11 @@ export class CasesService {
     dto: PartialCompleteDto,
   ): Promise<TransitionResultDto> {
     const owned = await this.requireOwnedCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+    const caseRow = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
+      where: { id: owned.id },
+      select: { totalQuantity: true, effortPoints: true },
+    });
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'partially_completed',
@@ -129,7 +147,53 @@ export class CasesService {
       payload: { reason: dto.reason, completedQuantity: dto.completedQuantity },
       expectedVersion: owned.version,
     });
+    // Partial ZST: prorate the effort by the completed share (§4.6, §15).
+    const completedQuantity = dto.completedQuantity ?? 0;
+    await this.writeZst(principal, owned.id, employee.id, {
+      completedQuantity,
+      effortPoints: proratedEffort(caseRow.totalQuantity, completedQuantity, caseRow.effortPoints),
+    });
     return this.finish(principal, result);
+  }
+
+  /**
+   * Persists the ZST completion record + zst.created audit event (§15.1).
+   * Idempotent per (case, quantity) so a retried completion does not double-count.
+   */
+  private async writeZst(
+    principal: Principal,
+    caseId: string,
+    employeeId: string,
+    zst: { completedQuantity: number; effortPoints: number },
+  ): Promise<void> {
+    const idempotencyKey = `zst:${caseId}:${zst.completedQuantity}`;
+    const existing = await this.prisma.zstRecord.findUnique({ where: { idempotencyKey } });
+    if (existing) return;
+    await this.prisma.$transaction(async (tx) => {
+      const record = await tx.zstRecord.create({
+        data: {
+          idempotencyKey,
+          caseId,
+          employeeId,
+          completedQuantity: zst.completedQuantity,
+          effortPoints: zst.effortPoints,
+          completedAt: new Date(),
+          source: 'mobile_app',
+        },
+      });
+      await this.events.append(
+        {
+          eventType: 'zst.created',
+          entityType: 'ZstRecord',
+          entityId: record.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: { caseId, effortPoints: zst.effortPoints },
+          idempotencyKey: `zst-evt:${record.id}`,
+        },
+        tx,
+      );
+    });
   }
 
   async reportIssue(
