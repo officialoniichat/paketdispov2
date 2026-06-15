@@ -1,26 +1,20 @@
-import { goodsReceiptCaseSchema, type GoodsReceiptCase } from '@paket/domain-types';
-
-export interface ApiClientOptions {
-  baseUrl: string;
-  token?: string;
-}
-
 /**
- * Minimal typed API client placeholder. EPIC 6 replaces the hand-written calls
- * with a generated OpenAPI client; the shared Zod schemas validate responses.
+ * @paket/api-client – typed client for the goods-receipt distribution backend.
+ *
+ * The transport is generated from the OpenAPI spec (openapi-typescript +
+ * openapi-fetch); the shared @paket/domain-types Zod schemas provide optional
+ * runtime validation. Regenerate types with `pnpm --filter @paket/api-client
+ * generate` whenever the backend spec changes (EPIC 3+).
  */
-export class ApiClient {
-  constructor(private readonly options: ApiClientOptions) {}
+export {
+  createApiClient,
+  fetchCaseValidated,
+  type ApiClientOptions,
+  type PaketApiClient,
+} from './client.js';
 
-  private async get<T>(path: string, schema: { parse: (v: unknown) => T }): Promise<T> {
-    const res = await fetch(`${this.options.baseUrl}${path}`, {
-      headers: this.options.token ? { authorization: `Bearer ${this.options.token}` } : {},
-    });
-    if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
-    return schema.parse(await res.json());
-  }
+// Generated contract types (paths, operations, component schemas).
+export type { paths, components, operations } from './generated/schema.js';
 
-  getCase(caseId: string): Promise<GoodsReceiptCase> {
-    return this.get(`/api/cases/${caseId}`, goodsReceiptCaseSchema);
-  }
-}
+// Re-export the shared case schema so callers can validate without a second dep.
+export { goodsReceiptCaseSchema, type GoodsReceiptCase } from '@paket/domain-types';

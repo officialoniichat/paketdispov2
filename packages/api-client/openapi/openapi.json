@@ -1,0 +1,228 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Paketlagerdispo Backend API",
+    "version": "0.1.0",
+    "description": "Interim OpenAPI contract for the goods-receipt distribution backend. Field names mirror @paket/domain-types (single source of truth). EPIC 3 replaces this file with the spec emitted by the backend (REST/OpenAPI first, §12.2); re-run `pnpm --filter @paket/api-client generate` afterwards."
+  },
+  "servers": [{ "url": "/", "description": "Same-origin (proxied) backend" }],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getLiveness",
+        "summary": "Liveness probe",
+        "responses": {
+          "200": {
+            "description": "Process is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": { "status": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases": {
+      "get": {
+        "operationId": "listCases",
+        "summary": "List goods-receipt cases",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/CaseStatus" }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "enum": [1, 2, 3, 4, 7, 8] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching cases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/GoodsReceiptCase" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}": {
+      "get": {
+        "operationId": "getCase",
+        "summary": "Get a single goods-receipt case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The case",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GoodsReceiptCase" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ProblemDetails" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/cases": {
+      "get": {
+        "operationId": "listMyCases",
+        "summary": "Cases assigned to the current employee",
+        "responses": {
+          "200": {
+            "description": "Assigned cases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/GoodsReceiptCase" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CaseStatus": {
+        "type": "string",
+        "enum": [
+          "imported",
+          "parsed",
+          "needs_review",
+          "ready",
+          "parked",
+          "assigned",
+          "picking",
+          "preparing",
+          "sorting",
+          "checking",
+          "labeling",
+          "securing",
+          "boxing",
+          "issue_open",
+          "waiting_teamlead",
+          "released",
+          "partially_completed",
+          "completed",
+          "zst_done",
+          "cancelled"
+        ]
+      },
+      "PriorityFlag": {
+        "type": "string",
+        "enum": [
+          "prio",
+          "catman_due",
+          "overdue",
+          "manual_teamlead_priority",
+          "same_day_required"
+        ]
+      },
+      "StorageLocation": {
+        "type": "object",
+        "required": ["id", "type", "code", "active"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "regal",
+              "palette",
+              "haengebahn",
+              "lagerplatz_d",
+              "workstation",
+              "printer",
+              "conveyor"
+            ]
+          },
+          "code": { "type": "string" },
+          "zone": { "type": "string" },
+          "sequenceIndex": { "type": "integer" },
+          "barcode": { "type": "string" },
+          "active": { "type": "boolean" }
+        }
+      },
+      "GoodsReceiptCase": {
+        "type": "object",
+        "required": [
+          "id",
+          "documentSetId",
+          "weBelegNo",
+          "bookingDate",
+          "branchNo",
+          "storageLocation",
+          "section",
+          "priorityFlags",
+          "totalQuantity",
+          "status",
+          "effortPoints",
+          "estimatedMinutes",
+          "version"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "documentSetId": { "type": "string", "format": "uuid" },
+          "weBelegNo": { "type": "string" },
+          "deliveryNoteNo": { "type": "string" },
+          "bookingDate": { "type": "string", "format": "date-time" },
+          "weDate": { "type": "string", "format": "date" },
+          "branchNo": { "type": "string" },
+          "primaryShopAreaNo": { "type": "string" },
+          "primaryFloor": { "type": "string" },
+          "storageLocation": { "$ref": "#/components/schemas/StorageLocation" },
+          "section": { "type": ["integer", "null"], "enum": [1, 2, 3, 4, 7, 8, null] },
+          "goodsTypeText": { "type": "string" },
+          "priorityFlags": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PriorityFlag" }
+          },
+          "catManDate": { "type": "string", "format": "date" },
+          "loadPlanDate": { "type": "string", "format": "date" },
+          "totalQuantity": { "type": "integer", "minimum": 0 },
+          "status": { "$ref": "#/components/schemas/CaseStatus" },
+          "effortPoints": { "type": "number", "minimum": 0 },
+          "estimatedMinutes": { "type": "number", "minimum": 0 },
+          "assignedBundleId": { "type": "string", "format": "uuid" },
+          "version": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" },
+          "code": { "type": "string" }
+        }
+      }
+    }
+  }
+}

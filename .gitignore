@@ -13,6 +13,9 @@ out/
 coverage/
 .turbo/
 
+# Storybook static build
+storybook-static/
+
 # Env & secrets
 .env
 .env.*

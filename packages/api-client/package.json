@@ -2,7 +2,7 @@
   "name": "@paket/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Typed API client (Anhang E.6). Will be backed by the generated OpenAPI client.",
+  "description": "Typed backend client (§12.2). OpenAPI types generated via openapi-typescript, transport via openapi-fetch; runtime validation via @paket/domain-types.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,14 +20,17 @@
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "generate": "openapi-typescript ./openapi/openapi.json -o ./src/generated/schema.ts"
   },
   "dependencies": {
     "@paket/domain-types": "workspace:*",
+    "openapi-fetch": "^0.13.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "openapi-typescript": "^7.6.1",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0",
     "vitest": "^2.1.8"
