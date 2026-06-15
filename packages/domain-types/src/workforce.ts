@@ -111,8 +111,6 @@ export const employeeProfileSchema = z.object({
   email: z.string().email().nullish(),
   roles: z.array(employeeRoleSchema),
   active: z.boolean(),
-  /** Linked to the Mitarbeiter pilot login (Mitarbeiter-App). */
-  isPilot: z.boolean().default(false),
   /** Bereich/Skill tags surfaced to the board (optional, not Pflicht). */
   areaTags: z.array(z.string()).default([]),
   /** Per-head productivity factor (0,5…1,2; default 1,0) scaling netCapacity. */
@@ -123,19 +121,17 @@ export const employeeProfileSchema = z.object({
 });
 export type EmployeeProfile = z.infer<typeof employeeProfileSchema>;
 
-/** Kind of absence; teilabwesend may carry a `partialUntil` cutoff. */
-export const absenceKindSchema = z.enum(['krank', 'urlaub', 'abwesend', 'teilabwesend']);
+/** Kind of absence — full-day; zeroes capacity for the date range. */
+export const absenceKindSchema = z.enum(['krank', 'urlaub', 'abwesend']);
 export type AbsenceKind = z.infer<typeof absenceKindSchema>;
 
-/** A recorded absence that zeroes (or shortens) capacity for its date range. */
+/** A recorded absence that zeroes capacity for its date range. */
 export const absenceSchema = z.object({
   id: idSchema,
   employeeId: idSchema,
   dateFrom: isoDateSchema,
   dateTo: isoDateSchema,
   kind: absenceKindSchema,
-  /** For teilabwesend: present only until this time of day. */
-  partialUntil: timeOfDaySchema.optional(),
   reason: z.string().optional(),
   createdBy: z.string().optional(),
   createdAt: isoDateTimeSchema.optional(),

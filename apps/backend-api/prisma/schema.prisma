@@ -198,7 +198,6 @@ enum AbsenceKind {
   krank
   urlaub
   abwesend
-  teilabwesend
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +212,6 @@ model User {
   active      Boolean  @default(true)
   // Mitarbeiter-Einstellungen (capacity/effort per head) — see
   // docs/concept/employee-settings-ux-concept.md.
-  isPilot              Boolean  @default(false)
   areaTags             String[] @default([])
   productivityFactor   Float    @default(1)
   overtimeTolerancePct Float    @default(0)
@@ -304,7 +302,6 @@ model Absence {
   dateFrom     DateTime    @db.Date
   dateTo       DateTime    @db.Date
   kind         AbsenceKind
-  partialUntil String?
   reason       String?
   createdBy    String?
   createdAt    DateTime    @default(now())

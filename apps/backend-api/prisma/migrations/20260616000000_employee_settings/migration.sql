@@ -2,11 +2,10 @@
 CREATE TYPE "ShiftSource" AS ENUM ('seak', 'pattern', 'teamlead');
 
 -- CreateEnum
-CREATE TYPE "AbsenceKind" AS ENUM ('krank', 'urlaub', 'abwesend', 'teilabwesend');
+CREATE TYPE "AbsenceKind" AS ENUM ('krank', 'urlaub', 'abwesend');
 
 -- AlterTable (Mitarbeiter-Einstellungen: per-head capacity/effort params)
-ALTER TABLE "users" ADD COLUMN     "isPilot" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "areaTags" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ALTER TABLE "users" ADD COLUMN     "areaTags" TEXT[] DEFAULT ARRAY[]::TEXT[],
 ADD COLUMN     "productivityFactor" DOUBLE PRECISION NOT NULL DEFAULT 1,
 ADD COLUMN     "overtimeTolerancePct" DOUBLE PRECISION NOT NULL DEFAULT 0,
 ADD COLUMN     "weeklyPattern" JSONB;
@@ -22,7 +21,6 @@ CREATE TABLE "absences" (
     "dateFrom" DATE NOT NULL,
     "dateTo" DATE NOT NULL,
     "kind" "AbsenceKind" NOT NULL,
-    "partialUntil" TEXT,
     "reason" TEXT,
     "createdBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

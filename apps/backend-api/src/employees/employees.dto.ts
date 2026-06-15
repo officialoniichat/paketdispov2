@@ -63,7 +63,6 @@ export class EmployeeListItemDto {
   @ApiProperty() displayName!: string;
   @ApiProperty({ type: [String] }) roles!: string[];
   @ApiProperty() active!: boolean;
-  @ApiProperty() isPilot!: boolean;
   @ApiProperty({ type: [String] }) areaTags!: string[];
   @ApiProperty() productivityFactor!: number;
   @ApiProperty() overtimeTolerancePct!: number;
@@ -72,6 +71,8 @@ export class EmployeeListItemDto {
   @ApiProperty({ description: 'Absent today (capacity 0)' }) absentToday!: boolean;
   @ApiProperty({ description: 'Net capacity counted today (0 if absent/inactive)' })
   netCapacityToday!: number;
+  @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
+  weeklyPattern!: WeeklyPatternDto | null;
 }
 
 /** List response with the team-capacity header the cockpit/list shows. */
@@ -91,8 +92,6 @@ export class AuditEntryDto {
 }
 
 export class EmployeeDetailDto extends EmployeeListItemDto {
-  @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
-  weeklyPattern!: WeeklyPatternDto | null;
   @ApiProperty({ type: [AuditEntryDto] }) recentAudit!: AuditEntryDto[];
 }
 
@@ -101,7 +100,6 @@ export class EmployeeDetailDto extends EmployeeListItemDto {
 /** PATCH profile. Roles are read-only in this pilot (identity stays in the IdP). */
 export class EmployeeProfileUpdateDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() isPilot?: boolean;
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -126,31 +124,11 @@ export class EmployeeProfileUpdateDto {
   weeklyPattern?: WeeklyPatternDto | null;
 }
 
-/** PUT today's (or a given day's) shift — overrides whatever the import produced. */
-export class ShiftOverrideDto {
-  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) @IsString() date!: string;
-  @ApiProperty({ description: 'HH:MM' }) @IsString() plannedStart!: string;
-  @ApiProperty({ description: 'HH:MM' }) @IsString() plannedEnd!: string;
-  @ApiProperty() @IsInt() @Min(0) breakMinutes!: number;
-  @ApiPropertyOptional({ description: 'Teilzeit 0..100 (default 100)' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  partTimePct?: number;
-  @ApiProperty() @IsBoolean() active!: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
-}
-
 export class AbsenceCreateDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) @IsString() dateFrom!: string;
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) @IsString() dateTo!: string;
-  @ApiProperty({ description: 'krank | urlaub | abwesend | teilabwesend' })
+  @ApiProperty({ description: 'krank | urlaub | abwesend' })
   @IsString()
   kind!: string;
-  @ApiPropertyOptional({ description: 'HH:MM cutoff for teilabwesend' })
-  @IsOptional()
-  @IsString()
-  partialUntil?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
 }

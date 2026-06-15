@@ -544,23 +544,6 @@ export interface paths {
         patch: operations["EmployeesController_updateProfile"];
         trace?: never;
     };
-    "/api/admin/employees/{id}/shift": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Override a day’s shift; recomputes netCapacity, source=teamlead. */
-        put: operations["EmployeesController_overrideShift"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/admin/employees/{id}/absence": {
         parameters: {
             query?: never;
@@ -1034,30 +1017,6 @@ export interface components {
             source: string;
             active: boolean;
         };
-        EmployeeListItemDto: {
-            id: string;
-            employeeNo: string;
-            displayName: string;
-            roles: string[];
-            active: boolean;
-            isPilot: boolean;
-            areaTags: string[];
-            productivityFactor: number;
-            overtimeTolerancePct: number;
-            todayShift?: components["schemas"]["TodayShiftDto"] | null;
-            /** @description Absent today (capacity 0) */
-            absentToday: boolean;
-            /** @description Net capacity counted today (0 if absent/inactive) */
-            netCapacityToday: number;
-        };
-        EmployeeListResponseDto: {
-            /** @description ISO date YYYY-MM-DD */
-            date: string;
-            activeCount: number;
-            teamCapacityMinutes: number;
-            morningCapacityMinutes: number;
-            employees: components["schemas"]["EmployeeListItemDto"][];
-        };
         WeeklyDayPlanDto: {
             working: boolean;
             shiftModel?: string;
@@ -1078,6 +1037,30 @@ export interface components {
             sat: components["schemas"]["WeeklyDayPlanDto"];
             sun: components["schemas"]["WeeklyDayPlanDto"];
         };
+        EmployeeListItemDto: {
+            id: string;
+            employeeNo: string;
+            displayName: string;
+            roles: string[];
+            active: boolean;
+            areaTags: string[];
+            productivityFactor: number;
+            overtimeTolerancePct: number;
+            todayShift?: components["schemas"]["TodayShiftDto"] | null;
+            /** @description Absent today (capacity 0) */
+            absentToday: boolean;
+            /** @description Net capacity counted today (0 if absent/inactive) */
+            netCapacityToday: number;
+            weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+        };
+        EmployeeListResponseDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            activeCount: number;
+            teamCapacityMinutes: number;
+            morningCapacityMinutes: number;
+            employees: components["schemas"]["EmployeeListItemDto"][];
+        };
         AuditEntryDto: {
             eventType: string;
             at: string;
@@ -1090,7 +1073,6 @@ export interface components {
             displayName: string;
             roles: string[];
             active: boolean;
-            isPilot: boolean;
             areaTags: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
@@ -1104,7 +1086,6 @@ export interface components {
         };
         EmployeeProfileUpdateDto: {
             active?: boolean;
-            isPilot?: boolean;
             areaTags?: string[];
             /** @description 0,5…1,2 */
             productivityFactor?: number;
@@ -1112,28 +1093,13 @@ export interface components {
             overtimeTolerancePct?: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
         };
-        ShiftOverrideDto: {
-            /** @description ISO date YYYY-MM-DD */
-            date: string;
-            /** @description HH:MM */
-            plannedStart: string;
-            /** @description HH:MM */
-            plannedEnd: string;
-            breakMinutes: number;
-            /** @description Teilzeit 0..100 (default 100) */
-            partTimePct?: number;
-            active: boolean;
-            reason?: string;
-        };
         AbsenceCreateDto: {
             /** @description ISO date YYYY-MM-DD */
             dateFrom: string;
             /** @description ISO date YYYY-MM-DD */
             dateTo: string;
-            /** @description krank | urlaub | abwesend | teilabwesend */
+            /** @description krank | urlaub | abwesend */
             kind: string;
-            /** @description HH:MM cutoff for teilabwesend */
-            partialUntil?: string;
             reason?: string;
         };
     };
@@ -1921,31 +1887,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EmployeeProfileUpdateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmployeeDetailDto"];
-                };
-            };
-        };
-    };
-    EmployeesController_overrideShift: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ShiftOverrideDto"];
             };
         };
         responses: {

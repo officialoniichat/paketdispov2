@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
@@ -7,7 +7,6 @@ import {
   EmployeeDetailDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
-  ShiftOverrideDto,
 } from './employees.dto.js';
 
 /**
@@ -48,17 +47,6 @@ export class EmployeesController {
     @Body() body: EmployeeProfileUpdateDto,
   ): Promise<EmployeeDetailDto> {
     return this.employees.updateProfile(principal, id, body);
-  }
-
-  @Put(':id/shift')
-  @ApiOperation({ summary: 'Override a day’s shift; recomputes netCapacity, source=teamlead.' })
-  @ApiOkResponse({ type: EmployeeDetailDto })
-  overrideShift(
-    @CurrentUser() principal: Principal,
-    @Param('id') id: string,
-    @Body() body: ShiftOverrideDto,
-  ): Promise<EmployeeDetailDto> {
-    return this.employees.overrideShift(principal, id, body);
   }
 
   @Post(':id/absence')

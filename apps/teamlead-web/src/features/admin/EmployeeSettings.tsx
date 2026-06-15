@@ -62,10 +62,9 @@ export function EmployeeSettings(): JSX.Element {
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
+                <TableCell>Rolle</TableCell>
                 <TableCell>Bereich</TableCell>
-                <TableCell>Heute</TableCell>
-                <TableCell align="right">Netto</TableCell>
-                <TableCell>Quelle</TableCell>
+                <TableCell align="right">Netto heute</TableCell>
                 <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>
@@ -111,7 +110,6 @@ function EmployeeRow({
   selected: boolean;
   onSelect: () => void;
 }): JSX.Element {
-  const shift = emp.todayShift;
   const statusLabel = !emp.active ? 'inaktiv' : emp.absentToday ? 'abwesend' : 'aktiv';
   const statusColor: 'default' | 'success' | 'warning' = !emp.active
     ? 'default'
@@ -121,10 +119,9 @@ function EmployeeRow({
   return (
     <TableRow hover selected={selected} onClick={onSelect} sx={{ cursor: 'pointer' }}>
       <TableCell>{emp.displayName}</TableCell>
+      <TableCell>{emp.roles.join(', ')}</TableCell>
       <TableCell>{emp.areaTags.length ? emp.areaTags.join(', ') : '—'}</TableCell>
-      <TableCell>{shift ? `${shift.plannedStart}–${shift.plannedEnd} ·${shift.breakMinutes}` : '—'}</TableCell>
       <TableCell align="right">{emp.netCapacityToday} min</TableCell>
-      <TableCell>{shift ? shift.source : '—'}</TableCell>
       <TableCell>
         <Chip size="small" label={statusLabel} color={statusColor} variant={selected ? 'filled' : 'outlined'} />
       </TableCell>

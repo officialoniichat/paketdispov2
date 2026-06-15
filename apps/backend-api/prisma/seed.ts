@@ -57,6 +57,14 @@ async function seedRoles(): Promise<Record<string, string>> {
 
 // --- Users (match the dev tokens) ------------------------------------------
 
+/** A shift model used Mo–Fr in an employee's weekly pattern (weekend = frei). */
+interface ShiftModel {
+  model: string;
+  start: string;
+  end: string;
+  breakMinutes: number;
+}
+
 interface SeedUser {
   employeeNo: string;
   displayName: string;
@@ -64,24 +72,37 @@ interface SeedUser {
   role: 'teamlead' | 'employee';
   /** Mitarbeiter-Einstellungen demo fields (concept employee-settings-ux). */
   areaTags?: string[];
-  isPilot?: boolean;
   productivityFactor?: number;
+  /** Mo–Fr shift model; capacity is derived from this (Wochenplan drives capacity). */
+  pattern?: ShiftModel;
 }
+
+const FRUEH: ShiftModel = { model: 'Frühschicht', start: '06:00', end: '14:00', breakMinutes: 30 };
+const SPAET: ShiftModel = { model: 'Spätschicht', start: '10:00', end: '18:00', breakMinutes: 30 };
 
 const USERS: SeedUser[] = [
   { employeeNo: 'tl-001', displayName: 'TL Logistik', email: 'tl-001@dev.local', role: 'teamlead' },
-  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', areaTags: ['Hängebahn'], isPilot: true, productivityFactor: 1.0 },
-  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', areaTags: ['Palette'], productivityFactor: 0.9 },
-  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', areaTags: ['NOS'], productivityFactor: 1.0 },
+  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', areaTags: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH },
+  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', areaTags: ['Palette'], productivityFactor: 0.9, pattern: SPAET },
+  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', areaTags: ['NOS'], productivityFactor: 1.0, pattern: FRUEH },
 ];
+
+/** Mo–Fr working with the model, weekend frei — matches weeklyPatternSchema. */
+function buildWeeklyPattern(m?: ShiftModel): Record<string, unknown> | null {
+  if (!m) return null;
+  const work = { working: true, shiftModel: m.model, start: m.start, end: m.end, breakMinutes: m.breakMinutes, partTimePct: 100 };
+  const frei = { working: false, breakMinutes: 0, partTimePct: 100 };
+  return { mon: work, tue: work, wed: work, thu: work, fri: work, sat: frei, sun: frei };
+}
 
 async function seedUsers(roleIds: Record<string, string>): Promise<Record<string, string>> {
   const idByEmployeeNo: Record<string, string> = {};
   for (const u of USERS) {
+    const weeklyPattern = buildWeeklyPattern(u.pattern);
     const profile = {
       areaTags: u.areaTags ?? [],
-      isPilot: u.isPilot ?? false,
       productivityFactor: u.productivityFactor ?? 1,
+      ...(weeklyPattern ? { weeklyPattern } : {}),
     };
     const user = await prisma.user.upsert({
       where: { employeeNo: u.employeeNo },
@@ -106,49 +127,41 @@ async function seedUsers(roleIds: Record<string, string>): Promise<Record<string
   return idByEmployeeNo;
 }
 
-// --- Shifts (three active employees on the seed day) -----------------------
+// --- Shifts (materialized from each employee's weekly pattern on the seed day) ---
 
-interface SeedShift {
-  employeeNo: string;
-  start: string;
-  end: string;
-  breakMinutes: number;
-  plannedHours: number;
-  netCapacityMinutes: number;
+function minutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
 }
-
-const SHIFTS: SeedShift[] = [
-  { employeeNo: 'ma-101', start: '07:00', end: '15:30', breakMinutes: 30, plannedHours: 8, netCapacityMinutes: 480 },
-  { employeeNo: 'ma-102', start: '07:00', end: '12:30', breakMinutes: 30, plannedHours: 5, netCapacityMinutes: 300 },
-  { employeeNo: 'ma-103', start: '07:00', end: '14:30', breakMinutes: 30, plannedHours: 7, netCapacityMinutes: 420 },
-];
 
 async function seedShifts(userIds: Record<string, string>): Promise<void> {
   const date = asDate(SEED_DATE);
-  for (const s of SHIFTS) {
-    const employeeId = requireId(userIds, s.employeeNo, 'user');
+  for (const u of USERS) {
+    if (!u.pattern) continue;
+    const employeeId = requireId(userIds, u.employeeNo, 'user');
+    const prod = u.productivityFactor ?? 1;
+    const windowMin = minutes(u.pattern.end) - minutes(u.pattern.start);
+    const net = Math.round((windowMin - u.pattern.breakMinutes) * prod);
+    const shiftData = {
+      plannedStart: asTime(SEED_DATE, u.pattern.start),
+      plannedEnd: asTime(SEED_DATE, u.pattern.end),
+      breakMinutes: u.pattern.breakMinutes,
+      plannedHours: round2(windowMin / 60),
+      netCapacityMinutes: net,
+      active: true,
+      source: 'pattern' as const,
+      productivityFactor: prod,
+    };
     await prisma.shift.upsert({
       where: { shift_employee_date: { employeeId, date } },
-      update: {
-        plannedStart: asTime(SEED_DATE, s.start),
-        plannedEnd: asTime(SEED_DATE, s.end),
-        breakMinutes: s.breakMinutes,
-        plannedHours: s.plannedHours,
-        netCapacityMinutes: s.netCapacityMinutes,
-        active: true,
-      },
-      create: {
-        employeeId,
-        date,
-        plannedStart: asTime(SEED_DATE, s.start),
-        plannedEnd: asTime(SEED_DATE, s.end),
-        breakMinutes: s.breakMinutes,
-        plannedHours: s.plannedHours,
-        netCapacityMinutes: s.netCapacityMinutes,
-        active: true,
-      },
+      update: shiftData,
+      create: { employeeId, date, ...shiftData },
     });
   }
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 // --- Locations (storage master referenced by cases) ------------------------

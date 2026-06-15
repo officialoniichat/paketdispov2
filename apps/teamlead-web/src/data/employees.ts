@@ -11,7 +11,6 @@ export type EmployeeListResponse = components['schemas']['EmployeeListResponseDt
 export type EmployeeListItem = components['schemas']['EmployeeListItemDto'];
 export type EmployeeDetail = components['schemas']['EmployeeDetailDto'];
 export type EmployeeProfileUpdate = components['schemas']['EmployeeProfileUpdateDto'];
-export type ShiftOverride = components['schemas']['ShiftOverrideDto'];
 export type AbsenceCreate = components['schemas']['AbsenceCreateDto'];
 export type WeeklyPattern = components['schemas']['WeeklyPatternDto'];
 
@@ -43,16 +42,7 @@ export async function updateEmployeeProfile(
   return unwrap<EmployeeDetail>(result, 'update employee');
 }
 
-/** Override a day's shift; backend recomputes netCapacity + sets source=teamlead. */
-export async function overrideShift(id: string, dto: ShiftOverride): Promise<EmployeeDetail> {
-  const result = await api.PUT('/api/admin/employees/{id}/shift', {
-    params: { path: { id } },
-    body: dto,
-  });
-  return unwrap<EmployeeDetail>(result, 'override shift');
-}
-
-/** Record an absence; backend zeroes/shortens affected shift capacity. */
+/** Record an absence; backend zeroes affected shift capacity for the range. */
 export async function createAbsence(id: string, dto: AbsenceCreate): Promise<EmployeeDetail> {
   const result = await api.POST('/api/admin/employees/{id}/absence', {
     params: { path: { id } },

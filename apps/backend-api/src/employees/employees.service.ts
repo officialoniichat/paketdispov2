@@ -5,6 +5,8 @@ import {
   employeeRoleSchema,
   weeklyPatternSchema,
   type EmployeeRole,
+  type WeeklyDayPlan,
+  type WeeklyPattern,
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -15,13 +17,14 @@ import type {
   EmployeeListItemDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
-  ShiftOverrideDto,
   TodayShiftDto,
 } from './employees.dto.js';
 
 /** Fraction of net capacity counted as "morning" for the starter-package view (§4.3). */
 const MORNING_FRACTION = 0.5;
 const AUDIT_LIMIT = 8;
+/** getUTCDay() index (0=Sun) → weekly-pattern key. */
+const WEEKDAY_KEYS: (keyof WeeklyPattern)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 type PrismaTx = Prisma.TransactionClient;
 
@@ -30,7 +33,6 @@ interface UserWithRelations {
   employeeNo: string;
   displayName: string;
   active: boolean;
-  isPilot: boolean;
   areaTags: string[];
   productivityFactor: number;
   overtimeTolerancePct: number;
@@ -48,16 +50,14 @@ interface UserWithRelations {
   absences: { id: string }[];
 }
 
-const USER_INCLUDE = {
-  roles: { include: { role: true } },
-} as const;
+const USER_INCLUDE = { roles: { include: { role: true } } } as const;
 
 /**
- * Mitarbeiter-Einstellungen service (concept employee-settings-ux). The single
- * editable + audited source for the engine's capacity inputs: profile (wer),
- * shift/weekly pattern (wann/wie lange), absence (Verfügbarkeit). Writes the same
- * `Shift.netCapacityMinutes`/`active` the assignment engine already reads, so no
- * new engine path is introduced.
+ * Mitarbeiter-Einstellungen service (concept employee-settings-ux). Clean separation:
+ *   - Stammdaten (who): role, active, areaTags, productivity, overtime tolerance.
+ *   - Wochenplan (when): the weekly pattern is the single source of capacity. Saving
+ *     it MATERIALIZES the concrete Shift the assignment engine reads — there is no
+ *     hand-edited per-day shift. Absences zero the materialized capacity.
  */
 @Injectable()
 export class EmployeesService {
@@ -108,7 +108,6 @@ export class EmployeesService {
 
     const data: Prisma.UserUpdateInput = {};
     if (dto.active !== undefined) data.active = dto.active;
-    if (dto.isPilot !== undefined) data.isPilot = dto.isPilot;
     if (dto.areaTags !== undefined) data.areaTags = dto.areaTags;
     if (dto.overtimeTolerancePct !== undefined) data.overtimeTolerancePct = dto.overtimeTolerancePct;
     if (dto.productivityFactor !== undefined) data.productivityFactor = dto.productivityFactor;
@@ -130,11 +129,9 @@ export class EmployeesService {
     const date = todayIso();
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id }, data });
-      // A new productivity factor re-derives today's shift capacity so the engine
-      // immediately sees the maintained per-head value (concept §c/§e).
-      if (dto.productivityFactor !== undefined && dto.productivityFactor !== user.productivityFactor) {
-        await this.rederiveShiftCapacity(tx, id, parseDate(date), dto.productivityFactor);
-      }
+      // Any change to capacity inputs re-derives today's concrete shift so the
+      // engine immediately reflects the plan (concept: Wochenplan drives capacity).
+      await this.materializeShift(tx, id, date);
       await this.events.append(
         {
           eventType: 'employee.profile_updated',
@@ -151,82 +148,12 @@ export class EmployeesService {
     return this.loadDetail(id, date);
   }
 
-  async overrideShift(
-    principal: Principal,
-    id: string,
-    dto: ShiftOverrideDto,
-  ): Promise<EmployeeDetailDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: { id: true, productivityFactor: true },
-    });
-    if (!user) throw new NotFoundException(`Employee ${id} not found`);
-
-    const startMin = hhmmToMinutes(dto.plannedStart);
-    const endMin = hhmmToMinutes(dto.plannedEnd);
-    if (endMin <= startMin) {
-      throw new BadRequestException('plannedEnd muss nach plannedStart liegen');
-    }
-    const partTimePct = dto.partTimePct ?? 100;
-    const net = dto.active
-      ? deriveNetCapacity(startMin, endMin, dto.breakMinutes, user.productivityFactor, partTimePct)
-      : 0;
-    const plannedHours = round2(Math.max(0, endMin - startMin) / 60);
-    const day = parseDate(dto.date);
-    const plannedStart = new Date(`${dto.date}T${dto.plannedStart}:00`);
-    const plannedEnd = new Date(`${dto.date}T${dto.plannedEnd}:00`);
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.shift.upsert({
-        where: { shift_employee_date: { employeeId: id, date: day } },
-        create: {
-          employeeId: id,
-          date: day,
-          plannedStart,
-          plannedEnd,
-          breakMinutes: dto.breakMinutes,
-          plannedHours,
-          netCapacityMinutes: net,
-          active: dto.active,
-          source: 'teamlead',
-          productivityFactor: user.productivityFactor,
-        },
-        update: {
-          plannedStart,
-          plannedEnd,
-          breakMinutes: dto.breakMinutes,
-          plannedHours,
-          netCapacityMinutes: net,
-          active: dto.active,
-          source: 'teamlead',
-          productivityFactor: user.productivityFactor,
-        },
-      });
-      await this.events.append(
-        {
-          eventType: 'employee.shift_overridden',
-          entityType: 'User',
-          entityId: id,
-          actorType: 'teamlead',
-          actorId: principal.sub,
-          payload: { date: dto.date, netCapacityMinutes: net, reason: dto.reason ?? null },
-        },
-        tx,
-      );
-    });
-
-    return this.loadDetail(id, dto.date);
-  }
-
   async createAbsence(
     principal: Principal,
     id: string,
     dto: AbsenceCreateDto,
   ): Promise<EmployeeDetailDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: { id: true, productivityFactor: true },
-    });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) throw new NotFoundException(`Employee ${id} not found`);
     const kind = absenceKindSchema.parse(dto.kind);
     const from = parseDate(dto.dateFrom);
@@ -240,12 +167,15 @@ export class EmployeesService {
           dateFrom: from,
           dateTo: to,
           kind: kind as AbsenceKind,
-          partialUntil: dto.partialUntil ?? null,
           reason: dto.reason ?? null,
           createdBy: principal.sub,
         },
       });
-      await this.applyAbsenceToShifts(tx, id, from, to, kind, dto.partialUntil, user.productivityFactor);
+      // Absence zeroes the materialized capacity over the range (full-day).
+      await tx.shift.updateMany({
+        where: { employeeId: id, date: { gte: from, lte: to } },
+        data: { netCapacityMinutes: 0, active: false },
+      });
       await this.events.append(
         {
           eventType: 'employee.absence_recorded',
@@ -253,12 +183,7 @@ export class EmployeesService {
           entityId: id,
           actorType: 'teamlead',
           actorId: principal.sub,
-          payload: {
-            kind,
-            dateFrom: dto.dateFrom,
-            dateTo: dto.dateTo,
-            reason: dto.reason ?? null,
-          },
+          payload: { kind, dateFrom: dto.dateFrom, dateTo: dto.dateTo, reason: dto.reason ?? null },
         },
         tx,
       );
@@ -269,50 +194,60 @@ export class EmployeesService {
 
   // --- internals ------------------------------------------------------------
 
-  /** Zero (full absence) or shorten (teilabwesend) the netCapacity of affected shifts. */
-  private async applyAbsenceToShifts(
-    tx: PrismaTx,
-    employeeId: string,
-    from: Date,
-    to: Date,
-    kind: string,
-    partialUntil: string | undefined,
-    productivityFactor: number,
-  ): Promise<void> {
-    const shifts = await tx.shift.findMany({
-      where: { employeeId, date: { gte: from, lte: to } },
+  /**
+   * Derive the concrete Shift for `date` from the employee's weekly pattern and
+   * persist it (source='pattern'). A non-working day, an inactive employee, or an
+   * active absence yields zero capacity. This is the one bridge from the planned
+   * Wochenplan to the capacity the engine consumes.
+   */
+  private async materializeShift(tx: PrismaTx, employeeId: string, date: string): Promise<void> {
+    const user = await tx.user.findUnique({
+      where: { id: employeeId },
+      select: { active: true, productivityFactor: true, weeklyPattern: true },
     });
-    for (const shift of shifts) {
-      let net = 0;
-      if (kind === 'teilabwesend' && partialUntil) {
-        const startMin = dateToMinutes(shift.plannedStart);
-        const untilMin = hhmmToMinutes(partialUntil);
-        net = deriveNetCapacity(startMin, Math.max(startMin, untilMin), shift.breakMinutes, productivityFactor, 100);
-      }
-      await tx.shift.update({
-        where: { id: shift.id },
-        data: { netCapacityMinutes: net, active: net > 0 },
-      });
-    }
-  }
+    if (!user) return;
+    const day = parseDate(date);
+    const absence = await tx.absence.findFirst({
+      where: { employeeId, dateFrom: { lte: day }, dateTo: { gte: day } },
+      select: { id: true },
+    });
 
-  /** Re-derive a single day's shift capacity for a changed per-head productivity. */
-  private async rederiveShiftCapacity(
-    tx: PrismaTx,
-    employeeId: string,
-    day: Date,
-    productivityFactor: number,
-  ): Promise<void> {
-    const shift = await tx.shift.findUnique({
+    const pattern = weeklyPatternSchema.safeParse(user.weeklyPattern);
+    const plan: WeeklyDayPlan | undefined = pattern.success
+      ? pattern.data[WEEKDAY_KEYS[day.getUTCDay()]!]
+      : undefined;
+    const working = user.active && !absence && !!plan?.working && !!plan.start && !!plan.end;
+
+    if (!working || !plan?.start || !plan.end) {
+      // No capacity this day: drop any materialized shift so the engine sees nothing.
+      await tx.shift.deleteMany({ where: { employeeId, date: day } });
+      return;
+    }
+
+    const startMin = hhmmToMinutes(plan.start);
+    const endMin = hhmmToMinutes(plan.end);
+    const net = deriveNetCapacity(
+      startMin,
+      endMin,
+      plan.breakMinutes,
+      user.productivityFactor,
+      plan.partTimePct,
+    );
+    const plannedHours = round2(Math.max(0, endMin - startMin) / 60);
+    const shiftData = {
+      plannedStart: new Date(`${date}T${plan.start}:00`),
+      plannedEnd: new Date(`${date}T${plan.end}:00`),
+      breakMinutes: plan.breakMinutes,
+      plannedHours,
+      netCapacityMinutes: net,
+      active: net > 0,
+      source: 'pattern' as const,
+      productivityFactor: user.productivityFactor,
+    };
+    await tx.shift.upsert({
       where: { shift_employee_date: { employeeId, date: day } },
-    });
-    if (!shift || !shift.active) return;
-    const startMin = dateToMinutes(shift.plannedStart);
-    const endMin = dateToMinutes(shift.plannedEnd);
-    const net = deriveNetCapacity(startMin, endMin, shift.breakMinutes, productivityFactor, 100);
-    await tx.shift.update({
-      where: { id: shift.id },
-      data: { netCapacityMinutes: net, productivityFactor },
+      create: { employeeId, date: day, ...shiftData },
+      update: shiftData,
     });
   }
 
@@ -335,10 +270,8 @@ export class EmployeesService {
     });
 
     const base = this.toListItem(user as unknown as UserWithRelations, date);
-    const weeklyParsed = weeklyPatternSchema.safeParse(user.weeklyPattern);
     return {
       ...base,
-      weeklyPattern: weeklyParsed.success ? weeklyParsed.data : null,
       recentAudit: events.map((e) => ({
         eventType: e.eventType,
         at: e.timestamp.toISOString(),
@@ -370,15 +303,20 @@ export class EmployeesService {
       displayName: u.displayName,
       roles: u.roles.map((r) => normalizeRole(r.role.name)),
       active: u.active,
-      isPilot: u.isPilot,
       areaTags: u.areaTags,
       productivityFactor: u.productivityFactor,
       overtimeTolerancePct: u.overtimeTolerancePct,
       todayShift,
       absentToday,
       netCapacityToday,
+      weeklyPattern: parseWeeklyPattern(u.weeklyPattern),
     };
   }
+}
+
+function parseWeeklyPattern(value: Prisma.JsonValue): WeeklyPattern | null {
+  const parsed = weeklyPatternSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 // --- pure helpers -----------------------------------------------------------
@@ -392,7 +330,6 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** A @db.Date value at UTC midnight, so equality/range filters match Prisma's Date. */
 function parseDate(date: string): Date {
   return new Date(`${date}T00:00:00.000Z`);
 }
@@ -404,10 +341,6 @@ function isoDate(d: Date): string {
 function hhmmToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
-}
-
-function dateToMinutes(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes();
 }
 
 function dateToHHMM(d: Date): string {
