@@ -1,0 +1,1068 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/me/stream": {
+      "get": {
+        "operationId": "LiveController_meStream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE live status for the caller’s own packages (§16.1)",
+        "tags": ["live"]
+      }
+    },
+    "/api/teamlead/stream": {
+      "get": {
+        "operationId": "LiveController_teamleadStream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE live status for the full operational pool",
+        "tags": ["live"]
+      }
+    },
+    "/api/me/today": {
+      "get": {
+        "operationId": "MeController_today",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["me"]
+      }
+    },
+    "/api/me/current-bundle": {
+      "get": {
+        "operationId": "MeController_currentBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active bundle, or null if none",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentBundleDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["me"]
+      }
+    },
+    "/api/cases/{caseId}/start-preparation": {
+      "post": {
+        "operationId": "CasesController_startPreparation",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Begin handling a package (assigned → picking, case.started)",
+        "tags": ["cases"]
+      }
+    },
+    "/api/cases/{caseId}/complete": {
+      "post": {
+        "operationId": "CasesController_complete",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Complete a package (boxing → completed, case.completed)",
+        "tags": ["cases"]
+      }
+    },
+    "/api/cases/{caseId}/partial-complete": {
+      "post": {
+        "operationId": "CasesController_partialComplete",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartialCompleteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Partially complete (boxing → partially_completed)",
+        "tags": ["cases"]
+      }
+    },
+    "/api/issues": {
+      "post": {
+        "operationId": "CasesController_reportIssue",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIssueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Report a problem on an owned case (→ issue_open, issue.created)",
+        "tags": ["cases"]
+      }
+    },
+    "/api/cases/{caseId}/preparation-complete": {
+      "post": {
+        "operationId": "CasesController_preparationComplete",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Finish preparation (picking → checking) — EPIC 5",
+        "tags": ["cases"]
+      }
+    },
+    "/api/positions/{positionId}/confirm": {
+      "post": {
+        "operationId": "CasesController_confirmPosition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm a position (position.confirmed) — EPIC 5",
+        "tags": ["cases"]
+      }
+    },
+    "/api/sku-lines/{skuLineId}/confirm-quantity": {
+      "post": {
+        "operationId": "CasesController_confirmQuantity",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm a SKU quantity (sku.quantity_confirmed) — EPIC 5",
+        "tags": ["cases"]
+      }
+    },
+    "/api/bundles/{bundleId}/start": {
+      "post": {
+        "operationId": "CasesController_startBundle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start a bundle (bundle.started) — EPIC 4",
+        "tags": ["cases"]
+      }
+    },
+    "/api/route-stops/{stopId}/scan": {
+      "post": {
+        "operationId": "CasesController_scanStop",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Scan a pickup location (pickup.location_scanned) — EPIC 4",
+        "tags": ["cases"]
+      }
+    },
+    "/api/transport-boxes/{boxId}/print-label": {
+      "post": {
+        "operationId": "CasesController_printLabel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Print a box label (box.label_printed) — EPIC 5",
+        "tags": ["cases"]
+      }
+    },
+    "/api/transport-boxes/{boxId}/seal": {
+      "post": {
+        "operationId": "CasesController_sealBox",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Seal a transport box (box.sealed) — EPIC 5",
+        "tags": ["cases"]
+      }
+    },
+    "/api/teamlead/dashboard": {
+      "get": {
+        "operationId": "TeamleadController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/cases": {
+      "get": {
+        "operationId": "TeamleadController_pool",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by CaseStatus",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "section",
+            "required": false,
+            "in": "query",
+            "description": "Filter by section code",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the operational pool (filter + paginate)",
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/prioritize": {
+      "post": {
+        "operationId": "TeamleadController_prioritize",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrioritizeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/park": {
+      "post": {
+        "operationId": "TeamleadController_park",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/unpark": {
+      "post": {
+        "operationId": "TeamleadController_unpark",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/issues/{issueId}/resolve": {
+      "post": {
+        "operationId": "TeamleadController_resolveIssue",
+        "parameters": [
+          {
+            "name": "issueId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveIssueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resolve an issue (issue_open → waiting_teamlead, issue.resolved)",
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/issues/{issueId}/release": {
+      "post": {
+        "operationId": "TeamleadController_releaseIssue",
+        "parameters": [
+          {
+            "name": "issueId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Release a case back to work (waiting_teamlead → released → checking)",
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/assignments/recalculate": {
+      "post": {
+        "operationId": "TeamleadController_recalculate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recalculate day assignment — EPIC 4 assignment engine",
+        "tags": ["teamlead"]
+      }
+    },
+    "/api/teamlead/assignments/manual": {
+      "post": {
+        "operationId": "TeamleadController_manualAssign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Manual assignment override — EPIC 4 assignment engine",
+        "tags": ["teamlead"]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Process is up"
+          }
+        },
+        "tags": ["health"]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Dependencies reachable"
+          }
+        },
+        "tags": ["health"]
+      }
+    }
+  },
+  "info": {
+    "title": "Paketlagerdispo Backend API",
+    "description": "Digitale Belegverteilung – modular monolith backbone. Status state machine (§7), RBAC (§5/§16.1), audit event log (§7.2), and the case pool/lifecycle (§14.2).",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "me",
+      "description": "Employee self-service (own packages only, §16.1)"
+    },
+    {
+      "name": "cases",
+      "description": "Employee package-handling lifecycle"
+    },
+    {
+      "name": "teamlead",
+      "description": "Teamlead pool steering & issue resolution"
+    },
+    {
+      "name": "live",
+      "description": "SSE live status streams"
+    },
+    {
+      "name": "health",
+      "description": "Liveness & readiness probes"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "OIDC access token"
+      }
+    },
+    "schemas": {
+      "RouteStopDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "locationCode": {
+            "type": "string"
+          },
+          "scanRequired": {
+            "type": "boolean"
+          },
+          "scanned": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "sequence", "locationCode", "scanRequired", "scanned"]
+      },
+      "CurrentBundleDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          },
+          "caseCount": {
+            "type": "number"
+          },
+          "routeStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteStopDto"
+            }
+          }
+        },
+        "required": ["bundleId", "status", "plannedEffortMinutes", "caseCount", "routeStops"]
+      },
+      "CaseSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Anhang A CaseStatus"
+          },
+          "section": {
+            "type": "object",
+            "nullable": true,
+            "description": "Section 1|2|3|4|7|8, null for prio-only"
+          },
+          "priorityFlags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalQuantity": {
+            "type": "number"
+          },
+          "estimatedMinutes": {
+            "type": "number"
+          },
+          "storageLocationCode": {
+            "type": "string"
+          },
+          "bookingDate": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          }
+        },
+        "required": [
+          "id",
+          "weBelegNo",
+          "status",
+          "priorityFlags",
+          "totalQuantity",
+          "estimatedMinutes",
+          "storageLocationCode",
+          "bookingDate"
+        ]
+      },
+      "TodayResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "bundle": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CurrentBundleDto"
+              }
+            ]
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseSummaryDto"
+            }
+          }
+        },
+        "required": ["date", "cases"]
+      },
+      "TransitionResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "eventId": {
+            "type": "object",
+            "nullable": true,
+            "description": "Audit event id, if a milestone was recorded"
+          }
+        },
+        "required": ["caseId", "status", "version"]
+      },
+      "PartialCompleteDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "completedQuantity": {
+            "type": "number"
+          }
+        }
+      },
+      "CreateIssueDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Case the issue is reported against"
+          },
+          "scope": {
+            "type": "string",
+            "description": "IssueScope: case|position|sku_line|transport_box"
+          },
+          "issueType": {
+            "type": "string",
+            "description": "IssueType (Anhang A)"
+          },
+          "scopeId": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "photoKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["caseId", "scope", "issueType"]
+      },
+      "DashboardDto": {
+        "type": "object",
+        "properties": {
+          "countsByStatus": {
+            "type": "object",
+            "description": "Open case count grouped by status"
+          },
+          "poolSize": {
+            "type": "number"
+          },
+          "prioOpen": {
+            "type": "number"
+          },
+          "oldestOpenBookingDate": {
+            "type": "object",
+            "nullable": true,
+            "description": "Booking date of oldest open case"
+          }
+        },
+        "required": ["countsByStatus", "poolSize", "prioOpen"]
+      },
+      "PoolItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Anhang A CaseStatus"
+          },
+          "section": {
+            "type": "object",
+            "nullable": true,
+            "description": "Section 1|2|3|4|7|8, null for prio-only"
+          },
+          "priorityFlags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalQuantity": {
+            "type": "number"
+          },
+          "estimatedMinutes": {
+            "type": "number"
+          },
+          "storageLocationCode": {
+            "type": "string"
+          },
+          "bookingDate": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "assignedEmployeeNo": {
+            "type": "object",
+            "nullable": true
+          },
+          "effortPoints": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "weBelegNo",
+          "status",
+          "priorityFlags",
+          "totalQuantity",
+          "estimatedMinutes",
+          "storageLocationCode",
+          "bookingDate",
+          "effortPoints"
+        ]
+      },
+      "PoolListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": ["items", "total", "page", "limit"]
+      },
+      "PrioritizeDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason for manual teamlead priority"
+          }
+        }
+      },
+      "ParkDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ResolveIssueDto": {
+        "type": "object",
+        "properties": {
+          "resolution": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

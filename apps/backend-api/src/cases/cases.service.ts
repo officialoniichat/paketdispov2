@@ -1,0 +1,278 @@
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { CaseStatus } from '@paket/domain-types';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { WorkflowService } from '../workflow/workflow.service.js';
+import { LiveStatusService } from '../live/live.module.js';
+import type { Principal } from '../auth/rbac.js';
+import { assertCanAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
+import {
+  type CaseSummaryDto,
+  type CreateIssueDto,
+  type CurrentBundleDto,
+  type PartialCompleteDto,
+  type TodayResponseDto,
+  type TransitionResultDto,
+} from './cases.dto.js';
+
+interface CaseOwnership {
+  id: string;
+  status: CaseStatus;
+  version: number;
+  ownerEmployeeNo: string | null;
+}
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfTodayUtc(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Employee-facing case access (§14.2 /api/me/*, lifecycle) — strictly scoped to
+ * the caller's own packages (§16.1). Every mutation runs through WorkflowService
+ * so the state machine and audit log stay authoritative.
+ */
+@Injectable()
+export class CasesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflow: WorkflowService,
+    private readonly live: LiveStatusService,
+  ) {}
+
+  private async resolveEmployee(principal: Principal): Promise<{ id: string; employeeNo: string }> {
+    if (!principal.employeeNo) {
+      throw new ForbiddenException('Token has no employee number claim');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { employeeNo: principal.employeeNo },
+      select: { id: true, employeeNo: true, active: true },
+    });
+    if (!user || !user.active) {
+      throw new ForbiddenException('Employee not provisioned or inactive');
+    }
+    return { id: user.id, employeeNo: user.employeeNo };
+  }
+
+  async getToday(principal: Principal): Promise<TodayResponseDto> {
+    const employee = await this.resolveEmployee(principal);
+    const today = startOfTodayUtc();
+
+    const bundle = await this.prisma.assignmentBundle.findFirst({
+      where: { employeeId: employee.id, date: today },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        routeStops: { orderBy: { sequence: 'asc' } },
+        cases: { include: { storageLocation: true }, orderBy: { bookingDate: 'asc' } },
+      },
+    });
+
+    if (!bundle) {
+      return { date: isoDay(today), bundle: null, cases: [] };
+    }
+
+    return {
+      date: isoDay(today),
+      bundle: this.mapBundle(bundle),
+      cases: bundle.cases.map((c) => this.mapSummary(c)),
+    };
+  }
+
+  async getCurrentBundle(principal: Principal): Promise<CurrentBundleDto | null> {
+    const employee = await this.resolveEmployee(principal);
+    const bundle = await this.prisma.assignmentBundle.findFirst({
+      where: { employeeId: employee.id, status: { in: ['accepted', 'active'] } },
+      orderBy: { updatedAt: 'desc' },
+      include: { routeStops: { orderBy: { sequence: 'asc' } }, cases: { select: { id: true } } },
+    });
+    return bundle ? this.mapBundle(bundle) : null;
+  }
+
+  async startPreparation(principal: Principal, caseId: string): Promise<TransitionResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    const result = await this.workflow.transition({
+      caseId: owned.id,
+      toStatus: 'picking',
+      eventType: 'case.started',
+      actor: { actorType: 'employee', actorId: principal.sub },
+      expectedVersion: owned.version,
+    });
+    return this.finish(principal, result);
+  }
+
+  async complete(principal: Principal, caseId: string): Promise<TransitionResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    const result = await this.workflow.transition({
+      caseId: owned.id,
+      toStatus: 'completed',
+      eventType: 'case.completed',
+      actor: { actorType: 'employee', actorId: principal.sub },
+      expectedVersion: owned.version,
+    });
+    return this.finish(principal, result);
+  }
+
+  async partialComplete(
+    principal: Principal,
+    caseId: string,
+    dto: PartialCompleteDto,
+  ): Promise<TransitionResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    const result = await this.workflow.transition({
+      caseId: owned.id,
+      toStatus: 'partially_completed',
+      eventType: 'case.partially_completed',
+      actor: { actorType: 'employee', actorId: principal.sub },
+      payload: { reason: dto.reason, completedQuantity: dto.completedQuantity },
+      expectedVersion: owned.version,
+    });
+    return this.finish(principal, result);
+  }
+
+  async reportIssue(
+    principal: Principal,
+    caseId: string,
+    dto: CreateIssueDto,
+  ): Promise<TransitionResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.issue.create({
+        data: {
+          caseId: owned.id,
+          scope: dto.scope as never,
+          scopeId: dto.scopeId,
+          employeeId: employee.id,
+          issueType: dto.issueType as never,
+          description: dto.description,
+          photoKeys: dto.photoKeys ?? [],
+        },
+      });
+      return this.workflow.transition({
+        caseId: owned.id,
+        toStatus: 'issue_open',
+        eventType: 'issue.created',
+        actor: { actorType: 'employee', actorId: principal.sub },
+        payload: { scope: dto.scope, issueType: dto.issueType },
+        expectedVersion: owned.version,
+      });
+    });
+    return this.finish(principal, result);
+  }
+
+  /** Loads a case and enforces §16.1 ownership; foreign cases read as 404. */
+  private async requireOwnedCase(principal: Principal, caseId: string): Promise<CaseOwnership> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
+      },
+    });
+    if (!found) {
+      throw new NotFoundException(`Case ${caseId} not found`);
+    }
+    const ownerEmployeeNo = found.assignedBundle?.employee?.employeeNo ?? null;
+    try {
+      assertCanAccessCase(principal, caseId, ownerEmployeeNo);
+    } catch (err) {
+      if (err instanceof CaseAccessDeniedError) {
+        throw new NotFoundException(`Case ${caseId} not found`);
+      }
+      throw err;
+    }
+    return {
+      id: found.id,
+      status: found.status as CaseStatus,
+      version: found.version,
+      ownerEmployeeNo,
+    };
+  }
+
+  private mapBundle(bundle: {
+    id: string;
+    status: string;
+    plannedEffortMinutes: number;
+    routeStops: Array<{
+      id: string;
+      sequence: number;
+      locationCode: string;
+      scanRequired: boolean;
+      scannedAt: Date | null;
+    }>;
+    cases: Array<{ id: string }>;
+  }): CurrentBundleDto {
+    return {
+      bundleId: bundle.id,
+      status: bundle.status,
+      plannedEffortMinutes: bundle.plannedEffortMinutes,
+      caseCount: bundle.cases.length,
+      routeStops: bundle.routeStops.map((s) => ({
+        id: s.id,
+        sequence: s.sequence,
+        locationCode: s.locationCode,
+        scanRequired: s.scanRequired,
+        scanned: s.scannedAt != null,
+      })),
+    };
+  }
+
+  private mapSummary(c: {
+    id: string;
+    weBelegNo: string;
+    status: string;
+    section: number | null;
+    priorityFlags: string[];
+    totalQuantity: number;
+    estimatedMinutes: number;
+    bookingDate: Date;
+    storageLocation: { code: string };
+  }): CaseSummaryDto {
+    return {
+      id: c.id,
+      weBelegNo: c.weBelegNo,
+      status: c.status,
+      section: c.section,
+      priorityFlags: c.priorityFlags,
+      totalQuantity: c.totalQuantity,
+      estimatedMinutes: c.estimatedMinutes,
+      storageLocationCode: c.storageLocation.code,
+      bookingDate: isoDay(c.bookingDate),
+    };
+  }
+
+  /** Maps the transition result and broadcasts it on the employee live stream. */
+  private finish(
+    principal: Principal,
+    result: { caseId: string; status: string; version: number; event: { id: string } | null },
+  ): TransitionResultDto {
+    this.live.publish({
+      caseId: result.caseId,
+      status: result.status,
+      eventType: result.event ? undefined : 'transition',
+      employeeNo: principal.employeeNo ?? null,
+      at: new Date().toISOString(),
+    });
+    return this.toResult(result);
+  }
+
+  private toResult(result: {
+    caseId: string;
+    status: string;
+    version: number;
+    event: { id: string } | null;
+  }): TransitionResultDto {
+    return {
+      caseId: result.caseId,
+      status: result.status,
+      version: result.version,
+      eventId: result.event?.id ?? null,
+    };
+  }
+}

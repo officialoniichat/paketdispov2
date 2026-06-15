@@ -647,6 +647,7 @@ model ZstRecord {
 
 model WorkflowEvent {
   id             String    @id @default(cuid())
+  seq            BigInt    @unique @default(autoincrement()) // monotonic chain order
   idempotencyKey String?   @unique // optional dedup key for at-least-once producers
   eventType      String // WorkflowEventType (dotted) – enforced by Zod at the boundary
   entityType     String
@@ -656,6 +657,9 @@ model WorkflowEvent {
   timestamp      DateTime  @default(now())
   payload        Json      @default("{}")
   correlationId  String?
+  // Tamper-evidence (§16.2): hash = sha256(prevHash + canonical content).
+  hash           String
+  prevHash       String?
 
   @@index([entityType, entityId])
   @@index([eventType])

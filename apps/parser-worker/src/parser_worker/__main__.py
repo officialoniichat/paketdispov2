@@ -1,12 +1,20 @@
-"""Entry point placeholder. EPIC 2 wires this to the Redis/BullMQ parse queue."""
+"""Entry point: consume the Redis/BullMQ document-parse queue (§12.2 / E.1)."""
+
+import asyncio
 
 import structlog
+
+from parser_worker.queue import PARSE_QUEUE_NAME, REDIS_URL, run_worker
 
 log = structlog.get_logger()
 
 
 def main() -> None:
-    log.info("parser_worker.start", message="parser worker baseline – queue wiring in EPIC 2")
+    log.info("parser_worker.start", queue=PARSE_QUEUE_NAME, redis_url=REDIS_URL)
+    try:
+        asyncio.run(run_worker())
+    except KeyboardInterrupt:
+        log.info("parser_worker.interrupted")
 
 
 if __name__ == "__main__":
