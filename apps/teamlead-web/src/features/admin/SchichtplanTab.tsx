@@ -5,10 +5,9 @@
  * backend materializes it into the capacity the assignment engine reads. Absence is
  * a small separate action. No per-day hand-editing — the pattern is the plan.
  */
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
-import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -20,7 +19,6 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import {
-  createAbsence,
   fetchEmployees,
   updateEmployeeProfile,
   type EmployeeListItem,
@@ -46,7 +44,6 @@ const MODELS: Record<string, { start: string; end: string; breakMinutes: number 
   Frei: null,
 };
 const MODEL_NAMES = Object.keys(MODELS);
-const ABSENCE_KINDS = ['krank', 'urlaub', 'abwesend'] as const;
 
 function freiDay(): WeeklyPattern['mon'] {
   return { working: false, breakMinutes: 0, partTimePct: 100 };
@@ -139,8 +136,6 @@ export function SchichtplanTab(): JSX.Element {
           </Table>
         </Paper>
       )}
-
-      {query.data && <AbsencePanel employees={query.data.employees} />}
     </Stack>
   );
 }
@@ -204,64 +199,5 @@ function PlannerRow({ emp }: { emp: EmployeeListItem }): JSX.Element {
       ))}
       <TableCell align="right">{weeklyHours(pattern)} h</TableCell>
     </TableRow>
-  );
-}
-
-function AbsencePanel({ employees }: { employees: EmployeeListItem[] }): JSX.Element {
-  const queryClient = useQueryClient();
-  const staff = useMemo(() => employees.filter((e) => e.roles.includes('employee')), [employees]);
-  const today = new Date().toISOString().slice(0, 10);
-  const [employeeId, setEmployeeId] = useState(staff[0]?.id ?? '');
-  const [kind, setKind] = useState<(typeof ABSENCE_KINDS)[number]>('krank');
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
-  const [reason, setReason] = useState('');
-
-  const mutation = useMutation({
-    mutationFn: () => createAbsence(employeeId, { dateFrom: from, dateTo: to, kind, reason: reason || undefined }),
-    onSuccess: () => {
-      setReason('');
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'employees'] });
-    },
-  });
-
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        Abwesenheit melden
-      </Typography>
-      <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-        <TextField select size="small" label="Mitarbeiter" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} sx={{ minWidth: 160 }}>
-          {staff.map((e) => (
-            <MenuItem key={e.id} value={e.id}>
-              {e.displayName}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField select size="small" label="Art" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} sx={{ width: 130 }}>
-          {ABSENCE_KINDS.map((k) => (
-            <MenuItem key={k} value={k}>
-              {k}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField size="small" label="Von" value={from} onChange={(e) => setFrom(e.target.value)} sx={{ width: 140 }} />
-        <TextField size="small" label="Bis" value={to} onChange={(e) => setTo(e.target.value)} sx={{ width: 140 }} />
-        <TextField size="small" label="Grund" value={reason} onChange={(e) => setReason(e.target.value)} sx={{ flex: 1, minWidth: 160 }} />
-        <Button variant="contained" color="warning" disabled={!employeeId || mutation.isPending} onClick={() => mutation.mutate()}>
-          Melden
-        </Button>
-      </Stack>
-      {mutation.isSuccess && (
-        <Alert severity="success" sx={{ mt: 1, py: 0 }}>
-          Abwesenheit gespeichert – Kapazität auf 0 gesetzt.
-        </Alert>
-      )}
-      {mutation.error && (
-        <Alert severity="error" sx={{ mt: 1, py: 0 }}>
-          Fehlgeschlagen: {mutation.error.message}
-        </Alert>
-      )}
-    </Paper>
   );
 }

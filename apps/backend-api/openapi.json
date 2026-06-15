@@ -1366,52 +1366,6 @@
         ]
       }
     },
-    "/api/admin/employees/{id}/absence": {
-      "post": {
-        "operationId": "EmployeesController_createAbsence",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AbsenceCreateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmployeeDetailDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Record an absence; zeroes/shortens affected shift capacity.",
-        "tags": [
-          "employees"
-        ]
-      }
-    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_live",
@@ -3064,13 +3018,9 @@
               }
             ]
           },
-          "absentToday": {
-            "type": "boolean",
-            "description": "Absent today (capacity 0)"
-          },
           "netCapacityToday": {
             "type": "number",
-            "description": "Net capacity counted today (0 if absent/inactive)"
+            "description": "Net capacity counted today (0 if inactive/frei)"
           },
           "weeklyPattern": {
             "nullable": true,
@@ -3091,7 +3041,6 @@
           "areaTags",
           "productivityFactor",
           "overtimeTolerancePct",
-          "absentToday",
           "netCapacityToday"
         ]
       },
@@ -3191,13 +3140,9 @@
               }
             ]
           },
-          "absentToday": {
-            "type": "boolean",
-            "description": "Absent today (capacity 0)"
-          },
           "netCapacityToday": {
             "type": "number",
-            "description": "Net capacity counted today (0 if absent/inactive)"
+            "description": "Net capacity counted today (0 if inactive/frei)"
           },
           "weeklyPattern": {
             "nullable": true,
@@ -3224,7 +3169,6 @@
           "areaTags",
           "productivityFactor",
           "overtimeTolerancePct",
-          "absentToday",
           "netCapacityToday",
           "recentAudit"
         ]
@@ -3259,31 +3203,6 @@
             ]
           }
         }
-      },
-      "AbsenceCreateDto": {
-        "type": "object",
-        "properties": {
-          "dateFrom": {
-            "type": "string",
-            "description": "ISO date YYYY-MM-DD"
-          },
-          "dateTo": {
-            "type": "string",
-            "description": "ISO date YYYY-MM-DD"
-          },
-          "kind": {
-            "type": "string",
-            "description": "krank | urlaub | abwesend"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dateFrom",
-          "dateTo",
-          "kind"
-        ]
       }
     }
   }

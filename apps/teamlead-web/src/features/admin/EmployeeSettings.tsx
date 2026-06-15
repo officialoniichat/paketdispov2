@@ -110,12 +110,8 @@ function EmployeeRow({
   selected: boolean;
   onSelect: () => void;
 }): JSX.Element {
-  const statusLabel = !emp.active ? 'inaktiv' : emp.absentToday ? 'abwesend' : 'aktiv';
-  const statusColor: 'default' | 'success' | 'warning' = !emp.active
-    ? 'default'
-    : emp.absentToday
-      ? 'warning'
-      : 'success';
+  const statusLabel = emp.active ? 'aktiv' : 'inaktiv';
+  const statusColor: 'default' | 'success' = emp.active ? 'success' : 'default';
   return (
     <TableRow hover selected={selected} onClick={onSelect} sx={{ cursor: 'pointer' }}>
       <TableCell>{emp.displayName}</TableCell>

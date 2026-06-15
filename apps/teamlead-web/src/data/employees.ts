@@ -11,7 +11,6 @@ export type EmployeeListResponse = components['schemas']['EmployeeListResponseDt
 export type EmployeeListItem = components['schemas']['EmployeeListItemDto'];
 export type EmployeeDetail = components['schemas']['EmployeeDetailDto'];
 export type EmployeeProfileUpdate = components['schemas']['EmployeeProfileUpdateDto'];
-export type AbsenceCreate = components['schemas']['AbsenceCreateDto'];
 export type WeeklyPattern = components['schemas']['WeeklyPatternDto'];
 
 /** List employees with today's (or a given day's) shift, capacity and absence. */
@@ -40,13 +39,4 @@ export async function updateEmployeeProfile(
     body: patch,
   });
   return unwrap<EmployeeDetail>(result, 'update employee');
-}
-
-/** Record an absence; backend zeroes affected shift capacity for the range. */
-export async function createAbsence(id: string, dto: AbsenceCreate): Promise<EmployeeDetail> {
-  const result = await api.POST('/api/admin/employees/{id}/absence', {
-    params: { path: { id } },
-    body: dto,
-  });
-  return unwrap<EmployeeDetail>(result, 'create absence');
 }
