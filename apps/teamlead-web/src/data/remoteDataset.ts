@@ -11,12 +11,14 @@ import type { WorkflowEvent } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
 import type {
+  BoardCase,
   BoardRow,
   CapacitySummary,
   CockpitSummary,
   Lane,
   LaneCard,
   LaneId,
+  PoolCase,
   PoolSummary,
   ZstProgress,
 } from './types.js';
@@ -26,6 +28,7 @@ type DashboardDto = components['schemas']['DashboardDto'];
 type KpiDto = components['schemas']['KpiDto'];
 type BoardDto = components['schemas']['BoardDto'];
 type BoardRowDto = components['schemas']['BoardRowDto'];
+type BoardCaseDto = components['schemas']['BoardCaseDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
 type PoolItemDto = components['schemas']['PoolItemDto'];
 type PoolListDto = components['schemas']['PoolListDto'];
@@ -36,6 +39,8 @@ export interface CockpitSnapshot {
   board: BoardRow[];
   lanes: Lane[];
   recentOverrides: WorkflowEvent[];
+  /** Ready, unassigned cases that can be added to a bundle (§10.3 manual add). */
+  pool: PoolCase[];
 }
 
 const HEAVY_MINUTES_THRESHOLD = 30;
@@ -75,6 +80,20 @@ export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
     board: boardDto.rows.map(mapBoardRow),
     lanes: buildLanes(poolDto.items),
     recentOverrides: eventDtos.map(mapEvent),
+    pool: poolDto.items.filter(isAddablePoolItem).map(toPoolCase),
+  };
+}
+
+/** Ready, not-yet-assigned cases are the only ones a teamlead can add to a bundle. */
+function isAddablePoolItem(item: PoolItemDto): boolean {
+  return item.status === 'ready' && item.assignedEmployeeNo == null;
+}
+
+function toPoolCase(item: PoolItemDto): PoolCase {
+  return {
+    caseId: item.id,
+    weBelegNo: item.weBelegNo,
+    estimatedMinutes: item.estimatedMinutes,
   };
 }
 
@@ -139,6 +158,19 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     bundleSize: row.cases.length,
     bundleId: row.bundleId,
     paused: row.bundleStatus === 'paused',
+    cases: row.cases.map(toBoardCase),
+  };
+}
+
+function toBoardCase(c: BoardCaseDto): BoardCase {
+  return {
+    caseId: c.id,
+    weBelegNo: c.weBelegNo,
+    status: c.status as BoardCase['status'],
+    estimatedMinutes: c.estimatedMinutes,
+    effortPoints: c.effortPoints,
+    // BoardCaseDto carries no storage code; the board caption hides it when empty.
+    storageCode: '',
   };
 }
 

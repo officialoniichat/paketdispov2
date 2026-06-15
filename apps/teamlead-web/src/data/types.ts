@@ -136,6 +136,16 @@ export interface Lane {
 // §10.3 Mitarbeitenden-Board (workforce dispatch)
 // ---------------------------------------------------------------------------
 
+/** One case in an employee's bundle, in pickup order (§10.3 board detail). */
+export interface BoardCase {
+  caseId: string;
+  weBelegNo: string;
+  status: GoodsReceiptCase['status'];
+  estimatedMinutes: number;
+  effortPoints: number;
+  storageCode: string;
+}
+
 export interface BoardRow {
   employeeId: string;
   displayName: string;
@@ -151,10 +161,47 @@ export interface BoardRow {
   bundleSize?: number;
   bundleId?: string;
   paused: boolean;
+  /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
+  cases: BoardCase[];
+}
+
+/** A free (ready, unassigned) case available to add to a bundle (§10.3). */
+export interface PoolCase {
+  caseId: string;
+  weBelegNo: string;
+  estimatedMinutes: number;
 }
 
 // ---------------------------------------------------------------------------
-// §E.4 Simulation „Neu berechnen"
+// §E.4 Simulation „Neu berechnen" (engine dry-run preview, real backend)
+// ---------------------------------------------------------------------------
+
+/** Per-employee load the engine proposes (mirrors EmployeeLoadDto). */
+export interface PreviewEmployeeLoad {
+  employeeId: string;
+  capacityMinutes: number;
+  assignedMinutes: number;
+  assignedPoints: number;
+  bundleCount: number;
+}
+
+/**
+ * Non-committal preview of an assignment-engine run (mirrors RecalculateResultDto).
+ * Produced by `/assignments/preview`; persists nothing until committed via
+ * `/assignments/recalculate`.
+ */
+export interface PreviewResult {
+  date: string;
+  bundleCount: number;
+  assignedCaseCount: number;
+  unassignedCaseCount: number;
+  reserveMinutes: number;
+  durationMs: number;
+  loads: PreviewEmployeeLoad[];
+}
+
+// ---------------------------------------------------------------------------
+// §E.4 Simulation „Neu berechnen" (legacy in-memory selector – mock only)
 // ---------------------------------------------------------------------------
 
 /** Delta the simulation proposes before going live (human-in-the-loop). */

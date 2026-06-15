@@ -220,6 +220,14 @@ export function buildBoardRows(ds: OperationsDataset): BoardRow[] {
       bundleSize: bundle?.caseIds.length,
       bundleId: bundle?.id,
       paused: bundle?.status === 'paused',
+      cases: bundleCases.map((c) => ({
+        caseId: c.id,
+        weBelegNo: c.weBelegNo,
+        status: c.status,
+        estimatedMinutes: c.estimatedMinutes,
+        effortPoints: c.effortPoints,
+        storageCode: c.storageLocation.code,
+      })),
     };
   });
 }

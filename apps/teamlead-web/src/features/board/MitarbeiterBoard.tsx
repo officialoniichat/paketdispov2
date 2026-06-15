@@ -3,25 +3,26 @@
  *
  * Per person: current Paket, Restkapazität, Aufwandspunkte, schwer/leicht mix
  * and Issue-Status. Teamlead actions – Paket entziehen/hinzufügen, Reihenfolge
- * neu setzen, Pause/Abwesenheit – all require a reason and are audited (§8.4).
+ * neu setzen, Pause/Abwesenheit – all require a reason and are audited (§8.4),
+ * and are POSTed to the real backend with an optimistic board update + rollback.
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
+import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
+import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import type { GoodsReceiptCase } from '@paket/domain-types';
 import { CaseStatusChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
@@ -36,8 +37,11 @@ interface PendingAction {
 }
 
 export function MitarbeiterBoard(): JSX.Element {
-  const { board } = useCockpitData();
+  const { board, withdraw, addToBundle, reorder, pauseResume } = useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
+
+  // First failing intervention drives the error snackbar.
+  const failed = [withdraw, addToBundle, reorder, pauseResume].find((m) => m.isError);
 
   return (
     <Stack spacing={2}>
@@ -58,6 +62,17 @@ export function MitarbeiterBoard(): JSX.Element {
         onConfirm={(reason) => pending?.run(reason)}
         onClose={() => setPending(null)}
       />
+
+      <Snackbar
+        open={Boolean(failed)}
+        autoHideDuration={8000}
+        onClose={() => failed?.reset()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" variant="filled" onClose={() => failed?.reset()}>
+          {failed?.error?.message ?? 'Eingriff fehlgeschlagen.'}
+        </Alert>
+      </Snackbar>
     </Stack>
   );
 }
@@ -68,24 +83,22 @@ interface EmployeeRowProps {
 }
 
 function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
-  const { dataset, withdrawCase, addCaseToBundle, reorderBundle, pauseBundle, manualOverridesEnabled } =
-    useCockpitData();
+  const { pool, withdraw, addToBundle, reorder, pauseResume } = useCockpitData();
   const navigate = useNavigate();
-  const bundle = dataset.bundles.find((b) => b.id === row.bundleId);
-  const bundleKey = bundle?.caseIds.join() ?? '';
-  const [draft, setDraft] = useState<string[]>(bundle?.caseIds ?? []);
+  const bundleId = row.bundleId;
+  const caseKey = row.cases.map((c) => c.caseId).join();
+  const [draft, setDraft] = useState<string[]>(() => row.cases.map((c) => c.caseId));
   const [addId, setAddId] = useState('');
 
   // Keep the reorder draft in sync once a mutation changes the bundle.
   useEffect(() => {
-    setDraft(bundle?.caseIds ?? []);
-  }, [bundleKey, bundle?.caseIds]);
+    setDraft(row.cases.map((c) => c.caseId));
+  }, [caseKey, row.cases]);
 
-  const pool = dataset.cases.filter((c) => c.status === 'ready' && !c.assignedBundleId);
   const draftCases = draft
-    .map((id) => dataset.cases.find((c) => c.id === id))
-    .filter((c): c is GoodsReceiptCase => Boolean(c));
-  const dirty = bundle ? draft.join() !== bundle.caseIds.join() : false;
+    .map((id) => row.cases.find((c) => c.caseId === id))
+    .filter((c): c is BoardRow['cases'][number] => c !== undefined);
+  const dirty = draft.join() !== row.cases.map((c) => c.caseId).join();
 
   function move(index: number, dir: -1 | 1): void {
     const next = [...draft];
@@ -133,26 +146,6 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
         </Stack>
       </AccordionSummary>
       <AccordionDetails>
-        {!manualOverridesEnabled ? (
-          <Stack spacing={1}>
-            {row.bundleSize ? (
-              <Typography variant="body2" color="text.secondary">
-                {row.bundleSize} Paket(e) zugewiesen · {formatMinutes(row.assignedMinutes)} verplant.
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Kein Paket zugewiesen.
-              </Typography>
-            )}
-            <Tooltip title="kommt später">
-              <span>
-                <Button size="small" variant="outlined" disabled>
-                  Manuelle Eingriffe (Entziehen / Hinzufügen / Reihenfolge / Pause)
-                </Button>
-              </span>
-            </Tooltip>
-          </Stack>
-        ) : (
         <Stack spacing={1}>
           {draftCases.length === 0 && (
             <Typography variant="body2" color="text.secondary">
@@ -160,7 +153,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             </Typography>
           )}
           {draftCases.map((c, i) => (
-            <Stack key={c.id} direction="row" spacing={1} alignItems="center">
+            <Stack key={c.caseId} direction="row" spacing={1} alignItems="center">
               <Typography variant="body2" sx={{ minWidth: 18 }}>
                 {i + 1}.
               </Typography>
@@ -183,20 +176,24 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
               <CaseStatusChip status={c.status} size="small" />
               <Typography variant="caption" color="text.secondary">
-                {c.storageLocation.code} · {formatMinutes(c.estimatedMinutes)}
+                {c.storageCode ? `${c.storageCode} · ` : ''}
+                {formatMinutes(c.estimatedMinutes)}
               </Typography>
-              <Button size="small" onClick={() => navigate(`/belege/${c.id}`)}>
+              <Button size="small" onClick={() => navigate(`/belege/${c.caseId}`)}>
                 Details
               </Button>
               <Button
                 size="small"
                 color="error"
+                disabled={!bundleId}
                 onClick={() =>
                   requestReason({
                     title: `${c.weBelegNo} von ${row.displayName} entziehen`,
                     description: 'Beleg geht zurück in den Pool.',
                     suggestions: ['Überlastet', 'Falsch zugeteilt', 'Pause/Abwesenheit'],
-                    run: (reason) => row.bundleId && withdrawCase(c.id, row.bundleId, reason),
+                    run: (reason) => {
+                      if (bundleId) withdraw.mutate({ caseId: c.caseId, bundleId, reason });
+                    },
                   })
                 }
               >
@@ -213,11 +210,11 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               value={addId}
               onChange={(e) => setAddId(e.target.value)}
               sx={{ minWidth: 220 }}
-              disabled={pool.length === 0 || !row.bundleId}
+              disabled={pool.length === 0 || !bundleId}
             >
               {pool.length === 0 && <MenuItem value="">Kein freier Beleg</MenuItem>}
               {pool.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
+                <MenuItem key={c.caseId} value={c.caseId}>
                   {c.weBelegNo} · {formatMinutes(c.estimatedMinutes)}
                 </MenuItem>
               ))}
@@ -225,16 +222,16 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             <Button
               size="small"
               variant="outlined"
-              disabled={!addId || !row.bundleId}
+              disabled={!addId || !bundleId}
               onClick={() => {
-                const c = pool.find((p) => p.id === addId);
-                if (!c || !row.bundleId) return;
+                const c = pool.find((p) => p.caseId === addId);
+                if (!c || !bundleId) return;
                 requestReason({
                   title: `${c.weBelegNo} zu ${row.displayName} hinzufügen`,
                   description: 'Manuelle Zuweisung an dieses Paket.',
                   suggestions: ['Reserve nutzen', 'Kapazität frei', 'Prio-Beleg'],
                   run: (reason) => {
-                    addCaseToBundle(c.id, row.bundleId!, reason);
+                    addToBundle.mutate({ caseId: c.caseId, bundleId, reason });
                     setAddId('');
                   },
                 });
@@ -246,13 +243,15 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             <Button
               size="small"
               variant="outlined"
-              disabled={!dirty || !row.bundleId}
+              disabled={!dirty || !bundleId}
               onClick={() =>
                 requestReason({
                   title: `Reihenfolge für ${row.displayName} speichern`,
                   description: 'Neue Abholreihenfolge des Pakets.',
                   suggestions: ['Laufweg optimiert', 'Prio vorgezogen'],
-                  run: (reason) => row.bundleId && reorderBundle(row.bundleId, draft, reason),
+                  run: (reason) => {
+                    if (bundleId) reorder.mutate({ bundleId, caseIds: draft, reason });
+                  },
                 })
               }
             >
@@ -263,13 +262,15 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               size="small"
               color="warning"
               variant="outlined"
-              disabled={!row.bundleId}
+              disabled={!bundleId}
               onClick={() =>
                 requestReason({
                   title: `${row.displayName}: ${row.paused ? 'Pause beenden' : 'Pause/Abwesenheit'}`,
                   description: row.paused ? 'Bearbeitung fortsetzen.' : 'Pausiert die Bearbeitung.',
                   suggestions: ['Pause', 'Krank', 'Andere Aufgabe', 'Zurück aus Pause'],
-                  run: (reason) => row.bundleId && pauseBundle(row.bundleId, reason),
+                  run: (reason) => {
+                    if (bundleId) pauseResume.mutate({ bundleId, reason, paused: row.paused });
+                  },
                 })
               }
             >
@@ -277,7 +278,6 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             </Button>
           </Stack>
         </Stack>
-        )}
       </AccordionDetails>
     </Accordion>
   );

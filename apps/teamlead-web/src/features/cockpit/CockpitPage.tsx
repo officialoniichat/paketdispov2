@@ -6,13 +6,12 @@
  * assignment engine (`/assignments/recalculate`) and a live teamlead override
  * audit trail (§8.4). Loading and error states are first-class.
  */
-import { type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
@@ -22,6 +21,7 @@ import Typography from '@mui/material/Typography';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import DownloadIcon from '@mui/icons-material/Download';
 import { useCockpitData } from '../../data/store.js';
+import { SimulationPanel } from '../simulation/SimulationPanel.js';
 import {
   formatDate,
   formatDateTime,
@@ -34,6 +34,7 @@ import { MetricCard } from '../../components/MetricCard.js';
 export function CockpitPage(): JSX.Element {
   const { cockpit, recentOverrides, isLoading, error, refetch, recalculate } = useCockpitData();
   const navigate = useNavigate();
+  const [simulationOpen, setSimulationOpen] = useState(false);
   const { capacity, pool, zst } = cockpit;
   const zstPct = zst.totalCases === 0 ? 0 : (zst.completedCases / zst.totalCases) * 100;
   const recalcResult = recalculate.data;
@@ -72,15 +73,9 @@ export function CockpitPage(): JSX.Element {
         <Stack direction="row" spacing={1} flexWrap="wrap">
           <Button
             variant="contained"
-            startIcon={
-              recalculate.isPending ? (
-                <CircularProgress size={18} color="inherit" />
-              ) : (
-                <CalculateIcon />
-              )
-            }
+            startIcon={<CalculateIcon />}
             disabled={recalculate.isPending}
-            onClick={() => recalculate.mutate()}
+            onClick={() => setSimulationOpen(true)}
           >
             Neu berechnen
           </Button>
@@ -205,12 +200,12 @@ export function CockpitPage(): JSX.Element {
         ) : (
           <Stack spacing={0.5} sx={{ mt: 1 }}>
             {recentOverrides.slice(0, 8).map((e) => {
-              const payload = e.payload as { action?: string; reason?: string } | undefined;
+              const payload = readAuditPayload(e.payload);
               return (
                 <Typography key={e.id} variant="body2">
-                  <strong>{formatDateTime(e.timestamp)}</strong> · {payload?.action ?? e.eventType}{' '}
-                  · {e.entityId}
-                  {payload?.reason ? ` – „${payload.reason}"` : ''}
+                  <strong>{formatDateTime(e.timestamp)}</strong> · {payload.action ?? e.eventType} ·{' '}
+                  {e.entityId}
+                  {payload.reason ? ` – „${payload.reason}"` : ''}
                 </Typography>
               );
             })}
@@ -243,8 +238,27 @@ export function CockpitPage(): JSX.Element {
           Neuberechnung fehlgeschlagen: {recalculate.error?.message}
         </Alert>
       </Snackbar>
+
+      <SimulationPanel open={simulationOpen} onClose={() => setSimulationOpen(false)} />
     </Stack>
   );
+}
+
+/** Audit payload fields the cockpit renders (§8.4); `WorkflowEvent.payload` is `unknown`. */
+interface AuditPayload {
+  action?: string;
+  reason?: string;
+}
+
+/** Safely narrow an `unknown` audit payload to its optional string fields. */
+function readAuditPayload(payload: unknown): AuditPayload {
+  if (typeof payload !== 'object' || payload === null) return {};
+  const action = 'action' in payload ? payload.action : undefined;
+  const reason = 'reason' in payload ? payload.reason : undefined;
+  return {
+    action: typeof action === 'string' ? action : undefined,
+    reason: typeof reason === 'string' ? reason : undefined,
+  };
 }
 
 function KpiSkeletons({ count }: { count: number }): JSX.Element {
