@@ -92,6 +92,15 @@ interface LaneColumnProps {
   onPrioritise: (c: LaneCard) => void;
 }
 
+/**
+ * Parken is only legal from `ready`/`needs_review` (§7.1 state machine); the backend
+ * rejects any other source state. Only offer the button when the click will succeed,
+ * so the UI can never trigger a rejected park.
+ */
+function canPark(card: LaneCard): boolean {
+  return card.status === 'ready' || card.status === 'needs_review';
+}
+
 function LaneColumn({
   lane,
   onOpen,
@@ -157,9 +166,11 @@ function LaneColumn({
                   <Button size="small" onClick={() => onPrioritise(c)}>
                     Priorisieren
                   </Button>
-                  <Button size="small" color="warning" onClick={() => onPark(c)}>
-                    Parken
-                  </Button>
+                  {canPark(c) && (
+                    <Button size="small" color="warning" onClick={() => onPark(c)}>
+                      Parken
+                    </Button>
+                  )}
                 </>
               )}
             </CardActions>

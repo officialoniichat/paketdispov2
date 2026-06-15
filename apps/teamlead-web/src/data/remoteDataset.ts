@@ -226,9 +226,28 @@ function laneForPoolItem(item: PoolItemDto): LaneId {
   return 'reserve';
 }
 
+/**
+ * The Ablagen board (§10.2) is the steerable pool — cases that are still
+ * park-/release-/prioritise-able. A case the engine already placed (`assigned`) or
+ * that an employee has started belongs on the Mitarbeiterboard, NOT in a pool lane:
+ * showing it here would offer "Parken", which the §7.1 state machine rejects (park is
+ * only legal from `ready`/`needs_review`). Restrict lanes to genuine pool residents.
+ */
+const POOL_LANE_STATUSES = new Set<PoolItemDto['status']>([
+  'ready',
+  'parked',
+  'needs_review',
+  'issue_open',
+]);
+
+function isPoolResident(item: PoolItemDto): boolean {
+  return POOL_LANE_STATUSES.has(item.status);
+}
+
 function buildLanes(items: PoolItemDto[]): Lane[] {
   const buckets = new Map<LaneId, LaneCard[]>(LANE_ORDER.map((id) => [id, []]));
   for (const item of items) {
+    if (!isPoolResident(item)) continue;
     buckets.get(laneForPoolItem(item))!.push(toLaneCard(item));
   }
   return LANE_ORDER.map((id) => {
