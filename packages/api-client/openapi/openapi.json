@@ -795,6 +795,273 @@
         ]
       }
     },
+    "/api/teamlead/assignments/preview": {
+      "post": {
+        "operationId": "TeamleadController_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecalculateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecalculateResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§E.4 Simulation/Vorschau: run the engine over the ready pool WITHOUT persisting (no bundles, no events).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/withdraw": {
+      "post": {
+        "operationId": "TeamleadController_withdraw",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Withdraw a case from a bundle → case back to ready (409 if already started).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/add": {
+      "post": {
+        "operationId": "TeamleadController_addToBundle",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddToBundleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Add a ready case to a bundle → case assigned.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/reorder": {
+      "post": {
+        "operationId": "TeamleadController_reorder",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderBundleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Reorder a bundle's cases (and its route stops follow).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/pause": {
+      "post": {
+        "operationId": "TeamleadController_pauseBundle",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BundlePauseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Pause a bundle (→ paused).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/resume": {
+      "post": {
+        "operationId": "TeamleadController_resumeBundle",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BundlePauseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Resume a paused bundle (→ active).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_live",
@@ -1709,6 +1976,109 @@
           "durationMs",
           "loads"
         ]
+      },
+      "WithdrawDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Case to withdraw from the bundle"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the §8.4 audit event"
+          }
+        },
+        "required": [
+          "caseId"
+        ]
+      },
+      "BundleMutationResultDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "bundleStatus": {
+            "type": "string",
+            "description": "AssignmentStatus after the mutation"
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          },
+          "caseIds": {
+            "description": "Case ids in bundle order",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caseId": {
+            "type": "object",
+            "nullable": true,
+            "description": "The case touched by this mutation, with its new status"
+          },
+          "caseStatus": {
+            "type": "object",
+            "nullable": true,
+            "description": "CaseStatus of the touched case, if any"
+          },
+          "eventId": {
+            "type": "object",
+            "nullable": true,
+            "description": "Audit event id, if recorded"
+          }
+        },
+        "required": [
+          "bundleId",
+          "bundleStatus",
+          "plannedEffortMinutes",
+          "caseIds"
+        ]
+      },
+      "AddToBundleDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Ready case to add to the bundle"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the §8.4 audit event"
+          }
+        },
+        "required": [
+          "caseId"
+        ]
+      },
+      "ReorderBundleDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Permutation of the bundle's current case ids",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the §8.4 audit event"
+          }
+        },
+        "required": [
+          "caseIds"
+        ]
+      },
+      "BundlePauseDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the §8.4 audit event"
+          }
+        }
       }
     }
   }

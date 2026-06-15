@@ -354,6 +354,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/assignments/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §E.4 Simulation/Vorschau: run the engine over the ready pool WITHOUT persisting (no bundles, no events). */
+        post: operations["TeamleadController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Withdraw a case from a bundle → case back to ready (409 if already started). */
+        post: operations["TeamleadController_withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Add a ready case to a bundle → case assigned. */
+        post: operations["TeamleadController_addToBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Reorder a bundle's cases (and its route stops follow). */
+        post: operations["TeamleadController_reorder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Pause a bundle (→ paused). */
+        post: operations["TeamleadController_pauseBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Resume a paused bundle (→ active). */
+        post: operations["TeamleadController_resumeBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -626,6 +728,42 @@ export interface components {
             /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
             durationMs: number;
             loads: components["schemas"]["EmployeeLoadDto"][];
+        };
+        WithdrawDto: {
+            /** @description Case to withdraw from the bundle */
+            caseId: string;
+            /** @description Reason logged in the §8.4 audit event */
+            reason?: string;
+        };
+        BundleMutationResultDto: {
+            bundleId: string;
+            /** @description AssignmentStatus after the mutation */
+            bundleStatus: string;
+            plannedEffortMinutes: number;
+            /** @description Case ids in bundle order */
+            caseIds: string[];
+            /** @description The case touched by this mutation, with its new status */
+            caseId?: Record<string, never> | null;
+            /** @description CaseStatus of the touched case, if any */
+            caseStatus?: Record<string, never> | null;
+            /** @description Audit event id, if recorded */
+            eventId?: Record<string, never> | null;
+        };
+        AddToBundleDto: {
+            /** @description Ready case to add to the bundle */
+            caseId: string;
+            /** @description Reason logged in the §8.4 audit event */
+            reason?: string;
+        };
+        ReorderBundleDto: {
+            /** @description Permutation of the bundle's current case ids */
+            caseIds: string[];
+            /** @description Reason logged in the §8.4 audit event */
+            reason?: string;
+        };
+        BundlePauseDto: {
+            /** @description Reason logged in the §8.4 audit event */
+            reason?: string;
         };
     };
     responses: never;
@@ -1095,6 +1233,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecalculateResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecalculateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecalculateResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_withdraw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_addToBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddToBundleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderBundleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_pauseBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundlePauseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_resumeBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BundlePauseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
                 };
             };
         };
