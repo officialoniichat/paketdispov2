@@ -1,10 +1,17 @@
 /**
  * LocationMaster-Pflege (§11.2). A simple Lagerplatzliste with codes and an
  * optional manual sort order – no routing graph or meter data in the MVP.
+ *
+ * Loaded from / saved to the real backend (`/api/admin/locations`) via
+ * {@link ../../data/admin}. Save replaces the whole list (upsert by code); a
+ * location still referenced by a case is rejected by the backend with a 409,
+ * surfaced here as an error alert.
  */
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
@@ -20,7 +27,7 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { LocationKind, LocationMaster } from '@paket/domain-types';
-import { useCockpitData } from '../../data/store.js';
+import { fetchLocations, saveLocations } from '../../data/admin.js';
 
 const KINDS: LocationKind[] = [
   'regal',
@@ -36,30 +43,50 @@ const KINDS: LocationKind[] = [
   'conveyor_finished_goods',
 ];
 
+const LOCATIONS_QUERY_KEY = ['admin', 'locations'] as const;
+
 export function LocationMasterEditor(): JSX.Element {
-  const { dataset, setLocations } = useCockpitData();
-  const [rows, setRows] = useState<LocationMaster[]>(dataset.locations);
-  const [saved, setSaved] = useState(false);
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState<LocationMaster[]>([]);
+
+  const query = useQuery<LocationMaster[], Error>({
+    queryKey: LOCATIONS_QUERY_KEY,
+    queryFn: fetchLocations,
+  });
+
+  // Seed the editable rows from the loaded list once it arrives (and on refetch).
+  useEffect(() => {
+    if (query.data) setRows(query.data);
+  }, [query.data]);
+
+  const mutation = useMutation<LocationMaster[], Error, LocationMaster[]>({
+    mutationFn: saveLocations,
+    onSuccess: (saved) => {
+      queryClient.setQueryData(LOCATIONS_QUERY_KEY, saved);
+      setRows(saved);
+    },
+  });
 
   function update(id: string, patch: Partial<LocationMaster>): void {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-    setSaved(false);
+    mutation.reset();
   }
 
   function remove(id: string): void {
     setRows((rs) => rs.filter((r) => r.id !== id));
-    setSaved(false);
+    mutation.reset();
   }
 
   function addRow(): void {
-    const id = `loc-new-${rows.length + 1}`;
-    setRows((rs) => [...rs, { id, code: '', displayName: '', kind: 'regal', active: true }]);
-    setSaved(false);
+    setRows((rs) => [
+      ...rs,
+      { id: `loc-new-${rs.length + 1}`, code: '', displayName: '', kind: 'regal', active: true },
+    ]);
+    mutation.reset();
   }
 
   function save(): void {
-    setLocations(rows);
-    setSaved(true);
+    mutation.mutate(rows);
   }
 
   return (
@@ -70,11 +97,31 @@ export function LocationMasterEditor(): JSX.Element {
           Neuer Lagerplatz
         </Button>
       </Stack>
-      {saved && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSaved(false)}>
+
+      {query.isLoading && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+          <CircularProgress size={18} />
+          <Typography variant="body2" color="text.secondary">
+            Lagerplätze werden geladen…
+          </Typography>
+        </Stack>
+      )}
+      {query.error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Lagerplätze konnten nicht geladen werden: {query.error.message}
+        </Alert>
+      )}
+      {mutation.isSuccess && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => mutation.reset()}>
           Lagerplätze gespeichert.
         </Alert>
       )}
+      {mutation.error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => mutation.reset()}>
+          Speichern fehlgeschlagen: {mutation.error.message}
+        </Alert>
+      )}
+
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -164,7 +211,7 @@ export function LocationMasterEditor(): JSX.Element {
           ))}
         </TableBody>
       </Table>
-      <Button variant="contained" sx={{ mt: 2 }} onClick={save}>
+      <Button variant="contained" sx={{ mt: 2 }} onClick={save} disabled={mutation.isPending}>
         Lagerplätze speichern
       </Button>
     </Paper>

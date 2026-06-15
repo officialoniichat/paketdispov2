@@ -14,8 +14,9 @@
  * (`/assignments/preview`, persists nothing) and a commit
  * (`/assignments/recalculate`, the real persist).
  *
- * Surfaces without a backend endpoint yet (Belegdetails, Admin/Regelpflege)
- * still read the in-memory `dataset` mock so they keep compiling.
+ * Belegdetails (§10.4) and Admin/Regelpflege (§11) are wired to their own live
+ * endpoints (see {@link ./belege} and {@link ./admin}), so this store no longer
+ * carries an in-memory mock dataset for them.
  */
 import { createContext, useContext, useMemo, useState, type JSX, type ReactNode } from 'react';
 import {
@@ -24,11 +25,10 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import type { LocationMaster, WorkflowEvent } from '@paket/domain-types';
+import type { WorkflowEvent } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api, CURRENT_TEAMLEAD_ID } from './api.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
-import { loadMockDataset } from './mock.js';
 import {
   addCaseToBundle as addCaseToBundleRequest,
   commitAssignment,
@@ -43,10 +43,8 @@ import type {
   BoardRow,
   CockpitSummary,
   Lane,
-  OperationsDataset,
   PoolCase,
   PreviewResult,
-  RuleConfig,
 } from './types.js';
 
 export { CURRENT_TEAMLEAD_ID };
@@ -122,8 +120,6 @@ export interface CockpitApi {
   recentOverrides: WorkflowEvent[];
   /** Ready, unassigned cases that can be added to a bundle (§10.3). */
   pool: PoolCase[];
-  /** Mock fallback for surfaces without a backend read yet (details/admin). */
-  dataset: OperationsDataset;
   /** §E.4 commit "Live zuweisen" → real assignment engine (persists). */
   recalculate: UseMutationResult<RecalculateResultDto, Error, void>;
   /** §E.4 preview "Simulieren" → engine dry-run (persists nothing). */
@@ -137,9 +133,6 @@ export interface CockpitApi {
   addToBundle: BundleMutation<AddVars>;
   reorder: BundleMutation<ReorderVars>;
   pauseResume: BundleMutation<PauseVars>;
-  /** §11 Regelpflege – local-only config edits for now. */
-  updateRules(rules: RuleConfig): void;
-  setLocations(locations: LocationMaster[]): void;
 }
 
 const CockpitContext = createContext<CockpitApi | null>(null);
@@ -165,9 +158,6 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     queryKey: cockpitKey,
     queryFn: () => fetchCockpit(date),
   });
-
-  // Mock-only state for surfaces the backend does not expose yet.
-  const [dataset, setDataset] = useState<OperationsDataset>(() => loadMockDataset());
 
   const invalidateCockpit = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['cockpit'] });
@@ -335,7 +325,6 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       lanes: query.data?.lanes ?? [],
       recentOverrides: query.data?.recentOverrides ?? [],
       pool: query.data?.pool ?? [],
-      dataset,
       recalculate,
       preview,
 
@@ -347,13 +336,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       addToBundle,
       reorder,
       pauseResume,
-
-      updateRules: (rules) => setDataset((ds) => ({ ...ds, rules })),
-      setLocations: (locations) => setDataset((ds) => ({ ...ds, locations })),
     }),
     [
       query,
-      dataset,
       recalculate,
       preview,
       prioritiseMutation,
