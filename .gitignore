@@ -37,6 +37,9 @@ __pycache__/
 # Docker volumes (local)
 .volumes/
 
+# Backup artifacts (DB dumps + document mirrors — contain production data)
+backups/
+
 # Prisma
 prisma/*.db
 

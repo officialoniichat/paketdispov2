@@ -71,9 +71,12 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - '80:80'
       - '443:443'
@@ -81,6 +84,13 @@ services:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    healthcheck:
+      # Hits the Caddyfile's /healthz endpoint so `docker compose ps`
+      # reports the reverse proxy's real health on a single-box deploy.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:80/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
