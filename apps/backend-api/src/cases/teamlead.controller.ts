@@ -1,6 +1,8 @@
-import { Body, Controller, Get, NotImplementedException, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
+import { AssignmentService } from '../assignment/assignment.service.js';
+import { RecalculateDto, RecalculateResultDto } from '../assignment/assignment.dto.js';
 import { TeamleadService } from './teamlead.service.js';
 import {
   DashboardDto,
@@ -19,7 +21,10 @@ import {
 @Roles(Role.Teamlead, Role.Admin)
 @Controller('api/teamlead')
 export class TeamleadController {
-  constructor(private readonly teamlead: TeamleadService) {}
+  constructor(
+    private readonly teamlead: TeamleadService,
+    private readonly assignment: AssignmentService,
+  ) {}
 
   @Get('dashboard')
   @ApiOkResponse({ type: DashboardDto })
@@ -85,17 +90,17 @@ export class TeamleadController {
     return this.teamlead.releaseIssue(principal, issueId, dto);
   }
 
-  // --- Assignment engine endpoints (EPIC 4) ---------------------------------
+  // --- Assignment engine (§8.3) ---------------------------------------------
 
   @Post('assignments/recalculate')
-  @ApiOperation({ summary: 'Recalculate day assignment — EPIC 4 assignment engine' })
-  recalculate(): never {
-    throw new NotImplementedException('assignment recalculation lands with EPIC 4');
-  }
-
-  @Post('assignments/manual')
-  @ApiOperation({ summary: 'Manual assignment override — EPIC 4 assignment engine' })
-  manualAssign(): never {
-    throw new NotImplementedException('manual assignment lands with EPIC 4');
+  @ApiOperation({
+    summary: 'Recalculate the day assignment (§8.3 "Neu berechnen"). Deterministic, < 5 s.',
+  })
+  @ApiOkResponse({ type: RecalculateResultDto })
+  recalculate(
+    @CurrentUser() principal: Principal,
+    @Body() dto: RecalculateDto,
+  ): Promise<RecalculateResultDto> {
+    return this.assignment.recalculate(principal, dto.date);
   }
 }

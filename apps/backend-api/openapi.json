@@ -16,7 +16,9 @@
           }
         ],
         "summary": "SSE live status for the caller’s own packages (§16.1)",
-        "tags": ["live"]
+        "tags": [
+          "live"
+        ]
       }
     },
     "/api/teamlead/stream": {
@@ -34,7 +36,9 @@
           }
         ],
         "summary": "SSE live status for the full operational pool",
-        "tags": ["live"]
+        "tags": [
+          "live"
+        ]
       }
     },
     "/api/me/today": {
@@ -58,7 +62,9 @@
             "bearer": []
           }
         ],
-        "tags": ["me"]
+        "tags": [
+          "me"
+        ]
       }
     },
     "/api/me/current-bundle": {
@@ -82,7 +88,9 @@
             "bearer": []
           }
         ],
-        "tags": ["me"]
+        "tags": [
+          "me"
+        ]
       }
     },
     "/api/cases/{caseId}/start-preparation": {
@@ -116,7 +124,9 @@
           }
         ],
         "summary": "Begin handling a package (assigned → picking, case.started)",
-        "tags": ["cases"]
+        "tags": [
+          "cases"
+        ]
       }
     },
     "/api/cases/{caseId}/complete": {
@@ -150,7 +160,9 @@
           }
         ],
         "summary": "Complete a package (boxing → completed, case.completed)",
-        "tags": ["cases"]
+        "tags": [
+          "cases"
+        ]
       }
     },
     "/api/cases/{caseId}/partial-complete": {
@@ -194,7 +206,9 @@
           }
         ],
         "summary": "Partially complete (boxing → partially_completed)",
-        "tags": ["cases"]
+        "tags": [
+          "cases"
+        ]
       }
     },
     "/api/issues": {
@@ -229,133 +243,9 @@
           }
         ],
         "summary": "Report a problem on an owned case (→ issue_open, issue.created)",
-        "tags": ["cases"]
-      }
-    },
-    "/api/cases/{caseId}/preparation-complete": {
-      "post": {
-        "operationId": "CasesController_preparationComplete",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Finish preparation (picking → checking) — EPIC 5",
-        "tags": ["cases"]
-      }
-    },
-    "/api/positions/{positionId}/confirm": {
-      "post": {
-        "operationId": "CasesController_confirmPosition",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Confirm a position (position.confirmed) — EPIC 5",
-        "tags": ["cases"]
-      }
-    },
-    "/api/sku-lines/{skuLineId}/confirm-quantity": {
-      "post": {
-        "operationId": "CasesController_confirmQuantity",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Confirm a SKU quantity (sku.quantity_confirmed) — EPIC 5",
-        "tags": ["cases"]
-      }
-    },
-    "/api/bundles/{bundleId}/start": {
-      "post": {
-        "operationId": "CasesController_startBundle",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Start a bundle (bundle.started) — EPIC 4",
-        "tags": ["cases"]
-      }
-    },
-    "/api/route-stops/{stopId}/scan": {
-      "post": {
-        "operationId": "CasesController_scanStop",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Scan a pickup location (pickup.location_scanned) — EPIC 4",
-        "tags": ["cases"]
-      }
-    },
-    "/api/transport-boxes/{boxId}/print-label": {
-      "post": {
-        "operationId": "CasesController_printLabel",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Print a box label (box.label_printed) — EPIC 5",
-        "tags": ["cases"]
-      }
-    },
-    "/api/transport-boxes/{boxId}/seal": {
-      "post": {
-        "operationId": "CasesController_sealBox",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Seal a transport box (box.sealed) — EPIC 5",
-        "tags": ["cases"]
+        "tags": [
+          "cases"
+        ]
       }
     },
     "/api/teamlead/dashboard": {
@@ -379,7 +269,9 @@
             "bearer": []
           }
         ],
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/cases": {
@@ -441,7 +333,9 @@
           }
         ],
         "summary": "List the operational pool (filter + paginate)",
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/cases/{caseId}/prioritize": {
@@ -484,7 +378,9 @@
             "bearer": []
           }
         ],
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/cases/{caseId}/park": {
@@ -527,7 +423,9 @@
             "bearer": []
           }
         ],
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/cases/{caseId}/unpark": {
@@ -560,7 +458,9 @@
             "bearer": []
           }
         ],
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/issues/{issueId}/resolve": {
@@ -604,7 +504,9 @@
           }
         ],
         "summary": "Resolve an issue (issue_open → waiting_teamlead, issue.resolved)",
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/issues/{issueId}/release": {
@@ -648,16 +550,35 @@
           }
         ],
         "summary": "Release a case back to work (waiting_teamlead → released → checking)",
-        "tags": ["teamlead"]
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/api/teamlead/assignments/recalculate": {
       "post": {
         "operationId": "TeamleadController_recalculate",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecalculateDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecalculateResultDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -665,26 +586,10 @@
             "bearer": []
           }
         ],
-        "summary": "Recalculate day assignment — EPIC 4 assignment engine",
-        "tags": ["teamlead"]
-      }
-    },
-    "/api/teamlead/assignments/manual": {
-      "post": {
-        "operationId": "TeamleadController_manualAssign",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Manual assignment override — EPIC 4 assignment engine",
-        "tags": ["teamlead"]
+        "summary": "Recalculate the day assignment (§8.3 \"Neu berechnen\"). Deterministic, < 5 s.",
+        "tags": [
+          "teamlead"
+        ]
       }
     },
     "/healthz": {
@@ -696,7 +601,9 @@
             "description": "Process is up"
           }
         },
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     },
     "/readyz": {
@@ -708,7 +615,9 @@
             "description": "Dependencies reachable"
           }
         },
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     }
   },
@@ -770,7 +679,13 @@
             "type": "boolean"
           }
         },
-        "required": ["id", "sequence", "locationCode", "scanRequired", "scanned"]
+        "required": [
+          "id",
+          "sequence",
+          "locationCode",
+          "scanRequired",
+          "scanned"
+        ]
       },
       "CurrentBundleDto": {
         "type": "object",
@@ -794,7 +709,13 @@
             }
           }
         },
-        "required": ["bundleId", "status", "plannedEffortMinutes", "caseCount", "routeStops"]
+        "required": [
+          "bundleId",
+          "status",
+          "plannedEffortMinutes",
+          "caseCount",
+          "routeStops"
+        ]
       },
       "CaseSummaryDto": {
         "type": "object",
@@ -868,7 +789,10 @@
             }
           }
         },
-        "required": ["date", "cases"]
+        "required": [
+          "date",
+          "cases"
+        ]
       },
       "TransitionResultDto": {
         "type": "object",
@@ -888,7 +812,11 @@
             "description": "Audit event id, if a milestone was recorded"
           }
         },
-        "required": ["caseId", "status", "version"]
+        "required": [
+          "caseId",
+          "status",
+          "version"
+        ]
       },
       "PartialCompleteDto": {
         "type": "object",
@@ -929,7 +857,11 @@
             }
           }
         },
-        "required": ["caseId", "scope", "issueType"]
+        "required": [
+          "caseId",
+          "scope",
+          "issueType"
+        ]
       },
       "DashboardDto": {
         "type": "object",
@@ -950,7 +882,11 @@
             "description": "Booking date of oldest open case"
           }
         },
-        "required": ["countsByStatus", "poolSize", "prioOpen"]
+        "required": [
+          "countsByStatus",
+          "poolSize",
+          "prioOpen"
+        ]
       },
       "PoolItemDto": {
         "type": "object",
@@ -1028,7 +964,12 @@
             "type": "number"
           }
         },
-        "required": ["items", "total", "page", "limit"]
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit"
+        ]
       },
       "PrioritizeDto": {
         "type": "object",
@@ -1062,6 +1003,82 @@
             "type": "string"
           }
         }
+      },
+      "RecalculateDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Planning date (YYYY-MM-DD). Defaults to today.",
+            "example": "2026-06-15"
+          }
+        }
+      },
+      "EmployeeLoadDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string"
+          },
+          "capacityMinutes": {
+            "type": "number"
+          },
+          "assignedMinutes": {
+            "type": "number"
+          },
+          "assignedPoints": {
+            "type": "number"
+          },
+          "bundleCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "employeeId",
+          "capacityMinutes",
+          "assignedMinutes",
+          "assignedPoints",
+          "bundleCount"
+        ]
+      },
+      "RecalculateResultDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "bundleCount": {
+            "type": "number"
+          },
+          "assignedCaseCount": {
+            "type": "number"
+          },
+          "unassignedCaseCount": {
+            "type": "number"
+          },
+          "reserveMinutes": {
+            "type": "number"
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "Wall-clock of the engine run (Anhang E.5 budget < 5000ms)."
+          },
+          "loads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeLoadDto"
+            }
+          }
+        },
+        "required": [
+          "date",
+          "bundleCount",
+          "assignedCaseCount",
+          "unassignedCaseCount",
+          "reserveMinutes",
+          "durationMs",
+          "loads"
+        ]
       }
     }
   }

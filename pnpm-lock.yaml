@@ -62,6 +62,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.28.0
         version: 1.41.1
+      '@paket/assignment-engine':
+        specifier: workspace:*
+        version: link:../../packages/assignment-engine
       '@paket/domain-types':
         specifier: workspace:*
         version: link:../../packages/domain-types

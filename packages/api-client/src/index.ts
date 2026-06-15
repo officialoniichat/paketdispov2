@@ -6,12 +6,7 @@
  * runtime validation. Regenerate types with `pnpm --filter @paket/api-client
  * generate` whenever the backend spec changes (EPIC 3+).
  */
-export {
-  createApiClient,
-  fetchCaseValidated,
-  type ApiClientOptions,
-  type PaketApiClient,
-} from './client.js';
+export { createApiClient, type ApiClientOptions, type PaketApiClient } from './client.js';
 
 // Generated contract types (paths, operations, component schemas).
 export type { paths, components, operations } from './generated/schema.js';

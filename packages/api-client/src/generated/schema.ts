@@ -4,6 +4,272 @@
  */
 
 export interface paths {
+    "/api/me/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSE live status for the caller’s own packages (§16.1) */
+        get: operations["LiveController_meStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSE live status for the full operational pool */
+        get: operations["LiveController_teamleadStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeController_today"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/current-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeController_currentBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/start-preparation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin handling a package (assigned → picking, case.started) */
+        post: operations["CasesController_startPreparation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a package (boxing → completed, case.completed) */
+        post: operations["CasesController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/partial-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Partially complete (boxing → partially_completed) */
+        post: operations["CasesController_partialComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report a problem on an owned case (→ issue_open, issue.created) */
+        post: operations["CasesController_reportIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TeamleadController_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the operational pool (filter + paginate) */
+        get: operations["TeamleadController_pool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/prioritize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TeamleadController_prioritize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/park": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TeamleadController_park"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/unpark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TeamleadController_unpark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/issues/{issueId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve an issue (issue_open → waiting_teamlead, issue.resolved) */
+        post: operations["TeamleadController_resolveIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/issues/{issueId}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release a case back to work (waiting_teamlead → released → checking) */
+        post: operations["TeamleadController_releaseIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/assignments/recalculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recalculate the day assignment (§8.3 "Neu berechnen"). Deterministic, < 5 s. */
+        post: operations["TeamleadController_recalculate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -11,8 +277,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liveness probe */
-        get: operations["getLiveness"];
+        get: operations["HealthController_live"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,49 +286,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/cases": {
+    "/readyz": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List goods-receipt cases */
-        get: operations["listCases"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/cases/{caseId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a single goods-receipt case */
-        get: operations["getCase"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/me/cases": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cases assigned to the current employee */
-        get: operations["listMyCases"];
+        get: operations["HealthController_ready"];
         put?: never;
         post?: never;
         delete?: never;
@@ -76,55 +306,128 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @enum {string} */
-        CaseStatus: "imported" | "parsed" | "needs_review" | "ready" | "parked" | "assigned" | "picking" | "preparing" | "sorting" | "checking" | "labeling" | "securing" | "boxing" | "issue_open" | "waiting_teamlead" | "released" | "partially_completed" | "completed" | "zst_done" | "cancelled";
-        /** @enum {string} */
-        PriorityFlag: "prio" | "catman_due" | "overdue" | "manual_teamlead_priority" | "same_day_required";
-        StorageLocation: {
-            /** Format: uuid */
+        RouteStopDto: {
             id: string;
-            /** @enum {string} */
-            type: "regal" | "palette" | "haengebahn" | "lagerplatz_d" | "workstation" | "printer" | "conveyor";
-            code: string;
-            zone?: string;
-            sequenceIndex?: number;
-            barcode?: string;
-            active: boolean;
+            sequence: number;
+            locationCode: string;
+            scanRequired: boolean;
+            scanned: boolean;
         };
-        GoodsReceiptCase: {
-            /** Format: uuid */
+        CurrentBundleDto: {
+            bundleId: string;
+            status: string;
+            plannedEffortMinutes: number;
+            caseCount: number;
+            routeStops: components["schemas"]["RouteStopDto"][];
+        };
+        CaseSummaryDto: {
             id: string;
-            /** Format: uuid */
-            documentSetId: string;
             weBelegNo: string;
-            deliveryNoteNo?: string;
-            /** Format: date-time */
-            bookingDate: string;
-            /** Format: date */
-            weDate?: string;
-            branchNo: string;
-            primaryShopAreaNo?: string;
-            primaryFloor?: string;
-            storageLocation: components["schemas"]["StorageLocation"];
-            /** @enum {integer|null} */
-            section: 1 | 2 | 3 | 4 | 7 | 8 | null;
-            goodsTypeText?: string;
-            priorityFlags: components["schemas"]["PriorityFlag"][];
-            /** Format: date */
-            catManDate?: string;
-            /** Format: date */
-            loadPlanDate?: string;
+            /** @description Anhang A CaseStatus */
+            status: string;
+            /** @description Section 1|2|3|4|7|8, null for prio-only */
+            section?: Record<string, never> | null;
+            priorityFlags: string[];
             totalQuantity: number;
-            status: components["schemas"]["CaseStatus"];
-            effortPoints: number;
             estimatedMinutes: number;
-            /** Format: uuid */
-            assignedBundleId?: string;
-            version: number;
+            storageLocationCode: string;
+            /** @description ISO date YYYY-MM-DD */
+            bookingDate: string;
         };
-        ProblemDetails: {
-            message: string;
-            code?: string;
+        TodayResponseDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            bundle?: components["schemas"]["CurrentBundleDto"] | null;
+            cases: components["schemas"]["CaseSummaryDto"][];
+        };
+        TransitionResultDto: {
+            caseId: string;
+            status: string;
+            version: number;
+            /** @description Audit event id, if a milestone was recorded */
+            eventId?: Record<string, never> | null;
+        };
+        PartialCompleteDto: {
+            reason?: string;
+            completedQuantity?: number;
+        };
+        CreateIssueDto: {
+            /** @description Case the issue is reported against */
+            caseId: string;
+            /** @description IssueScope: case|position|sku_line|transport_box */
+            scope: string;
+            /** @description IssueType (Anhang A) */
+            issueType: string;
+            scopeId?: string;
+            description?: string;
+            photoKeys?: string[];
+        };
+        DashboardDto: {
+            /** @description Open case count grouped by status */
+            countsByStatus: Record<string, never>;
+            poolSize: number;
+            prioOpen: number;
+            /** @description Booking date of oldest open case */
+            oldestOpenBookingDate?: Record<string, never> | null;
+        };
+        PoolItemDto: {
+            id: string;
+            weBelegNo: string;
+            /** @description Anhang A CaseStatus */
+            status: string;
+            /** @description Section 1|2|3|4|7|8, null for prio-only */
+            section?: Record<string, never> | null;
+            priorityFlags: string[];
+            totalQuantity: number;
+            estimatedMinutes: number;
+            storageLocationCode: string;
+            /** @description ISO date YYYY-MM-DD */
+            bookingDate: string;
+            assignedEmployeeNo?: Record<string, never> | null;
+            effortPoints: number;
+        };
+        PoolListDto: {
+            items: components["schemas"]["PoolItemDto"][];
+            total: number;
+            page: number;
+            limit: number;
+        };
+        PrioritizeDto: {
+            /** @description Reason for manual teamlead priority */
+            reason?: string;
+        };
+        ParkDto: {
+            reason?: string;
+        };
+        ResolveIssueDto: {
+            resolution?: string;
+        };
+        ReleaseDto: {
+            note?: string;
+        };
+        RecalculateDto: {
+            /**
+             * @description Planning date (YYYY-MM-DD). Defaults to today.
+             * @example 2026-06-15
+             */
+            date?: string;
+        };
+        EmployeeLoadDto: {
+            employeeId: string;
+            capacityMinutes: number;
+            assignedMinutes: number;
+            assignedPoints: number;
+            bundleCount: number;
+        };
+        RecalculateResultDto: {
+            date: string;
+            bundleCount: number;
+            assignedCaseCount: number;
+            unassignedCaseCount: number;
+            reserveMinutes: number;
+            /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
+            durationMs: number;
+            loads: components["schemas"]["EmployeeLoadDto"][];
         };
     };
     responses: never;
@@ -135,7 +438,359 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getLiveness: {
+    LiveController_meStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LiveController_teamleadStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MeController_today: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayResponseDto"];
+                };
+            };
+        };
+    };
+    MeController_currentBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active bundle, or null if none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentBundleDto"];
+                };
+            };
+        };
+    };
+    CasesController_startPreparation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_partialComplete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartialCompleteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_reportIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_dashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_pool: {
+        parameters: {
+            query?: {
+                /** @description Filter by CaseStatus */
+                status?: string;
+                /** @description Filter by section code */
+                section?: number;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolListDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_prioritize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrioritizeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_park: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParkDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_unpark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_resolveIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_releaseIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_recalculate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecalculateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecalculateResultDto"];
+                };
+            };
+        };
+    };
+    HealthController_live: {
         parameters: {
             query?: never;
             header?: never;
@@ -149,69 +804,11 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        status: string;
-                    };
-                };
+                content?: never;
             };
         };
     };
-    listCases: {
-        parameters: {
-            query?: {
-                status?: components["schemas"]["CaseStatus"];
-                section?: 1 | 2 | 3 | 4 | 7 | 8;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Matching cases */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GoodsReceiptCase"][];
-                };
-            };
-        };
-    };
-    getCase: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The case */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GoodsReceiptCase"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    listMyCases: {
+    HealthController_ready: {
         parameters: {
             query?: never;
             header?: never;
@@ -220,14 +817,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Assigned cases */
+            /** @description Dependencies reachable */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["GoodsReceiptCase"][];
-                };
+                content?: never;
             };
         };
     };

@@ -7,7 +7,6 @@
  * runtime against the shared @paket/domain-types Zod schemas (trust but verify).
  */
 import createClient, { type Client } from 'openapi-fetch';
-import { goodsReceiptCaseSchema, type GoodsReceiptCase } from '@paket/domain-types';
 import type { paths } from './generated/schema.js';
 
 export interface ApiClientOptions {
@@ -24,21 +23,4 @@ export function createApiClient({ baseUrl, token }: ApiClientOptions): PaketApiC
     baseUrl,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-}
-
-/**
- * Fetch a single case and validate the payload against the shared Zod schema.
- * Demonstrates the typed-client + runtime-validation pairing.
- */
-export async function fetchCaseValidated(
-  client: PaketApiClient,
-  caseId: string,
-): Promise<GoodsReceiptCase> {
-  const { data, error } = await client.GET('/api/cases/{caseId}', {
-    params: { path: { caseId } },
-  });
-  if (error || !data) {
-    throw new Error(`getCase(${caseId}) failed`);
-  }
-  return goodsReceiptCaseSchema.parse(data);
 }

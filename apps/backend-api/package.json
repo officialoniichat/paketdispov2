@@ -28,6 +28,7 @@
     "@opentelemetry/resources": "^1.30.0",
     "@opentelemetry/sdk-node": "^0.57.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@paket/assignment-engine": "workspace:*",
     "@paket/domain-types": "workspace:*",
     "@prisma/client": "^6.2.1",
     "class-transformer": "^0.5.1",
