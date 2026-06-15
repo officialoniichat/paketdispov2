@@ -1,14 +1,19 @@
 /**
  * Belegdetails (§10.4): Kopf, Priorität, Aufwand, Positionen+SKU, Boxen,
- * Historie (alle Events / manuelle Eingriffe / ZST / Issues) und
- * Originaldokumente. Teamlead actions (Priorisieren/Parken) are audited (§8.4).
+ * Historie und Originaldokumente — read live from the backend
+ * (`GET /api/teamlead/cases/:id`). Teamlead actions (Priorisieren/Parken) POST
+ * through the store's audited (§8.4) endpoints and invalidate this view + the
+ * cockpit on success.
  */
 import { useState, type JSX, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
+import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import Tab from '@mui/material/Tab';
 import Table from '@mui/material/Table';
@@ -22,13 +27,13 @@ import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import {
-  getBoxesForCase,
-  getCaseById,
-  getDocumentsForCase,
-  getHistoryForCase,
-  getIssuesForCase,
-  getPositionsForCase,
-} from '../../data/selectors.js';
+  fetchBelegDetail,
+  type BelegBox,
+  type BelegDetail,
+  type BelegDocument,
+  type BelegHistoryEntry,
+  type BelegPosition,
+} from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 
@@ -36,12 +41,47 @@ const TABS = ['Kopf', 'Priorität', 'Aufwand', 'Positionen', 'Boxen', 'Historie'
 
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
-  const { dataset, prioritiseCase, parkCase } = useCockpitData();
+  const { prioritiseCase, parkCase } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [pending, setPending] = useState<{ title: string; run: (r: string) => void } | null>(null);
 
-  const c = getCaseById(dataset, caseId);
+  const query = useQuery<BelegDetail, Error>({
+    queryKey: ['beleg', caseId],
+    queryFn: () => fetchBelegDetail(caseId),
+    enabled: caseId !== '',
+  });
+
+  if (query.isLoading) {
+    return (
+      <Stack spacing={2}>
+        <Skeleton variant="text" width={220} height={48} />
+        <Skeleton variant="rounded" height={48} />
+        <Skeleton variant="rounded" height={320} />
+      </Stack>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h5">Beleg konnte nicht geladen werden</Typography>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => void query.refetch()}>
+              Erneut laden
+            </Button>
+          }
+        >
+          {query.error.message}
+        </Alert>
+        <Button onClick={() => navigate('/belege')}>Zur Belegliste</Button>
+      </Stack>
+    );
+  }
+
+  const c = query.data;
   if (!c) {
     return (
       <Stack spacing={2}>
@@ -50,12 +90,6 @@ export function BelegDetailPage(): JSX.Element {
       </Stack>
     );
   }
-
-  const positions = getPositionsForCase(dataset, caseId);
-  const boxes = getBoxesForCase(dataset, caseId);
-  const history = getHistoryForCase(dataset, caseId);
-  const documents = getDocumentsForCase(dataset, caseId);
-  const issues = getIssuesForCase(dataset, caseId);
 
   return (
     <Stack spacing={2}>
@@ -75,9 +109,7 @@ export function BelegDetailPage(): JSX.Element {
             {c.priorityFlags.map((f) => (
               <PriorityChip key={f} flag={f} size="small" />
             ))}
-            {issues.some((i) => i.status === 'open' || i.status === 'in_review') && (
-              <ProblemChip status="open" size="small" />
-            )}
+            {c.hasOpenIssue && <ProblemChip status="open" size="small" />}
           </Stack>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -117,10 +149,11 @@ export function BelegDetailPage(): JSX.Element {
               ['WE-Belegnummer', c.weBelegNo],
               ['Lieferschein', c.deliveryNoteNo ?? '–'],
               ['Buchungsdatum', formatDate(c.bookingDate)],
-              ['Lagerplatz', c.storageLocation.code],
+              ['Lagerplatz', c.storageCode],
               ['Shopbereich', c.primaryShopAreaNo ?? '–'],
               ['Etage', c.primaryFloor ?? '–'],
               ['Belegmenge', String(c.totalQuantity)],
+              ['Zugeteilt', c.assignedEmployeeName ?? '–'],
             ]}
           />
         )}
@@ -129,9 +162,9 @@ export function BelegDetailPage(): JSX.Element {
             rows={[
               ['Abschnitt', c.section === null ? '– (Prio ist kein Abschnitt)' : String(c.section)],
               ['Prio-Flags', c.priorityFlags.join(', ') || '–'],
-              ['CatMan-Datum', formatDate(c.catManDate)],
-              ['Verladetag', formatDate(c.loadPlanDate)],
-              ['Warenart', c.goodsTypeText ?? '–'],
+              ['CatMan-Datum', formatDate(c.catManDate ?? undefined)],
+              ['Verladetag', formatDate(c.loadPlanDate ?? undefined)],
+              ['Warenart', c.goodsType ?? '–'],
             ]}
           />
         )}
@@ -143,23 +176,23 @@ export function BelegDetailPage(): JSX.Element {
               ['Menge (Aufwandstreiber)', String(c.totalQuantity)],
               [
                 'Preisetikett-Positionen',
-                String(positions.filter((p) => p.instruction.priceLabelRequired).length),
+                String(c.positions.filter((p) => p.priceLabelRequired).length),
               ],
               [
                 'Sicherungs-Positionen',
-                String(positions.filter((p) => p.instruction.securityRequired).length),
+                String(c.positions.filter((p) => p.securityRequired).length),
               ],
               [
                 'Online-Positionen',
-                String(positions.filter((p) => p.instruction.onlineHandlingRequired).length),
+                String(c.positions.filter((p) => p.onlineHandlingRequired).length),
               ],
             ]}
           />
         )}
-        {tab === 3 && <PositionsTab positions={positions} />}
-        {tab === 4 && <BoxesTab boxes={boxes} />}
-        {tab === 5 && <HistoryTab history={history} />}
-        {tab === 6 && <DocumentsTab documents={documents} />}
+        {tab === 3 && <PositionsTab positions={c.positions} />}
+        {tab === 4 && <BoxesTab boxes={c.boxes} />}
+        {tab === 5 && <HistoryTab history={c.history} />}
+        {tab === 6 && <DocumentsTab documents={c.documents} />}
       </Paper>
 
       <ReasonDialog
@@ -189,11 +222,7 @@ function FieldGrid({ rows }: { rows: [string, ReactNode][] }): JSX.Element {
   );
 }
 
-function PositionsTab({
-  positions,
-}: {
-  positions: ReturnType<typeof getPositionsForCase>;
-}): JSX.Element {
+function PositionsTab({ positions }: { positions: BelegPosition[] }): JSX.Element {
   if (positions.length === 0) return <Empty text="Keine Positionen erfasst." />;
   return (
     <Stack spacing={2}>
@@ -203,11 +232,9 @@ function PositionsTab({
             <Typography sx={{ fontWeight: 700 }}>
               Position {p.positionNo} · WGR {p.wgr} · {p.supplierColor}
             </Typography>
-            {p.instruction.priceLabelRequired && <Chip size="small" label="Etikett" />}
-            {p.instruction.securityRequired && (
-              <Chip size="small" color="warning" label="Sichern" />
-            )}
-            {p.instruction.onlineHandlingRequired && <Chip size="small" label="Online" />}
+            {p.priceLabelRequired && <Chip size="small" label="Etikett" />}
+            {p.securityRequired && <Chip size="small" color="warning" label="Sichern" />}
+            {p.onlineHandlingRequired && <Chip size="small" label="Online" />}
           </Stack>
           <Table size="small">
             <TableHead>
@@ -237,7 +264,7 @@ function PositionsTab({
   );
 }
 
-function BoxesTab({ boxes }: { boxes: ReturnType<typeof getBoxesForCase> }): JSX.Element {
+function BoxesTab({ boxes }: { boxes: BelegBox[] }): JSX.Element {
   if (boxes.length === 0) return <Empty text="Noch keine Transportboxen berechnet." />;
   return (
     <Table size="small">
@@ -258,7 +285,7 @@ function BoxesTab({ boxes }: { boxes: ReturnType<typeof getBoxesForCase> }): JSX
             <TableCell>{b.shopAreaNo}</TableCell>
             <TableCell>{b.floor ?? '–'}</TableCell>
             <TableCell align="right">{b.quantity}</TableCell>
-            <TableCell>{b.labelPrinted ? 'Gedruckt' : 'Offen'}</TableCell>
+            <TableCell>{b.labelStatus === 'not_required' ? 'Nicht nötig' : b.labelStatus}</TableCell>
             <TableCell>{b.sealed ? 'Versiegelt' : 'Offen'}</TableCell>
           </TableRow>
         ))}
@@ -267,28 +294,21 @@ function BoxesTab({ boxes }: { boxes: ReturnType<typeof getBoxesForCase> }): JSX
   );
 }
 
-function HistoryTab({ history }: { history: ReturnType<typeof getHistoryForCase> }): JSX.Element {
+function HistoryTab({ history }: { history: BelegHistoryEntry[] }): JSX.Element {
   if (history.length === 0) return <Empty text="Keine Ereignisse." />;
   return (
     <Stack spacing={0.5}>
-      {history.map((e) => {
-        const payload = e.payload as { reason?: string } | undefined;
-        return (
-          <Typography key={e.id} variant="body2">
-            <strong>{formatDateTime(e.timestamp)}</strong> · {e.eventType} · {e.actorType}
-            {payload?.reason ? ` – „${payload.reason}"` : ''}
-          </Typography>
-        );
-      })}
+      {history.map((e) => (
+        <Typography key={e.id} variant="body2">
+          <strong>{formatDateTime(e.timestamp)}</strong> · {e.eventType} · {e.actorType}
+          {e.reason ? ` – „${e.reason}"` : ''}
+        </Typography>
+      ))}
     </Stack>
   );
 }
 
-function DocumentsTab({
-  documents,
-}: {
-  documents: ReturnType<typeof getDocumentsForCase>;
-}): JSX.Element {
+function DocumentsTab({ documents }: { documents: BelegDocument[] }): JSX.Element {
   if (documents.length === 0) return <Empty text="Keine Originaldokumente verknüpft." />;
   const labels: Record<string, string> = {
     work_instruction: 'Arbeitsanweisung',

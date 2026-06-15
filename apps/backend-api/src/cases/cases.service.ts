@@ -73,6 +73,7 @@ export class CasesService {
       where: { employeeId: employee.id, date: today },
       orderBy: { createdAt: 'desc' },
       include: {
+        employee: { select: { displayName: true } },
         routeStops: { orderBy: { sequence: 'asc' } },
         cases: { include: { storageLocation: true }, orderBy: { bookingDate: 'asc' } },
       },
@@ -82,10 +83,11 @@ export class CasesService {
       return { date: isoDay(today), bundle: null, cases: [] };
     }
 
+    const assignedEmployeeName = bundle.employee.displayName;
     return {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
-      cases: bundle.cases.map((c) => this.mapSummary(c)),
+      cases: bundle.cases.map((c) => this.mapSummary(c, assignedEmployeeName)),
     };
   }
 
@@ -113,7 +115,9 @@ export class CasesService {
         workInstruction: true,
         positions: { orderBy: { positionNo: 'asc' } },
         transportBoxes: { orderBy: { boxNo: 'asc' } },
-        assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
+        assignedBundle: {
+          select: { employee: { select: { employeeNo: true, displayName: true } } },
+        },
       },
     });
     if (!found) {
@@ -124,7 +128,7 @@ export class CasesService {
       throw new ForbiddenException(`Access to case ${caseId} denied`);
     }
     return {
-      case: this.mapSummary(found),
+      case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null),
       workInstruction: found.workInstruction
         ? this.mapWorkInstruction(found.workInstruction)
         : null,
@@ -461,17 +465,21 @@ export class CasesService {
     };
   }
 
-  private mapSummary(c: {
-    id: string;
-    weBelegNo: string;
-    status: string;
-    section: number | null;
-    priorityFlags: string[];
-    totalQuantity: number;
-    estimatedMinutes: number;
-    bookingDate: Date;
-    storageLocation: { code: string };
-  }): CaseSummaryDto {
+  private mapSummary(
+    c: {
+      id: string;
+      weBelegNo: string;
+      status: string;
+      section: number | null;
+      priorityFlags: string[];
+      totalQuantity: number;
+      estimatedMinutes: number;
+      bookingDate: Date;
+      goodsTypeText: string | null;
+      storageLocation: { code: string };
+    },
+    assignedEmployeeName: string | null,
+  ): CaseSummaryDto {
     return {
       id: c.id,
       weBelegNo: c.weBelegNo,
@@ -482,6 +490,8 @@ export class CasesService {
       estimatedMinutes: c.estimatedMinutes,
       storageLocationCode: c.storageLocation.code,
       bookingDate: isoDay(c.bookingDate),
+      goodsType: c.goodsTypeText,
+      assignedEmployeeName,
     };
   }
 

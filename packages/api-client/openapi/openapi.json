@@ -441,6 +441,15 @@
             }
           },
           {
+            "name": "eventType",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated WorkflowEventType allowlist, e.g. \"assignment.overridden,case.prioritized,case.parked,case.ready\". When set, only events whose eventType is in the list are returned.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",
@@ -536,6 +545,42 @@
           }
         ],
         "summary": "List the operational pool (filter + paginate)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}": {
+      "get": {
+        "operationId": "TeamleadController_caseDetail",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§10.4 Belegdetails: one case with positions, boxes, documents, history",
         "tags": [
           "teamlead"
         ]
@@ -1201,7 +1246,7 @@
             "description": "Anhang A CaseStatus"
           },
           "section": {
-            "type": "object",
+            "type": "number",
             "nullable": true,
             "description": "Section 1|2|3|4|7|8, null for prio-only"
           },
@@ -1223,6 +1268,16 @@
           "bookingDate": {
             "type": "string",
             "description": "ISO date YYYY-MM-DD"
+          },
+          "goodsType": {
+            "type": "string",
+            "nullable": true,
+            "description": "GoodsTypeText (Warenart), null if unknown"
+          },
+          "assignedEmployeeName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the assigned employee"
           }
         },
         "required": [
@@ -1278,7 +1333,7 @@
             "description": "CheckMode: quantity_only|percentage_check|full_check"
           },
           "goodsReceiptCheckPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "minimumQuantityCheckAlwaysRequired": {
@@ -1365,15 +1420,15 @@
             "type": "string"
           },
           "shopNo": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "floor": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "goodsType": {
-            "type": "object",
+            "type": "string",
             "nullable": true,
             "description": "BoxGoodsType"
           },
@@ -1799,7 +1854,7 @@
             "description": "Anhang A CaseStatus"
           },
           "section": {
-            "type": "object",
+            "type": "number",
             "nullable": true,
             "description": "Section 1|2|3|4|7|8, null for prio-only"
           },
@@ -1821,6 +1876,16 @@
           "bookingDate": {
             "type": "string",
             "description": "ISO date YYYY-MM-DD"
+          },
+          "goodsType": {
+            "type": "string",
+            "nullable": true,
+            "description": "GoodsTypeText (Warenart), null if unknown"
+          },
+          "assignedEmployeeName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the assigned employee"
           },
           "assignedEmployeeNo": {
             "type": "object",
@@ -1866,6 +1931,197 @@
           "total",
           "page",
           "limit"
+        ]
+      },
+      "SkuLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ean": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string"
+          },
+          "expectedQuantity": {
+            "type": "number"
+          },
+          "confirmedQuantity": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "SkuLineStatus: open|confirmed|deviation"
+          }
+        },
+        "required": [
+          "id",
+          "ean",
+          "size",
+          "expectedQuantity",
+          "status"
+        ]
+      },
+      "PositionDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "positionNo": {
+            "type": "number"
+          },
+          "wgr": {
+            "type": "string",
+            "description": "Warengruppe"
+          },
+          "supplierColor": {
+            "type": "string"
+          },
+          "expectedQuantity": {
+            "type": "number",
+            "description": "Σ expected over the position SKU lines"
+          },
+          "confirmedQuantity": {
+            "type": "number",
+            "nullable": true,
+            "description": "Σ confirmed over the SKU lines, null if none confirmed yet"
+          },
+          "priceLabelRequired": {
+            "type": "boolean"
+          },
+          "securityRequired": {
+            "type": "boolean"
+          },
+          "onlineHandlingRequired": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "description": "PositionStatus: open|confirmed|issue_open|completed"
+          },
+          "skuLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkuLineDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "positionNo",
+          "wgr",
+          "supplierColor",
+          "expectedQuantity",
+          "priceLabelRequired",
+          "securityRequired",
+          "onlineHandlingRequired",
+          "status",
+          "skuLines"
+        ]
+      },
+      "CaseDocumentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "DocumentKind: delivery_note|goods_receipt|work_instruction|unknown"
+          },
+          "fileName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "fileName"
+        ]
+      },
+      "CaseDetailDto": {
+        "type": "object",
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummaryDto"
+          },
+          "effortPoints": {
+            "type": "number",
+            "description": "Effort points (Aufwandspunkte)"
+          },
+          "deliveryNoteNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryShopAreaNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryFloor": {
+            "type": "string",
+            "nullable": true
+          },
+          "catManDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "loadPlanDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "goodsType": {
+            "type": "string",
+            "nullable": true,
+            "description": "GoodsTypeText (Warenart)"
+          },
+          "workInstruction": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkInstructionHeaderDto"
+              }
+            ]
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PositionDetailDto"
+            }
+          },
+          "transportBoxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransportBoxTargetDto"
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseDocumentDto"
+            }
+          },
+          "history": {
+            "description": "Audit history, newest first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEventDto"
+            }
+          }
+        },
+        "required": [
+          "case",
+          "effortPoints",
+          "positions",
+          "transportBoxes",
+          "documents",
+          "history"
         ]
       },
       "PrioritizeDto": {

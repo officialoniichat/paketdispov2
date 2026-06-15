@@ -255,6 +255,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §10.4 Belegdetails: one case with positions, boxes, documents, history */
+        get: operations["TeamleadController_caseDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/cases/{caseId}/prioritize": {
         parameters: {
             query?: never;
@@ -512,13 +529,17 @@ export interface components {
             /** @description Anhang A CaseStatus */
             status: string;
             /** @description Section 1|2|3|4|7|8, null for prio-only */
-            section?: Record<string, never> | null;
+            section?: number | null;
             priorityFlags: string[];
             totalQuantity: number;
             estimatedMinutes: number;
             storageLocationCode: string;
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
+            /** @description GoodsTypeText (Warenart), null if unknown */
+            goodsType?: string | null;
+            /** @description Display name of the assigned employee */
+            assignedEmployeeName?: string | null;
         };
         TodayResponseDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -531,7 +552,7 @@ export interface components {
             sortByArticleColorSizeRequired: boolean;
             /** @description CheckMode: quantity_only|percentage_check|full_check */
             goodsReceiptCheckMode: string;
-            goodsReceiptCheckPercentage?: Record<string, never> | null;
+            goodsReceiptCheckPercentage?: number | null;
             minimumQuantityCheckAlwaysRequired: boolean;
             boxLabelRequired: boolean;
             zstRequired: boolean;
@@ -555,10 +576,10 @@ export interface components {
             boxNo: number;
             branchNo: string;
             shopAreaNo: string;
-            shopNo?: Record<string, never> | null;
-            floor?: Record<string, never> | null;
+            shopNo?: string | null;
+            floor?: string | null;
             /** @description BoxGoodsType */
-            goodsType?: Record<string, never> | null;
+            goodsType?: string | null;
             positionIds: string[];
             plannedQuantity: number;
             quantity: number;
@@ -676,13 +697,17 @@ export interface components {
             /** @description Anhang A CaseStatus */
             status: string;
             /** @description Section 1|2|3|4|7|8, null for prio-only */
-            section?: Record<string, never> | null;
+            section?: number | null;
             priorityFlags: string[];
             totalQuantity: number;
             estimatedMinutes: number;
             storageLocationCode: string;
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
+            /** @description GoodsTypeText (Warenart), null if unknown */
+            goodsType?: string | null;
+            /** @description Display name of the assigned employee */
+            assignedEmployeeName?: string | null;
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
         };
@@ -691,6 +716,58 @@ export interface components {
             total: number;
             page: number;
             limit: number;
+        };
+        SkuLineDto: {
+            id: string;
+            ean: string;
+            size: string;
+            expectedQuantity: number;
+            confirmedQuantity?: number | null;
+            /** @description SkuLineStatus: open|confirmed|deviation */
+            status: string;
+        };
+        PositionDetailDto: {
+            id: string;
+            positionNo: number;
+            /** @description Warengruppe */
+            wgr: string;
+            supplierColor: string;
+            /** @description Σ expected over the position SKU lines */
+            expectedQuantity: number;
+            /** @description Σ confirmed over the SKU lines, null if none confirmed yet */
+            confirmedQuantity?: number | null;
+            priceLabelRequired: boolean;
+            securityRequired: boolean;
+            onlineHandlingRequired: boolean;
+            /** @description PositionStatus: open|confirmed|issue_open|completed */
+            status: string;
+            skuLines: components["schemas"]["SkuLineDto"][];
+        };
+        CaseDocumentDto: {
+            id: string;
+            /** @description DocumentKind: delivery_note|goods_receipt|work_instruction|unknown */
+            kind: string;
+            fileName: string;
+        };
+        CaseDetailDto: {
+            case: components["schemas"]["CaseSummaryDto"];
+            /** @description Effort points (Aufwandspunkte) */
+            effortPoints: number;
+            deliveryNoteNo?: string | null;
+            primaryShopAreaNo?: string | null;
+            primaryFloor?: string | null;
+            /** @description ISO date YYYY-MM-DD */
+            catManDate?: string | null;
+            /** @description ISO date YYYY-MM-DD */
+            loadPlanDate?: string | null;
+            /** @description GoodsTypeText (Warenart) */
+            goodsType?: string | null;
+            workInstruction?: components["schemas"]["WorkInstructionHeaderDto"] | null;
+            positions: components["schemas"]["PositionDetailDto"][];
+            transportBoxes: components["schemas"]["TransportBoxTargetDto"][];
+            documents: components["schemas"]["CaseDocumentDto"][];
+            /** @description Audit history, newest first */
+            history: components["schemas"]["AuditEventDto"][];
         };
         PrioritizeDto: {
             /** @description Reason for manual teamlead priority */
@@ -1048,6 +1125,8 @@ export interface operations {
                 actorType?: string;
                 /** @description Filter by entityId */
                 entityId?: string;
+                /** @description Comma-separated WorkflowEventType allowlist, e.g. "assignment.overridden,case.prioritized,case.parked,case.ready". When set, only events whose eventType is in the list are returned. */
+                eventType?: string;
                 /** @description Page size 1..200 */
                 limit?: number;
             };
@@ -1089,6 +1168,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoolListDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_caseDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseDetailDto"];
                 };
             };
         };

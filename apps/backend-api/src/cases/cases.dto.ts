@@ -7,13 +7,29 @@ export class CaseSummaryDto {
   @ApiProperty() id!: string;
   @ApiProperty() weBelegNo!: string;
   @ApiProperty({ description: 'Anhang A CaseStatus' }) status!: string;
-  @ApiPropertyOptional({ nullable: true, description: 'Section 1|2|3|4|7|8, null for prio-only' })
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Section 1|2|3|4|7|8, null for prio-only',
+  })
   section!: number | null;
   @ApiProperty({ type: [String] }) priorityFlags!: string[];
   @ApiProperty() totalQuantity!: number;
   @ApiProperty() estimatedMinutes!: number;
   @ApiProperty() storageLocationCode!: string;
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) bookingDate!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'GoodsTypeText (Warenart), null if unknown',
+  })
+  goodsType!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Display name of the assigned employee',
+  })
+  assignedEmployeeName!: string | null;
 }
 
 export class RouteStopDto {
@@ -46,7 +62,7 @@ export class WorkInstructionHeaderDto {
   @ApiProperty() sortByArticleColorSizeRequired!: boolean;
   @ApiProperty({ description: 'CheckMode: quantity_only|percentage_check|full_check' })
   goodsReceiptCheckMode!: string;
-  @ApiPropertyOptional({ nullable: true }) goodsReceiptCheckPercentage!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true }) goodsReceiptCheckPercentage!: number | null;
   @ApiProperty() minimumQuantityCheckAlwaysRequired!: boolean;
   @ApiProperty() boxLabelRequired!: boolean;
   @ApiProperty() zstRequired!: boolean;
@@ -72,9 +88,9 @@ export class TransportBoxTargetDto {
   @ApiProperty() boxNo!: number;
   @ApiProperty() branchNo!: string;
   @ApiProperty() shopAreaNo!: string;
-  @ApiPropertyOptional({ nullable: true }) shopNo!: string | null;
-  @ApiPropertyOptional({ nullable: true }) floor!: string | null;
-  @ApiPropertyOptional({ nullable: true, description: 'BoxGoodsType' })
+  @ApiPropertyOptional({ type: String, nullable: true }) shopNo!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) floor!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'BoxGoodsType' })
   goodsType!: string | null;
   @ApiProperty({ type: [String] }) positionIds!: string[];
   @ApiProperty() plannedQuantity!: number;
@@ -179,10 +195,80 @@ export class AuditEventDto {
   @ApiProperty() eventType!: string;
   @ApiProperty() entityType!: string;
   @ApiProperty() entityId!: string;
-  @ApiPropertyOptional({ description: 'Projected from payload, if present' })
+  @ApiPropertyOptional({ type: String, description: 'Projected from payload, if present' })
   action?: string;
-  @ApiPropertyOptional({ description: 'Projected from payload, if present' })
+  @ApiPropertyOptional({ type: String, description: 'Projected from payload, if present' })
   reason?: string;
+}
+
+// --- Belegdetails (§10.4 teamlead case detail) ------------------------------
+
+/** One EAN/size line under a position (Anhang A ReceiptSkuLine). */
+export class SkuLineDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() ean!: string;
+  @ApiProperty() size!: string;
+  @ApiProperty() expectedQuantity!: number;
+  @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
+  @ApiProperty({ description: 'SkuLineStatus: open|confirmed|deviation' }) status!: string;
+}
+
+/**
+ * A receipt position enriched with its §13 instruction flags and SKU lines —
+ * the teamlead Belegdetails "Positionen" tab (richer than the employee
+ * {@link ReceiptPositionDto}, which omits instruction flags + SKU lines).
+ */
+export class PositionDetailDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() positionNo!: number;
+  @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
+  @ApiProperty() supplierColor!: string;
+  @ApiProperty({ description: 'Σ expected over the position SKU lines' }) expectedQuantity!: number;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Σ confirmed over the SKU lines, null if none confirmed yet',
+  })
+  confirmedQuantity!: number | null;
+  @ApiProperty() priceLabelRequired!: boolean;
+  @ApiProperty() securityRequired!: boolean;
+  @ApiProperty() onlineHandlingRequired!: boolean;
+  @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
+  status!: string;
+  @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
+}
+
+/** A linked original document (Anhang A Document via DocumentSet). */
+export class CaseDocumentDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'DocumentKind: delivery_note|goods_receipt|work_instruction|unknown' })
+  kind!: string;
+  @ApiProperty() fileName!: string;
+}
+
+/**
+ * §10.4 Belegdetails read model: rich header + work instruction + positions
+ * (with SKU lines) + transport boxes + linked documents + audit history.
+ */
+export class CaseDetailDto {
+  @ApiProperty({ type: CaseSummaryDto }) case!: CaseSummaryDto;
+  @ApiProperty({ description: 'Effort points (Aufwandspunkte)' }) effortPoints!: number;
+  @ApiPropertyOptional({ type: String, nullable: true }) deliveryNoteNo!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) primaryShopAreaNo!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) primaryFloor!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO date YYYY-MM-DD' })
+  catManDate!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO date YYYY-MM-DD' })
+  loadPlanDate!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'GoodsTypeText (Warenart)' })
+  goodsType!: string | null;
+  @ApiPropertyOptional({ type: WorkInstructionHeaderDto, nullable: true })
+  workInstruction!: WorkInstructionHeaderDto | null;
+  @ApiProperty({ type: [PositionDetailDto] }) positions!: PositionDetailDto[];
+  @ApiProperty({ type: [TransportBoxTargetDto] }) transportBoxes!: TransportBoxTargetDto[];
+  @ApiProperty({ type: [CaseDocumentDto] }) documents!: CaseDocumentDto[];
+  @ApiProperty({ type: [AuditEventDto], description: 'Audit history, newest first' })
+  history!: AuditEventDto[];
 }
 
 export class TransitionResultDto {
@@ -375,6 +461,16 @@ export class EventQueryDto {
   @IsOptional()
   @IsString()
   entityId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Comma-separated WorkflowEventType allowlist, e.g. ' +
+      '"assignment.overridden,case.prioritized,case.parked,case.ready". ' +
+      'When set, only events whose eventType is in the list are returned.',
+  })
+  @IsOptional()
+  @IsString()
+  eventType?: string;
 
   @ApiPropertyOptional({ default: 50, description: 'Page size 1..200' })
   @IsOptional()

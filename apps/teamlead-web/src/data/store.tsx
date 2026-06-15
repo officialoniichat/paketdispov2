@@ -174,6 +174,16 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   };
 
   /**
+   * Single-case audited actions (park/unpark/prioritise) change both the cockpit
+   * snapshot AND any open Belegdetails, so they refresh both query families.
+   */
+  const invalidateCockpitAndBelege = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['cockpit'] });
+    void queryClient.invalidateQueries({ queryKey: ['beleg'] });
+    void queryClient.invalidateQueries({ queryKey: ['belege'] });
+  };
+
+  /**
    * Optimistically apply `patch` to the cached snapshot, returning a rollback
    * context. Shared by every bundle intervention so failures restore the board.
    */
@@ -213,7 +223,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       if (error) throw new Error(`prioritize failed (${JSON.stringify(error)})`);
       return data;
     },
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const parkMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
@@ -225,7 +235,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       if (error) throw new Error(`park failed (${JSON.stringify(error)})`);
       return data;
     },
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const unparkMutation = useMutation<unknown, Error, { caseId: string }>({
@@ -237,7 +247,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       if (error) throw new Error(`unpark failed (${JSON.stringify(error)})`);
       return data;
     },
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // --- §8.4 audited bundle interventions, with optimistic board patches -----

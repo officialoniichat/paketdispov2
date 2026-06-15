@@ -3,6 +3,7 @@ import { WorkflowModule } from '../workflow/workflow.module.js';
 import { AssignmentModule } from '../assignment/assignment.module.js';
 import { CasesService } from './cases.service.js';
 import { TeamleadService } from './teamlead.service.js';
+import { TeamleadReadService } from './teamlead-read.service.js';
 import { MeController } from './me.controller.js';
 import { CasesController } from './cases.controller.js';
 import { TeamleadController } from './teamlead.controller.js';
@@ -11,6 +12,6 @@ import { TeamleadController } from './teamlead.controller.js';
 @Module({
   imports: [WorkflowModule, AssignmentModule],
   controllers: [MeController, CasesController, TeamleadController],
-  providers: [CasesService, TeamleadService],
+  providers: [CasesService, TeamleadService, TeamleadReadService],
 })
 export class CasesModule {}

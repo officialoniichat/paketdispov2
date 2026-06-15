@@ -52,6 +52,14 @@ export interface CockpitSnapshot {
 
 const HEAVY_MINUTES_THRESHOLD = 30;
 
+/**
+ * The §8.4 events that represent a genuine human teamlead intervention — the only
+ * ones the "Letzte Teamlead-Eingriffe" feed should show. Sent to the backend as
+ * an explicit allowlist so the feed never relies solely on actorType.
+ */
+const GENUINE_INTERVENTION_EVENT_TYPES =
+  'assignment.overridden,case.prioritized,case.parked,case.ready';
+
 // ---------------------------------------------------------------------------
 // Boundary narrowing: the generated DTOs type enum-ish fields as plain
 // `string`/`number`, so we validate them against the domain Zod schemas before
@@ -107,7 +115,19 @@ export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
     api.GET('/api/teamlead/dashboard'),
     api.GET('/api/teamlead/kpis', { params: { query: { date } } }),
     api.GET('/api/teamlead/board', { params: { query: { date } } }),
-    api.GET('/api/teamlead/events', { params: { query: { actorType: 'teamlead', limit: 50 } } }),
+    api.GET('/api/teamlead/events', {
+      params: {
+        query: {
+          // Explicit genuine-intervention allowlist (§8.4): the feed shows real
+          // human overrides, not engine/system events. actorType=teamlead is the
+          // belt; this eventType allowlist is the braces, so an accidentally
+          // teamlead-tagged system event can never leak into the feed.
+          actorType: 'teamlead',
+          eventType: GENUINE_INTERVENTION_EVENT_TYPES,
+          limit: 50,
+        },
+      },
+    }),
     api.GET('/api/teamlead/cases', { params: { query: { page: 1, limit: 200 } } }),
   ]);
 

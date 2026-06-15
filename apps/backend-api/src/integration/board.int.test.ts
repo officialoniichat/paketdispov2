@@ -6,10 +6,8 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
-import { WorkflowService } from '../workflow/workflow.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
-import { LiveStatusService } from '../live/live.module.js';
-import { TeamleadService } from '../cases/teamlead.service.js';
+import { TeamleadReadService } from '../cases/teamlead-read.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -35,7 +33,7 @@ function asDate(day: string): Date {
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let assignment: AssignmentService;
-let teamleadSvc: TeamleadService;
+let teamleadSvc: TeamleadReadService;
 
 async function seed(): Promise<void> {
   const e1 = await prisma.user.create({ data: { employeeNo: 'ma-101', displayName: 'Anna' } });
@@ -95,10 +93,8 @@ beforeAll(async () => {
   prisma = new PrismaClient({ datasourceUrl: url });
   const p = prisma as unknown as PrismaService;
   const events = new EventLogService(p);
-  const workflow = new WorkflowService(p, events);
   assignment = new AssignmentService(p, events);
-  const live = new LiveStatusService();
-  teamleadSvc = new TeamleadService(p, workflow, events, live);
+  teamleadSvc = new TeamleadReadService(p);
   await seed();
   await assignment.recalculate(teamlead, DATE);
 }, 180_000);

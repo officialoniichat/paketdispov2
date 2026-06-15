@@ -5,10 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import { EventLogService } from '../events/event-log.service.js';
-import { WorkflowService } from '../workflow/workflow.service.js';
-import { LiveStatusService } from '../live/live.module.js';
-import { TeamleadService } from '../cases/teamlead.service.js';
+import { TeamleadReadService } from '../cases/teamlead-read.service.js';
 
 /**
  * Integration test for GET /api/teamlead/kpis (Task 1.3). Aggregates over
@@ -25,7 +22,7 @@ function asDate(day: string): Date {
 
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
-let teamleadSvc: TeamleadService;
+let teamleadSvc: TeamleadReadService;
 
 async function seed(): Promise<void> {
   const emp = await prisma.user.create({ data: { employeeNo: 'ma-101', displayName: 'Anna' } });
@@ -88,10 +85,7 @@ beforeAll(async () => {
   });
   prisma = new PrismaClient({ datasourceUrl: url });
   const p = prisma as unknown as PrismaService;
-  const events = new EventLogService(p);
-  const workflow = new WorkflowService(p, events);
-  const live = new LiveStatusService();
-  teamleadSvc = new TeamleadService(p, workflow, events, live);
+  teamleadSvc = new TeamleadReadService(p);
   await seed();
 }, 180_000);
 

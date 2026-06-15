@@ -278,12 +278,17 @@ export class AssignmentService {
       },
       tx,
     );
+    // The engine placing a bundle on an employee is a SYSTEM action (mirrors the
+    // sibling `bundle.created`). It must NOT carry actorType `teamlead`, or the
+    // "Letzte Teamlead-Eingriffe" feed (genuine human overrides) would be polluted
+    // with every automatic assignment. Human overrides (§8.4 assignment.overridden,
+    // case.prioritized/parked/ready) are the only teamlead-actor events.
     await this.events.append(
       {
         eventType: 'bundle.assigned',
         entityType: 'AssignmentBundle',
         entityId: created.id,
-        actorType: 'teamlead',
+        actorType: 'system',
         actorId: principal.sub,
         payload: { employeeId: bundle.employeeId, caseCount: bundle.caseIds.length },
       },

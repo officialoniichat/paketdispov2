@@ -10,6 +10,7 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
+import { TeamleadReadService } from '../cases/teamlead-read.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -31,6 +32,7 @@ let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let assignment: AssignmentService;
 let teamleadSvc: TeamleadService;
+let readSvc: TeamleadReadService;
 
 async function seed(): Promise<void> {
   const emp = await prisma.user.create({ data: { employeeNo: 'ma-101', displayName: 'Anna' } });
@@ -66,6 +68,23 @@ async function seed(): Promise<void> {
       },
     });
   }
+
+  // A `needs_review` case the engine never picks up (recalculate reads only the
+  // `ready` pool), so it stays parkable. Used to exercise a genuine teamlead park.
+  await prisma.goodsReceiptCase.create({
+    data: {
+      documentSetId: docSet.id,
+      weBelegNo: 'WE-EV-REVIEW',
+      bookingDate: asDate(DATE),
+      branchNo: '1',
+      storageLocationId: loc.id,
+      section: 7,
+      totalQuantity: 20,
+      status: 'needs_review',
+      effortPoints: 8,
+      estimatedMinutes: 20,
+    },
+  });
 }
 
 beforeAll(async () => {
@@ -83,8 +102,16 @@ beforeAll(async () => {
   assignment = new AssignmentService(p, events);
   const live = new LiveStatusService();
   teamleadSvc = new TeamleadService(p, workflow, events, live);
+  readSvc = new TeamleadReadService(p);
   await seed();
-  await assignment.recalculate(teamlead, DATE); // appends bundle.created + bundle.assigned
+  await assignment.recalculate(teamlead, DATE); // appends bundle.created + bundle.assigned (system)
+  // A genuine teamlead action so the actorType=teamlead filter has events to match
+  // (bundle.assigned is now a SYSTEM event and no longer counts as a teamlead one).
+  const reviewCase = await prisma.goodsReceiptCase.findFirstOrThrow({
+    where: { weBelegNo: 'WE-EV-REVIEW' },
+    select: { id: true },
+  });
+  await teamleadSvc.prioritize(teamlead, reviewCase.id, { reason: 'Initiale Priorisierung' });
 }, 180_000);
 
 afterAll(async () => {
@@ -94,7 +121,7 @@ afterAll(async () => {
 
 describe('events (§7.2/§16.2 GET /api/teamlead/events)', () => {
   it('returns events newest-first with seq + projected fields', async () => {
-    const rows = await teamleadSvc.auditEvents({ limit: 10 });
+    const rows = await readSvc.auditEvents({ limit: 10 });
 
     expect(rows.length).toBeGreaterThan(0);
     // seq desc (monotonic, newest first)
@@ -110,13 +137,55 @@ describe('events (§7.2/§16.2 GET /api/teamlead/events)', () => {
   });
 
   it('filters by actorType', async () => {
-    const tl = await teamleadSvc.auditEvents({ actorType: 'teamlead', limit: 50 });
+    const tl = await readSvc.auditEvents({ actorType: 'teamlead', limit: 50 });
     expect(tl.length).toBeGreaterThan(0);
     expect(tl.every((r) => r.actorType === 'teamlead')).toBe(true);
   });
 
   it('honours the limit (default 50, capped)', async () => {
-    const one = await teamleadSvc.auditEvents({ limit: 1 });
+    const one = await readSvc.auditEvents({ limit: 1 });
     expect(one.length).toBe(1);
+  });
+
+  it('filters by an eventType allowlist', async () => {
+    const onlyAssigned = await readSvc.auditEvents({ eventType: 'bundle.assigned', limit: 50 });
+    expect(onlyAssigned.length).toBeGreaterThan(0);
+    expect(onlyAssigned.every((r) => r.eventType === 'bundle.assigned')).toBe(true);
+
+    // Blank/empty allowlist entries are ignored (no accidental "hide everything").
+    const blank = await readSvc.auditEvents({ eventType: ' , ', limit: 50 });
+    expect(blank.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The cockpit "Letzte Teamlead-Eingriffe" feed must show GENUINE human
+   * overrides (park/prioritize) and never the engine's bundle.assigned, which is
+   * now a system event. We perform a park + a prioritize, then read the feed the
+   * cockpit reads (actorType=teamlead + the genuine-intervention allowlist).
+   */
+  it('feed shows genuine teamlead overrides and excludes bundle.assigned', async () => {
+    const reviewCase = await prisma.goodsReceiptCase.findFirstOrThrow({
+      where: { weBelegNo: 'WE-EV-REVIEW' },
+      select: { id: true },
+    });
+    const readyCase = await prisma.goodsReceiptCase.findFirstOrThrow({
+      where: { weBelegNo: 'WE-EV-0' },
+      select: { id: true },
+    });
+
+    await teamleadSvc.park(teamlead, reviewCase.id, { reason: 'Klärung Lieferschein' });
+    await teamleadSvc.prioritize(teamlead, readyCase.id, { reason: 'CatMan heute' });
+
+    const feed = await readSvc.auditEvents({
+      actorType: 'teamlead',
+      eventType: 'assignment.overridden,case.prioritized,case.parked,case.ready',
+      limit: 50,
+    });
+
+    expect(feed.some((r) => r.eventType === 'case.parked')).toBe(true);
+    expect(feed.some((r) => r.eventType === 'case.prioritized')).toBe(true);
+    // The engine's automatic assignment is a SYSTEM event and must NOT pollute the feed.
+    expect(feed.some((r) => r.eventType === 'bundle.assigned')).toBe(false);
+    expect(feed.every((r) => r.actorType === 'teamlead')).toBe(true);
   });
 });

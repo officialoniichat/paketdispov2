@@ -4,6 +4,7 @@ import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { RecalculateDto, RecalculateResultDto } from '../assignment/assignment.dto.js';
 import { TeamleadService } from './teamlead.service.js';
+import { TeamleadReadService } from './teamlead-read.service.js';
 import {
   AddToBundleDto,
   AuditEventDto,
@@ -11,6 +12,7 @@ import {
   BundleMutationResultDto,
   BundlePauseDto,
   CapacityDto,
+  CaseDetailDto,
   DashboardDto,
   EventQueryDto,
   KpiDto,
@@ -33,48 +35,56 @@ import {
 export class TeamleadController {
   constructor(
     private readonly teamlead: TeamleadService,
+    private readonly read: TeamleadReadService,
     private readonly assignment: AssignmentService,
   ) {}
 
   @Get('dashboard')
   @ApiOkResponse({ type: DashboardDto })
   dashboard(): Promise<DashboardDto> {
-    return this.teamlead.dashboard();
+    return this.read.dashboard();
   }
 
   @Get('board')
   @ApiOperation({ summary: "§10.3 Mitarbeitenden-Board for the day (assigned bundles per employee)" })
   @ApiOkResponse({ type: BoardDto })
   board(@Query('date') date: string): Promise<BoardDto> {
-    return this.teamlead.board(date ?? new Date().toISOString().slice(0, 10));
+    return this.read.board(date ?? new Date().toISOString().slice(0, 10));
   }
 
   @Get('capacity')
   @ApiOperation({ summary: '§10.1 Day capacity tile (net / planned / reserve / utilisation)' })
   @ApiOkResponse({ type: CapacityDto })
   capacity(@Query('date') date: string): Promise<CapacityDto> {
-    return this.teamlead.capacity(date ?? new Date().toISOString().slice(0, 10));
+    return this.read.capacity(date ?? new Date().toISOString().slice(0, 10));
   }
 
   @Get('kpis')
   @ApiOperation({ summary: '§10.1 Day ZST KPIs (computed from ZstRecord + case statuses)' })
   @ApiOkResponse({ type: KpiDto })
   kpis(@Query('date') date: string): Promise<KpiDto> {
-    return this.teamlead.kpis(date ?? new Date().toISOString().slice(0, 10));
+    return this.read.kpis(date ?? new Date().toISOString().slice(0, 10));
   }
 
   @Get('events')
   @ApiOperation({ summary: '§7.2/§16.2 audit feed (workflow events, newest first)' })
   @ApiOkResponse({ type: [AuditEventDto] })
   events(@Query() query: EventQueryDto): Promise<AuditEventDto[]> {
-    return this.teamlead.auditEvents(query);
+    return this.read.auditEvents(query);
   }
 
   @Get('cases')
   @ApiOperation({ summary: 'List the operational pool (filter + paginate)' })
   @ApiOkResponse({ type: PoolListDto })
   pool(@Query() query: PoolQueryDto): Promise<PoolListDto> {
-    return this.teamlead.listPool(query);
+    return this.read.listPool(query);
+  }
+
+  @Get('cases/:caseId')
+  @ApiOperation({ summary: '§10.4 Belegdetails: one case with positions, boxes, documents, history' })
+  @ApiOkResponse({ type: CaseDetailDto })
+  caseDetail(@Param('caseId') caseId: string): Promise<CaseDetailDto> {
+    return this.read.caseDetail(caseId);
   }
 
   @Post('cases/:caseId/prioritize')
