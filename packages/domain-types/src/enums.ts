@@ -177,6 +177,9 @@ export const workflowEventTypeSchema = z.enum([
   'zst.created',
   'zst.exported',
   'assignment.overridden',
+  'employee.profile_updated',
+  'employee.shift_overridden',
+  'employee.absence_recorded',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
 

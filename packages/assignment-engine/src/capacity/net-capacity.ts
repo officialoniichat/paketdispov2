@@ -14,6 +14,12 @@ export interface NetCapacityOptions {
   resolveEmployeeId?: (employeeNo: string) => string;
   /** Map `workstationCode` → workstation location id; defaults to undefined. */
   resolveWorkstationId?: (workstationCode: string) => string | undefined;
+  /**
+   * Per-head productivity factor by SEAK `employeeNo` (Mitarbeiter-Einstellungen
+   * §c). When it returns a number, it overrides `config.productivityFactor` for
+   * that employee so capacity reflects the maintained per-person value.
+   */
+  resolveProductivityFactor?: (employeeNo: string) => number | undefined;
 }
 
 function shiftWindowMinutes(row: ShiftImportRow): number {
@@ -23,14 +29,20 @@ function shiftWindowMinutes(row: ShiftImportRow): number {
   return Math.max(0, (endMs - startMs) / 60000);
 }
 
-/** Net belegbearbeitung capacity in minutes for one shift row. Inactive → 0. */
+/**
+ * Net belegbearbeitung capacity in minutes for one shift row. Inactive → 0.
+ * A per-head `productivityFactor` (when supplied) overrides `config.productivityFactor`,
+ * so a maintained per-person value scales that employee's capacity (concept §c/§e).
+ */
 export function computeNetCapacityMinutes(
   row: ShiftImportRow,
   config: CapacityConfig = DEFAULT_CAPACITY_CONFIG,
+  productivityFactor?: number,
 ): number {
   if (!row.active) return 0;
   const net = Math.max(0, shiftWindowMinutes(row) - row.breakMinutes);
-  return Math.round(net * config.productivityFactor);
+  const factor = productivityFactor ?? config.productivityFactor;
+  return Math.round(net * factor);
 }
 
 /** Convert a validated import row into a persisted {@link EmployeeShift} with net capacity. */
@@ -43,6 +55,7 @@ export function toEmployeeShift(
   const workstationId = row.workstationCode
     ? options.resolveWorkstationId?.(row.workstationCode)
     : undefined;
+  const productivityFactor = options.resolveProductivityFactor?.(row.employeeNo);
 
   return employeeShiftSchema.parse({
     id: `shift-${employeeId}-${row.date}`,
@@ -52,9 +65,11 @@ export function toEmployeeShift(
     plannedEnd: row.plannedEnd,
     breakMinutes: row.breakMinutes,
     plannedHours: row.plannedHours,
-    netCapacityMinutes: computeNetCapacityMinutes(row, config),
+    netCapacityMinutes: computeNetCapacityMinutes(row, config, productivityFactor),
     workstationId,
     active: row.active,
+    source: 'seak',
+    productivityFactor: productivityFactor ?? config.productivityFactor,
   });
 }
 

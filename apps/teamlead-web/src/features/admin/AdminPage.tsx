@@ -27,8 +27,25 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { RuleConfig } from '@paket/domain-types';
 import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
 import { LocationMasterEditor } from './LocationMasterEditor.js';
+import { EmployeeSettings } from './EmployeeSettings.js';
+import { SchichtplanTab } from './SchichtplanTab.js';
 
-const TABS = ['Priorität', 'Reserve', 'Bündel', 'Aufwand', 'Verladeplan', 'Parser', 'Lagerplätze'];
+const TABS = [
+  'Priorität',
+  'Reserve',
+  'Bündel',
+  'Aufwand',
+  'Verladeplan',
+  'Parser',
+  'Lagerplätze',
+  'Mitarbeiter',
+  'Schichtplan',
+];
+
+/** Tab indices that render a self-contained editor instead of the RuleConfig form. */
+const LOCATIONS_TAB = 6;
+const EMPLOYEES_TAB = 7;
+const SCHICHTPLAN_TAB = 8;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -75,7 +92,11 @@ export function AdminPage(): JSX.Element {
         ))}
       </Tabs>
 
-      {tab === 6 ? (
+      {tab === SCHICHTPLAN_TAB ? (
+        <SchichtplanTab />
+      ) : tab === EMPLOYEES_TAB ? (
+        <EmployeeSettings />
+      ) : tab === LOCATIONS_TAB ? (
         <LocationMasterEditor />
       ) : (
         <Paper variant="outlined" sx={{ p: 2 }}>

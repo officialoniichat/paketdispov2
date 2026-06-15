@@ -6,6 +6,7 @@ import { WorkflowModule } from './workflow/workflow.module.js';
 import { LiveModule } from './live/live.module.js';
 import { CasesModule } from './cases/cases.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { EmployeesModule } from './employees/employees.module.js';
 import { HealthModule } from './health/health.module.js';
 
 /**
@@ -21,6 +22,7 @@ import { HealthModule } from './health/health.module.js';
     WorkflowModule,
     CasesModule,
     AdminModule,
+    EmployeesModule,
     HealthModule,
   ],
 })
