@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
+import { AdminService } from '../admin/admin.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
 import type { CapacityDto } from '../cases/cases.dto.js';
 import { Role, type Principal } from '../auth/rbac.js';
@@ -101,7 +102,10 @@ beforeAll(async () => {
   const p = prisma as unknown as PrismaService;
   const events = new EventLogService(p);
   assignment = new AssignmentService(p, events);
-  teamleadSvc = new TeamleadReadService(p);
+  // No rule_config row is seeded → AdminService.getRuleConfig() returns the default
+  // reserve rule (enabled, today_proxy, morningGapMinutes 105), which drives the
+  // eiserne Reserve exactly as the Admin/Regeln form would.
+  teamleadSvc = new TeamleadReadService(p, new AdminService(p));
   await seed();
   // Seed-only snapshot: 14 ready cases still in the pool, so the eiserne Reserve is
   // secured. Capture it BEFORE recalculate assigns the pool (which empties `ready`).
@@ -129,22 +133,22 @@ describe('capacity (§10.1 GET /api/teamlead/capacity)', () => {
     );
   });
 
-  it('exposes the eiserne Reserve + Starterpaket fields, secured from the seed pool', () => {
-    // 3 active shifts × 105 morningGapMinutes = 315 target.
+  it('exposes the eiserne Reserve + Starterpaket fields, satisfied from the seed pool', () => {
+    // today_proxy: 3 active shifts × 105 morningGapMinutes = 315 target.
     expect(preRecalcCapacity.reserveTargetMinutes).toBe(315);
     // 14 holdable ready cases × 30 min = 420 raw eligible backlog.
     expect(preRecalcCapacity.reserveSecuredMinutes).toBe(420);
-    expect(preRecalcCapacity.reserveSatisfied).toBe(true);
+    expect(preRecalcCapacity.reserveState).toBe('satisfied');
     // Starter caps at the target worth: ceil(315 / 30) = 11 belege (330 min ≥ 315).
     expect(preRecalcCapacity.starterBelegCount).toBe(11);
     expect(preRecalcCapacity.starterMinutes).toBe(330);
   });
 
-  it('drops the reserve to unsatisfied once recalculate has drained the ready pool', async () => {
+  it('drops the reserve to at_risk once recalculate has drained the ready pool', async () => {
     // After a full recalculate the ready pool is assigned away → nothing left to hold.
     const cap = await teamleadSvc.capacity(DATE);
     expect(cap.reserveSecuredMinutes).toBe(0);
-    expect(cap.reserveSatisfied).toBe(false);
+    expect(cap.reserveState).toBe('at_risk');
     expect(cap.starterBelegCount).toBe(0);
   });
 });

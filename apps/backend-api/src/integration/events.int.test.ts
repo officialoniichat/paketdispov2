@@ -11,6 +11,7 @@ import { AssignmentService } from '../assignment/assignment.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
+import { AdminService } from '../admin/admin.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -102,7 +103,7 @@ beforeAll(async () => {
   assignment = new AssignmentService(p, events);
   const live = new LiveStatusService();
   teamleadSvc = new TeamleadService(p, workflow, events, live);
-  readSvc = new TeamleadReadService(p);
+  readSvc = new TeamleadReadService(p, new AdminService(p));
   await seed();
   await assignment.recalculate(teamlead, DATE); // appends bundle.created + bundle.assigned (system)
   // A genuine teamlead action so the actorType=teamlead filter has events to match

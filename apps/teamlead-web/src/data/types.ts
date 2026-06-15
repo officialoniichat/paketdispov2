@@ -20,12 +20,19 @@ export interface CapacitySummary {
   /** Freie Kapazität (idle headroom) = net − planned. NOT the eiserne Reserve. */
   reserveMinutes: number;
   utilisationPct: number;
+  /**
+   * Eiserne Reserve lifecycle state (concept §5/§9). Drives the ReserveCard so it
+   * never shows an ambiguous "✅ / Ziel 0":
+   * - `satisfied`     — target > 0 and the holdable backlog meets the floor.
+   * - `at_risk`       — target > 0 but the backlog falls short (Leerlauf risk).
+   * - `disabled`      — the reserve rule is switched off in Admin/Regeln.
+   * - `no_early_shift`— enabled but no early-shift worker resolved (target 0).
+   */
+  reserveState: 'satisfied' | 'at_risk' | 'disabled' | 'no_early_shift';
   /** Eiserne Reserve target floor (concept §5): earlyShiftWorkers × morningGapMinutes. */
   reserveTargetMinutes: number;
   /** Holdable, deadline-safe ready backlog securing the reserve. */
   reserveSecuredMinutes: number;
-  /** Whether the holdable backlog meets the target floor. */
-  reserveSatisfied: boolean;
   /** Belege forming tomorrow's Starterpaket (capped at target worth). */
   starterBelegCount: number;
   /** Σ estimatedMinutes of those starter belege. */

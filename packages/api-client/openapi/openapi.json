@@ -1875,6 +1875,16 @@
             "type": "number",
             "description": "Round 1 decimal, 0 if net capacity = 0"
           },
+          "reserveState": {
+            "type": "string",
+            "description": "Eiserne Reserve lifecycle state (concept §5/§9)",
+            "enum": [
+              "satisfied",
+              "at_risk",
+              "disabled",
+              "no_early_shift"
+            ]
+          },
           "reserveTargetMinutes": {
             "type": "number",
             "description": "Eiserne Reserve target (concept §5): earlyShiftWorkers × morningGapMinutes"
@@ -1882,10 +1892,6 @@
           "reserveSecuredMinutes": {
             "type": "number",
             "description": "Holdable, deadline-safe ready backlog minutes securing the reserve"
-          },
-          "reserveSatisfied": {
-            "type": "boolean",
-            "description": "Whether the holdable backlog meets the reserve target floor"
           },
           "starterBelegCount": {
             "type": "number",
@@ -1903,9 +1909,9 @@
           "plannedMinutes",
           "reserveMinutes",
           "utilisationPct",
+          "reserveState",
           "reserveTargetMinutes",
           "reserveSecuredMinutes",
-          "reserveSatisfied",
           "starterBelegCount",
           "starterMinutes"
         ]
@@ -2602,16 +2608,48 @@
       "ReserveRuleConfigDto": {
         "type": "object",
         "properties": {
-          "nextShiftCapacityPct": {
-            "type": "number"
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the eiserne Reserve floor is enforced"
           },
-          "minMinutesPerEmployee": {
-            "type": "number"
+          "morningGapMinutes": {
+            "type": "number",
+            "description": "Morning gap minutes; target = earlyShiftWorkers × this (concept §5)"
+          },
+          "earlyShiftSource": {
+            "type": "string",
+            "description": "How the early-shift worker count is resolved",
+            "enum": [
+              "next_morning",
+              "today_proxy"
+            ]
+          },
+          "neverReserveSections": {
+            "description": "Sections never held back overnight (concept §5.1)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "neverReserveFlags": {
+            "description": "Priority flags that disqualify holding a case back",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "respectDeadlines": {
+            "type": "boolean",
+            "description": "When true, a held case must not breach its Catmandatum/Verladetag"
           }
         },
         "required": [
-          "nextShiftCapacityPct",
-          "minMinutesPerEmployee"
+          "enabled",
+          "morningGapMinutes",
+          "earlyShiftSource",
+          "neverReserveSections",
+          "neverReserveFlags",
+          "respectDeadlines"
         ]
       },
       "BundleRuleConfigDto": {

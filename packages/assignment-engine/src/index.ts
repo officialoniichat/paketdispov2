@@ -74,6 +74,8 @@ export {
   canConsumeReserve,
   computeReserveStatus,
   type ReserveInput,
+  type ReserveState,
+  type ReserveRuleValues,
   type ReserveStatus,
   type ReserveStatusInput,
 } from './assignment/reserve.js';

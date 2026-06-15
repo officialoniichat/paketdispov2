@@ -8,6 +8,7 @@ import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
+import { AdminService } from '../admin/admin.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -94,7 +95,7 @@ beforeAll(async () => {
   const p = prisma as unknown as PrismaService;
   const events = new EventLogService(p);
   assignment = new AssignmentService(p, events);
-  teamleadSvc = new TeamleadReadService(p);
+  teamleadSvc = new TeamleadReadService(p, new AdminService(p));
   await seed();
   await assignment.recalculate(teamlead, DATE);
 }, 180_000);

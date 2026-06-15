@@ -700,12 +700,15 @@ export interface components {
             reserveMinutes: number;
             /** @description Round 1 decimal, 0 if net capacity = 0 */
             utilisationPct: number;
+            /**
+             * @description Eiserne Reserve lifecycle state (concept §5/§9)
+             * @enum {string}
+             */
+            reserveState: "satisfied" | "at_risk" | "disabled" | "no_early_shift";
             /** @description Eiserne Reserve target (concept §5): earlyShiftWorkers × morningGapMinutes */
             reserveTargetMinutes: number;
             /** @description Holdable, deadline-safe ready backlog minutes securing the reserve */
             reserveSecuredMinutes: number;
-            /** @description Whether the holdable backlog meets the reserve target floor */
-            reserveSatisfied: boolean;
             /** @description Belege forming tomorrow's Starterpaket (capped at target worth) */
             starterBelegCount: number;
             /** @description Σ estimatedMinutes of the Starterpaket belege */
@@ -920,8 +923,21 @@ export interface components {
             manualPriorityWins: boolean;
         };
         ReserveRuleConfigDto: {
-            nextShiftCapacityPct: number;
-            minMinutesPerEmployee: number;
+            /** @description Whether the eiserne Reserve floor is enforced */
+            enabled: boolean;
+            /** @description Morning gap minutes; target = earlyShiftWorkers × this (concept §5) */
+            morningGapMinutes: number;
+            /**
+             * @description How the early-shift worker count is resolved
+             * @enum {string}
+             */
+            earlyShiftSource: "next_morning" | "today_proxy";
+            /** @description Sections never held back overnight (concept §5.1) */
+            neverReserveSections: number[];
+            /** @description Priority flags that disqualify holding a case back */
+            neverReserveFlags: string[];
+            /** @description When true, a held case must not breach its Catmandatum/Verladetag */
+            respectDeadlines: boolean;
         };
         BundleRuleConfigDto: {
             minMinutes: number;

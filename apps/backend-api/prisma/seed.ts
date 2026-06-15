@@ -110,6 +110,16 @@ const SHIFTS: SeedShift[] = [
 
 async function seedShifts(userIds: Record<string, string>): Promise<void> {
   const date = asDate(SEED_DATE);
+  // Idempotency guard: a prior seed run may have created the day's shifts against
+  // now-stale User ids (e.g. users were re-created with fresh cuids). The
+  // [employeeId, date] upsert below cannot reconcile those orphans, so re-running
+  // would accumulate duplicate shifts for the date. Drop every shift on SEED_DATE
+  // that does NOT belong to a current seed user before (re-)upserting the canonical
+  // three — leaving exactly 3 active shifts for the date on any number of re-runs.
+  const currentEmployeeIds = SHIFTS.map((s) => requireId(userIds, s.employeeNo, 'user'));
+  await prisma.shift.deleteMany({
+    where: { date, employeeId: { notIn: currentEmployeeIds } },
+  });
   for (const s of SHIFTS) {
     const employeeId = requireId(userIds, s.employeeNo, 'user');
     await prisma.shift.upsert({

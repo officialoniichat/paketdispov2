@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
-  employeeShiftSchema,
   goodsReceiptCaseSchema,
-  type EmployeeShift,
   type GoodsReceiptCase,
   type PriorityFlag,
   type SectionCode,
 } from '@paket/domain-types';
-import { computeReserveStatus } from './reserve.js';
+import { computeReserveStatus, type ReserveRuleValues } from './reserve.js';
 
 const DATE = '2026-06-16';
+
+/** Admin/Regeln reserve defaults the engine is driven by (single source of truth). */
+const RULE: ReserveRuleValues = {
+  enabled: true,
+  morningGapMinutes: 105,
+  neverReserveSections: [4, 7, 8],
+  neverReserveFlags: ['prio', 'catman_due', 'overdue', 'manual_teamlead_priority'],
+  respectDeadlines: true,
+};
 
 interface CaseOverrides {
   id: string;
@@ -42,26 +49,13 @@ function makeCase(o: CaseOverrides): GoodsReceiptCase {
   });
 }
 
-function shift(employeeId: string): EmployeeShift {
-  return employeeShiftSchema.parse({
-    id: `shift-${employeeId}`,
-    employeeId,
-    date: DATE,
-    plannedStart: `${DATE}T07:00:00.000Z`,
-    plannedEnd: `${DATE}T15:00:00.000Z`,
-    breakMinutes: 30,
-    plannedHours: 8,
-    netCapacityMinutes: 450,
-    active: true,
-  });
-}
-
 describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => {
   it('targets earlyShiftWorkerCount × morningGapMinutes (default 105)', () => {
     const status = computeReserveStatus({
       cases: [],
-      shifts: [shift('e1'), shift('e2'), shift('e3')],
+      earlyShiftWorkerCount: 3,
       date: DATE,
+      rule: RULE,
     });
     expect(status.targetMinutes).toBe(315); // 3 × 105
   });
@@ -74,24 +68,50 @@ describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => 
     ];
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1'), shift('e2'), shift('e3')],
+      earlyShiftWorkerCount: 3,
       date: DATE,
+      rule: RULE,
     });
     expect(status.targetMinutes).toBe(315);
     expect(status.securedMinutes).toBe(360); // raw eligible backlog
-    expect(status.satisfied).toBe(true);
+    expect(status.state).toBe('satisfied');
   });
 
-  it('is NOT satisfied when the holdable backlog falls short', () => {
+  it('is at_risk when the holdable backlog falls short of a positive target', () => {
     const cases = [makeCase({ id: 'a', estimatedMinutes: 100 })];
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1'), shift('e2'), shift('e3')],
+      earlyShiftWorkerCount: 3,
       date: DATE,
+      rule: RULE,
     });
     expect(status.targetMinutes).toBe(315);
     expect(status.securedMinutes).toBe(100);
-    expect(status.satisfied).toBe(false);
+    expect(status.state).toBe('at_risk');
+  });
+
+  it('reports disabled when the reserve rule is switched off (no target, no hold)', () => {
+    const status = computeReserveStatus({
+      cases: [makeCase({ id: 'a', estimatedMinutes: 200 })],
+      earlyShiftWorkerCount: 3,
+      date: DATE,
+      rule: { ...RULE, enabled: false },
+    });
+    expect(status.state).toBe('disabled');
+    expect(status.targetMinutes).toBe(0);
+    expect(status.securedMinutes).toBe(0);
+    expect(status.starterBelegCount).toBe(0);
+  });
+
+  it('reports no_early_shift (NOT satisfied) when there is no early-shift worker', () => {
+    const status = computeReserveStatus({
+      cases: [makeCase({ id: 'a', estimatedMinutes: 50 })],
+      earlyShiftWorkerCount: 0,
+      date: DATE,
+      rule: RULE,
+    });
+    expect(status.state).toBe('no_early_shift');
+    expect(status.targetMinutes).toBe(0);
   });
 
   it('excludes urgent / never-holdable cases from the secured backlog', () => {
@@ -107,12 +127,13 @@ describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => 
     ];
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1')],
+      earlyShiftWorkerCount: 1,
       date: DATE,
+      rule: RULE,
     });
     expect(status.targetMinutes).toBe(105);
     expect(status.securedMinutes).toBe(80); // only the holdable one
-    expect(status.satisfied).toBe(false);
+    expect(status.state).toBe('at_risk');
   });
 
   it('treats a case as not deadline-safe when holding breaches catManDate/loadPlanDate', () => {
@@ -126,11 +147,24 @@ describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => 
     ];
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1')],
+      earlyShiftWorkerCount: 1,
       date: DATE,
+      rule: RULE,
     });
     expect(status.securedMinutes).toBe(90);
-    expect(status.satisfied).toBe(false);
+    expect(status.state).toBe('at_risk');
+  });
+
+  it('respectDeadlines=false lets near-deadline cases secure the reserve', () => {
+    const cases = [makeCase({ id: 'duesoon', estimatedMinutes: 200, loadPlanDate: DATE })];
+    const status = computeReserveStatus({
+      cases,
+      earlyShiftWorkerCount: 1,
+      date: DATE,
+      rule: { ...RULE, respectDeadlines: false },
+    });
+    expect(status.securedMinutes).toBe(200);
+    expect(status.state).toBe('satisfied');
   });
 
   it('only counts ready cases', () => {
@@ -140,8 +174,9 @@ describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => 
     ];
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1')],
+      earlyShiftWorkerCount: 1,
       date: DATE,
+      rule: RULE,
     });
     expect(status.securedMinutes).toBe(200);
   });
@@ -156,21 +191,12 @@ describe('computeReserveStatus (Reserve & Starterpaket concept §5/§6)', () => 
     // 1 worker -> target 105. Cumulative: 60, then 120 (>= 105) -> 2 belege.
     const status = computeReserveStatus({
       cases,
-      shifts: [shift('e1')],
+      earlyShiftWorkerCount: 1,
       date: DATE,
+      rule: RULE,
     });
     expect(status.targetMinutes).toBe(105);
     expect(status.starterBelegCount).toBe(2);
     expect(status.starterMinutes).toBe(120);
-  });
-
-  it('with no shifts the target is 0 and the reserve is trivially satisfied', () => {
-    const status = computeReserveStatus({
-      cases: [makeCase({ id: 'a', estimatedMinutes: 50 })],
-      shifts: [],
-      date: DATE,
-    });
-    expect(status.targetMinutes).toBe(0);
-    expect(status.satisfied).toBe(true);
   });
 });

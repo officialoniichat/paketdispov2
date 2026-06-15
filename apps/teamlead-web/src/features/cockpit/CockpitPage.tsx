@@ -120,9 +120,9 @@ export function CockpitPage(): JSX.Element {
                 tone="accent"
               />
               <ReserveCard
+                state={capacity.reserveState}
                 targetMinutes={capacity.reserveTargetMinutes}
                 securedMinutes={capacity.reserveSecuredMinutes}
-                satisfied={capacity.reserveSatisfied}
               />
               <StarterPreviewCard
                 belegCount={capacity.starterBelegCount}

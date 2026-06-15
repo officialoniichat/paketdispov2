@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WorkflowModule } from '../workflow/workflow.module.js';
 import { AssignmentModule } from '../assignment/assignment.module.js';
+import { AdminModule } from '../admin/admin.module.js';
 import { CasesService } from './cases.service.js';
 import { TeamleadService } from './teamlead.service.js';
 import { TeamleadReadService } from './teamlead-read.service.js';
@@ -10,7 +11,7 @@ import { TeamleadController } from './teamlead.controller.js';
 
 /** Digital receipt pool + case lifecycle (§14.2, §16.1). */
 @Module({
-  imports: [WorkflowModule, AssignmentModule],
+  imports: [WorkflowModule, AssignmentModule, AdminModule],
   controllers: [MeController, CasesController, TeamleadController],
   providers: [CasesService, TeamleadService, TeamleadReadService],
 })

@@ -77,8 +77,35 @@ export class PriorityRuleConfigDto {
 }
 
 export class ReserveRuleConfigDto {
-  @ApiProperty() @IsNumber() @Min(0) nextShiftCapacityPct!: number;
-  @ApiProperty() @IsNumber() @Min(0) minMinutesPerEmployee!: number;
+  @ApiProperty({ description: 'Whether the eiserne Reserve floor is enforced' })
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({ description: 'Morning gap minutes; target = earlyShiftWorkers × this (concept §5)' })
+  @IsInt()
+  @Min(1)
+  morningGapMinutes!: number;
+
+  @ApiProperty({
+    description: 'How the early-shift worker count is resolved',
+    enum: ['next_morning', 'today_proxy'],
+  })
+  @IsString()
+  earlyShiftSource!: 'next_morning' | 'today_proxy';
+
+  @ApiProperty({ type: [Number], description: 'Sections never held back overnight (concept §5.1)' })
+  @IsArray()
+  @IsInt({ each: true })
+  neverReserveSections!: number[];
+
+  @ApiProperty({ type: [String], description: 'Priority flags that disqualify holding a case back' })
+  @IsArray()
+  @IsString({ each: true })
+  neverReserveFlags!: string[];
+
+  @ApiProperty({ description: 'When true, a held case must not breach its Catmandatum/Verladetag' })
+  @IsBoolean()
+  respectDeadlines!: boolean;
 }
 
 export class BundleRuleConfigDto {

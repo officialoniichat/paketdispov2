@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AssignmentStatus, CaseStatus, PriorityFlag } from '@prisma/client';
-import { computeReserveStatus } from '@paket/assignment-engine';
+import { computeReserveStatus, type ReserveRuleValues } from '@paket/assignment-engine';
+import type { ReserveRuleConfig } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { toEmployeeShift, toGoodsReceiptCase } from '../assignment/assignment.mappers.js';
+import { AdminService } from '../admin/admin.service.js';
+import { toGoodsReceiptCase } from '../assignment/assignment.mappers.js';
 import {
   type AuditEventDto,
   type BoardDto,
@@ -28,6 +30,21 @@ const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 's
 const COMPLETED_STATUSES: CaseStatus[] = ['completed', 'zst_done'];
 /** Bundle statuses excluded from planned-effort capacity math. */
 const INACTIVE_BUNDLE_STATUSES: AssignmentStatus[] = ['cancelled', 'completed'];
+
+/**
+ * Map the persisted Admin/Regeln reserve rule onto the engine's reserve-rule values
+ * (single source of truth → engine). Field-by-field so the engine stays free of the
+ * admin-config schema; `earlyShiftSource` is resolved separately into a worker count.
+ */
+function toReserveRuleValues(reserve: ReserveRuleConfig): ReserveRuleValues {
+  return {
+    enabled: reserve.enabled,
+    morningGapMinutes: reserve.morningGapMinutes,
+    neverReserveSections: reserve.neverReserveSections,
+    neverReserveFlags: reserve.neverReserveFlags,
+    respectDeadlines: reserve.respectDeadlines,
+  };
+}
 
 /** Inclusive UTC day window [start, end] for a YYYY-MM-DD calendar day. */
 function dayWindow(date: string): { start: Date; end: Date } {
@@ -68,7 +85,10 @@ function readStringField(payload: unknown, key: string): string | undefined {
  */
 @Injectable()
 export class TeamleadReadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly admin: AdminService,
+  ) {}
 
   async listPool(query: PoolQueryDto): Promise<PoolListDto> {
     const page = query.page ?? 1;
@@ -239,7 +259,7 @@ export class TeamleadReadService {
    */
   async capacity(date: string): Promise<CapacityDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
-    const [shifts, bundles, readyCases] = await Promise.all([
+    const [shifts, bundles, readyCases, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({ where: { date: day, active: true } }),
       this.prisma.assignmentBundle.findMany({
         where: { date: day, status: { notIn: INACTIVE_BUNDLE_STATUSES } },
@@ -251,6 +271,9 @@ export class TeamleadReadService {
         where: { status: 'ready' },
         include: { storageLocation: true },
       }),
+      // The persisted Admin/Regeln config is the SINGLE SOURCE OF TRUTH for the
+      // reserve rule — reuse the exact read GET /api/admin/rules serves.
+      this.admin.getRuleConfig(),
     ]);
 
     const netCapacityMinutes = shifts.reduce((sum, s) => sum + s.netCapacityMinutes, 0);
@@ -261,12 +284,21 @@ export class TeamleadReadService {
     const utilisationPct =
       netCapacityMinutes === 0 ? 0 : round1((plannedMinutes / netCapacityMinutes) * 100);
 
-    // Eiserne Reserve + Starterpaket (concept §5/§6). Active shifts are the
-    // early-shift worker proxy (no PEP yet); the engine documents the assumption.
+    // Eiserne Reserve + Starterpaket (concept §5/§6), driven by the Admin/Regeln
+    // reserve rule. The early-shift worker count is resolved from the configured
+    // source: today's active-shift proxy, or the next working morning's shifts.
+    const reserveRule = ruleConfig.reserve;
+    const earlyShiftWorkerCount = await this.resolveEarlyShiftWorkerCount(
+      date,
+      day,
+      reserveRule.earlyShiftSource,
+      shifts.length,
+    );
     const reserve = computeReserveStatus({
       cases: readyCases.map(toGoodsReceiptCase),
-      shifts: shifts.map(toEmployeeShift),
+      earlyShiftWorkerCount,
       date,
+      rule: toReserveRuleValues(reserveRule),
     });
 
     return {
@@ -276,12 +308,35 @@ export class TeamleadReadService {
       plannedMinutes,
       reserveMinutes,
       utilisationPct,
+      reserveState: reserve.state,
       reserveTargetMinutes: reserve.targetMinutes,
       reserveSecuredMinutes: reserve.securedMinutes,
-      reserveSatisfied: reserve.satisfied,
       starterBelegCount: reserve.starterBelegCount,
       starterMinutes: reserve.starterMinutes,
     };
+  }
+
+  /**
+   * Resolve the early-shift worker count for the reserve target (concept §5):
+   * - `today_proxy` → active shifts on the planning date itself (no PEP feed yet).
+   * - `next_morning` → active shifts on the next working day that actually has any
+   *   (the earliest active-shift date strictly after `date`); 0 if none is planned.
+   */
+  private async resolveEarlyShiftWorkerCount(
+    date: string,
+    day: Date,
+    source: ReserveRuleConfig['earlyShiftSource'],
+    todayActiveShiftCount: number,
+  ): Promise<number> {
+    if (source === 'today_proxy') return todayActiveShiftCount;
+
+    const nextShiftDay = await this.prisma.shift.findFirst({
+      where: { date: { gt: day }, active: true },
+      orderBy: { date: 'asc' },
+      select: { date: true },
+    });
+    if (!nextShiftDay) return 0;
+    return this.prisma.shift.count({ where: { date: nextShiftDay.date, active: true } });
   }
 
   /**
