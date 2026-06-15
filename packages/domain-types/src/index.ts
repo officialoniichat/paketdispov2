@@ -9,6 +9,7 @@ export * from './documents.js';
 export * from './cases.js';
 export * from './workforce.js';
 export * from './location.js';
+export * from './admin-config.js';
 export * from './assignment.js';
 export * from './transport.js';
 export * from './issues.js';

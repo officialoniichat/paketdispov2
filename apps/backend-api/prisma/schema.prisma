@@ -500,6 +500,18 @@ model PriorityRule {
   @@map("priority_rules")
 }
 
+// Singleton structured-config store (§11). The teamlead/admin cockpit edits one
+// cohesive RuleConfig object that does not fit the generic PriorityRule/EffortRule
+// key/rank tables, so it is stored as a validated JSON document keyed by a fixed
+// string (e.g. "rule_config"). Writes are Zod-validated at the API boundary.
+model AppConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_config")
+}
+
 model EffortRule {
   id        String   @id @default(cuid())
   driverKey String   @unique

@@ -1107,6 +1107,139 @@
         ]
       }
     },
+    "/api/admin/locations": {
+      "get": {
+        "operationId": "AdminController_locations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LocationDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§11.2 List the location master (Lagerplätze).",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "AdminController_replaceLocations",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LocationUpsertDto"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LocationDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§11.2 Replace the location master: upsert by code, soft-deactivate omitted rows, 409 if a referenced location is removed.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/rules": {
+      "get": {
+        "operationId": "AdminController_rules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleConfigDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§11 Read the structured rule config (priority/reserve/bundle/effort).",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "AdminController_replaceRules",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleConfigDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§11 Persist the structured rule config (Zod-validated).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_live",
@@ -2335,6 +2468,282 @@
             "description": "Reason logged in the §8.4 audit event"
           }
         }
+      },
+      "LocationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Natural code, e.g. \"R27\", \"HB-5/234\""
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "LocationKind enum value"
+          },
+          "zone": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceIndex": {
+            "type": "number",
+            "nullable": true
+          },
+          "scanCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "displayName",
+          "kind",
+          "active"
+        ]
+      },
+      "LocationUpsertDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Server id; omit/ignore for new rows"
+          },
+          "code": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "LocationKind enum value"
+          },
+          "zone": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceIndex": {
+            "type": "number",
+            "nullable": true
+          },
+          "scanCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "displayName",
+          "kind",
+          "active"
+        ]
+      },
+      "PriorityRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "catManWeight": {
+            "type": "number"
+          },
+          "overdueThresholdHours": {
+            "type": "number"
+          },
+          "fifoEnabled": {
+            "type": "boolean"
+          },
+          "manualPriorityWins": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "catManWeight",
+          "overdueThresholdHours",
+          "fifoEnabled",
+          "manualPriorityWins"
+        ]
+      },
+      "ReserveRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "nextShiftCapacityPct": {
+            "type": "number"
+          },
+          "minMinutesPerEmployee": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "nextShiftCapacityPct",
+          "minMinutesPerEmployee"
+        ]
+      },
+      "BundleRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "minMinutes": {
+            "type": "number"
+          },
+          "maxMinutes": {
+            "type": "number"
+          },
+          "maxCases": {
+            "type": "number"
+          },
+          "maxHeavyCases": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "minMinutes",
+          "maxMinutes",
+          "maxCases",
+          "maxHeavyCases"
+        ]
+      },
+      "EffortRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "priceLabelPrintFactor": {
+            "type": "number"
+          },
+          "securingFactor": {
+            "type": "number"
+          },
+          "onlineFactor": {
+            "type": "number"
+          },
+          "redPriceFactor": {
+            "type": "number"
+          },
+          "checkShareFactor": {
+            "type": "number"
+          },
+          "boxSplittingFactor": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "priceLabelPrintFactor",
+          "securingFactor",
+          "onlineFactor",
+          "redPriceFactor",
+          "checkShareFactor",
+          "boxSplittingFactor"
+        ]
+      },
+      "LoadPlanRowDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopAreaNo": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "string"
+          },
+          "validFrom": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "validTo": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "specialDay": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "shopAreaNo",
+          "floor",
+          "weekday",
+          "validFrom",
+          "specialDay"
+        ]
+      },
+      "ParserTemplateRowDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requiredFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "detectionThreshold": {
+            "type": "number"
+          },
+          "fallbackToManual": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "requiredFields",
+          "detectionThreshold",
+          "fallbackToManual"
+        ]
+      },
+      "RuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "priority": {
+            "$ref": "#/components/schemas/PriorityRuleConfigDto"
+          },
+          "reserve": {
+            "$ref": "#/components/schemas/ReserveRuleConfigDto"
+          },
+          "bundle": {
+            "$ref": "#/components/schemas/BundleRuleConfigDto"
+          },
+          "effort": {
+            "$ref": "#/components/schemas/EffortRuleConfigDto"
+          },
+          "loadPlan": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadPlanRowDto"
+            }
+          },
+          "parserTemplates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParserTemplateRowDto"
+            }
+          }
+        },
+        "required": [
+          "priority",
+          "reserve",
+          "bundle",
+          "effort",
+          "loadPlan",
+          "parserTemplates"
+        ]
       }
     }
   }

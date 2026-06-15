@@ -12,7 +12,8 @@
 //
 // Run from apps/backend-api so prisma.config.ts loads DATABASE_URL:
 //   pnpm --filter @paket/backend-api exec prisma db seed
-import { PrismaClient, type LocationKind, type PriorityFlag } from '@prisma/client';
+import { PrismaClient, type LocationKind, type PriorityFlag, type Prisma } from '@prisma/client';
+import { DEFAULT_RULE_CONFIG, RULE_CONFIG_KEY } from '@paket/domain-types';
 
 const prisma = new PrismaClient();
 
@@ -342,6 +343,21 @@ async function seedCaseDetails(): Promise<void> {
   }
 }
 
+// --- App config (§11 structured rule config singleton) ---------------------
+// Idempotent: only writes the default when no row exists yet, so re-running the
+// seed never clobbers a rule config a teamlead/admin has since edited via the API.
+
+async function seedRuleConfig(): Promise<void> {
+  const existing = await prisma.appConfig.findUnique({ where: { key: RULE_CONFIG_KEY } });
+  if (existing) return;
+  await prisma.appConfig.create({
+    data: {
+      key: RULE_CONFIG_KEY,
+      value: DEFAULT_RULE_CONFIG as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
 async function main(): Promise<void> {
   const roleIds = await seedRoles();
   const userIds = await seedUsers(roleIds);
@@ -349,6 +365,7 @@ async function main(): Promise<void> {
   const locationIds = await seedLocations();
   await seedCases(locationIds);
   await seedCaseDetails();
+  await seedRuleConfig();
 
   const [users, shifts, locations, readyCases, positions, boxes] = await Promise.all([
     prisma.user.count(),

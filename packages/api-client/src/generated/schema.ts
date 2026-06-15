@@ -473,6 +473,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §11.2 List the location master (Lagerplätze). */
+        get: operations["AdminController_locations"];
+        /** §11.2 Replace the location master: upsert by code, soft-deactivate omitted rows, 409 if a referenced location is removed. */
+        put: operations["AdminController_replaceLocations"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §11 Read the structured rule config (priority/reserve/bundle/effort). */
+        get: operations["AdminController_rules"];
+        /** §11 Persist the structured rule config (Zod-validated). */
+        put: operations["AdminController_replaceRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -841,6 +877,80 @@ export interface components {
         BundlePauseDto: {
             /** @description Reason logged in the §8.4 audit event */
             reason?: string;
+        };
+        LocationDto: {
+            id: string;
+            /** @description Natural code, e.g. "R27", "HB-5/234" */
+            code: string;
+            displayName: string;
+            /** @description LocationKind enum value */
+            kind: string;
+            zone?: string | null;
+            sequenceIndex?: number | null;
+            scanCode?: string | null;
+            active: boolean;
+        };
+        LocationUpsertDto: {
+            /** @description Server id; omit/ignore for new rows */
+            id?: string;
+            code: string;
+            displayName: string;
+            /** @description LocationKind enum value */
+            kind: string;
+            zone?: string | null;
+            sequenceIndex?: number | null;
+            scanCode?: string | null;
+            active: boolean;
+        };
+        PriorityRuleConfigDto: {
+            catManWeight: number;
+            overdueThresholdHours: number;
+            fifoEnabled: boolean;
+            manualPriorityWins: boolean;
+        };
+        ReserveRuleConfigDto: {
+            nextShiftCapacityPct: number;
+            minMinutesPerEmployee: number;
+        };
+        BundleRuleConfigDto: {
+            minMinutes: number;
+            maxMinutes: number;
+            maxCases: number;
+            maxHeavyCases: number;
+        };
+        EffortRuleConfigDto: {
+            priceLabelPrintFactor: number;
+            securingFactor: number;
+            onlineFactor: number;
+            redPriceFactor: number;
+            checkShareFactor: number;
+            boxSplittingFactor: number;
+        };
+        LoadPlanRowDto: {
+            id: string;
+            shopAreaNo: string;
+            floor: string;
+            weekday: string;
+            /** @description ISO date YYYY-MM-DD */
+            validFrom: string;
+            /** @description ISO date YYYY-MM-DD */
+            validTo?: string;
+            specialDay: boolean;
+        };
+        ParserTemplateRowDto: {
+            id: string;
+            name: string;
+            requiredFields: string[];
+            detectionThreshold: number;
+            fallbackToManual: boolean;
+        };
+        RuleConfigDto: {
+            priority: components["schemas"]["PriorityRuleConfigDto"];
+            reserve: components["schemas"]["ReserveRuleConfigDto"];
+            bundle: components["schemas"]["BundleRuleConfigDto"];
+            effort: components["schemas"]["EffortRuleConfigDto"];
+            loadPlan: components["schemas"]["LoadPlanRowDto"][];
+            parserTemplates: components["schemas"]["ParserTemplateRowDto"][];
         };
     };
     responses: never;
@@ -1481,6 +1591,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    AdminController_locations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    AdminController_replaceLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationUpsertDto"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    AdminController_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleConfigDto"];
+                };
+            };
+        };
+    };
+    AdminController_replaceRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleConfigDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleConfigDto"];
                 };
             };
         };
