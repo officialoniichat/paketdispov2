@@ -309,7 +309,7 @@ async function seedCaseDetails(): Promise<void> {
       positions.push({ positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau' });
     }
     for (const p of positions) {
-      await prisma.receiptPosition.upsert({
+      const position = await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
         update: { wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor },
         create: {
@@ -322,6 +322,21 @@ async function seedCaseDetails(): Promise<void> {
           shopNo: '21',
         },
       });
+
+      // Two EAN/size lines per position so the Belegdetail "Positionen" SKU table
+      // (EAN · Größe · Soll · Ist · Status) is populated. Soll splits the case's
+      // quantity across the lines; Ist stays open (null) until confirmed.
+      const skuQuantities = splitQuantity(Math.max(2, Math.round(c.totalQuantity / positions.length)));
+      const sizes = ['38', '40'];
+      for (const [skuIndex, expectedQuantity] of skuQuantities.entries()) {
+        const size = sizes[skuIndex] ?? String(40 + skuIndex * 2);
+        const ean = `40123${p.positionNo}${skuIndex}${c.weBelegNo.slice(-5)}`;
+        await prisma.receiptSkuLine.upsert({
+          where: { sku_position_ean_size: { receiptPositionId: position.id, ean, size } },
+          update: { expectedQuantity },
+          create: { receiptPositionId: position.id, ean, size, expectedQuantity },
+        });
+      }
     }
 
     // 1-2 boxes whose planned quantities sum to totalQuantity (full-ZST gate).
