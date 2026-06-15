@@ -15,6 +15,13 @@ import type {
   TransportBoxTarget,
   WorkInstructionHeader,
 } from '@paket/domain-types';
+import {
+  caseStatusSchema,
+  priorityFlagSchema,
+  receiptPositionSchema,
+  sectionCodeSchema,
+  transportBoxTargetSchema,
+} from '@paket/domain-types';
 import { db as defaultDb, type PaketDb } from './db.js';
 import { putAggregate, putBundle, putProgress } from './repository.js';
 import type { AssignedBundle, CaseAggregate, PickupStop } from './types.js';
@@ -44,27 +51,46 @@ function checkMode(mode: string): WorkInstructionHeader['goodsReceiptCheckMode']
   return 'quantity_only';
 }
 
-/** Map a DTO goodsType string onto the TransportBoxTarget union. */
+/** Map a DTO goodsType string onto the TransportBoxTarget union, defaulting to `mixed`. */
 function boxGoodsType(value: unknown): TransportBoxTarget['goodsType'] {
-  const allowed = [
-    'vororder',
-    'nachorder',
-    'sopo',
-    'nos',
-    'extrabestellung',
-    'nos_nachorder',
-    'prio',
-    'mixed',
-  ] as const;
-  const s = str(value);
-  return (allowed as readonly string[]).includes(s ?? '')
-    ? (s as TransportBoxTarget['goodsType'])
-    : 'mixed';
+  const parsed = transportBoxTargetSchema.shape.goodsType.safeParse(value);
+  return parsed.success ? parsed.data : 'mixed';
+}
+
+/** Map a DTO labelStatus string onto the TransportBoxTarget union, defaulting to `pending`. */
+function boxLabelStatus(value: unknown): TransportBoxTarget['labelStatus'] {
+  const parsed = transportBoxTargetSchema.shape.labelStatus.safeParse(value);
+  return parsed.success ? parsed.data : 'pending';
+}
+
+/** Map a DTO position status string onto the ReceiptPosition union, defaulting to `open`. */
+function positionStatus(value: unknown): ReceiptPosition['status'] {
+  const parsed = receiptPositionSchema.shape.status.safeParse(value);
+  return parsed.success ? parsed.data : 'open';
+}
+
+/** Narrow a numeric DTO section to the domain `SectionCode`, or null when absent/invalid. */
+function caseSection(value: unknown): GoodsReceiptCase['section'] {
+  if (typeof value !== 'number') return null;
+  const parsed = sectionCodeSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Narrow a DTO status string onto the domain `CaseStatus` (throws on an unknown value). */
+function caseStatus(value: string): GoodsReceiptCase['status'] {
+  return caseStatusSchema.parse(value);
+}
+
+/** Keep only the DTO priority flags that are members of the domain `PriorityFlag` union. */
+function casePriorityFlags(values: readonly string[]): GoodsReceiptCase['priorityFlags'] {
+  return values.filter(
+    (flag): flag is GoodsReceiptCase['priorityFlags'][number] =>
+      priorityFlagSchema.safeParse(flag).success,
+  );
 }
 
 /** CaseSummaryDto + section→domain case (synthesising fields the DTO omits). */
 function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
-  const section = typeof summary.section === 'number' ? summary.section : null;
   return {
     id: summary.id,
     documentSetId: `ds-${summary.id}`,
@@ -78,10 +104,10 @@ function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
       barcode: summary.storageLocationCode,
       active: true,
     },
-    section: section as GoodsReceiptCase['section'],
-    priorityFlags: summary.priorityFlags as GoodsReceiptCase['priorityFlags'],
+    section: caseSection(summary.section),
+    priorityFlags: casePriorityFlags(summary.priorityFlags),
     totalQuantity: summary.totalQuantity,
-    status: summary.status as GoodsReceiptCase['status'],
+    status: caseStatus(summary.status),
     effortPoints: 0,
     estimatedMinutes: summary.estimatedMinutes,
     version: 0,
@@ -145,7 +171,7 @@ function toPositions(
           status: 'open' as const,
         },
       ],
-      status: dto.status as ReceiptPosition['status'],
+      status: positionStatus(dto.status),
     };
   });
 }
@@ -163,7 +189,7 @@ function toBoxTargets(caseId: string, dtos: TransportBoxTargetDto[]): TransportB
     positionIds: dto.positionIds,
     plannedQuantity: dto.plannedQuantity,
     actualQuantity: dto.quantity,
-    labelStatus: (str(dto.labelStatus) as TransportBoxTarget['labelStatus']) ?? 'pending',
+    labelStatus: boxLabelStatus(dto.labelStatus),
   }));
 }
 

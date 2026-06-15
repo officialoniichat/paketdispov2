@@ -17,10 +17,10 @@ interface TokenClaims {
 /** Base64url-decode the JWT payload segment; returns {} on any malformed input. */
 function decodeJwtClaims(token: string | undefined): TokenClaims {
   if (!token) return {};
-  const segments = token.split('.');
-  if (segments.length < 2) return {};
+  const segment = token.split('.')[1];
+  if (!segment) return {};
   try {
-    const payload = segments[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = segment.replace(/-/g, '+').replace(/_/g, '/');
     const json = atob(payload);
     return JSON.parse(json) as TokenClaims;
   } catch {

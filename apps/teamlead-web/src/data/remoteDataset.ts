@@ -8,6 +8,13 @@
  * feature components don't change.
  */
 import type { WorkflowEvent } from '@paket/domain-types';
+import {
+  actorTypeSchema,
+  caseStatusSchema,
+  priorityFlagSchema,
+  sectionCodeSchema,
+  workflowEventTypeSchema,
+} from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
 import type {
@@ -44,6 +51,47 @@ export interface CockpitSnapshot {
 }
 
 const HEAVY_MINUTES_THRESHOLD = 30;
+
+// ---------------------------------------------------------------------------
+// Boundary narrowing: the generated DTOs type enum-ish fields as plain
+// `string`/`number`, so we validate them against the domain Zod schemas before
+// projecting onto the view-model unions instead of asserting with a bare `as`.
+// An unexpected backend value fails fast (throws) rather than corrupting state.
+// ---------------------------------------------------------------------------
+
+/** Narrow a DTO status string to the domain `CaseStatus`, throwing on an unknown value. */
+function toCaseStatus(value: string): BoardCase['status'] {
+  return caseStatusSchema.parse(value);
+}
+
+/** Narrow a DTO actorType string to the domain `ActorType`. */
+function toActorType(value: string): WorkflowEvent['actorType'] {
+  return actorTypeSchema.parse(value);
+}
+
+/** Narrow a DTO eventType string to the domain `WorkflowEventType`. */
+function toEventType(value: string): WorkflowEvent['eventType'] {
+  return workflowEventTypeSchema.parse(value);
+}
+
+/**
+ * Narrow a DTO section to the domain `SectionCode`, or null when absent/invalid.
+ * The generated `section` type widens to `Record<string, never> | null` (an
+ * openapi-typescript nullable-number artifact), so we accept `unknown` and gate
+ * on `typeof === 'number'` before validating.
+ */
+function toSectionCode(value: unknown): LaneCard['section'] {
+  if (typeof value !== 'number') return null;
+  const parsed = sectionCodeSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Keep only the DTO priority flags that are members of the domain `PriorityFlag` union. */
+function toPriorityFlags(values: readonly string[]): LaneCard['priorityFlags'] {
+  return values.filter(
+    (flag): flag is LaneCard['priorityFlags'][number] => priorityFlagSchema.safeParse(flag).success,
+  );
+}
 
 /** Unwrap an openapi-fetch `{ data, error }` result, throwing so React Query sees it. */
 function unwrap<T>(result: { data?: T; error?: unknown }, label: string): T {
@@ -166,7 +214,7 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
   return {
     caseId: c.id,
     weBelegNo: c.weBelegNo,
-    status: c.status as BoardCase['status'],
+    status: toCaseStatus(c.status),
     estimatedMinutes: c.estimatedMinutes,
     effortPoints: c.effortPoints,
     // BoardCaseDto carries no storage code; the board caption hides it when empty.
@@ -266,9 +314,9 @@ function toLaneCard(item: PoolItemDto): LaneCard {
   return {
     caseId: item.id,
     weBelegNo: item.weBelegNo,
-    status: item.status as LaneCard['status'],
-    section: (typeof item.section === 'number' ? item.section : null) as LaneCard['section'],
-    priorityFlags: item.priorityFlags as LaneCard['priorityFlags'],
+    status: toCaseStatus(item.status),
+    section: toSectionCode(item.section),
+    priorityFlags: toPriorityFlags(item.priorityFlags),
     totalQuantity: item.totalQuantity,
     effortPoints: item.effortPoints,
     estimatedMinutes: item.estimatedMinutes,
@@ -284,10 +332,10 @@ function toLaneCard(item: PoolItemDto): LaneCard {
 function mapEvent(dto: AuditEventDto): WorkflowEvent {
   return {
     id: dto.id,
-    eventType: dto.eventType as WorkflowEvent['eventType'],
+    eventType: toEventType(dto.eventType),
     entityType: dto.entityType,
     entityId: dto.entityId,
-    actorType: dto.actorType as WorkflowEvent['actorType'],
+    actorType: toActorType(dto.actorType),
     actorId: dto.actorId,
     timestamp: dto.at,
     payload: { action: dto.action, reason: dto.reason },

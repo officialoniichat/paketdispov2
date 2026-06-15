@@ -29,6 +29,15 @@ function asTime(day: string, hhmm: string): Date {
   return new Date(`${day}T${hhmm}:00.000Z`);
 }
 
+/** Look up a previously-seeded id, failing loudly if a referenced key is missing. */
+function requireId(map: Record<string, string>, key: string, kind: string): string {
+  const id = map[key];
+  if (id === undefined) {
+    throw new Error(`[seed] missing ${kind} for key "${key}" — check seed ordering`);
+  }
+  return id;
+}
+
 // --- Roles (RBAC) ----------------------------------------------------------
 
 async function seedRoles(): Promise<Record<string, string>> {
@@ -71,10 +80,11 @@ async function seedUsers(roleIds: Record<string, string>): Promise<Record<string
     });
     idByEmployeeNo[u.employeeNo] = user.id;
     // Link role idempotently (composite PK [userId, roleId]).
+    const roleId = requireId(roleIds, u.role, 'role');
     await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: roleIds[u.role]! } },
+      where: { userId_roleId: { userId: user.id, roleId } },
       update: {},
-      create: { userId: user.id, roleId: roleIds[u.role]! },
+      create: { userId: user.id, roleId },
     });
   }
   return idByEmployeeNo;
@@ -100,7 +110,7 @@ const SHIFTS: SeedShift[] = [
 async function seedShifts(userIds: Record<string, string>): Promise<void> {
   const date = asDate(SEED_DATE);
   for (const s of SHIFTS) {
-    const employeeId = userIds[s.employeeNo]!;
+    const employeeId = requireId(userIds, s.employeeNo, 'user');
     await prisma.shift.upsert({
       where: { shift_employee_date: { employeeId, date } },
       update: {
@@ -218,7 +228,7 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
       },
     });
 
-    const storageLocationId = locationIds[c.storageCode]!;
+    const storageLocationId = requireId(locationIds, c.storageCode, 'location');
     const caseData = {
       documentSetId: documentSet.id,
       deliveryNoteNo: c.weBelegNo.replace('WE', 'LS'),

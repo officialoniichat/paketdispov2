@@ -71,6 +71,22 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+/** Type guard: a freeform JSON value that is a plain (non-array) object. */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Read an optional string field from a freeform audit `payload` (Prisma `Json`),
+ * narrowing `unknown` safely via {@link isJsonObject}: non-object/array payloads
+ * and non-string values yield `undefined` rather than forcing a cast.
+ */
+function readStringField(payload: unknown, key: string): string | undefined {
+  if (!isJsonObject(payload)) return undefined;
+  const value = payload[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
 /** True iff `candidate` contains exactly the same ids as `current` (any order). */
 function isPermutation(current: string[], candidate: string[]): boolean {
   if (current.length !== candidate.length) return false;
@@ -348,9 +364,8 @@ export class TeamleadService {
     });
 
     return rows.map((e) => {
-      const payload = (e.payload ?? {}) as Record<string, unknown>;
-      const action = typeof payload['action'] === 'string' ? payload['action'] : undefined;
-      const reason = typeof payload['reason'] === 'string' ? payload['reason'] : undefined;
+      const action = readStringField(e.payload, 'action');
+      const reason = readStringField(e.payload, 'reason');
       return {
         id: e.id,
         seq: Number(e.seq),
@@ -738,15 +753,13 @@ export class TeamleadService {
       return { id: s.id, primary, originalIdx };
     });
     ranked.sort((a, b) => a.primary - b.primary || a.originalIdx - b.originalIdx);
-    // Two-phase write to avoid colliding with the @@unique([bundleId, sequence]).
-    for (let i = 0; i < ranked.length; i++) {
-      await tx.routeStop.update({
-        where: { id: ranked[i]!.id },
-        data: { sequence: -(i + 1) },
-      });
+    // Two-phase write to avoid colliding with the @@unique([bundleId, sequence]):
+    // first park every stop at a negative slot, then assign the final 0..n order.
+    for (const [i, stop] of ranked.entries()) {
+      await tx.routeStop.update({ where: { id: stop.id }, data: { sequence: -(i + 1) } });
     }
-    for (let i = 0; i < ranked.length; i++) {
-      await tx.routeStop.update({ where: { id: ranked[i]!.id }, data: { sequence: i } });
+    for (const [i, stop] of ranked.entries()) {
+      await tx.routeStop.update({ where: { id: stop.id }, data: { sequence: i } });
     }
   }
 

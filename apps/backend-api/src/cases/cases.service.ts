@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { CaseStatus } from '@paket/domain-types';
+import { caseStatusSchema } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -254,10 +255,11 @@ export class CasesService {
       return { version: fromVersion };
     }
     let version = fromVersion;
-    for (let i = startIndex + 1; i <= boxingIndex; i += 1) {
+    // Slice the chain so each hop target is a properly-typed CaseStatus (no index cast).
+    for (const toStatus of CasesService.WORK_CHAIN.slice(startIndex + 1, boxingIndex + 1)) {
       const result = await this.workflow.transition({
         caseId,
-        toStatus: CasesService.WORK_CHAIN[i] as CaseStatus,
+        toStatus,
         actor: { actorType: 'employee', actorId: principal.sub },
         expectedVersion: version,
       });
@@ -425,7 +427,7 @@ export class CasesService {
     }
     return {
       id: found.id,
-      status: found.status as CaseStatus,
+      status: caseStatusSchema.parse(found.status),
       version: found.version,
       ownerEmployeeNo,
     };

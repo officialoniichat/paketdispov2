@@ -49,14 +49,11 @@ export class AssignmentService {
       this.prisma.location.findMany({ where: { active: true } }),
     ]);
 
-    let durationMs = 0;
-    let plan: ReturnType<typeof assignWork> | undefined;
-    let assignedCaseCount = 0;
-
     // ONE transaction: clearing the prior plan, re-reading the freed pool, running
     // the engine, and persisting the new plan all commit (or roll back) together so
     // a failure leaves the previous plan intact (§8.3 "Neu berechnen" must be re-runnable).
-    await this.prisma.$transaction(async (tx) => {
+    // The callback returns the engine plan + metrics so we never need a post-tx cast.
+    const { plan, durationMs, assignedCaseCount } = await this.prisma.$transaction(async (tx) => {
       // 1. Clear the prior plan for this date so the re-insert is clean and idempotent.
       //    Only revert cases that a PRIOR recalc left in `assigned` — cases an employee
       //    has already started/completed (picking/checking/.../completed) are left alone.
@@ -77,25 +74,27 @@ export class AssignmentService {
       };
 
       const t0 = performance.now();
-      plan = assignWork(input);
-      durationMs = Math.round(performance.now() - t0);
+      const computedPlan = assignWork(input);
+      const elapsedMs = Math.round(performance.now() - t0);
 
       const seqByBundleId = new Map<string, BundlePickupSequence>(
-        plan.pickupSequences.map((s) => [s.bundleId, s]),
+        computedPlan.pickupSequences.map((s) => [s.bundleId, s]),
       );
 
-      for (const bundle of plan.bundles) {
-        assignedCaseCount += await this.persistBundle(
+      let persistedCount = 0;
+      for (const bundle of computedPlan.bundles) {
+        persistedCount += await this.persistBundle(
           tx,
           bundle,
           seqByBundleId.get(bundle.id),
           principal,
         );
       }
+
+      return { plan: computedPlan, durationMs: elapsedMs, assignedCaseCount: persistedCount };
     });
 
-    const finalPlan = plan as ReturnType<typeof assignWork>;
-    return this.toResultDto(day, finalPlan, assignedCaseCount, durationMs);
+    return this.toResultDto(day, plan, assignedCaseCount, durationMs);
   }
 
   /**

@@ -39,6 +39,7 @@ import {
   withdrawCase as withdrawCaseRequest,
 } from './mutations.js';
 import type {
+  BoardCase,
   BoardRow,
   CockpitSummary,
   Lane,
@@ -265,17 +266,15 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         const poolCase = snapshot.pool.find((p) => p.caseId === caseId);
         const withRow = patchBoardRow(snapshot, bundleId, (row) => {
           if (row.cases.some((c) => c.caseId === caseId)) return row;
-          const cases = [
-            ...row.cases,
-            {
-              caseId,
-              weBelegNo: poolCase?.weBelegNo ?? caseId,
-              status: 'assigned' as BoardRow['cases'][number]['status'],
-              estimatedMinutes: poolCase?.estimatedMinutes ?? 0,
-              effortPoints: 0,
-              storageCode: '',
-            },
-          ];
+          const newCase: BoardCase = {
+            caseId,
+            weBelegNo: poolCase?.weBelegNo ?? caseId,
+            status: 'assigned',
+            estimatedMinutes: poolCase?.estimatedMinutes ?? 0,
+            effortPoints: 0,
+            storageCode: '',
+          };
+          const cases = [...row.cases, newCase];
           return { ...row, cases, bundleSize: cases.length };
         });
         return { ...withRow, pool: withRow.pool.filter((p) => p.caseId !== caseId) };
