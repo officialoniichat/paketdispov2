@@ -63,6 +63,20 @@ Das Konzept liefert **keinen kalibrierten Kalender** (F.4 nennt relative Wochen,
 
 **Lesereihenfolge im Kickoff:** 6 (Register, setzt Owner/Termine) → 1 (Mapping) → 2/3/4/5 (Datensammlung).
 
+### Sammeldateien (Templates — Header/bekanntes Skelett, Werte ⬜)
+
+Leere, sofort befüllbare Erfassungsbögen. Sie enthalten **keine** erfundenen Werte (H.4): nur Spaltenköpfe bzw. die aus H.3 belegten Code-Bereiche; jedes unverifizierte Feld bleibt leer.
+
+| Datei | Befüllt durch | Deliverable | Inhalt |
+|-------|---------------|-------------|--------|
+| [`golden-master/register.csv`](golden-master/register.csv) | FB-LOG + DSB-BR | 2 | Header der 24 Set-Spalten; eine Zeile je realem Belegset |
+| [`golden-master/README.md`](golden-master/README.md) | — | 2 | Ordnerstruktur + Sammelregeln |
+| [`locations.csv`](locations.csv) | FB-LOG | 3 | Regal 1–40 + D 1–9 vor-enumeriert (belegt); Palette/Hängebahn als Expand-Template; `active`/`barcode`/`zone`/`sequenceIndex` leer |
+| [`samples/seak_pep_template.csv`](samples/seak_pep_template.csv) | HR-PEP | 4 | Header `ShiftImportRow`; reale Schicht-/Anwesenheitszeilen ergänzen |
+| [`samples/loadplan.csv`](samples/loadplan.csv) | FB-LOG | 5 | Header `LoadPlanRule`; belegte B.1-Beispielzeile siehe `05 §2` |
+
+> Solange diese Dateien nur Header/Skelett enthalten, ist die jeweilige Sammlung **offen** — der korrekte H.4-Zustand, kein Fehler.
+
 ---
 
 ## Abnahme dieses Discovery-Pakets (H.5)
