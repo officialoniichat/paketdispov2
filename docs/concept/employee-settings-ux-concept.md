@@ -18,6 +18,21 @@
 > Teamlead die Engine bedient*; dieses beschreibt, *woher die Engine ihre Kapazität bekommt*.
 > Beide teilen dasselbe Frei/Fix-Modell und dieselbe Audit-Disziplin (§8.4).
 
+> **Umsetzungsstand (2026-06-16) — gegenüber dem Erstentwurf bereinigt (lean):**
+> - **Kein Pilot-Login.** Login ist immer vorhanden; das `isPilot`-Feld wurde komplett
+>   entfernt. Rollen sind in diesem Stand read-only (Identität bleibt im IdP).
+> - **Trennung in zwei Admin-Tabs statt einem überladenen Panel:**
+>   *Mitarbeiter* = Stammdaten (Rolle, aktiv, Bereich/Skill, Produktivität,
+>   Überstunden-Toleranz). *Schichtplan* = intuitives Wochengitter (Früh/Spät/Frei je
+>   Mo–So + Legende) + einfache Abwesenheit. Keine manuelle „Schicht heute überschreiben“.
+> - **Kapazität ist musterbasiert:** Speichern des Wochenplans **materialisiert** die
+>   konkrete `Shift` (netCapacityMinutes), die die Engine liest. Der Wochenplan ist die
+>   einzige Quelle — kein Tages-Override.
+> - **Abwesenheit lean:** ganztägig `krank | urlaub | abwesend` über einen Zeitraum →
+>   Kapazität 0. Kein `teilabwesend`/`partialUntil`.
+> Die folgenden Abschnitte beschreiben das ursprüngliche Modell; wo sie Pilot-Login,
+> Tages-Override oder Teilabwesenheit erwähnen, gilt der obige bereinigte Stand.
+
 ---
 
 ## (a) Problem-/Zielanalyse
