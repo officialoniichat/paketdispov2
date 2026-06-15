@@ -248,12 +248,79 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
   }
 }
 
+// --- Case details (header + positions + box targets for the PWA aggregate) -
+// The /api/me/cases/:id/aggregate endpoint (§14.2) needs a non-empty aggregate.
+// Seed a work-instruction header, two receipt positions and one transport box
+// for the first two cases. Idempotent via natural keys: WorkInstructionHeader
+// (PK caseId), ReceiptPosition (@@unique [caseId, positionNo]), TransportBox
+// (@@unique [caseId, boxNo]).
+const DETAIL_WE_BELEG_NOS = ['WE-2026-000123', 'WE-2026-000124'];
+
+async function seedCaseDetails(): Promise<void> {
+  for (const weBelegNo of DETAIL_WE_BELEG_NOS) {
+    const c = await prisma.goodsReceiptCase.findUnique({ where: { weBelegNo } });
+    if (!c) continue;
+
+    await prisma.workInstructionHeader.upsert({
+      where: { caseId: c.id },
+      update: {
+        priceLabelPrintRequired: true,
+        goodsReceiptCheckMode: 'percentage_check',
+        goodsReceiptCheckPercentage: 20,
+        boxLabelRequired: true,
+        zstRequired: true,
+      },
+      create: {
+        caseId: c.id,
+        priceLabelPrintRequired: true,
+        goodsReceiptCheckMode: 'percentage_check',
+        goodsReceiptCheckPercentage: 20,
+        boxLabelRequired: true,
+        zstRequired: true,
+      },
+    });
+
+    const positions = [
+      { positionNo: 1, wgr: '4711', supplierArticleNo: 'ART-001', supplierColor: 'schwarz' },
+      { positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau' },
+    ];
+    for (const p of positions) {
+      await prisma.receiptPosition.upsert({
+        where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
+        update: { wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor },
+        create: {
+          caseId: c.id,
+          positionNo: p.positionNo,
+          wgr: p.wgr,
+          supplierArticleNo: p.supplierArticleNo,
+          supplierColor: p.supplierColor,
+          branchNo: '001',
+          shopNo: '21',
+        },
+      });
+    }
+
+    await prisma.transportBox.upsert({
+      where: { box_case_no: { caseId: c.id, boxNo: 1 } },
+      update: { plannedQuantity: c.totalQuantity, branchNo: '001', shopAreaNo: '21' },
+      create: {
+        caseId: c.id,
+        boxNo: 1,
+        branchNo: '001',
+        shopAreaNo: '21',
+        plannedQuantity: c.totalQuantity,
+      },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const roleIds = await seedRoles();
   const userIds = await seedUsers(roleIds);
   await seedShifts(userIds);
   const locationIds = await seedLocations();
   await seedCases(locationIds);
+  await seedCaseDetails();
 
   const [users, shifts, locations, readyCases] = await Promise.all([
     prisma.user.count(),

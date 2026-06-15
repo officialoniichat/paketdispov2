@@ -39,6 +39,59 @@ export class TodayResponseDto {
   @ApiProperty({ type: [CaseSummaryDto] }) cases!: CaseSummaryDto[];
 }
 
+// --- Employee case aggregate (PWA CaseAggregate, §9 work screens) -----------
+
+export class WorkInstructionHeaderDto {
+  @ApiProperty() priceLabelPrintRequired!: boolean;
+  @ApiProperty() sortByArticleColorSizeRequired!: boolean;
+  @ApiProperty({ description: 'CheckMode: quantity_only|percentage_check|full_check' })
+  goodsReceiptCheckMode!: string;
+  @ApiPropertyOptional({ nullable: true }) goodsReceiptCheckPercentage!: number | null;
+  @ApiProperty() minimumQuantityCheckAlwaysRequired!: boolean;
+  @ApiProperty() boxLabelRequired!: boolean;
+  @ApiProperty() zstRequired!: boolean;
+}
+
+export class ReceiptPositionDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() positionNo!: number;
+  @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
+  @ApiProperty() supplierArticleNo!: string;
+  @ApiProperty() supplierColor!: string;
+  @ApiPropertyOptional({ nullable: true }) season!: string | null;
+  @ApiProperty() branchNo!: string;
+  @ApiProperty() shopNo!: string;
+  @ApiPropertyOptional({ nullable: true }) floor!: string | null;
+  @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
+  status!: string;
+}
+
+/** Mirrors the persisted TransportBox row (Anhang A) — the box target per case. */
+export class TransportBoxTargetDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() boxNo!: number;
+  @ApiProperty() branchNo!: string;
+  @ApiProperty() shopAreaNo!: string;
+  @ApiPropertyOptional({ nullable: true }) shopNo!: string | null;
+  @ApiPropertyOptional({ nullable: true }) floor!: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'BoxGoodsType' })
+  goodsType!: string | null;
+  @ApiProperty({ type: [String] }) positionIds!: string[];
+  @ApiProperty() plannedQuantity!: number;
+  @ApiProperty() quantity!: number;
+  @ApiProperty({ description: 'BoxLabelStatus: not_required|pending|printed|reprinted' })
+  labelStatus!: string;
+  @ApiProperty() sealed!: boolean;
+}
+
+export class CaseAggregateDto {
+  @ApiProperty({ type: CaseSummaryDto }) case!: CaseSummaryDto;
+  @ApiPropertyOptional({ type: WorkInstructionHeaderDto, nullable: true })
+  workInstruction!: WorkInstructionHeaderDto | null;
+  @ApiProperty({ type: [ReceiptPositionDto] }) positions!: ReceiptPositionDto[];
+  @ApiProperty({ type: [TransportBoxTargetDto] }) boxTargets!: TransportBoxTargetDto[];
+}
+
 export class PoolItemDto extends CaseSummaryDto {
   @ApiPropertyOptional({ nullable: true }) assignedEmployeeNo!: string | null;
   @ApiProperty() effortPoints!: number;

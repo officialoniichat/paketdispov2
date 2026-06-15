@@ -6,14 +6,18 @@ import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { proratedEffort } from '../modules/completion/completion-logic.js';
 import type { Principal } from '../auth/rbac.js';
-import { assertCanAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
+import { assertCanAccessCase, canAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
 import {
+  type CaseAggregateDto,
   type CaseSummaryDto,
   type CreateIssueDto,
   type CurrentBundleDto,
   type PartialCompleteDto,
+  type ReceiptPositionDto,
   type TodayResponseDto,
   type TransitionResultDto,
+  type TransportBoxTargetDto,
+  type WorkInstructionHeaderDto,
 } from './cases.dto.js';
 
 interface CaseOwnership {
@@ -92,6 +96,116 @@ export class CasesService {
       include: { routeStops: { orderBy: { sequence: 'asc' } }, cases: { select: { id: true } } },
     });
     return bundle ? this.mapBundle(bundle) : null;
+  }
+
+  /**
+   * §14.2 case aggregate for the PWA: work-instruction header + receipt
+   * positions + transport box targets. Scoped to the caller (§16.1) — a missing
+   * case is 404, a foreign employee's case is 403 (ForbiddenException).
+   */
+  async getCaseAggregate(principal: Principal, caseId: string): Promise<CaseAggregateDto> {
+    await this.resolveEmployee(principal);
+    const found = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      include: {
+        storageLocation: true,
+        workInstruction: true,
+        positions: { orderBy: { positionNo: 'asc' } },
+        transportBoxes: { orderBy: { boxNo: 'asc' } },
+        assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
+      },
+    });
+    if (!found) {
+      throw new NotFoundException(`Case ${caseId} not found`);
+    }
+    const ownerEmployeeNo = found.assignedBundle?.employee?.employeeNo ?? null;
+    if (!canAccessCase(principal, ownerEmployeeNo)) {
+      throw new ForbiddenException(`Access to case ${caseId} denied`);
+    }
+    return {
+      case: this.mapSummary(found),
+      workInstruction: found.workInstruction
+        ? this.mapWorkInstruction(found.workInstruction)
+        : null,
+      positions: found.positions.map((p) => this.mapPosition(p)),
+      boxTargets: found.transportBoxes.map((b) => this.mapBoxTarget(b)),
+    };
+  }
+
+  private mapWorkInstruction(wi: {
+    priceLabelPrintRequired: boolean;
+    sortByArticleColorSizeRequired: boolean;
+    goodsReceiptCheckMode: string;
+    goodsReceiptCheckPercentage: number | null;
+    minimumQuantityCheckAlwaysRequired: boolean;
+    boxLabelRequired: boolean;
+    zstRequired: boolean;
+  }): WorkInstructionHeaderDto {
+    return {
+      priceLabelPrintRequired: wi.priceLabelPrintRequired,
+      sortByArticleColorSizeRequired: wi.sortByArticleColorSizeRequired,
+      goodsReceiptCheckMode: wi.goodsReceiptCheckMode,
+      goodsReceiptCheckPercentage: wi.goodsReceiptCheckPercentage,
+      minimumQuantityCheckAlwaysRequired: wi.minimumQuantityCheckAlwaysRequired,
+      boxLabelRequired: wi.boxLabelRequired,
+      zstRequired: wi.zstRequired,
+    };
+  }
+
+  private mapPosition(p: {
+    id: string;
+    positionNo: number;
+    wgr: string;
+    supplierArticleNo: string;
+    supplierColor: string;
+    season: string | null;
+    branchNo: string;
+    shopNo: string;
+    floor: string | null;
+    status: string;
+  }): ReceiptPositionDto {
+    return {
+      id: p.id,
+      positionNo: p.positionNo,
+      wgr: p.wgr,
+      supplierArticleNo: p.supplierArticleNo,
+      supplierColor: p.supplierColor,
+      season: p.season,
+      branchNo: p.branchNo,
+      shopNo: p.shopNo,
+      floor: p.floor,
+      status: p.status,
+    };
+  }
+
+  private mapBoxTarget(b: {
+    id: string;
+    boxNo: number;
+    branchNo: string;
+    shopAreaNo: string;
+    shopNo: string | null;
+    floor: string | null;
+    goodsType: string | null;
+    positionIds: string[];
+    plannedQuantity: number;
+    quantity: number;
+    labelStatus: string;
+    sealed: boolean;
+  }): TransportBoxTargetDto {
+    return {
+      id: b.id,
+      boxNo: b.boxNo,
+      branchNo: b.branchNo,
+      shopAreaNo: b.shopAreaNo,
+      shopNo: b.shopNo,
+      floor: b.floor,
+      goodsType: b.goodsType,
+      positionIds: b.positionIds,
+      plannedQuantity: b.plannedQuantity,
+      quantity: b.quantity,
+      labelStatus: b.labelStatus,
+      sealed: b.sealed,
+    };
   }
 
   async startPreparation(principal: Principal, caseId: string): Promise<TransitionResultDto> {
