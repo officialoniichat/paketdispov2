@@ -17,9 +17,8 @@ import {
   type ReceiptPositionDto,
   type TodayResponseDto,
   type TransitionResultDto,
-  type TransportBoxTargetDto,
-  type WorkInstructionHeaderDto,
 } from './cases.dto.js';
+import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
 
 interface CaseOwnership {
   id: string;
@@ -129,31 +128,9 @@ export class CasesService {
     }
     return {
       case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null),
-      workInstruction: found.workInstruction
-        ? this.mapWorkInstruction(found.workInstruction)
-        : null,
+      workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPosition(p)),
-      boxTargets: found.transportBoxes.map((b) => this.mapBoxTarget(b)),
-    };
-  }
-
-  private mapWorkInstruction(wi: {
-    priceLabelPrintRequired: boolean;
-    sortByArticleColorSizeRequired: boolean;
-    goodsReceiptCheckMode: string;
-    goodsReceiptCheckPercentage: number | null;
-    minimumQuantityCheckAlwaysRequired: boolean;
-    boxLabelRequired: boolean;
-    zstRequired: boolean;
-  }): WorkInstructionHeaderDto {
-    return {
-      priceLabelPrintRequired: wi.priceLabelPrintRequired,
-      sortByArticleColorSizeRequired: wi.sortByArticleColorSizeRequired,
-      goodsReceiptCheckMode: wi.goodsReceiptCheckMode,
-      goodsReceiptCheckPercentage: wi.goodsReceiptCheckPercentage,
-      minimumQuantityCheckAlwaysRequired: wi.minimumQuantityCheckAlwaysRequired,
-      boxLabelRequired: wi.boxLabelRequired,
-      zstRequired: wi.zstRequired,
+      boxTargets: found.transportBoxes.map((b) => mapBoxTarget(b)),
     };
   }
 
@@ -180,36 +157,6 @@ export class CasesService {
       shopNo: p.shopNo,
       floor: p.floor,
       status: p.status,
-    };
-  }
-
-  private mapBoxTarget(b: {
-    id: string;
-    boxNo: number;
-    branchNo: string;
-    shopAreaNo: string;
-    shopNo: string | null;
-    floor: string | null;
-    goodsType: string | null;
-    positionIds: string[];
-    plannedQuantity: number;
-    quantity: number;
-    labelStatus: string;
-    sealed: boolean;
-  }): TransportBoxTargetDto {
-    return {
-      id: b.id,
-      boxNo: b.boxNo,
-      branchNo: b.branchNo,
-      shopAreaNo: b.shopAreaNo,
-      shopNo: b.shopNo,
-      floor: b.floor,
-      goodsType: b.goodsType,
-      positionIds: b.positionIds,
-      plannedQuantity: b.plannedQuantity,
-      quantity: b.quantity,
-      labelStatus: b.labelStatus,
-      sealed: b.sealed,
     };
   }
 

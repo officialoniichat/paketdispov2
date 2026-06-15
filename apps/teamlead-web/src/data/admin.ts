@@ -5,32 +5,15 @@
  * {@link ./remoteDataset}: boundary narrowing of enum-ish DTO fields goes through
  * the @paket/domain-types Zod schemas (no bare `as`, no `any`).
  */
-import {
-  locationKindSchema,
-  ruleConfigSchema,
-  type LocationKind,
-  type LocationMaster,
-  type RuleConfig,
-} from '@paket/domain-types';
+import { ruleConfigSchema, type LocationMaster, type RuleConfig } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
+import { unwrap } from './http.js';
+import { toLocationKind } from './narrow.js';
 
 type LocationDto = components['schemas']['LocationDto'];
 type LocationUpsertDto = components['schemas']['LocationUpsertDto'];
 type RuleConfigDto = components['schemas']['RuleConfigDto'];
-
-/** Unwrap an openapi-fetch `{ data, error }` result, throwing so React Query sees it. */
-function unwrap<T>(result: { data?: T; error?: unknown }, label: string): T {
-  if (result.error || result.data === undefined) {
-    throw new Error(`Backend request failed: ${label} (${JSON.stringify(result.error)})`);
-  }
-  return result.data;
-}
-
-/** Narrow the DTO `kind` string to the domain `LocationKind`, throwing on unknown. */
-function toLocationKind(value: string): LocationKind {
-  return locationKindSchema.parse(value);
-}
 
 // --- Locations --------------------------------------------------------------
 
@@ -91,9 +74,14 @@ export async function fetchRuleConfig(): Promise<RuleConfig> {
   return ruleConfigSchema.parse(dto);
 }
 
-/** §11 Persist the structured rule config; returns the saved (validated) config. */
+/**
+ * §11 Persist the structured rule config; returns the saved (validated) config.
+ * The domain `RuleConfig` and the generated `RuleConfigDto` share one shape (the
+ * DTO is generated from the same domain schema), so the validated config is sent
+ * as the request body without a bare cast.
+ */
 export async function saveRuleConfig(config: RuleConfig): Promise<RuleConfig> {
-  const body = config as RuleConfigDto;
+  const body: RuleConfigDto = ruleConfigSchema.parse(config);
   const result = await api.PUT('/api/admin/rules', { body });
   const dto = unwrap<RuleConfigDto>(result, 'save rules');
   return ruleConfigSchema.parse(dto);

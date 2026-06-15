@@ -8,15 +8,16 @@
  * feature components don't change.
  */
 import type { WorkflowEvent } from '@paket/domain-types';
-import {
-  actorTypeSchema,
-  caseStatusSchema,
-  priorityFlagSchema,
-  sectionCodeSchema,
-  workflowEventTypeSchema,
-} from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
+import { unwrap } from './http.js';
+import {
+  toActorType,
+  toCaseStatus,
+  toEventType,
+  toPriorityFlags,
+  toSectionCode,
+} from './narrow.js';
 import type {
   BoardCase,
   BoardRow,
@@ -59,55 +60,6 @@ const HEAVY_MINUTES_THRESHOLD = 30;
  */
 const GENUINE_INTERVENTION_EVENT_TYPES =
   'assignment.overridden,case.prioritized,case.parked,case.ready';
-
-// ---------------------------------------------------------------------------
-// Boundary narrowing: the generated DTOs type enum-ish fields as plain
-// `string`/`number`, so we validate them against the domain Zod schemas before
-// projecting onto the view-model unions instead of asserting with a bare `as`.
-// An unexpected backend value fails fast (throws) rather than corrupting state.
-// ---------------------------------------------------------------------------
-
-/** Narrow a DTO status string to the domain `CaseStatus`, throwing on an unknown value. */
-function toCaseStatus(value: string): BoardCase['status'] {
-  return caseStatusSchema.parse(value);
-}
-
-/** Narrow a DTO actorType string to the domain `ActorType`. */
-function toActorType(value: string): WorkflowEvent['actorType'] {
-  return actorTypeSchema.parse(value);
-}
-
-/** Narrow a DTO eventType string to the domain `WorkflowEventType`. */
-function toEventType(value: string): WorkflowEvent['eventType'] {
-  return workflowEventTypeSchema.parse(value);
-}
-
-/**
- * Narrow a DTO section to the domain `SectionCode`, or null when absent/invalid.
- * The generated `section` type widens to `Record<string, never> | null` (an
- * openapi-typescript nullable-number artifact), so we accept `unknown` and gate
- * on `typeof === 'number'` before validating.
- */
-function toSectionCode(value: unknown): LaneCard['section'] {
-  if (typeof value !== 'number') return null;
-  const parsed = sectionCodeSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
-/** Keep only the DTO priority flags that are members of the domain `PriorityFlag` union. */
-function toPriorityFlags(values: readonly string[]): LaneCard['priorityFlags'] {
-  return values.filter(
-    (flag): flag is LaneCard['priorityFlags'][number] => priorityFlagSchema.safeParse(flag).success,
-  );
-}
-
-/** Unwrap an openapi-fetch `{ data, error }` result, throwing so React Query sees it. */
-function unwrap<T>(result: { data?: T; error?: unknown }, label: string): T {
-  if (result.error || result.data === undefined) {
-    throw new Error(`Backend request failed: ${label} (${JSON.stringify(result.error)})`);
-  }
-  return result.data;
-}
 
 export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
   const [capacity, dashboard, kpis, board, events, pool] = await Promise.all([

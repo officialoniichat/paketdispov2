@@ -6,6 +6,7 @@
  * snackbar can surface the message. No `any`, no non-null assertions.
  */
 import type { PaketApiClient, components } from '@paket/api-client';
+import { hasFetchError } from './http.js';
 import type { PreviewResult } from './types.js';
 
 type WithdrawDto = components['schemas']['WithdrawDto'];
@@ -36,7 +37,7 @@ function describeCause(cause: unknown): string {
 
 /** Throw on the openapi-fetch error channel or a missing body; otherwise return data. */
 function ensure<T>(operation: string, result: { data?: T; error?: unknown }): T {
-  if (result.error || result.data === undefined) {
+  if (hasFetchError(result) || result.data === undefined) {
     throw new MutationError(operation, result.error);
   }
   return result.data;

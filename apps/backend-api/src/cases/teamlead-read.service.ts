@@ -17,9 +17,8 @@ import {
   type PoolQueryDto,
   type PositionDetailDto,
   type SkuLineDto,
-  type TransportBoxTargetDto,
-  type WorkInstructionHeaderDto,
 } from './cases.dto.js';
+import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
 
 /** Priority flags counted as an "open prio" case in the dashboard tile. */
 const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 'same_day_required'];
@@ -387,11 +386,9 @@ export class TeamleadReadService {
       catManDate: isoDay(found.catManDate),
       loadPlanDate: isoDay(found.loadPlanDate),
       goodsType: found.goodsTypeText,
-      workInstruction: found.workInstruction
-        ? this.mapWorkInstruction(found.workInstruction)
-        : null,
+      workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPositionDetail(p)),
-      transportBoxes: found.transportBoxes.map((b) => this.mapBoxTarget(b)),
+      transportBoxes: found.transportBoxes.map((b) => mapBoxTarget(b)),
       documents: found.documentSet.documents.map((d) => this.mapDocument(d)),
       history,
     };
@@ -421,26 +418,6 @@ export class TeamleadReadService {
       entityId: e.entityId,
       action: readStringField(e.payload, 'action'),
       reason: readStringField(e.payload, 'reason'),
-    };
-  }
-
-  private mapWorkInstruction(wi: {
-    priceLabelPrintRequired: boolean;
-    sortByArticleColorSizeRequired: boolean;
-    goodsReceiptCheckMode: string;
-    goodsReceiptCheckPercentage: number | null;
-    minimumQuantityCheckAlwaysRequired: boolean;
-    boxLabelRequired: boolean;
-    zstRequired: boolean;
-  }): WorkInstructionHeaderDto {
-    return {
-      priceLabelPrintRequired: wi.priceLabelPrintRequired,
-      sortByArticleColorSizeRequired: wi.sortByArticleColorSizeRequired,
-      goodsReceiptCheckMode: wi.goodsReceiptCheckMode,
-      goodsReceiptCheckPercentage: wi.goodsReceiptCheckPercentage,
-      minimumQuantityCheckAlwaysRequired: wi.minimumQuantityCheckAlwaysRequired,
-      boxLabelRequired: wi.boxLabelRequired,
-      zstRequired: wi.zstRequired,
     };
   }
 
@@ -490,36 +467,6 @@ export class TeamleadReadService {
       onlineHandlingRequired: p.instruction?.onlineHandlingRequired ?? false,
       status: p.status,
       skuLines,
-    };
-  }
-
-  private mapBoxTarget(b: {
-    id: string;
-    boxNo: number;
-    branchNo: string;
-    shopAreaNo: string;
-    shopNo: string | null;
-    floor: string | null;
-    goodsType: string | null;
-    positionIds: string[];
-    plannedQuantity: number;
-    quantity: number;
-    labelStatus: string;
-    sealed: boolean;
-  }): TransportBoxTargetDto {
-    return {
-      id: b.id,
-      boxNo: b.boxNo,
-      branchNo: b.branchNo,
-      shopAreaNo: b.shopAreaNo,
-      shopNo: b.shopNo,
-      floor: b.floor,
-      goodsType: b.goodsType,
-      positionIds: b.positionIds,
-      plannedQuantity: b.plannedQuantity,
-      quantity: b.quantity,
-      labelStatus: b.labelStatus,
-      sealed: b.sealed,
     };
   }
 

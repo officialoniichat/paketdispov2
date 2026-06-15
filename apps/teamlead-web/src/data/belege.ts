@@ -8,18 +8,16 @@
  * validate them against the @paket/domain-types Zod schemas before projecting
  * onto the domain unions instead of asserting with a bare `as`.
  */
-import {
-  caseStatusSchema,
-  priorityFlagSchema,
-  sectionCodeSchema,
-  workflowEventTypeSchema,
-  type CaseStatus,
-  type PriorityFlag,
-  type SectionCode,
-  type WorkflowEventType,
+import type {
+  CaseStatus,
+  PriorityFlag,
+  SectionCode,
+  WorkflowEventType,
 } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
+import { unwrap } from './http.js';
+import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './narrow.js';
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
 type PoolListDto = components['schemas']['PoolListDto'];
@@ -134,43 +132,6 @@ export interface BelegDetail {
   boxes: BelegBox[];
   documents: BelegDocument[];
   history: BelegHistoryEntry[];
-}
-
-// ---------------------------------------------------------------------------
-// Boundary narrowing helpers (domain Zod schemas; fail fast on unknown values)
-// ---------------------------------------------------------------------------
-
-function toCaseStatus(value: string): CaseStatus {
-  return caseStatusSchema.parse(value);
-}
-
-/**
- * Narrow the DTO section to the domain `SectionCode`, or null. The generated
- * `section` type widens to an openapi-typescript nullable-number artifact, so we
- * accept `unknown` and gate on `typeof === 'number'` before validating.
- */
-function toSectionCode(value: unknown): SectionCode | null {
-  if (typeof value !== 'number') return null;
-  const parsed = sectionCodeSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
-function toPriorityFlags(values: readonly string[]): PriorityFlag[] {
-  return values.filter(
-    (flag): flag is PriorityFlag => priorityFlagSchema.safeParse(flag).success,
-  );
-}
-
-function toEventType(value: string): WorkflowEventType {
-  return workflowEventTypeSchema.parse(value);
-}
-
-/** Unwrap an openapi-fetch `{ data, error }` result, throwing so React Query sees it. */
-function unwrap<T>(result: { data?: T; error?: unknown }, label: string): T {
-  if (result.error || result.data === undefined) {
-    throw new Error(`Backend request failed: ${label} (${JSON.stringify(result.error)})`);
-  }
-  return result.data;
 }
 
 // ---------------------------------------------------------------------------

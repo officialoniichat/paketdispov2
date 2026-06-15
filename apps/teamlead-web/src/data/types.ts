@@ -1,59 +1,12 @@
 /**
  * View-model types for the Teamlead cockpit (§10/§11, Anhang E.4).
  *
- * These are UI/projection shapes derived from the @paket/domain-types entities.
- * Selectors in `selectors.ts` compute them from the (currently mocked) dataset;
- * once EPIC 3/6 ships the read APIs, the same shapes are populated from
- * @paket/api-client without touching the feature components.
+ * These are UI/projection shapes the cockpit components render. The live data
+ * layer (see {@link ./remoteDataset}, {@link ./belege}) populates them from the
+ * @paket/api-client read endpoints, mapping each DTO field-by-field so the
+ * feature components stay free of transport concerns.
  */
-import type {
-  AssignmentBundle,
-  EmployeeShift,
-  GoodsReceiptCase,
-  KpiSnapshot,
-  LocationMaster,
-  ReceiptPosition,
-  TransportBox,
-  WorkIssue,
-  WorkflowEvent,
-} from '@paket/domain-types';
-
-/** A warehouse employee (Anhang A Employee – minimal projection for the board). */
-export interface Employee {
-  id: string;
-  displayName: string;
-  workstationCode?: string;
-}
-
-/** Original document reference shown in Belegdetails (§10.4 Originaldokumente). */
-export interface DocumentRef {
-  id: string;
-  caseId: string;
-  kind: 'work_instruction' | 'goods_receipt' | 'delivery_note';
-  fileName: string;
-  url: string;
-}
-
-/**
- * The whole operational snapshot the cockpit renders. In production this is the
- * fan-out of several read endpoints; here it is one in-memory dataset so the UI,
- * selectors and tests share a single source of truth.
- */
-export interface OperationsDataset {
-  date: string;
-  employees: Employee[];
-  shifts: EmployeeShift[];
-  cases: GoodsReceiptCase[];
-  positions: ReceiptPosition[];
-  bundles: AssignmentBundle[];
-  issues: WorkIssue[];
-  boxes: TransportBox[];
-  locations: LocationMaster[];
-  events: WorkflowEvent[];
-  documents: DocumentRef[];
-  kpis: KpiSnapshot[];
-  rules: RuleConfig;
-}
+import type { GoodsReceiptCase, WorkIssue } from '@paket/domain-types';
 
 // ---------------------------------------------------------------------------
 // §10.1 Tagescockpit
@@ -200,86 +153,3 @@ export interface PreviewResult {
   loads: PreviewEmployeeLoad[];
 }
 
-// ---------------------------------------------------------------------------
-// §E.4 Simulation „Neu berechnen" (legacy in-memory selector – mock only)
-// ---------------------------------------------------------------------------
-
-/** Delta the simulation proposes before going live (human-in-the-loop). */
-export interface SimulationResult {
-  newlyAssigned: number;
-  reassigned: number;
-  reserveBeforeMinutes: number;
-  reserveAfterMinutes: number;
-  reserveDeltaMinutes: number;
-  utilisationBeforePct: number;
-  utilisationAfterPct: number;
-  unassignedRemaining: number;
-  perEmployee: SimulationEmployeeDelta[];
-}
-
-export interface SimulationEmployeeDelta {
-  employeeId: string;
-  displayName: string;
-  beforeMinutes: number;
-  afterMinutes: number;
-  deltaMinutes: number;
-}
-
-// ---------------------------------------------------------------------------
-// §11 Admin / Regelpflege
-// ---------------------------------------------------------------------------
-
-export interface PriorityRuleConfig {
-  catManWeight: number;
-  overdueThresholdHours: number;
-  fifoEnabled: boolean;
-  manualPriorityWins: boolean;
-}
-
-export interface ReserveRuleConfig {
-  nextShiftCapacityPct: number;
-  minMinutesPerEmployee: number;
-}
-
-export interface BundleRuleConfig {
-  minMinutes: number;
-  maxMinutes: number;
-  maxCases: number;
-  maxHeavyCases: number;
-}
-
-export interface EffortRuleConfig {
-  priceLabelPrintFactor: number;
-  securingFactor: number;
-  onlineFactor: number;
-  redPriceFactor: number;
-  checkShareFactor: number;
-  boxSplittingFactor: number;
-}
-
-export interface LoadPlanRow {
-  id: string;
-  shopAreaNo: string;
-  floor: string;
-  weekday: string;
-  validFrom: string;
-  validTo?: string;
-  specialDay: boolean;
-}
-
-export interface ParserTemplateRow {
-  id: string;
-  name: string;
-  requiredFields: string[];
-  detectionThreshold: number;
-  fallbackToManual: boolean;
-}
-
-export interface RuleConfig {
-  priority: PriorityRuleConfig;
-  reserve: ReserveRuleConfig;
-  bundle: BundleRuleConfig;
-  effort: EffortRuleConfig;
-  loadPlan: LoadPlanRow[];
-  parserTemplates: ParserTemplateRow[];
-}
