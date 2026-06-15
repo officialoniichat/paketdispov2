@@ -14,6 +14,14 @@ import type { ProtoBundle } from './bundling.js';
  *     (keine dauerhafte Warengruppen-Spezialisierung),
  *   - balanceHeavyLight: spreading heavy bundles so each shift gets a heavy/light mix.
  * Largest-effort-first (LPT) assignment with deterministic tie-breaks.
+ *
+ * The LPT loop still decides per proto-bundle which employee receives it (fairness
+ * and determinism are unchanged). Afterwards every proto-bundle that landed on the
+ * same employee is MERGED into a single AssignmentBundle: one bundle = one employee's
+ * day plan. caseIds are concatenated in proto-assignment order, effort is summed, and
+ * the bundle gets one stable id (`bundle-<date>-<employeeIndex>`). The whole cockpit
+ * (board row, withdraw/add/reorder/pause/resume, the "Paket x/y" counter, §10.3) keys
+ * off exactly one bundle per employee, so the engine emits exactly that.
  */
 
 const SPECIALIST_PENALTY = 0.05;
@@ -34,15 +42,23 @@ export interface DistributionResult {
 
 interface EmployeeState {
   shift: EmployeeShift;
+  /** Stable distribution order index of this employee (drives the merged bundle id). */
+  index: number;
   assignedMinutes: number;
   assignedPoints: number;
   bundleCount: number;
   heavyCount: number;
   wgrCounts: Map<string, number>;
+  /** Proto-bundles assigned to this employee, in LPT-assignment order (for the merge). */
+  assignedProtos: ProtoBundle[];
 }
 
 function pad(n: number): string {
   return String(n).padStart(4, '0');
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export function distributeBundlesByWeightedLoad(
@@ -56,18 +72,20 @@ export function distributeBundlesByWeightedLoad(
 
   const states: EmployeeState[] = shifts
     .filter((s) => s.active && s.netCapacityMinutes > 0)
-    .map((shift) => ({
+    .map((shift, index) => ({
       shift,
+      index,
       assignedMinutes: 0,
       assignedPoints: 0,
       bundleCount: 0,
       heavyCount: 0,
       wgrCounts: new Map<string, number>(),
+      assignedProtos: [],
     }));
 
-  // Stable bundle id per proto by creation order (deterministic recalculation).
+  // Stable proto ordering key by creation order (deterministic recalculation).
   const idByProto = new Map<ProtoBundle, string>();
-  protoBundles.forEach((proto, index) => idByProto.set(proto, `bundle-${date}-${pad(index)}`));
+  protoBundles.forEach((proto, index) => idByProto.set(proto, `proto-${date}-${pad(index)}`));
 
   if (states.length === 0) {
     return { bundles: [], loads: [], unassigned: [...protoBundles] };
@@ -78,8 +96,8 @@ export function distributeBundlesByWeightedLoad(
       b.effortMinutes - a.effortMinutes || idByProto.get(a)!.localeCompare(idByProto.get(b)!),
   );
 
-  const bundles: AssignmentBundle[] = [];
-
+  // LPT assignment (fairness + specialist/heavy balancing) — decides which employee
+  // owns each proto-bundle. Unchanged from before; only the emitted shape differs.
   for (const proto of order) {
     let best: EmployeeState | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
@@ -104,22 +122,36 @@ export function distributeBundlesByWeightedLoad(
     const chosen = best!;
     chosen.assignedMinutes += proto.effortMinutes;
     chosen.assignedPoints += proto.effortPoints;
-    chosen.bundleCount += 1;
     if (proto.containsHeavy) chosen.heavyCount += 1;
     for (const c of proto.cases) {
       for (const wgr of c.wgrCodes) {
         chosen.wgrCounts.set(wgr, (chosen.wgrCounts.get(wgr) ?? 0) + 1);
       }
     }
+    chosen.assignedProtos.push(proto);
+  }
 
+  // Merge: one AssignmentBundle per employee with work. caseIds are concatenated in
+  // proto-assignment order (priority/FIFO preserved within each proto), effort summed,
+  // and one stable id `bundle-<date>-<employeeIndex>` per person. Pickup order is
+  // recomputed over the merged case list downstream in plan.ts (route stays []).
+  const bundles: AssignmentBundle[] = [];
+  for (const st of states) {
+    if (st.assignedProtos.length === 0) continue;
+    st.bundleCount = 1;
+    const caseIds = st.assignedProtos.flatMap((p) => p.caseIds);
+    const plannedEffortMinutes = round2(
+      st.assignedProtos.reduce((sum, p) => sum + p.effortMinutes, 0),
+    );
+    const effortPoints = round2(st.assignedProtos.reduce((sum, p) => sum + p.effortPoints, 0));
     bundles.push(
       assignmentBundleSchema.parse({
-        id: idByProto.get(proto)!,
-        employeeId: chosen.shift.employeeId,
+        id: `bundle-${date}-${pad(st.index)}`,
+        employeeId: st.shift.employeeId,
         date,
-        caseIds: proto.caseIds,
-        plannedEffortMinutes: proto.effortMinutes,
-        effortPoints: proto.effortPoints,
+        caseIds,
+        plannedEffortMinutes,
+        effortPoints,
         route: [],
         status: 'created',
         createdBy: 'system',
@@ -132,8 +164,8 @@ export function distributeBundlesByWeightedLoad(
   const loads: EmployeeLoad[] = states.map((st) => ({
     employeeId: st.shift.employeeId,
     capacityMinutes: st.shift.netCapacityMinutes,
-    assignedMinutes: Math.round(st.assignedMinutes * 100) / 100,
-    assignedPoints: Math.round(st.assignedPoints * 100) / 100,
+    assignedMinutes: round2(st.assignedMinutes),
+    assignedPoints: round2(st.assignedPoints),
     bundleCount: st.bundleCount,
     distinctWgrCount: st.wgrCounts.size,
   }));

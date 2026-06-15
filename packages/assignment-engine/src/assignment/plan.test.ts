@@ -167,6 +167,30 @@ describe('assignWork (§8.3 end-to-end)', () => {
     expect(fingerprint(a)).toBe(fingerprint(b));
   });
 
+  it('emits at most one bundle per employee (one day plan per person)', () => {
+    // 12 cases over 2 employees: without merging the engine would split each
+    // person's work across several proto-bundles; the plan must collapse to ≤1.
+    const cases = Array.from({ length: 12 }, (_, i) =>
+      makeCase({ id: String(i), estimatedMinutes: 30, effortPoints: 30 }),
+    );
+    const plan = assignWork(baseInput({ cases }), undefined, { now: NOW });
+    const byEmployee = new Map<string, number>();
+    for (const b of plan.bundles) {
+      byEmployee.set(b.employeeId, (byEmployee.get(b.employeeId) ?? 0) + 1);
+    }
+    for (const count of byEmployee.values()) {
+      expect(count).toBe(1);
+    }
+    // Every assigned case still appears exactly once across the merged bundles.
+    const assigned = plan.bundles.flatMap((b) => b.caseIds);
+    expect(new Set(assigned).size).toBe(assigned.length);
+    // A merged bundle carries cases and a recomputed pickup route.
+    for (const b of plan.bundles) {
+      expect(b.caseIds.length).toBeGreaterThan(0);
+      expect(b.route.length).toBeGreaterThan(0);
+    }
+  });
+
   it('reports unassigned cases when there is no capacity', () => {
     const input = baseInput({ shifts: [], cases: [makeCase({ id: '1' })] });
     const plan = assignWork(input, undefined, { now: NOW });

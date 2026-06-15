@@ -147,16 +147,36 @@ describe('distributeBundlesByWeightedLoad (§8.3/§8.4)', () => {
     );
   }
 
-  it('balances equal bundles evenly across two employees', () => {
+  it('balances equal proto-bundles evenly, then merges into one bundle per employee', () => {
     const protos = protosOf(['1', 50, 'a'], ['2', 50, 'a'], ['3', 50, 'a'], ['4', 50, 'a']);
     const result = distributeBundlesByWeightedLoad(
       [shift('E-1', 480), shift('E-2', 480)],
       protos,
       '2026-06-15',
     );
+    // Fairness unchanged (LPT spreads the 4 equal protos 2+2), but each employee
+    // ends with exactly ONE merged AssignmentBundle carrying both their cases.
+    expect(result.bundles).toHaveLength(2);
+    const sizes = result.bundles.map((b) => b.caseIds.length).sort();
+    expect(sizes).toEqual([2, 2]);
     const counts = result.loads.map((l) => l.bundleCount).sort();
-    expect(counts).toEqual([2, 2]);
+    expect(counts).toEqual([1, 1]);
+    expect(new Set(result.bundles.map((b) => b.employeeId)).size).toBe(2);
     expect(result.unassigned).toHaveLength(0);
+  });
+
+  it('emits one stable bundle id per employee (bundle-<date>-<index>)', () => {
+    const protos = protosOf(['1', 50, 'a'], ['2', 50, 'a'], ['3', 50, 'a'], ['4', 50, 'a']);
+    const result = distributeBundlesByWeightedLoad(
+      [shift('E-1', 480), shift('E-2', 480)],
+      protos,
+      '2026-06-15',
+    );
+    for (const b of result.bundles) {
+      expect(b.id).toMatch(/^bundle-2026-06-15-\d{4}$/);
+    }
+    // One bundle id per employee — ids are unique.
+    expect(new Set(result.bundles.map((b) => b.id)).size).toBe(result.bundles.length);
   });
 
   it('spreads distinct Warengruppen to avoid specialists', () => {
