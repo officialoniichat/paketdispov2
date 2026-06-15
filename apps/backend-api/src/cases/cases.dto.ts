@@ -303,6 +303,68 @@ export class ManualAssignmentDto {
   caseIds!: string[];
 }
 
+/** Body for POST /api/teamlead/bundles/:bundleId/withdraw — pull a case out of a bundle. */
+export class WithdrawDto {
+  @ApiProperty({ description: 'Case to withdraw from the bundle' })
+  @IsString()
+  caseId!: string;
+
+  @ApiPropertyOptional({ description: 'Reason logged in the §8.4 audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Body for POST /api/teamlead/bundles/:bundleId/add — add a ready case to a bundle. */
+export class AddToBundleDto {
+  @ApiProperty({ description: 'Ready case to add to the bundle' })
+  @IsString()
+  caseId!: string;
+
+  @ApiPropertyOptional({ description: 'Reason logged in the §8.4 audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Body for POST /api/teamlead/bundles/:bundleId/reorder — set the item order. */
+export class ReorderBundleDto {
+  @ApiProperty({ type: [String], description: 'Permutation of the bundle\'s current case ids' })
+  @IsArray()
+  @IsString({ each: true })
+  caseIds!: string[];
+
+  @ApiPropertyOptional({ description: 'Reason logged in the §8.4 audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Body for POST /api/teamlead/bundles/:bundleId/pause|resume — toggle bundle status. */
+export class BundlePauseDto {
+  @ApiPropertyOptional({ description: 'Reason logged in the §8.4 audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Result of a manual bundle override (§8.4). Reflects the post-mutation state. */
+export class BundleMutationResultDto {
+  @ApiProperty() bundleId!: string;
+  @ApiProperty({ description: 'AssignmentStatus after the mutation' }) bundleStatus!: string;
+  @ApiProperty() plannedEffortMinutes!: number;
+  @ApiProperty({ type: [String], description: 'Case ids in bundle order' }) caseIds!: string[];
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'The case touched by this mutation, with its new status',
+  })
+  caseId!: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'CaseStatus of the touched case, if any' })
+  caseStatus!: string | null;
+  @ApiPropertyOptional({ nullable: true, description: 'Audit event id, if recorded' })
+  eventId!: string | null;
+}
+
 export class EventQueryDto {
   @ApiPropertyOptional({ description: 'Filter by ActorType (system|employee|teamlead|admin)' })
   @IsOptional()

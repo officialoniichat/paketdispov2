@@ -85,14 +85,61 @@ export class AssignmentService {
     });
 
     const finalPlan = plan as ReturnType<typeof assignWork>;
+    return this.toResultDto(day, finalPlan, assignedCaseCount, durationMs);
+  }
+
+  /**
+   * §E.4 Simulation/Vorschau: run the SAME deterministic engine as recalculate()
+   * over the current `ready` pool, but persist NOTHING — no bundle/item/route-stop
+   * rows, no case status changes, no audit events. The teamlead reviews this
+   * proposed plan before committing it via recalculate(). Reads are non-mutating,
+   * so no transaction is needed; assignedCaseCount mirrors the would-be persist.
+   */
+  async preview(_principal: Principal, date?: string): Promise<RecalculateResultDto> {
+    const day = date ?? new Date().toISOString().slice(0, 10);
+    const dayStart = new Date(day + 'T00:00:00.000Z');
+    const dayEnd = new Date(day + 'T23:59:59.999Z');
+
+    const [shiftRows, locationRows, casesRows] = await Promise.all([
+      this.prisma.shift.findMany({ where: { date: { gte: dayStart, lte: dayEnd }, active: true } }),
+      this.prisma.location.findMany({ where: { active: true } }),
+      this.prisma.goodsReceiptCase.findMany({
+        where: { status: POOL_STATUS },
+        include: { storageLocation: true },
+      }),
+    ]);
+
+    const input: EngineInput = {
+      date: day,
+      cases: casesRows.map(toGoodsReceiptCase),
+      shifts: shiftRows.map(toEmployeeShift),
+      locations: locationRows.map(toLocationMaster),
+    };
+
+    const t0 = performance.now();
+    const plan = assignWork(input);
+    const durationMs = Math.round(performance.now() - t0);
+
+    // Proposed assignment count = cases the engine placed into bundles (no DB write).
+    const assignedCaseCount = plan.bundles.reduce((sum, b) => sum + b.caseIds.length, 0);
+    return this.toResultDto(day, plan, assignedCaseCount, durationMs);
+  }
+
+  /** Shape an engine plan into the RecalculateResultDto returned by recalculate/preview. */
+  private toResultDto(
+    day: string,
+    plan: ReturnType<typeof assignWork>,
+    assignedCaseCount: number,
+    durationMs: number,
+  ): RecalculateResultDto {
     return {
       date: day,
-      bundleCount: finalPlan.bundles.length,
+      bundleCount: plan.bundles.length,
       assignedCaseCount,
-      unassignedCaseCount: finalPlan.unassigned.length,
-      reserveMinutes: finalPlan.reserve.minutes,
+      unassignedCaseCount: plan.unassigned.length,
+      reserveMinutes: plan.reserve.minutes,
       durationMs,
-      loads: finalPlan.loads.map((l) => ({
+      loads: plan.loads.map((l) => ({
         employeeId: l.employeeId,
         capacityMinutes: l.capacityMinutes,
         assignedMinutes: l.assignedMinutes,

@@ -5,8 +5,11 @@ import { AssignmentService } from '../assignment/assignment.service.js';
 import { RecalculateDto, RecalculateResultDto } from '../assignment/assignment.dto.js';
 import { TeamleadService } from './teamlead.service.js';
 import {
+  AddToBundleDto,
   AuditEventDto,
   BoardDto,
+  BundleMutationResultDto,
+  BundlePauseDto,
   CapacityDto,
   DashboardDto,
   EventQueryDto,
@@ -16,8 +19,10 @@ import {
   PoolQueryDto,
   PrioritizeDto,
   ReleaseDto,
+  ReorderBundleDto,
   ResolveIssueDto,
   TransitionResultDto,
+  WithdrawDto,
 } from './cases.dto.js';
 
 /** Teamlead pool steering & issue resolution (§14.2). Full operational visibility. */
@@ -135,5 +140,77 @@ export class TeamleadController {
     @Body() dto: RecalculateDto,
   ): Promise<RecalculateResultDto> {
     return this.assignment.recalculate(principal, dto.date);
+  }
+
+  @Post('assignments/preview')
+  @ApiOperation({
+    summary:
+      '§E.4 Simulation/Vorschau: run the engine over the ready pool WITHOUT persisting (no bundles, no events).',
+  })
+  @ApiOkResponse({ type: RecalculateResultDto })
+  preview(
+    @CurrentUser() principal: Principal,
+    @Body() dto: RecalculateDto,
+  ): Promise<RecalculateResultDto> {
+    return this.assignment.preview(principal, dto.date);
+  }
+
+  // --- §8.4 manual bundle overrides -----------------------------------------
+
+  @Post('bundles/:bundleId/withdraw')
+  @ApiOperation({
+    summary: '§8.4 Withdraw a case from a bundle → case back to ready (409 if already started).',
+  })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  withdraw(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Body() dto: WithdrawDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.withdraw(principal, bundleId, dto);
+  }
+
+  @Post('bundles/:bundleId/add')
+  @ApiOperation({ summary: '§8.4 Add a ready case to a bundle → case assigned.' })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  addToBundle(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Body() dto: AddToBundleDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.addToBundle(principal, bundleId, dto);
+  }
+
+  @Post('bundles/:bundleId/reorder')
+  @ApiOperation({ summary: "§8.4 Reorder a bundle's cases (and its route stops follow)." })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  reorder(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Body() dto: ReorderBundleDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.reorder(principal, bundleId, dto);
+  }
+
+  @Post('bundles/:bundleId/pause')
+  @ApiOperation({ summary: '§8.4 Pause a bundle (→ paused).' })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  pauseBundle(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Body() dto: BundlePauseDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.pauseBundle(principal, bundleId, dto);
+  }
+
+  @Post('bundles/:bundleId/resume')
+  @ApiOperation({ summary: '§8.4 Resume a paused bundle (→ active).' })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  resumeBundle(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Body() dto: BundlePauseDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.resumeBundle(principal, bundleId, dto);
   }
 }
