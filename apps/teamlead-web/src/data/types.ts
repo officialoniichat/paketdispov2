@@ -17,8 +17,19 @@ export interface CapacitySummary {
   plannedEmployees: number;
   netCapacityMinutes: number;
   plannedMinutes: number;
+  /** Freie Kapazität (idle headroom) = net − planned. NOT the eiserne Reserve. */
   reserveMinutes: number;
   utilisationPct: number;
+  /** Eiserne Reserve target floor (concept §5): earlyShiftWorkers × morningGapMinutes. */
+  reserveTargetMinutes: number;
+  /** Holdable, deadline-safe ready backlog securing the reserve. */
+  reserveSecuredMinutes: number;
+  /** Whether the holdable backlog meets the target floor. */
+  reserveSatisfied: boolean;
+  /** Belege forming tomorrow's Starterpaket (capped at target worth). */
+  starterBelegCount: number;
+  /** Σ estimatedMinutes of those starter belege. */
+  starterMinutes: number;
 }
 
 /** Open-pool counters (§10.1: Offen / Überfällig / Prio / CatMan / Probleme). */

@@ -8,6 +8,7 @@ import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
+import type { CapacityDto } from '../cases/cases.dto.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -28,6 +29,8 @@ let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let assignment: AssignmentService;
 let teamleadSvc: TeamleadReadService;
+/** Capacity snapshot taken seed-only (before recalculate drains the ready pool). */
+let preRecalcCapacity: CapacityDto;
 
 async function seed(): Promise<void> {
   const e1 = await prisma.user.create({ data: { employeeNo: 'ma-101', displayName: 'Anna' } });
@@ -50,22 +53,37 @@ async function seed(): Promise<void> {
       },
     });
   }
+  const e3 = await prisma.user.create({ data: { employeeNo: 'ma-103', displayName: 'Cara' } });
+  await prisma.shift.create({
+    data: {
+      employeeId: e3.id,
+      date: asDate(DATE),
+      plannedStart: new Date(`${DATE}T07:00:00.000Z`),
+      plannedEnd: new Date(`${DATE}T15:00:00.000Z`),
+      plannedHours: 8,
+      netCapacityMinutes: 480,
+    },
+  });
   const docSet = await prisma.documentSet.create({
     data: { source: 'pdf_folder', importKey: 'cap-set-1', status: 'parsed' },
   });
-  for (let i = 0; i < 5; i++) {
+  // 14 ready, holdable (section 1, far-out Verladetag) carryover cases. With 3 active
+  // shifts the eiserne Reserve target is 3 × 105 = 315 min; 14 × 30 = 420 min of
+  // holdable backlog comfortably secures it (concept §5/§6).
+  for (let i = 0; i < 14; i++) {
     await prisma.goodsReceiptCase.create({
       data: {
         documentSetId: docSet.id,
         weBelegNo: `WE-CAP-${i}`,
         bookingDate: asDate(DATE),
+        loadPlanDate: asDate('2026-06-30'),
         branchNo: '1',
         storageLocationId: loc.id,
-        section: 7,
+        section: 1,
         totalQuantity: 20,
         status: 'ready',
-        effortPoints: 8,
-        estimatedMinutes: 20,
+        effortPoints: 12,
+        estimatedMinutes: 30,
       },
     });
   }
@@ -85,6 +103,9 @@ beforeAll(async () => {
   assignment = new AssignmentService(p, events);
   teamleadSvc = new TeamleadReadService(p);
   await seed();
+  // Seed-only snapshot: 14 ready cases still in the pool, so the eiserne Reserve is
+  // secured. Capture it BEFORE recalculate assigns the pool (which empties `ready`).
+  preRecalcCapacity = await teamleadSvc.capacity(DATE);
   await assignment.recalculate(teamlead, DATE);
 }, 180_000);
 
@@ -94,16 +115,36 @@ afterAll(async () => {
 });
 
 describe('capacity (§10.1 GET /api/teamlead/capacity)', () => {
-  it('computes net/planned/reserve/utilisation for the date', async () => {
+  it('computes net/planned/freie-Kapazität/utilisation for the date', async () => {
     const cap = await teamleadSvc.capacity(DATE);
 
     expect(cap.date).toBe(DATE);
-    expect(cap.plannedEmployees).toBe(2);
-    expect(cap.netCapacityMinutes).toBe(780); // 480 + 300
+    expect(cap.plannedEmployees).toBe(3);
+    expect(cap.netCapacityMinutes).toBe(1260); // 480 + 300 + 480
     expect(cap.plannedMinutes).toBeGreaterThan(0);
+    // Freie Kapazität (idle headroom) math is unchanged by the reserve work.
     expect(cap.reserveMinutes).toBe(cap.netCapacityMinutes - cap.plannedMinutes);
     expect(cap.utilisationPct).toBe(
       Math.round((cap.plannedMinutes / cap.netCapacityMinutes) * 1000) / 10,
     );
+  });
+
+  it('exposes the eiserne Reserve + Starterpaket fields, secured from the seed pool', () => {
+    // 3 active shifts × 105 morningGapMinutes = 315 target.
+    expect(preRecalcCapacity.reserveTargetMinutes).toBe(315);
+    // 14 holdable ready cases × 30 min = 420 raw eligible backlog.
+    expect(preRecalcCapacity.reserveSecuredMinutes).toBe(420);
+    expect(preRecalcCapacity.reserveSatisfied).toBe(true);
+    // Starter caps at the target worth: ceil(315 / 30) = 11 belege (330 min ≥ 315).
+    expect(preRecalcCapacity.starterBelegCount).toBe(11);
+    expect(preRecalcCapacity.starterMinutes).toBe(330);
+  });
+
+  it('drops the reserve to unsatisfied once recalculate has drained the ready pool', async () => {
+    // After a full recalculate the ready pool is assigned away → nothing left to hold.
+    const cap = await teamleadSvc.capacity(DATE);
+    expect(cap.reserveSecuredMinutes).toBe(0);
+    expect(cap.reserveSatisfied).toBe(false);
+    expect(cap.starterBelegCount).toBe(0);
   });
 });

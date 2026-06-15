@@ -696,9 +696,20 @@ export interface components {
             plannedEmployees: number;
             netCapacityMinutes: number;
             plannedMinutes: number;
+            /** @description Freie Kapazität (idle headroom) = net − planned */
             reserveMinutes: number;
             /** @description Round 1 decimal, 0 if net capacity = 0 */
             utilisationPct: number;
+            /** @description Eiserne Reserve target (concept §5): earlyShiftWorkers × morningGapMinutes */
+            reserveTargetMinutes: number;
+            /** @description Holdable, deadline-safe ready backlog minutes securing the reserve */
+            reserveSecuredMinutes: number;
+            /** @description Whether the holdable backlog meets the reserve target floor */
+            reserveSatisfied: boolean;
+            /** @description Belege forming tomorrow's Starterpaket (capped at target worth) */
+            starterBelegCount: number;
+            /** @description Σ estimatedMinutes of the Starterpaket belege */
+            starterMinutes: number;
         };
         KpiDto: {
             /** @description ISO date YYYY-MM-DD */

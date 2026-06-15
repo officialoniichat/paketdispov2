@@ -30,6 +30,8 @@ import {
   formatPct,
 } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
+import { ReserveCard } from './ReserveCard.js';
+import { StarterPreviewCard } from './StarterPreviewCard.js';
 
 export function CockpitPage(): JSX.Element {
   const { cockpit, recentOverrides, isLoading, error, refetch, recalculate } = useCockpitData();
@@ -94,7 +96,7 @@ export function CockpitPage(): JSX.Element {
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap">
           {isLoading ? (
-            <KpiSkeletons count={5} />
+            <KpiSkeletons count={7} />
           ) : (
             <>
               <MetricCard label="Geplante MA" value={capacity.plannedEmployees} />
@@ -108,7 +110,7 @@ export function CockpitPage(): JSX.Element {
                 tone="accent"
               />
               <MetricCard
-                label="Reserve"
+                label="Freie Kapazität"
                 value={formatMinutes(capacity.reserveMinutes)}
                 tone={capacity.reserveMinutes <= 0 ? 'danger' : 'positive'}
               />
@@ -116,6 +118,15 @@ export function CockpitPage(): JSX.Element {
                 label="Auslastung"
                 value={formatPct(capacity.utilisationPct)}
                 tone="accent"
+              />
+              <ReserveCard
+                targetMinutes={capacity.reserveTargetMinutes}
+                securedMinutes={capacity.reserveSecuredMinutes}
+                satisfied={capacity.reserveSatisfied}
+              />
+              <StarterPreviewCard
+                belegCount={capacity.starterBelegCount}
+                minutes={capacity.starterMinutes}
               />
             </>
           )}

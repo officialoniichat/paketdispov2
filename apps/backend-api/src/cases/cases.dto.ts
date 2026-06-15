@@ -170,9 +170,22 @@ export class CapacityDto {
   @ApiProperty() plannedEmployees!: number;
   @ApiProperty() netCapacityMinutes!: number;
   @ApiProperty() plannedMinutes!: number;
-  @ApiProperty() reserveMinutes!: number;
+  @ApiProperty({ description: 'Freie Kapazität (idle headroom) = net − planned' })
+  reserveMinutes!: number;
   @ApiProperty({ description: 'Round 1 decimal, 0 if net capacity = 0' })
   utilisationPct!: number;
+  @ApiProperty({
+    description: 'Eiserne Reserve target (concept §5): earlyShiftWorkers × morningGapMinutes',
+  })
+  reserveTargetMinutes!: number;
+  @ApiProperty({ description: 'Holdable, deadline-safe ready backlog minutes securing the reserve' })
+  reserveSecuredMinutes!: number;
+  @ApiProperty({ description: 'Whether the holdable backlog meets the reserve target floor' })
+  reserveSatisfied!: boolean;
+  @ApiProperty({ description: "Belege forming tomorrow's Starterpaket (capped at target worth)" })
+  starterBelegCount!: number;
+  @ApiProperty({ description: 'Σ estimatedMinutes of the Starterpaket belege' })
+  starterMinutes!: number;
 }
 
 export class KpiDto {

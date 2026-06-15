@@ -1868,11 +1868,32 @@
             "type": "number"
           },
           "reserveMinutes": {
-            "type": "number"
+            "type": "number",
+            "description": "Freie Kapazität (idle headroom) = net − planned"
           },
           "utilisationPct": {
             "type": "number",
             "description": "Round 1 decimal, 0 if net capacity = 0"
+          },
+          "reserveTargetMinutes": {
+            "type": "number",
+            "description": "Eiserne Reserve target (concept §5): earlyShiftWorkers × morningGapMinutes"
+          },
+          "reserveSecuredMinutes": {
+            "type": "number",
+            "description": "Holdable, deadline-safe ready backlog minutes securing the reserve"
+          },
+          "reserveSatisfied": {
+            "type": "boolean",
+            "description": "Whether the holdable backlog meets the reserve target floor"
+          },
+          "starterBelegCount": {
+            "type": "number",
+            "description": "Belege forming tomorrow's Starterpaket (capped at target worth)"
+          },
+          "starterMinutes": {
+            "type": "number",
+            "description": "Σ estimatedMinutes of the Starterpaket belege"
           }
         },
         "required": [
@@ -1881,7 +1902,12 @@
           "netCapacityMinutes",
           "plannedMinutes",
           "reserveMinutes",
-          "utilisationPct"
+          "utilisationPct",
+          "reserveTargetMinutes",
+          "reserveSecuredMinutes",
+          "reserveSatisfied",
+          "starterBelegCount",
+          "starterMinutes"
         ]
       },
       "KpiDto": {

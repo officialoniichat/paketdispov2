@@ -69,7 +69,14 @@ export {
 export { computeEffort, type EffortResult } from './effort/effort-score.js';
 
 // (4) Assignment (§8.3/§8.4).
-export { computeIronReserve, canConsumeReserve, type ReserveInput } from './assignment/reserve.js';
+export {
+  computeIronReserve,
+  canConsumeReserve,
+  computeReserveStatus,
+  type ReserveInput,
+  type ReserveStatus,
+  type ReserveStatusInput,
+} from './assignment/reserve.js';
 export {
   createBalancedBundles,
   type ProtoBundle,

@@ -128,6 +128,11 @@ function mapCapacity(dto: CapacityDto): CapacitySummary {
     plannedMinutes: dto.plannedMinutes,
     reserveMinutes: dto.reserveMinutes,
     utilisationPct: dto.utilisationPct,
+    reserveTargetMinutes: dto.reserveTargetMinutes,
+    reserveSecuredMinutes: dto.reserveSecuredMinutes,
+    reserveSatisfied: dto.reserveSatisfied,
+    starterBelegCount: dto.starterBelegCount,
+    starterMinutes: dto.starterMinutes,
   };
 }
 

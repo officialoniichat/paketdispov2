@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AssignmentStatus, CaseStatus, PriorityFlag } from '@prisma/client';
+import { computeReserveStatus } from '@paket/assignment-engine';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { toEmployeeShift, toGoodsReceiptCase } from '../assignment/assignment.mappers.js';
 import {
   type AuditEventDto,
   type BoardDto,
@@ -237,19 +239,35 @@ export class TeamleadReadService {
    */
   async capacity(date: string): Promise<CapacityDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
-    const [shifts, bundles] = await Promise.all([
+    const [shifts, bundles, readyCases] = await Promise.all([
       this.prisma.shift.findMany({ where: { date: day, active: true } }),
       this.prisma.assignmentBundle.findMany({
         where: { date: day, status: { notIn: INACTIVE_BUNDLE_STATUSES } },
         select: { plannedEffortMinutes: true },
       }),
+      // The eiserne Reserve is sized over the whole ready carryover pool (not just
+      // today's bookings) — any `ready` case survives into tomorrow's morning.
+      this.prisma.goodsReceiptCase.findMany({
+        where: { status: 'ready' },
+        include: { storageLocation: true },
+      }),
     ]);
 
     const netCapacityMinutes = shifts.reduce((sum, s) => sum + s.netCapacityMinutes, 0);
     const plannedMinutes = bundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
+    // Freie Kapazität (idle headroom) — UNCHANGED. The UI relabels this "Freie
+    // Kapazität"; the eiserne Reserve is the separate reserve* block below.
     const reserveMinutes = netCapacityMinutes - plannedMinutes;
     const utilisationPct =
       netCapacityMinutes === 0 ? 0 : round1((plannedMinutes / netCapacityMinutes) * 100);
+
+    // Eiserne Reserve + Starterpaket (concept §5/§6). Active shifts are the
+    // early-shift worker proxy (no PEP yet); the engine documents the assumption.
+    const reserve = computeReserveStatus({
+      cases: readyCases.map(toGoodsReceiptCase),
+      shifts: shifts.map(toEmployeeShift),
+      date,
+    });
 
     return {
       date,
@@ -258,6 +276,11 @@ export class TeamleadReadService {
       plannedMinutes,
       reserveMinutes,
       utilisationPct,
+      reserveTargetMinutes: reserve.targetMinutes,
+      reserveSecuredMinutes: reserve.securedMinutes,
+      reserveSatisfied: reserve.satisfied,
+      starterBelegCount: reserve.starterBelegCount,
+      starterMinutes: reserve.starterMinutes,
     };
   }
 
