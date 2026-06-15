@@ -60,6 +60,78 @@ export class DashboardDto {
   oldestOpenBookingDate!: string | null;
 }
 
+// --- Teamlead read endpoints (board / capacity / kpis / events) -------------
+
+export class BoardRouteStopDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() sequence!: number;
+  @ApiProperty() locationCode!: string;
+  @ApiProperty() scanRequired!: boolean;
+  @ApiProperty() scanned!: boolean;
+}
+
+export class BoardCaseDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() weBelegNo!: string;
+  @ApiProperty() status!: string;
+  @ApiProperty() totalQuantity!: number;
+  @ApiProperty() estimatedMinutes!: number;
+  @ApiProperty() effortPoints!: number;
+}
+
+export class BoardRowDto {
+  @ApiProperty() employeeNo!: string;
+  @ApiProperty() employeeName!: string;
+  @ApiProperty() bundleId!: string;
+  @ApiProperty() bundleStatus!: string;
+  @ApiProperty() plannedEffortMinutes!: number;
+  @ApiProperty() capacityMinutes!: number;
+  @ApiProperty({ type: [BoardCaseDto] }) cases!: BoardCaseDto[];
+  @ApiProperty({ type: [BoardRouteStopDto] }) routeStops!: BoardRouteStopDto[];
+}
+
+export class BoardDto {
+  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
+  @ApiProperty({ type: [BoardRowDto] }) rows!: BoardRowDto[];
+  @ApiProperty() reserveMinutes!: number;
+}
+
+export class CapacityDto {
+  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
+  @ApiProperty() plannedEmployees!: number;
+  @ApiProperty() netCapacityMinutes!: number;
+  @ApiProperty() plannedMinutes!: number;
+  @ApiProperty() reserveMinutes!: number;
+  @ApiProperty({ description: 'Round 1 decimal, 0 if net capacity = 0' })
+  utilisationPct!: number;
+}
+
+export class KpiDto {
+  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
+  @ApiProperty() completedCases!: number;
+  @ApiProperty() totalCases!: number;
+  @ApiProperty() completedParts!: number;
+  @ApiProperty() effortPoints!: number;
+  @ApiProperty() workedMinutes!: number;
+  @ApiProperty() partsPerHour!: number;
+  @ApiProperty() effortPointsPerHour!: number;
+}
+
+export class AuditEventDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'Monotonic chain sequence' }) seq!: number;
+  @ApiProperty({ description: 'ISO-8601 timestamp' }) at!: string;
+  @ApiProperty() actorType!: string;
+  @ApiProperty() actorId!: string;
+  @ApiProperty() eventType!: string;
+  @ApiProperty() entityType!: string;
+  @ApiProperty() entityId!: string;
+  @ApiPropertyOptional({ description: 'Projected from payload, if present' })
+  action?: string;
+  @ApiPropertyOptional({ description: 'Projected from payload, if present' })
+  reason?: string;
+}
+
 export class TransitionResultDto {
   @ApiProperty() caseId!: string;
   @ApiProperty() status!: string;
@@ -176,4 +248,23 @@ export class ManualAssignmentDto {
   @ApiProperty({ type: [String] })
   @IsArray()
   caseIds!: string[];
+}
+
+export class EventQueryDto {
+  @ApiPropertyOptional({ description: 'Filter by ActorType (system|employee|teamlead|admin)' })
+  @IsOptional()
+  @IsString()
+  actorType?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by entityId' })
+  @IsOptional()
+  @IsString()
+  entityId?: string;
+
+  @ApiPropertyOptional({ default: 50, description: 'Page size 1..200' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
 }

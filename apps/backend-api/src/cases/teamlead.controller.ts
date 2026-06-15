@@ -5,7 +5,12 @@ import { AssignmentService } from '../assignment/assignment.service.js';
 import { RecalculateDto, RecalculateResultDto } from '../assignment/assignment.dto.js';
 import { TeamleadService } from './teamlead.service.js';
 import {
+  AuditEventDto,
+  BoardDto,
+  CapacityDto,
   DashboardDto,
+  EventQueryDto,
+  KpiDto,
   ParkDto,
   PoolListDto,
   PoolQueryDto,
@@ -30,6 +35,34 @@ export class TeamleadController {
   @ApiOkResponse({ type: DashboardDto })
   dashboard(): Promise<DashboardDto> {
     return this.teamlead.dashboard();
+  }
+
+  @Get('board')
+  @ApiOperation({ summary: "§10.3 Mitarbeitenden-Board for the day (assigned bundles per employee)" })
+  @ApiOkResponse({ type: BoardDto })
+  board(@Query('date') date: string): Promise<BoardDto> {
+    return this.teamlead.board(date ?? new Date().toISOString().slice(0, 10));
+  }
+
+  @Get('capacity')
+  @ApiOperation({ summary: '§10.1 Day capacity tile (net / planned / reserve / utilisation)' })
+  @ApiOkResponse({ type: CapacityDto })
+  capacity(@Query('date') date: string): Promise<CapacityDto> {
+    return this.teamlead.capacity(date ?? new Date().toISOString().slice(0, 10));
+  }
+
+  @Get('kpis')
+  @ApiOperation({ summary: '§10.1 Day ZST KPIs (computed from ZstRecord + case statuses)' })
+  @ApiOkResponse({ type: KpiDto })
+  kpis(@Query('date') date: string): Promise<KpiDto> {
+    return this.teamlead.kpis(date ?? new Date().toISOString().slice(0, 10));
+  }
+
+  @Get('events')
+  @ApiOperation({ summary: '§7.2/§16.2 audit feed (workflow events, newest first)' })
+  @ApiOkResponse({ type: [AuditEventDto] })
+  events(@Query() query: EventQueryDto): Promise<AuditEventDto[]> {
+    return this.teamlead.auditEvents(query);
   }
 
   @Get('cases')
