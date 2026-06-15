@@ -5,6 +5,9 @@
   "description": "Modular monolith backend API (Fastify + Prisma). Document/Workflow/Assignment/Route/Issue/Print/Reporting/Admin modules.",
   "type": "module",
   "main": "dist/main.js",
+  "prisma": {
+    "seed": "node --import @swc-node/register/esm-register prisma/seed.ts"
+  },
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.json",
     "dev": "node --import @swc-node/register/esm-register --watch src/main.ts",
