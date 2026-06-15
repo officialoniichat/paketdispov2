@@ -13,6 +13,13 @@ out/
 coverage/
 .turbo/
 
+# Playwright E2E scratch output
+test-results/
+playwright-report/
+.playwright-mcp/
+blob-report/
+.last-run.json
+
 # Storybook static build
 storybook-static/
 
