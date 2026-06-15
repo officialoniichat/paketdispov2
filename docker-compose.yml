@@ -1,0 +1,90 @@
+# Infrastructure baseline for the modular monolith (pilot / On-Prem VM).
+# Services: PostgreSQL (system of record), Redis (BullMQ), MinIO (documents/photos),
+# Caddy (reverse proxy). App containers are added in later EPICs.
+name: paketlagerdispo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-paket}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paket_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-paketlager}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-paket} -d ${POSTGRES_DB:-paketlager}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-paketminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-paketminio_dev_pw}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: create the documents bucket once MinIO is healthy.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-paketminio} ${MINIO_ROOT_PASSWORD:-paketminio_dev_pw} &&
+      mc mb --ignore-existing local/${MINIO_BUCKET:-documents} &&
+      echo 'bucket ready';
+      "
+    restart: 'no'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

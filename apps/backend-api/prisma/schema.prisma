@@ -1,0 +1,664 @@
+// Prisma schema – §14.1 Tabellenmodell.
+// Maps the domain model (Anhang A + D) to PostgreSQL with strong consistency:
+// unique keys for natural identities and idempotency keys for imports/events/ZST.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (identifier-safe values use @map where the wire value differs)
+// ---------------------------------------------------------------------------
+
+enum CaseStatus {
+  imported
+  parsed
+  needs_review
+  ready
+  parked
+  assigned
+  picking
+  preparing
+  sorting
+  checking
+  labeling
+  securing
+  boxing
+  issue_open
+  waiting_teamlead
+  released
+  partially_completed
+  completed
+  zst_done
+  cancelled
+}
+
+enum ParseStatus {
+  pending
+  parsed
+  needs_review
+  failed
+}
+
+enum DocumentKind {
+  delivery_note
+  goods_receipt
+  work_instruction
+  unknown
+}
+
+enum DocumentSource {
+  prohandel_api
+  erp_export
+  pdf_folder
+  print_job
+  manual_upload
+}
+
+enum PriorityFlag {
+  prio
+  catman_due
+  overdue
+  manual_teamlead_priority
+  same_day_required
+}
+
+enum GoodsTypeText {
+  Vororder
+  Nachorder
+  Sonderposten
+  NOS
+  NOOS
+  Extrabestellung
+  NOS_Nachorder @map("NOS-Nachorder")
+  Prio
+}
+
+enum LocationKind {
+  regal
+  palette_a
+  palette_b
+  palette_c
+  palette_e
+  haengebahn
+  lagerplatz_d
+  workstation
+  printer
+  conveyor_packages
+  conveyor_finished_goods
+}
+
+enum CheckMode {
+  quantity_only
+  percentage_check
+  full_check
+}
+
+enum AssignmentStatus {
+  created
+  assigned
+  accepted
+  active
+  paused
+  completed
+  cancelled
+}
+
+enum AssignmentCreatedBy {
+  system
+  teamlead
+}
+
+enum IssueStatus {
+  open
+  in_review
+  waiting_external
+  resolved
+  rejected
+}
+
+enum IssueScope {
+  case
+  position
+  sku_line
+  transport_box
+}
+
+enum IssueType {
+  missing_quantity
+  overdelivery
+  wrong_article
+  wrong_color
+  wrong_size
+  damaged_goods
+  missing_package
+  label_problem
+  security_problem
+  printer_problem
+  other
+}
+
+enum PositionStatus {
+  open
+  confirmed
+  issue_open
+  completed
+}
+
+enum SkuLineStatus {
+  open
+  confirmed
+  deviation
+}
+
+enum BoxGoodsType {
+  vororder
+  nachorder
+  sopo
+  nos
+  extrabestellung
+  nos_nachorder
+  prio
+  mixed
+}
+
+enum BoxLabelStatus {
+  not_required
+  pending
+  printed
+  reprinted
+}
+
+enum ZstSource {
+  mobile_app
+  teamlead_dashboard
+  manual_import
+}
+
+enum ActorType {
+  system
+  employee
+  teamlead
+  admin
+}
+
+// ---------------------------------------------------------------------------
+// Identity & RBAC
+// ---------------------------------------------------------------------------
+
+model User {
+  id          String   @id @default(cuid())
+  employeeNo  String   @unique
+  email       String?  @unique
+  displayName String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles           UserRole[]
+  shifts          Shift[]
+  bundles         AssignmentBundle[]
+  issuesReported  Issue[]            @relation("IssueReporter")
+  zstRecords      ZstRecord[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  name  String           @unique
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Workforce & master data
+// ---------------------------------------------------------------------------
+
+model Shift {
+  id                 String   @id @default(cuid())
+  employeeId         String
+  date               DateTime @db.Date
+  plannedStart       DateTime
+  plannedEnd         DateTime
+  breakMinutes       Int      @default(0)
+  plannedHours       Float
+  netCapacityMinutes Float
+  workstationId      String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  employee    User         @relation(fields: [employeeId], references: [id])
+  workstation Workstation? @relation(fields: [workstationId], references: [id])
+
+  @@unique([employeeId, date], name: "shift_employee_date")
+  @@index([date])
+  @@map("shifts")
+}
+
+model Workstation {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  locationId String?
+  active     Boolean  @default(true)
+
+  location Location? @relation(fields: [locationId], references: [id])
+  shifts   Shift[]
+
+  @@map("workstations")
+}
+
+model Location {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  displayName   String
+  kind          LocationKind
+  zone          String?
+  sequenceIndex Int?
+  scanCode      String?      @unique
+  active        Boolean      @default(true)
+
+  workstations Workstation[]
+  cases        GoodsReceiptCase[]
+  routeStops   RouteStop[]
+
+  @@index([kind])
+  @@map("locations")
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+model DocumentSet {
+  id              String         @id @default(cuid())
+  source          DocumentSource
+  importKey       String         @unique // idempotency for re-imports (source + external ref)
+  importedAt      DateTime       @default(now())
+  bookingDate     DateTime?      @db.Date
+  weBelegNo       String?
+  deliveryNoteNo  String?
+  parseConfidence Float          @default(0)
+  status          ParseStatus    @default(pending)
+
+  documents Document[]
+  cases     GoodsReceiptCase[]
+
+  @@index([weBelegNo])
+  @@map("document_sets")
+}
+
+model Document {
+  id            String      @id @default(cuid())
+  documentSetId String
+  kind          DocumentKind
+  fileName      String
+  mimeType      String
+  storageKey    String      @unique
+  sha256        String?
+  sizeBytes     Int?
+  parserVersion String?
+  parseStatus   ParseStatus @default(pending)
+  parseWarnings String[]    @default([])
+  createdAt     DateTime    @default(now())
+
+  documentSet DocumentSet @relation(fields: [documentSetId], references: [id], onDelete: Cascade)
+
+  @@unique([documentSetId, sha256], name: "document_set_hash")
+  @@index([documentSetId])
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// Goods receipt case + positions + sku lines
+// ---------------------------------------------------------------------------
+
+model GoodsReceiptCase {
+  id                String         @id @default(cuid())
+  documentSetId     String
+  weBelegNo         String         @unique
+  deliveryNoteNo    String?
+  bookingDate       DateTime       @db.Date
+  weDate            DateTime?      @db.Date
+  branchNo          String
+  primaryShopAreaNo String?
+  primaryFloor      String?
+  storageLocationId String
+  section           Int? // SectionCode 1|2|3|4|7|8, null for prio-only
+  goodsTypeText     GoodsTypeText?
+  priorityFlags     PriorityFlag[] @default([])
+  catManDate        DateTime?      @db.Date
+  loadPlanDate      DateTime?      @db.Date
+  totalQuantity     Int            @default(0)
+  status            CaseStatus     @default(imported)
+  effortPoints      Float          @default(0)
+  estimatedMinutes  Float          @default(0)
+  assignedBundleId  String?
+  version           Int            @default(0) // optimistic locking
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  documentSet     DocumentSet             @relation(fields: [documentSetId], references: [id])
+  storageLocation Location                @relation(fields: [storageLocationId], references: [id])
+  assignedBundle  AssignmentBundle?       @relation(fields: [assignedBundleId], references: [id])
+  positions       ReceiptPosition[]
+  workInstruction WorkInstructionHeader?
+  assignmentItems AssignmentItem[]
+  issues          Issue[]
+  transportBoxes  TransportBox[]
+  zstRecords      ZstRecord[]
+
+  @@index([status])
+  @@index([bookingDate])
+  @@index([section])
+  @@map("goods_receipt_cases")
+}
+
+model WorkInstructionHeader {
+  caseId                          String    @id
+  priceLabelPrintRequired         Boolean   @default(false)
+  sortByArticleColorSizeRequired  Boolean   @default(false)
+  goodsReceiptCheckMode           CheckMode @default(quantity_only)
+  goodsReceiptCheckPercentage     Float?
+  minimumQuantityCheckAlwaysRequired Boolean @default(true)
+  boxLabelRequired                Boolean   @default(false)
+  zstRequired                     Boolean   @default(false)
+
+  case GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("work_instruction_headers")
+}
+
+model ReceiptPosition {
+  id                 String         @id @default(cuid())
+  caseId             String
+  positionNo         Int
+  wgr                String
+  supplierArticleNo  String
+  supplierColor      String
+  season             String?
+  nosFlag            Boolean?
+  branchNo           String
+  shopNo             String
+  hShopNo            String?
+  floor              String?
+  onlineRelevant     Boolean?
+  sustainabilityFlag String?
+  labelType          String?
+  status             PositionStatus @default(open)
+
+  case        GoodsReceiptCase     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  instruction PositionInstruction?
+  skuLines    ReceiptSkuLine[]
+
+  @@unique([caseId, positionNo], name: "position_case_no")
+  @@index([caseId])
+  @@map("receipt_positions")
+}
+
+model PositionInstruction {
+  positionId               String  @id
+  priceLabelRequired       Boolean @default(false)
+  priceLabelAttachRequired Boolean @default(false)
+  priceLabelAttachLocation String?
+  securityRequired         Boolean @default(false)
+  securityLocation         String?
+  onlineHandlingRequired   Boolean @default(false)
+  onlineHandlingLocation   String?
+  redPriceRequired         Boolean?
+  notes                    String?
+
+  position ReceiptPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@map("position_instructions")
+}
+
+model ReceiptSkuLine {
+  id                String        @id @default(cuid())
+  receiptPositionId String
+  ean               String
+  size              String
+  expectedQuantity  Int           @default(0)
+  confirmedQuantity Int?
+  ekPrice           Float?
+  vkPrice           Float?
+  vkLabelPrice      Float?
+  status            SkuLineStatus @default(open)
+
+  position ReceiptPosition @relation(fields: [receiptPositionId], references: [id], onDelete: Cascade)
+
+  @@unique([receiptPositionId, ean, size], name: "sku_position_ean_size")
+  @@index([receiptPositionId])
+  @@map("receipt_sku_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Admin rules
+// ---------------------------------------------------------------------------
+
+model LoadPlanRule {
+  id          String    @id @default(cuid())
+  shopAreaNo  String
+  floor       String?
+  section     Int?
+  weekday     Int? // 0..6 load day per shop area/floor
+  validFrom   DateTime  @db.Date
+  validTo     DateTime? @db.Date
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([shopAreaNo, floor, validFrom], name: "loadplan_area_floor_from")
+  @@index([shopAreaNo])
+  @@map("load_plan_rules")
+}
+
+model PriorityRule {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  rank      Int
+  params    Json     @default("{}")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("priority_rules")
+}
+
+model EffortRule {
+  id        String   @id @default(cuid())
+  driverKey String   @unique
+  weight    Float    @default(0)
+  params    Json     @default("{}")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("effort_rules")
+}
+
+// ---------------------------------------------------------------------------
+// Assignment & route
+// ---------------------------------------------------------------------------
+
+model AssignmentBundle {
+  id                  String              @id @default(cuid())
+  employeeId          String
+  date                DateTime            @db.Date
+  plannedEffortMinutes Float              @default(0)
+  effortPoints        Float               @default(0)
+  status              AssignmentStatus    @default(created)
+  createdBy           AssignmentCreatedBy @default(system)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  employee   User             @relation(fields: [employeeId], references: [id])
+  items      AssignmentItem[]
+  routeStops RouteStop[]
+  cases      GoodsReceiptCase[]
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("assignment_bundles")
+}
+
+model AssignmentItem {
+  id       String @id @default(cuid())
+  bundleId String
+  caseId   String
+  sequence Int    @default(0)
+
+  bundle AssignmentBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  case   GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, caseId], name: "item_bundle_case")
+  @@unique([caseId], name: "item_case_unique") // a case belongs to at most one bundle
+  @@map("assignment_items")
+}
+
+model RouteStop {
+  id                   String    @id @default(cuid())
+  bundleId             String
+  sequence             Int
+  locationId           String
+  locationCode         String
+  orderIds             String[]  @default([])
+  scanRequired         Boolean   @default(true)
+  skipAllowedWithReason Boolean  @default(false)
+  scannedAt            DateTime?
+
+  bundle   AssignmentBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  location Location         @relation(fields: [locationId], references: [id])
+
+  @@unique([bundleId, sequence], name: "routestop_bundle_seq")
+  @@index([bundleId])
+  @@map("route_stops")
+}
+
+// ---------------------------------------------------------------------------
+// Issues, boxes, ZST, events
+// ---------------------------------------------------------------------------
+
+model Issue {
+  id          String      @id @default(cuid())
+  caseId      String
+  scope       IssueScope
+  scopeId     String?
+  employeeId  String
+  issueType   IssueType
+  description String?
+  photoKeys   String[]    @default([])
+  reportedAt  DateTime    @default(now())
+  status      IssueStatus @default(open)
+  resolution  String?
+  releasedBy  String?
+  releasedAt  DateTime?
+
+  case     GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  employee User             @relation("IssueReporter", fields: [employeeId], references: [id])
+
+  @@index([caseId])
+  @@index([status])
+  @@map("issues")
+}
+
+model TransportBox {
+  id            String          @id @default(cuid())
+  caseId        String
+  boxNo         Int
+  branchNo      String
+  shopAreaNo    String
+  shopNo        String?
+  hShopNo       String?
+  floor         String?
+  goodsType     BoxGoodsType?
+  goodsTypeText GoodsTypeText?
+  positionIds   String[]        @default([])
+  plannedQuantity Int           @default(0)
+  quantity      Int             @default(0)
+  labelStatus   BoxLabelStatus  @default(not_required)
+  labelPrinted  Boolean         @default(false)
+  sealed        Boolean         @default(false)
+  sealCode      String?         @unique
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+
+  case GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, boxNo], name: "box_case_no")
+  @@index([caseId])
+  @@map("transport_boxes")
+}
+
+model ZstRecord {
+  id                String    @id @default(cuid())
+  idempotencyKey    String    @unique // dedup of ZST creation/export
+  caseId            String
+  employeeId        String
+  completedQuantity Int       @default(0)
+  effortPoints      Float     @default(0)
+  startedAt         DateTime?
+  completedAt       DateTime
+  source            ZstSource @default(mobile_app)
+  exportedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  case     GoodsReceiptCase @relation(fields: [caseId], references: [id])
+  employee User             @relation(fields: [employeeId], references: [id])
+
+  @@index([caseId])
+  @@index([exportedAt])
+  @@map("zst_records")
+}
+
+model WorkflowEvent {
+  id             String    @id @default(cuid())
+  idempotencyKey String?   @unique // optional dedup key for at-least-once producers
+  eventType      String // WorkflowEventType (dotted) – enforced by Zod at the boundary
+  entityType     String
+  entityId       String
+  actorType      ActorType
+  actorId        String?
+  timestamp      DateTime  @default(now())
+  payload        Json      @default("{}")
+  correlationId  String?
+
+  @@index([entityType, entityId])
+  @@index([eventType])
+  @@index([correlationId])
+  @@map("workflow_events")
+}

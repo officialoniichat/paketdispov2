@@ -1,0 +1,23 @@
+# Reverse proxy baseline for the pilot deployment.
+# Routes /api/* to the backend API and everything else to the employee PWA.
+# Upstreams resolve lazily, so Caddy starts cleanly before the app containers exist.
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode gzip
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle_path /api/* {
+		reverse_proxy backend-api:3000
+	}
+
+	handle {
+		reverse_proxy employee-pwa:5173
+	}
+}
