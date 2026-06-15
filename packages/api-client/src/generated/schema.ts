@@ -70,6 +70,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/cases/{caseId}/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeController_caseAggregate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{caseId}/start-preparation": {
         parameters: {
             query?: never;
@@ -146,6 +162,74 @@ export interface paths {
             cookie?: never;
         };
         get: operations["TeamleadController_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §10.3 Mitarbeitenden-Board for the day (assigned bundles per employee) */
+        get: operations["TeamleadController_board"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §10.1 Day capacity tile (net / planned / reserve / utilisation) */
+        get: operations["TeamleadController_capacity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/kpis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §10.1 Day ZST KPIs (computed from ZstRecord + case statuses) */
+        get: operations["TeamleadController_kpis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §7.2/§16.2 audit feed (workflow events, newest first) */
+        get: operations["TeamleadController_events"];
         put?: never;
         post?: never;
         delete?: never;
@@ -340,6 +424,52 @@ export interface components {
             bundle?: components["schemas"]["CurrentBundleDto"] | null;
             cases: components["schemas"]["CaseSummaryDto"][];
         };
+        WorkInstructionHeaderDto: {
+            priceLabelPrintRequired: boolean;
+            sortByArticleColorSizeRequired: boolean;
+            /** @description CheckMode: quantity_only|percentage_check|full_check */
+            goodsReceiptCheckMode: string;
+            goodsReceiptCheckPercentage?: Record<string, never> | null;
+            minimumQuantityCheckAlwaysRequired: boolean;
+            boxLabelRequired: boolean;
+            zstRequired: boolean;
+        };
+        ReceiptPositionDto: {
+            id: string;
+            positionNo: number;
+            /** @description Warengruppe */
+            wgr: string;
+            supplierArticleNo: string;
+            supplierColor: string;
+            season?: Record<string, never> | null;
+            branchNo: string;
+            shopNo: string;
+            floor?: Record<string, never> | null;
+            /** @description PositionStatus: open|confirmed|issue_open|completed */
+            status: string;
+        };
+        TransportBoxTargetDto: {
+            id: string;
+            boxNo: number;
+            branchNo: string;
+            shopAreaNo: string;
+            shopNo?: Record<string, never> | null;
+            floor?: Record<string, never> | null;
+            /** @description BoxGoodsType */
+            goodsType?: Record<string, never> | null;
+            positionIds: string[];
+            plannedQuantity: number;
+            quantity: number;
+            /** @description BoxLabelStatus: not_required|pending|printed|reprinted */
+            labelStatus: string;
+            sealed: boolean;
+        };
+        CaseAggregateDto: {
+            case: components["schemas"]["CaseSummaryDto"];
+            workInstruction?: components["schemas"]["WorkInstructionHeaderDto"] | null;
+            positions: components["schemas"]["ReceiptPositionDto"][];
+            boxTargets: components["schemas"]["TransportBoxTargetDto"][];
+        };
         TransitionResultDto: {
             caseId: string;
             status: string;
@@ -369,6 +499,74 @@ export interface components {
             prioOpen: number;
             /** @description Booking date of oldest open case */
             oldestOpenBookingDate?: Record<string, never> | null;
+        };
+        BoardCaseDto: {
+            id: string;
+            weBelegNo: string;
+            status: string;
+            totalQuantity: number;
+            estimatedMinutes: number;
+            effortPoints: number;
+        };
+        BoardRouteStopDto: {
+            id: string;
+            sequence: number;
+            locationCode: string;
+            scanRequired: boolean;
+            scanned: boolean;
+        };
+        BoardRowDto: {
+            employeeNo: string;
+            employeeName: string;
+            bundleId: string;
+            bundleStatus: string;
+            plannedEffortMinutes: number;
+            capacityMinutes: number;
+            cases: components["schemas"]["BoardCaseDto"][];
+            routeStops: components["schemas"]["BoardRouteStopDto"][];
+        };
+        BoardDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            rows: components["schemas"]["BoardRowDto"][];
+            reserveMinutes: number;
+        };
+        CapacityDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            plannedEmployees: number;
+            netCapacityMinutes: number;
+            plannedMinutes: number;
+            reserveMinutes: number;
+            /** @description Round 1 decimal, 0 if net capacity = 0 */
+            utilisationPct: number;
+        };
+        KpiDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            completedCases: number;
+            totalCases: number;
+            completedParts: number;
+            effortPoints: number;
+            workedMinutes: number;
+            partsPerHour: number;
+            effortPointsPerHour: number;
+        };
+        AuditEventDto: {
+            id: string;
+            /** @description Monotonic chain sequence */
+            seq: number;
+            /** @description ISO-8601 timestamp */
+            at: string;
+            actorType: string;
+            actorId: string;
+            eventType: string;
+            entityType: string;
+            entityId: string;
+            /** @description Projected from payload, if present */
+            action?: string;
+            /** @description Projected from payload, if present */
+            reason?: string;
         };
         PoolItemDto: {
             id: string;
@@ -511,6 +709,28 @@ export interface operations {
             };
         };
     };
+    MeController_caseAggregate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseAggregateDto"];
+                };
+            };
+        };
+    };
     CasesController_startPreparation: {
         parameters: {
             query?: never;
@@ -616,6 +836,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_board: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_capacity: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapacityDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_kpis: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KpiDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_events: {
+        parameters: {
+            query?: {
+                /** @description Filter by ActorType (system|employee|teamlead|admin) */
+                actorType?: string;
+                /** @description Filter by entityId */
+                entityId?: string;
+                /** @description Page size 1..200 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventDto"][];
                 };
             };
         };

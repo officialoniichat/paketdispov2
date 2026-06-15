@@ -93,6 +93,42 @@
         ]
       }
     },
+    "/api/me/cases/{caseId}/aggregate": {
+      "get": {
+        "operationId": "MeController_caseAggregate",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseAggregateDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/cases/{caseId}/start-preparation": {
       "post": {
         "operationId": "CasesController_startPreparation",
@@ -269,6 +305,173 @@
             "bearer": []
           }
         ],
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/board": {
+      "get": {
+        "operationId": "TeamleadController_board",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§10.3 Mitarbeitenden-Board for the day (assigned bundles per employee)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/capacity": {
+      "get": {
+        "operationId": "TeamleadController_capacity",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§10.1 Day capacity tile (net / planned / reserve / utilisation)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/kpis": {
+      "get": {
+        "operationId": "TeamleadController_kpis",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KpiDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§10.1 Day ZST KPIs (computed from ZstRecord + case statuses)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/events": {
+      "get": {
+        "operationId": "TeamleadController_events",
+        "parameters": [
+          {
+            "name": "actorType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by ActorType (system|employee|teamlead|admin)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by entityId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size 1..200",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§7.2/§16.2 audit feed (workflow events, newest first)",
         "tags": [
           "teamlead"
         ]
@@ -794,6 +997,185 @@
           "cases"
         ]
       },
+      "WorkInstructionHeaderDto": {
+        "type": "object",
+        "properties": {
+          "priceLabelPrintRequired": {
+            "type": "boolean"
+          },
+          "sortByArticleColorSizeRequired": {
+            "type": "boolean"
+          },
+          "goodsReceiptCheckMode": {
+            "type": "string",
+            "description": "CheckMode: quantity_only|percentage_check|full_check"
+          },
+          "goodsReceiptCheckPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "minimumQuantityCheckAlwaysRequired": {
+            "type": "boolean"
+          },
+          "boxLabelRequired": {
+            "type": "boolean"
+          },
+          "zstRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "priceLabelPrintRequired",
+          "sortByArticleColorSizeRequired",
+          "goodsReceiptCheckMode",
+          "minimumQuantityCheckAlwaysRequired",
+          "boxLabelRequired",
+          "zstRequired"
+        ]
+      },
+      "ReceiptPositionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "positionNo": {
+            "type": "number"
+          },
+          "wgr": {
+            "type": "string",
+            "description": "Warengruppe"
+          },
+          "supplierArticleNo": {
+            "type": "string"
+          },
+          "supplierColor": {
+            "type": "string"
+          },
+          "season": {
+            "type": "object",
+            "nullable": true
+          },
+          "branchNo": {
+            "type": "string"
+          },
+          "shopNo": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "object",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "PositionStatus: open|confirmed|issue_open|completed"
+          }
+        },
+        "required": [
+          "id",
+          "positionNo",
+          "wgr",
+          "supplierArticleNo",
+          "supplierColor",
+          "branchNo",
+          "shopNo",
+          "status"
+        ]
+      },
+      "TransportBoxTargetDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "boxNo": {
+            "type": "number"
+          },
+          "branchNo": {
+            "type": "string"
+          },
+          "shopAreaNo": {
+            "type": "string"
+          },
+          "shopNo": {
+            "type": "object",
+            "nullable": true
+          },
+          "floor": {
+            "type": "object",
+            "nullable": true
+          },
+          "goodsType": {
+            "type": "object",
+            "nullable": true,
+            "description": "BoxGoodsType"
+          },
+          "positionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "plannedQuantity": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "labelStatus": {
+            "type": "string",
+            "description": "BoxLabelStatus: not_required|pending|printed|reprinted"
+          },
+          "sealed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "boxNo",
+          "branchNo",
+          "shopAreaNo",
+          "positionIds",
+          "plannedQuantity",
+          "quantity",
+          "labelStatus",
+          "sealed"
+        ]
+      },
+      "CaseAggregateDto": {
+        "type": "object",
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummaryDto"
+          },
+          "workInstruction": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkInstructionHeaderDto"
+              }
+            ]
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptPositionDto"
+            }
+          },
+          "boxTargets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransportBoxTargetDto"
+            }
+          }
+        },
+        "required": [
+          "case",
+          "positions",
+          "boxTargets"
+        ]
+      },
       "TransitionResultDto": {
         "type": "object",
         "properties": {
@@ -886,6 +1268,254 @@
           "countsByStatus",
           "poolSize",
           "prioOpen"
+        ]
+      },
+      "BoardCaseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totalQuantity": {
+            "type": "number"
+          },
+          "estimatedMinutes": {
+            "type": "number"
+          },
+          "effortPoints": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "weBelegNo",
+          "status",
+          "totalQuantity",
+          "estimatedMinutes",
+          "effortPoints"
+        ]
+      },
+      "BoardRouteStopDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "locationCode": {
+            "type": "string"
+          },
+          "scanRequired": {
+            "type": "boolean"
+          },
+          "scanned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "locationCode",
+          "scanRequired",
+          "scanned"
+        ]
+      },
+      "BoardRowDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "bundleId": {
+            "type": "string"
+          },
+          "bundleStatus": {
+            "type": "string"
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          },
+          "capacityMinutes": {
+            "type": "number"
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardCaseDto"
+            }
+          },
+          "routeStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardRouteStopDto"
+            }
+          }
+        },
+        "required": [
+          "employeeNo",
+          "employeeName",
+          "bundleId",
+          "bundleStatus",
+          "plannedEffortMinutes",
+          "capacityMinutes",
+          "cases",
+          "routeStops"
+        ]
+      },
+      "BoardDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardRowDto"
+            }
+          },
+          "reserveMinutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "rows",
+          "reserveMinutes"
+        ]
+      },
+      "CapacityDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "plannedEmployees": {
+            "type": "number"
+          },
+          "netCapacityMinutes": {
+            "type": "number"
+          },
+          "plannedMinutes": {
+            "type": "number"
+          },
+          "reserveMinutes": {
+            "type": "number"
+          },
+          "utilisationPct": {
+            "type": "number",
+            "description": "Round 1 decimal, 0 if net capacity = 0"
+          }
+        },
+        "required": [
+          "date",
+          "plannedEmployees",
+          "netCapacityMinutes",
+          "plannedMinutes",
+          "reserveMinutes",
+          "utilisationPct"
+        ]
+      },
+      "KpiDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "completedCases": {
+            "type": "number"
+          },
+          "totalCases": {
+            "type": "number"
+          },
+          "completedParts": {
+            "type": "number"
+          },
+          "effortPoints": {
+            "type": "number"
+          },
+          "workedMinutes": {
+            "type": "number"
+          },
+          "partsPerHour": {
+            "type": "number"
+          },
+          "effortPointsPerHour": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "completedCases",
+          "totalCases",
+          "completedParts",
+          "effortPoints",
+          "workedMinutes",
+          "partsPerHour",
+          "effortPointsPerHour"
+        ]
+      },
+      "AuditEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "number",
+            "description": "Monotonic chain sequence"
+          },
+          "at": {
+            "type": "string",
+            "description": "ISO-8601 timestamp"
+          },
+          "actorType": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "description": "Projected from payload, if present"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Projected from payload, if present"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "at",
+          "actorType",
+          "actorId",
+          "eventType",
+          "entityType",
+          "entityId"
         ]
       },
       "PoolItemDto": {
