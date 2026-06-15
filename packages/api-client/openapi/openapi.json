@@ -1240,6 +1240,224 @@
         ]
       }
     },
+    "/api/admin/employees": {
+      "get": {
+        "operationId": "EmployeesController_list",
+        "parameters": [
+          {
+            "name": "date",
+            "required": false,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD (default today)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List employees with today’s shift, capacity and absence.",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/admin/employees/{id}": {
+      "get": {
+        "operationId": "EmployeesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": false,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD (default today)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Employee detail incl. weekly pattern and recent audit.",
+        "tags": [
+          "employees"
+        ]
+      },
+      "patch": {
+        "operationId": "EmployeesController_updateProfile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeProfileUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update profile (active, area tags, productivity, overtime, pattern).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/admin/employees/{id}/shift": {
+      "put": {
+        "operationId": "EmployeesController_overrideShift",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftOverrideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Override a day’s shift; recomputes netCapacity, source=teamlead.",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/admin/employees/{id}/absence": {
+      "post": {
+        "operationId": "EmployeesController_createAbsence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record an absence; zeroes/shortens affected shift capacity.",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_live",
@@ -2743,6 +2961,417 @@
           "effort",
           "loadPlan",
           "parserTemplates"
+        ]
+      },
+      "TodayShiftDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "plannedStart": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "breakMinutes": {
+            "type": "number"
+          },
+          "netCapacityMinutes": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "description": "seak | pattern | teamlead"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "date",
+          "plannedStart",
+          "plannedEnd",
+          "breakMinutes",
+          "netCapacityMinutes",
+          "source",
+          "active"
+        ]
+      },
+      "EmployeeListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "isPilot": {
+            "type": "boolean"
+          },
+          "areaTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "productivityFactor": {
+            "type": "number"
+          },
+          "overtimeTolerancePct": {
+            "type": "number"
+          },
+          "todayShift": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TodayShiftDto"
+              }
+            ]
+          },
+          "absentToday": {
+            "type": "boolean",
+            "description": "Absent today (capacity 0)"
+          },
+          "netCapacityToday": {
+            "type": "number",
+            "description": "Net capacity counted today (0 if absent/inactive)"
+          }
+        },
+        "required": [
+          "id",
+          "employeeNo",
+          "displayName",
+          "roles",
+          "active",
+          "isPilot",
+          "areaTags",
+          "productivityFactor",
+          "overtimeTolerancePct",
+          "absentToday",
+          "netCapacityToday"
+        ]
+      },
+      "EmployeeListResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "activeCount": {
+            "type": "number"
+          },
+          "teamCapacityMinutes": {
+            "type": "number"
+          },
+          "morningCapacityMinutes": {
+            "type": "number"
+          },
+          "employees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeListItemDto"
+            }
+          }
+        },
+        "required": [
+          "date",
+          "activeCount",
+          "teamCapacityMinutes",
+          "morningCapacityMinutes",
+          "employees"
+        ]
+      },
+      "WeeklyDayPlanDto": {
+        "type": "object",
+        "properties": {
+          "working": {
+            "type": "boolean"
+          },
+          "shiftModel": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "end": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "breakMinutes": {
+            "type": "number"
+          },
+          "partTimePct": {
+            "type": "number",
+            "description": "Teilzeit-Anteil 0..100"
+          }
+        },
+        "required": [
+          "working",
+          "breakMinutes",
+          "partTimePct"
+        ]
+      },
+      "WeeklyPatternDto": {
+        "type": "object",
+        "properties": {
+          "mon": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "tue": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "wed": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "thu": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "fri": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "sat": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          },
+          "sun": {
+            "$ref": "#/components/schemas/WeeklyDayPlanDto"
+          }
+        },
+        "required": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "AuditEntryDto": {
+        "type": "object",
+        "properties": {
+          "eventType": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string",
+            "nullable": true
+          },
+          "payload": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "eventType",
+          "at",
+          "payload"
+        ]
+      },
+      "EmployeeDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "isPilot": {
+            "type": "boolean"
+          },
+          "areaTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "productivityFactor": {
+            "type": "number"
+          },
+          "overtimeTolerancePct": {
+            "type": "number"
+          },
+          "todayShift": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TodayShiftDto"
+              }
+            ]
+          },
+          "absentToday": {
+            "type": "boolean",
+            "description": "Absent today (capacity 0)"
+          },
+          "netCapacityToday": {
+            "type": "number",
+            "description": "Net capacity counted today (0 if absent/inactive)"
+          },
+          "weeklyPattern": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WeeklyPatternDto"
+              }
+            ]
+          },
+          "recentAudit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "employeeNo",
+          "displayName",
+          "roles",
+          "active",
+          "isPilot",
+          "areaTags",
+          "productivityFactor",
+          "overtimeTolerancePct",
+          "absentToday",
+          "netCapacityToday",
+          "recentAudit"
+        ]
+      },
+      "EmployeeProfileUpdateDto": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "isPilot": {
+            "type": "boolean"
+          },
+          "areaTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "productivityFactor": {
+            "type": "number",
+            "description": "0,5…1,2"
+          },
+          "overtimeTolerancePct": {
+            "type": "number",
+            "description": "0…25"
+          },
+          "weeklyPattern": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WeeklyPatternDto"
+              }
+            ]
+          }
+        }
+      },
+      "ShiftOverrideDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "plannedStart": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "plannedEnd": {
+            "type": "string",
+            "description": "HH:MM"
+          },
+          "breakMinutes": {
+            "type": "number"
+          },
+          "partTimePct": {
+            "type": "number",
+            "description": "Teilzeit 0..100 (default 100)"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "plannedStart",
+          "plannedEnd",
+          "breakMinutes",
+          "active"
+        ]
+      },
+      "AbsenceCreateDto": {
+        "type": "object",
+        "properties": {
+          "dateFrom": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "dateTo": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD"
+          },
+          "kind": {
+            "type": "string",
+            "description": "krank | urlaub | abwesend | teilabwesend"
+          },
+          "partialUntil": {
+            "type": "string",
+            "description": "HH:MM cutoff for teilabwesend"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dateFrom",
+          "dateTo",
+          "kind"
         ]
       }
     }

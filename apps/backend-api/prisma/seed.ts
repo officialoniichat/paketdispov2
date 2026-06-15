@@ -62,22 +62,37 @@ interface SeedUser {
   displayName: string;
   email: string;
   role: 'teamlead' | 'employee';
+  /** Mitarbeiter-Einstellungen demo fields (concept employee-settings-ux). */
+  areaTags?: string[];
+  isPilot?: boolean;
+  productivityFactor?: number;
 }
 
 const USERS: SeedUser[] = [
   { employeeNo: 'tl-001', displayName: 'TL Logistik', email: 'tl-001@dev.local', role: 'teamlead' },
-  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee' },
-  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee' },
-  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee' },
+  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', areaTags: ['Hängebahn'], isPilot: true, productivityFactor: 1.0 },
+  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', areaTags: ['Palette'], productivityFactor: 0.9 },
+  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', areaTags: ['NOS'], productivityFactor: 1.0 },
 ];
 
 async function seedUsers(roleIds: Record<string, string>): Promise<Record<string, string>> {
   const idByEmployeeNo: Record<string, string> = {};
   for (const u of USERS) {
+    const profile = {
+      areaTags: u.areaTags ?? [],
+      isPilot: u.isPilot ?? false,
+      productivityFactor: u.productivityFactor ?? 1,
+    };
     const user = await prisma.user.upsert({
       where: { employeeNo: u.employeeNo },
-      update: { displayName: u.displayName, email: u.email, active: true },
-      create: { employeeNo: u.employeeNo, displayName: u.displayName, email: u.email, active: true },
+      update: { displayName: u.displayName, email: u.email, active: true, ...profile },
+      create: {
+        employeeNo: u.employeeNo,
+        displayName: u.displayName,
+        email: u.email,
+        active: true,
+        ...profile,
+      },
     });
     idByEmployeeNo[u.employeeNo] = user.id;
     // Link role idempotently (composite PK [userId, roleId]).

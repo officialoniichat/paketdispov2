@@ -509,6 +509,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List employees with today’s shift, capacity and absence. */
+        get: operations["EmployeesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/employees/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee detail incl. weekly pattern and recent audit. */
+        get: operations["EmployeesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update profile (active, area tags, productivity, overtime, pattern). */
+        patch: operations["EmployeesController_updateProfile"];
+        trace?: never;
+    };
+    "/api/admin/employees/{id}/shift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Override a day’s shift; recomputes netCapacity, source=teamlead. */
+        put: operations["EmployeesController_overrideShift"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/employees/{id}/absence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an absence; zeroes/shortens affected shift capacity. */
+        post: operations["EmployeesController_createAbsence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -951,6 +1020,121 @@ export interface components {
             effort: components["schemas"]["EffortRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
             parserTemplates: components["schemas"]["ParserTemplateRowDto"][];
+        };
+        TodayShiftDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            /** @description HH:MM */
+            plannedStart: string;
+            /** @description HH:MM */
+            plannedEnd: string;
+            breakMinutes: number;
+            netCapacityMinutes: number;
+            /** @description seak | pattern | teamlead */
+            source: string;
+            active: boolean;
+        };
+        EmployeeListItemDto: {
+            id: string;
+            employeeNo: string;
+            displayName: string;
+            roles: string[];
+            active: boolean;
+            isPilot: boolean;
+            areaTags: string[];
+            productivityFactor: number;
+            overtimeTolerancePct: number;
+            todayShift?: components["schemas"]["TodayShiftDto"] | null;
+            /** @description Absent today (capacity 0) */
+            absentToday: boolean;
+            /** @description Net capacity counted today (0 if absent/inactive) */
+            netCapacityToday: number;
+        };
+        EmployeeListResponseDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            activeCount: number;
+            teamCapacityMinutes: number;
+            morningCapacityMinutes: number;
+            employees: components["schemas"]["EmployeeListItemDto"][];
+        };
+        WeeklyDayPlanDto: {
+            working: boolean;
+            shiftModel?: string;
+            /** @description HH:MM */
+            start?: string;
+            /** @description HH:MM */
+            end?: string;
+            breakMinutes: number;
+            /** @description Teilzeit-Anteil 0..100 */
+            partTimePct: number;
+        };
+        WeeklyPatternDto: {
+            mon: components["schemas"]["WeeklyDayPlanDto"];
+            tue: components["schemas"]["WeeklyDayPlanDto"];
+            wed: components["schemas"]["WeeklyDayPlanDto"];
+            thu: components["schemas"]["WeeklyDayPlanDto"];
+            fri: components["schemas"]["WeeklyDayPlanDto"];
+            sat: components["schemas"]["WeeklyDayPlanDto"];
+            sun: components["schemas"]["WeeklyDayPlanDto"];
+        };
+        AuditEntryDto: {
+            eventType: string;
+            at: string;
+            actorId?: string | null;
+            payload: Record<string, never>;
+        };
+        EmployeeDetailDto: {
+            id: string;
+            employeeNo: string;
+            displayName: string;
+            roles: string[];
+            active: boolean;
+            isPilot: boolean;
+            areaTags: string[];
+            productivityFactor: number;
+            overtimeTolerancePct: number;
+            todayShift?: components["schemas"]["TodayShiftDto"] | null;
+            /** @description Absent today (capacity 0) */
+            absentToday: boolean;
+            /** @description Net capacity counted today (0 if absent/inactive) */
+            netCapacityToday: number;
+            weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+            recentAudit: components["schemas"]["AuditEntryDto"][];
+        };
+        EmployeeProfileUpdateDto: {
+            active?: boolean;
+            isPilot?: boolean;
+            areaTags?: string[];
+            /** @description 0,5…1,2 */
+            productivityFactor?: number;
+            /** @description 0…25 */
+            overtimeTolerancePct?: number;
+            weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+        };
+        ShiftOverrideDto: {
+            /** @description ISO date YYYY-MM-DD */
+            date: string;
+            /** @description HH:MM */
+            plannedStart: string;
+            /** @description HH:MM */
+            plannedEnd: string;
+            breakMinutes: number;
+            /** @description Teilzeit 0..100 (default 100) */
+            partTimePct?: number;
+            active: boolean;
+            reason?: string;
+        };
+        AbsenceCreateDto: {
+            /** @description ISO date YYYY-MM-DD */
+            dateFrom: string;
+            /** @description ISO date YYYY-MM-DD */
+            dateTo: string;
+            /** @description krank | urlaub | abwesend | teilabwesend */
+            kind: string;
+            /** @description HH:MM cutoff for teilabwesend */
+            partialUntil?: string;
+            reason?: string;
         };
     };
     responses: never;
@@ -1675,6 +1859,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleConfigDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_list: {
+        parameters: {
+            query?: {
+                /** @description ISO date YYYY-MM-DD (default today) */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeListResponseDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_get: {
+        parameters: {
+            query?: {
+                /** @description ISO date YYYY-MM-DD (default today) */
+                date?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeProfileUpdateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_overrideShift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftOverrideDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_createAbsence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceCreateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailDto"];
                 };
             };
         };

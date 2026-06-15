@@ -79,4 +79,22 @@ describe('net capacity (§4.3)', () => {
     expect(teamCapacityMinutes(shifts)).toBe(1200);
     expect(shifts[0]?.employeeId).toBe('E-0001');
   });
+
+  it('lets a per-head productivity factor override the config factor', () => {
+    const { rows } = parseShiftImportCsv(SAMPLE_CSV);
+    const e1 = rows.find((r) => r.employeeNo === 'E-0001')!;
+    // 480 net min × 0.5 per-head factor = 240, ignoring the default config 1.0.
+    expect(computeNetCapacityMinutes(e1, undefined, 0.5)).toBe(240);
+  });
+
+  it('applies and records the per-head factor + seak source on the built shift', () => {
+    const { rows } = parseShiftImportCsv(SAMPLE_CSV);
+    const e1 = rows.find((r) => r.employeeNo === 'E-0001')!;
+    const shift = toEmployeeShift(e1, {
+      resolveProductivityFactor: (no) => (no === 'E-0001' ? 0.8 : undefined),
+    });
+    expect(shift.netCapacityMinutes).toBe(384); // 480 × 0.8
+    expect(shift.productivityFactor).toBe(0.8);
+    expect(shift.source).toBe('seak');
+  });
 });

@@ -187,6 +187,20 @@ enum ActorType {
   admin
 }
 
+// Provenance of a shift's values (Mitarbeiter-Einstellungen §c, Prinzip 2).
+enum ShiftSource {
+  seak
+  pattern
+  teamlead
+}
+
+enum AbsenceKind {
+  krank
+  urlaub
+  abwesend
+  teilabwesend
+}
+
 // ---------------------------------------------------------------------------
 // Identity & RBAC
 // ---------------------------------------------------------------------------
@@ -197,6 +211,13 @@ model User {
   email       String?  @unique
   displayName String
   active      Boolean  @default(true)
+  // Mitarbeiter-Einstellungen (capacity/effort per head) — see
+  // docs/concept/employee-settings-ux-concept.md.
+  isPilot              Boolean  @default(false)
+  areaTags             String[] @default([])
+  productivityFactor   Float    @default(1)
+  overtimeTolerancePct Float    @default(0)
+  weeklyPattern        Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -205,6 +226,7 @@ model User {
   bundles         AssignmentBundle[]
   issuesReported  Issue[]            @relation("IssueReporter")
   zstRecords      ZstRecord[]
+  absences        Absence[]
 
   @@map("users")
 }
@@ -261,8 +283,10 @@ model Shift {
   plannedHours       Float
   netCapacityMinutes Float
   workstationId      String?
-  active             Boolean  @default(true)
-  createdAt          DateTime @default(now())
+  active             Boolean     @default(true)
+  source             ShiftSource @default(seak)
+  productivityFactor Float       @default(1)
+  createdAt          DateTime    @default(now())
 
   employee    User         @relation(fields: [employeeId], references: [id])
   workstation Workstation? @relation(fields: [workstationId], references: [id])
@@ -270,6 +294,26 @@ model Shift {
   @@unique([employeeId, date], name: "shift_employee_date")
   @@index([date])
   @@map("shifts")
+}
+
+// Recorded absence (Verfügbarkeit/Abwesenheit, concept §d Screen 4). Zeroes or
+// shortens an employee's capacity over its date range; surfaced as an audit event.
+model Absence {
+  id           String      @id @default(cuid())
+  employeeId   String
+  dateFrom     DateTime    @db.Date
+  dateTo       DateTime    @db.Date
+  kind         AbsenceKind
+  partialUntil String?
+  reason       String?
+  createdBy    String?
+  createdAt    DateTime    @default(now())
+
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([dateFrom])
+  @@map("absences")
 }
 
 model Workstation {
