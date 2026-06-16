@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/auth/dev-employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List employees for the pilot login picker (dev only) */
+        get: operations["DevLoginController_devEmployees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/dev-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint an employee token for the chosen name (dev only) */
+        post: operations["DevLoginController_devLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/stream": {
         parameters: {
             query?: never;
@@ -95,7 +129,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Begin handling a package (assigned → picking, case.started) */
+        /** Begin handling a package (assigned → in_progress, case.started) */
         post: operations["CasesController_startPreparation"];
         delete?: never;
         options?: never;
@@ -112,7 +146,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Complete a package (boxing → completed, case.completed) */
+        /** Complete a package (in_progress → completed, case.completed) */
         post: operations["CasesController_complete"];
         delete?: never;
         options?: never;
@@ -129,7 +163,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Partially complete (boxing → partially_completed) */
+        /** Partially complete (in_progress → partially_completed) */
         post: operations["CasesController_partialComplete"];
         delete?: never;
         options?: never;
@@ -314,6 +348,57 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["TeamleadController_unpark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Zur Planung freigeben: approve a reviewed case (needs_review → ready). */
+        post: operations["TeamleadController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready). */
+        post: operations["TeamleadController_reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/deprioritize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Priorität entfernen: drop the manual teamlead priority (case.deprioritized). */
+        post: operations["TeamleadController_deprioritize"];
         delete?: never;
         options?: never;
         head?: never;
@@ -597,6 +682,7 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DevLoginDto: Record<string, never>;
         RouteStopDto: {
             id: string;
             sequence: number;
@@ -1136,6 +1222,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    DevLoginController_devEmployees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DevLoginController_devLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevLoginDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     LiveController_meStream: {
         parameters: {
             query?: never;
@@ -1538,6 +1662,81 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParkDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParkDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_deprioritize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrioritizeDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
