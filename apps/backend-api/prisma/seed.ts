@@ -349,17 +349,31 @@ async function seedCaseDetails(): Promise<void> {
       },
     });
 
-    // 1-2 positions; larger cases get a second position to exercise multi-pos UI.
-    const positions = [
-      { positionNo: 1, wgr: '4711', supplierArticleNo: 'ART-001', supplierColor: 'schwarz' },
-    ];
-    if (c.totalQuantity >= 24) {
-      positions.push({ positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau' });
-    }
-    for (const p of positions) {
+    // Positions carry a destination: Filiale 1 / Shopbereich 21 / Etage. Most Belege
+    // ship to ONE Etage (like the Arbeitsanweisung example: 5 Positionen, alle EG)
+    // → one Transportbox. A deterministic subset puts a second position on another
+    // Etage to demo the real split (one box per Shopbereich/Shop/Etage) → two boxes.
+    const positionCount = c.totalQuantity >= 24 ? 2 : 1;
+    const splitAcrossEtagen = positionCount === 2 && c.totalQuantity % 2 === 0;
+    const secondQty = Math.floor(c.totalQuantity / positionCount);
+    const posMeta = [
+      {
+        positionNo: 1, wgr: '4711', supplierArticleNo: 'ART-001', supplierColor: 'schwarz',
+        floor: 'EG', qty: c.totalQuantity - secondQty * (positionCount - 1),
+      },
+      {
+        positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau',
+        floor: splitAcrossEtagen ? '1.OG' : 'EG', qty: secondQty,
+      },
+    ].slice(0, positionCount);
+
+    for (const p of posMeta) {
       const position = await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
-        update: { wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor },
+        update: {
+          wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor,
+          floor: p.floor,
+        },
         create: {
           caseId: c.id,
           positionNo: p.positionNo,
@@ -368,13 +382,14 @@ async function seedCaseDetails(): Promise<void> {
           supplierColor: p.supplierColor,
           branchNo: '001',
           shopNo: '21',
+          floor: p.floor,
         },
       });
 
       // Two EAN/size lines per position so the Belegdetail "Positionen" SKU table
-      // (EAN · Größe · Soll · Ist · Status) is populated. Soll splits the case's
-      // quantity across the lines; Ist stays open (null) until confirmed.
-      const skuQuantities = splitQuantity(Math.max(2, Math.round(c.totalQuantity / positions.length)));
+      // (EAN · Größe · Soll · Ist · Status) is populated; Soll splits this position's
+      // quantity across the lines, Ist stays open (null) until confirmed.
+      const skuQuantities = splitQuantity(Math.max(2, p.qty));
       const sizes = ['38', '40'];
       for (const [skuIndex, expectedQuantity] of skuQuantities.entries()) {
         const size = sizes[skuIndex] ?? String(40 + skuIndex * 2);
@@ -387,18 +402,26 @@ async function seedCaseDetails(): Promise<void> {
       }
     }
 
-    // 1-2 boxes whose planned quantities sum to totalQuantity (full-ZST gate).
-    const boxQuantities = splitQuantity(c.totalQuantity);
-    for (const [index, plannedQuantity] of boxQuantities.entries()) {
-      const boxNo = index + 1;
-      await prisma.transportBox.upsert({
-        where: { box_case_no: { caseId: c.id, boxNo } },
-        update: { plannedQuantity, branchNo: '001', shopAreaNo: '21' },
-        create: {
+    // Boxes BY DESTINATION, not by piece count (§ box label = Shopbereich/Shop/Etage):
+    // one Transportbox per distinct Etage across the positions. Rebuilt each run so a
+    // case that no longer splits drops its extra box. Quantities sum to totalQuantity
+    // (the full-ZST gate). Single-destination Beleg → exactly one box.
+    await prisma.transportBox.deleteMany({ where: { caseId: c.id } });
+    const qtyByFloor = new Map<string, number>();
+    for (const p of posMeta) {
+      qtyByFloor.set(p.floor, (qtyByFloor.get(p.floor) ?? 0) + p.qty);
+    }
+    let boxNo = 0;
+    for (const [floor, plannedQuantity] of qtyByFloor) {
+      boxNo += 1;
+      await prisma.transportBox.create({
+        data: {
           caseId: c.id,
           boxNo,
           branchNo: '001',
           shopAreaNo: '21',
+          shopNo: '21',
+          floor,
           plannedQuantity,
         },
       });
