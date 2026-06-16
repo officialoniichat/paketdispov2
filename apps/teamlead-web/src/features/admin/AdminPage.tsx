@@ -10,15 +10,18 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import InputAdornment from '@mui/material/InputAdornment';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { RuleConfig } from '@paket/domain-types';
 import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
@@ -305,6 +308,21 @@ function Grid({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
+/** Hover-tooltip info marker (ⓘ) explaining a non-obvious setting. */
+function InfoHint({ text }: { text: string }): JSX.Element {
+  return (
+    <Tooltip title={text} arrow enterTouchDelay={0} leaveTouchDelay={4000}>
+      <Box
+        component="span"
+        aria-label="Erklärung"
+        sx={{ cursor: 'help', color: 'text.secondary', fontSize: 16, lineHeight: 1, userSelect: 'none' }}
+      >
+        ⓘ
+      </Box>
+    </Tooltip>
+  );
+}
+
 function Num({
   label,
   value,
@@ -314,7 +332,7 @@ function Num({
   label: string;
   value: number;
   onChange: (v: number) => void;
-  /** Short plain-language explanation shown under the field. */
+  /** Hover-tooltip explanation shown via an ⓘ marker in the field. */
   hint?: string;
 }): JSX.Element {
   return (
@@ -325,7 +343,17 @@ function Num({
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       inputProps={{ step: 'any' }}
-      helperText={hint}
+      InputProps={
+        hint
+          ? {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <InfoHint text={hint} />
+                </InputAdornment>
+              ),
+            }
+          : undefined
+      }
     />
   );
 }
@@ -339,20 +367,18 @@ function Toggle({
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
-  /** Short plain-language explanation shown under the switch. */
+  /** Hover-tooltip explanation shown via an ⓘ marker next to the label. */
   hint?: string;
 }): JSX.Element {
   return (
-    <Stack spacing={0}>
-      <FormControlLabel
-        control={<Switch checked={checked} onChange={(e) => onChange(e.target.checked)} />}
-        label={label}
-      />
-      {hint && (
-        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5, mt: -0.5 }}>
-          {hint}
-        </Typography>
-      )}
-    </Stack>
+    <FormControlLabel
+      control={<Switch checked={checked} onChange={(e) => onChange(e.target.checked)} />}
+      label={
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+          {label}
+          {hint && <InfoHint text={hint} />}
+        </Box>
+      }
+    />
   );
 }
