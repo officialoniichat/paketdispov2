@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mitarbeiter-App — UX-Mockups (Rework)</title>
+<style>
+  :root{
+    --brand:#0a3d62; --brand-light:#3c6e8f; --accent:#e58e26;
+    --surface:#f5f7fa; --raised:#ffffff; --text:#1a2430; --text2:#516170;
+    --border:#d6dde5; --danger:#c62828; --warning:#b26a00; --success:#2e7d32; --info:#1565c0;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e7ecf1;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45;-webkit-font-smoothing:antialiased}
+  header.page{background:linear-gradient(135deg,var(--brand),#0c2f4a);color:#fff;padding:40px 32px 34px}
+  header.page h1{margin:0 0 6px;font-size:30px;letter-spacing:-.3px}
+  header.page p{margin:2px 0;color:#cddcea;max-width:880px}
+  header.page .meta{margin-top:14px;font-size:13px;color:#9fbdd6}
+  .wrap{max-width:1280px;margin:0 auto;padding:32px}
+
+  /* principles */
+  .principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:0 0 10px}
+  .principle{background:var(--raised);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+  .principle b{color:var(--brand);font-size:14px}
+  .principle p{margin:6px 0 0;font-size:13px;color:var(--text2)}
+
+  /* flow strip */
+  .flowmap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin:18px 0 8px}
+  .flowmap .ph{display:flex;align-items:center;gap:8px}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600}
+  .pill.a{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .pill.b{background:#fff;color:var(--brand);border-color:var(--brand)}
+  .arrow{color:var(--text2);font-weight:700}
+
+  h2.sec{font-size:20px;margin:40px 0 4px;padding-bottom:8px;border-bottom:3px solid var(--accent);display:inline-block}
+  .sec-intro{color:var(--text2);margin:8px 0 20px;max-width:900px}
+
+  /* screen grid */
+  .screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:26px;align-items:start}
+  .screen{display:flex;flex-direction:column;gap:10px}
+  .screen > .cap{font-size:13px;color:var(--text2)}
+  .screen > .cap b{color:var(--text);display:block;font-size:14px;margin-bottom:2px}
+
+  /* phone frame */
+  .phone{background:#0e1b27;border-radius:30px;padding:10px;box-shadow:0 12px 30px rgba(10,30,50,.22)}
+  .scr{background:var(--surface);border-radius:22px;overflow:hidden;height:600px;display:flex;flex-direction:column;position:relative}
+  .statusbar{background:var(--brand);color:#fff;font-size:11px;padding:7px 14px;display:flex;justify-content:space-between;align-items:center}
+  .statusbar .b{font-weight:700;letter-spacing:.3px}
+  .appbar{padding:11px 16px;border-bottom:1px solid var(--border);background:#fff}
+  .over{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text2);font-weight:700}
+  .h1{font-size:19px;font-weight:800;margin:2px 0 0;letter-spacing:-.2px}
+  .sub{font-size:12.5px;color:var(--text2);margin-top:2px}
+  .body{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+  .body::-webkit-scrollbar{width:0}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px}
+  .card.flat{background:var(--surface)}
+  .row{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+  .row + .row{margin-top:5px}
+  .k{color:var(--text2)} .v{font-weight:700;text-align:right}
+  .lead{font-size:13.5px}
+  .muted{color:var(--text2);font-size:12.5px}
+  .big{font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .c-ready{background:var(--success);color:#fff}
+  .c-prog{background:var(--brand-light);color:#fff}
+  .c-open{background:#e8edf2;color:var(--text)}
+  .c-prio{background:var(--accent);color:#3a2400}
+  .c-warn{background:var(--warning);color:#fff}
+  .c-dang{background:var(--danger);color:#fff}
+  .c-info{background:var(--info);color:#fff}
+  .chips{display:flex;gap:5px;flex-wrap:wrap}
+
+  /* list item with leading icon box */
+  .li{display:flex;gap:11px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 12px}
+  .li.done{background:#f1f8f2;border-color:#bfe0c4}
+  .li.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(229,142,38,.25)}
+  .ic{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--surface);border:1px solid var(--border)}
+  .ic.hang{background:#eef4fb;border-color:#c7ddf2}
+  .ic.pal{background:#fff4e6;border-color:#f3d6ad}
+  .ic.reg{background:#eef7ef;border-color:#c7e6cb}
+  .li .t{flex:1;min-width:0}
+  .li .t .l1{font-size:14px;font-weight:700}
+  .li .t .l2{font-size:12px;color:var(--text2)}
+  .li .end{font-size:18px}
+  .tick{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+  .tick.on{background:var(--success);color:#fff}
+  .tick.off{border:2px dashed var(--border);color:var(--border)}
+
+  /* scan field */
+  .scan{border:2px dashed var(--brand-light);border-radius:12px;padding:14px;text-align:center;background:#f0f6fb;color:var(--brand)}
+  .scan .big2{font-size:15px;font-weight:800}
+  .scan .mono{font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:800;letter-spacing:1px}
+
+  .alert{border-radius:10px;padding:10px 12px;font-size:12.5px;display:flex;gap:8px;align-items:flex-start}
+  .a-info{background:#e7f0fb;color:#0d3c70} .a-warn{background:#fbf0dd;color:#6b4500}
+  .a-ok{background:#e9f6ea;color:#1f5a23} .a-dang{background:#fbe6e6;color:#7a1c1c}
+
+  /* checklist line */
+  .ck{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:3px 0}
+  .box{width:21px;height:21px;border-radius:6px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
+  .box.on{background:var(--success);border-color:var(--success)}
+  .box.lock{background:var(--surface);border-style:dashed}
+  .ck.dis{color:var(--text2)}
+
+  /* bottom action bar */
+  .actions{padding:12px 16px;background:#fff;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .btn{border:none;border-radius:12px;padding:15px;font-size:15.5px;font-weight:800;text-align:center;cursor:default}
+  .btn.primary{background:var(--accent);color:#3a2400}
+  .btn.primary.brand{background:var(--brand);color:#fff}
+  .btn.dis{background:#e3e8ee;color:#9aa7b4}
+  .btn.ghost{background:#fff;border:2px solid var(--border);color:var(--text)}
+  .btn.danger{background:#fff;border:2px solid var(--danger);color:var(--danger)}
+  .btn.sm{padding:11px;font-size:13.5px}
+  .hint{font-size:11px;color:var(--text2);text-align:center}
+
+  /* annotation note */
+  .note{background:#fffdf5;border:1px solid #f0e2bf;border-left:4px solid var(--accent);border-radius:8px;padding:11px 13px;font-size:12.5px;color:#5a4a23}
+  .note b{color:#7a5a10}
+  .note.fix{background:#f4faf5;border-color:#cfe7d3;border-left-color:var(--success);color:#2c5230}
+  .note.fix b{color:#1f5a23}
+
+  /* progress bar */
+  .pbar{height:9px;background:var(--surface);border-radius:99px;overflow:hidden;border:1px solid var(--border)}
+  .pbar > i{display:block;height:100%;background:var(--success)}
+
+  .seg{display:flex;gap:4px}
+  .seg > i{flex:1;height:6px;border-radius:99px;background:var(--border)}
+  .seg > i.on{background:var(--accent)}
+
+  footer{padding:30px 32px;color:#7c8a98;font-size:12px;text-align:center}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--text2);margin:14px 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:14px;height:14px;border-radius:4px;display:inline-block}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Mitarbeiter-App — UX-Mockups (Rework)</h1>
+  <p>Vollständige Neugestaltung des Auszeichnungs-Flows auf Basis des IST-Prozesses L&amp;T (Auftrag → Wareneingang → Buchung → Auszeichnung → Verladung). Jede Aktion ist abgebildet, mobil-first, große Touch-Ziele, eine Entscheidung pro Screen.</p>
+  <div class="meta">Konzept · keine Implementierung · L&amp;T-Theme (#0a3d62 / #e58e26) · 600px Phone-Frames</div>
+</header>
+
+<div class="wrap">
+
+  <!-- KEY PRINCIPLES -->
+  <div class="principles">
+    <div class="principle"><b>Frei wählbar — alle zu erledigen</b><p>Der Mitarbeitende bekommt seine Belege <b>einzeln</b> zugeteilt, nicht ein starres „Paket". Er muss alle machen, wählt aber selbst, welchen als nächstes (antippen).</p></div>
+    <div class="principle"><b>Prio = Sortierung, kein Zwang</b><p>Die Liste ist nach Priorität vorsortiert (NOS/Extra oben) = Empfehlung der Reihenfolge. Jeder Beleg ist jederzeit antippbar.</p></div>
+    <div class="principle"><b>Scan validiert wirklich</b><p>Gescannter Lagerplatz wird gegen den erwarteten geprüft. Treffer = grün, Fehler = klare Warnung. Kein „blind weiter".</p></div>
+    <div class="principle"><b>Eine Aktion pro Screen</b><p>Ein großer „Next Best Action"-Button. Problem melden ist immer erreichbar.</p></div>
+    <div class="principle"><b>Guardrails statt Formulare</b><p>Etikett vor Auspacken · Mindest-Stückzahl auch bei „Prüfung = Nein" · offenes Problem blockiert ZST.</p></div>
+    <div class="principle"><b>Warenart verzweigt</b><p>Regal / Palette / Hängeware haben unterschiedliche Abschluss-Wege (Hängeware ohne Box/Plombe).</p></div>
+  </div>
+
+  <!-- FLOW MAP -->
+  <div class="flowmap">
+    <div class="ph"><span class="pill a">0 · Tagesstart</span></div><span class="arrow">→</span>
+    <div class="ph"><span class="pill b">1 · Belegliste — Prio-sortiert, frei wählbar</span></div><span class="arrow">→ Beleg tippen →</span>
+    <div class="ph"><span class="pill b">2 · Beleg bearbeiten</span>
+      <span class="pill">Holen + Scan</span><span class="arrow">›</span>
+      <span class="pill">Vorbereitung</span><span class="arrow">›</span>
+      <span class="pill">Positionen</span><span class="arrow">›</span>
+      <span class="pill">Boxen</span><span class="arrow">›</span>
+      <span class="pill">ZST</span></div>
+    <span class="arrow">↩ zurück zur Liste · nächsten wählen</span>
+  </div>
+  <div class="legend">
+    <span><i class="sw" style="background:#e58e26"></i> Primäraktion</span>
+    <span><i class="sw" style="background:#0a3d62"></i> Marken / Kopf</span>
+    <span><i class="sw" style="background:#2e7d32"></i> erledigt / OK</span>
+    <span><i class="sw" style="background:#b26a00"></i> Achtung</span>
+    <span><i class="sw" style="background:#c62828"></i> Problem / blockiert</span>
+    <span>📦 Regal · 🟧 Palette · 👕 Hängeware</span>
+  </div>
+
+  <!-- ===================== PHASE 0 ===================== -->
+  <h2 class="sec">Phase 0 — Tagesstart</h2>
+  <p class="sec-intro">Beim Login sieht der Mitarbeitende, <b>wie viele Belege</b> ihm heute zugeteilt sind (nach Prio sortiert), bis wann sie raus müssen (Verladetag) und welche eilig sind (Abschnitt). Es ist <b>kein starres „Paket"</b> — nur sein Arbeitsvorrat, den er frei abarbeitet.</p>
+  <div class="screens">
+
+    <!-- 0: Tagesstart -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">L&amp;T Auszeichnung</span><span>09:02 · 🔋</span></div>
+        <div class="appbar"><div class="over">Tagesstart</div><div class="h1">Guten Morgen, Lena</div><div class="sub">Arbeitsplatz 3 · Frühschicht 09:00–17:00</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="over">Deine Belege heute</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
+              <span class="big">8</span><span class="muted">Belege · alle zu erledigen · ca. 210 Min</span>
+            </div>
+            <div class="seg" style="margin-top:12px"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="muted" style="margin-top:6px">0 von 8 fertig · Reihenfolge wählst du</div>
+          </div>
+          <div class="card flat">
+            <div class="row"><span class="k">Verladetag</span><span class="v">heute · Abfahrt 17:00</span></div>
+            <div class="row"><span class="k">Eilige Belege</span><span class="v"><span class="chip c-prio">3× NOS/Extra</span></span></div>
+            <div class="row"><span class="k">Warenarten</span><span class="v">5📦 · 1🟧 · 2👕</span></div>
+          </div>
+          <div class="alert a-info">⏱️ <div><b>3 Belege müssen heute raus</b> (NOS &amp; Extrabestellung). Sie stehen in der Liste ganz oben — empfohlen zuerst.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Zu meinen Belegen</div>
+          <div class="hint">du wählst, was zuerst</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>0 · Tagesstart</b>Arbeitsvorrat + Deadline + Eile sichtbar.</div>
+      <div class="note fix"><b>Fix:</b> kein hardcodiertes „Paket 1 von 1" mehr. Es sind <b>einzelne, prio-sortierte Belege</b>, alle zu erledigen — die Reihenfolge entscheidet der Mitarbeitende. Verladetag/Abschnitt sind jetzt sichtbar.</div>
+    </div>
+
+  </div>
+
+  <!-- ===================== PHASE 1 ===================== -->
+  <h2 class="sec">Phase 1 — Belegliste (Arbeitsvorrat, frei wählbar)</h2>
+  <p class="sec-intro">Das ist der zentrale Screen. Der Mitarbeitende bekommt <b>einzelne Belege</b> zugeteilt, nach Prio sortiert. Er muss alle erledigen, <b>tippt aber selbst</b> den nächsten an — der oberste offene ist als „empfohlen" markiert, jeder ist frei wählbar. Status je Beleg zeigt, was offen / in Arbeit / fertig / Problem ist.</p>
+  <div class="screens">
+
+    <!-- 1a selectable prio beleg list -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">Meine Belege</span><span>09:05</span></div>
+        <div class="appbar"><div class="over">8 Belege · nach Prio · du wählst</div><div class="h1">2 fertig · 6 offen</div>
+          <div class="pbar" style="margin-top:8px"><i style="width:25%"></i></div></div>
+        <div class="body">
+          <div class="li active"><div class="ic reg">📦</div><div class="t"><div class="l1">WE 4475 <span class="chip c-prio">NOS</span></div><div class="l2">Regal 7 · 24 Teile · empfohlen</div></div><span class="chip c-open">Offen</span></div>
+          <div class="li"><div class="ic reg">📦</div><div class="t"><div class="l1">WE 4477 <span class="chip c-prio">Extra</span></div><div class="l2">Regal 22 · 12 Teile</div></div><span class="chip c-open">Offen</span></div>
+          <div class="li"><div class="ic pal">🟧</div><div class="t"><div class="l1">WE 4480</div><div class="l2">Palette A3 · 120 Teile · 3 Shops</div></div><span class="chip c-prog">In Arbeit</span></div>
+          <div class="li"><div class="ic hang">👕</div><div class="t"><div class="l1">WE 4492</div><div class="l2">Hängebahn 2/118 · 30 Teile</div></div><span class="chip c-open">Offen</span></div>
+          <div class="li"><div class="ic reg">📦</div><div class="t"><div class="l1">WE 4490</div><div class="l2">Regal 31 · 9 Teile</div></div><span class="chip c-open">Offen</span></div>
+          <div class="li done"><div class="ic reg">📦</div><div class="t"><div class="l1">WE 4471</div><div class="l2">ZST gesetzt · 18 Teile</div></div><span class="chip c-ready">Fertig</span></div>
+          <div class="li done"><div class="ic hang">👕</div><div class="t"><div class="l1">WE 4468</div><div class="l2">ZST gesetzt · 42 Teile</div></div><span class="chip c-ready">Fertig</span></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Empfohlenen starten · WE 4475</div>
+          <div class="hint">oder einen beliebigen Beleg antippen</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>1a · Belegliste (Hub)</b>Prio-sortiert, jeder Beleg antippbar, Status sichtbar.</div>
+      <div class="note fix"><b>Kern-Fix:</b> kein „alles in ein Paket geschoben" und keine erzwungene Reihenfolge. Liste der zugeteilten Belege, prio-sortiert — der Mitarbeitende tippt frei, was er als nächstes macht. Alle müssen erledigt werden; das „wann" entscheidet er.</div>
+    </div>
+
+    <!-- 1b tap -> holen + scan -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4475</span><span>09:06</span></div>
+        <div class="appbar"><div class="over">Beleg gewählt · NOS</div><div class="h1">Beleg holen</div><div class="sub">Lagerplatz abfahren &amp; scannen</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="row"><span class="k">Lagerplatz</span><span class="v">Regal 7 (REG-07)</span></div>
+            <div class="row"><span class="k">Beleg</span><span class="v">WE 4475</span></div>
+            <div class="row"><span class="k">Teile / Pakete</span><span class="v">24 · 2 Kartons</span></div>
+          </div>
+          <div class="scan">
+            <div class="big2">📷 Lagerplatz scannen</div>
+            <div class="muted" style="margin-top:3px">am Regal angekommen? Code scannen</div>
+          </div>
+          <div class="alert a-info">🛒 <div>Tipp: Du kannst auf der Liste auch mehrere Belege nacheinander holen — die App merkt sich jeden Stand.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Scannen</div>
+          <div class="btn danger sm">Paket nicht da → Teamlead</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>1b · Beleg holen</b>Gewählter Beleg → Lagerplatz + Scan.</div>
+      <div class="note"><b>Frei, nicht erzwungen:</b> Ein Beleg = ein Lagerplatz. Wer mehrere mitnehmen will, holt sie nacheinander aus der Liste — kein vorgeschriebener „Milk-Run".</div>
+    </div>
+
+    <!-- 1b2 scan match -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4475</span><span>09:07</span></div>
+        <div class="appbar"><div class="over">Scan-Treffer</div><div class="h1">Regal 7 · WE 4475</div></div>
+        <div class="body">
+          <div class="alert a-ok">✅ <div><b>Richtiger Lagerplatz.</b> Gescannt: <b>REG-07</b></div></div>
+          <div class="card">
+            <div class="row"><span class="k">Beleg</span><span class="v">WE 4475</span></div>
+            <div class="row"><span class="k">Abschnitt</span><span class="v"><span class="chip c-prio">NOS</span></span></div>
+            <div class="row"><span class="k">Teile</span><span class="v">24</span></div>
+            <div class="row"><span class="k">Pakete</span><span class="v">2 Kartons</span></div>
+          </div>
+          <div class="alert a-info">📦 <div>Beide Kartons mitnehmen, dann weiter zur Vorbereitung.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Weiter zur Vorbereitung</div>
+          <div class="btn ghost sm">Zurück zur Liste</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>1b· Treffer-Bestätigung</b>Scan stimmt mit erwartetem Platz überein.</div>
+      <div class="note fix"><b>Fix gegenüber heute:</b> Der heutige Screen zeigt den erwarteten Code im Klartext und bucht per „Paket gefunden" <i>egal was gescannt wurde</i>. Hier wird wirklich verglichen.</div>
+    </div>
+
+    <!-- 1c scan mismatch + not found -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">Sammeln</span><span>09:07</span></div>
+        <div class="appbar"><div class="over">Scan-Fehler</div><div class="h1">Falscher Lagerplatz</div></div>
+        <div class="body">
+          <div class="alert a-dang">⚠️ <div><b>Das passt nicht zum Beleg.</b><br>Gescannt: <b>REG-09</b> · erwartet: <b>REG-07</b></div></div>
+          <div class="card">
+            <div class="lead">Mögliche Gründe:</div>
+            <div class="ck">• Falsches Paket gegriffen</div>
+            <div class="ck">• Paket wurde umgelagert</div>
+          </div>
+          <div class="card flat">
+            <div class="over">Was tun?</div>
+            <div class="muted" style="margin-top:4px">Nochmal scannen oder „Paket nicht da" — der Beleg bleibt offen und wandert ans Ende der Runde.</div>
+          </div>
+          <div class="alert a-warn">🔎 <div>Steht das Paket sichtbar an <b>REG-09</b>? Dann gehört es zu einem anderen Beleg — liegen lassen.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Nochmal scannen</div>
+          <div class="btn danger sm">Paket nicht da → Teamlead</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>1c · Scan-Fehler / nicht da</b>Klare Korrektur statt stillem Weiterklicken.</div>
+      <div class="note"><b>Sinnvoll, nicht überladen:</b> kein Sperrbildschirm — Mitarbeitender bleibt handlungsfähig (nochmal scannen oder als „nicht da" melden).</div>
+    </div>
+
+  </div>
+
+  <!-- ===================== PHASE 2 ===================== -->
+  <h2 class="sec">Phase 2 — Beleg bearbeiten</h2>
+  <p class="sec-intro">Hat der Mitarbeitende einen Beleg gewählt, arbeitet er ihn von oben nach unten ab. Nach dem ZST landet er wieder in der Belegliste (Phase 1) und wählt den nächsten — der empfohlene oberste offene ist hervorgehoben, aber frei wählbar. Ein angefangener Beleg behält seinen Stand (z. B. „Position 2 von 3").</p>
+  <div class="screens">
+
+    <!-- 2b vorbereitung -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4475</span><span>09:21</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4475 · NOS</div><div class="h1">Vorbereitung</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="over">Arbeitsanweisung</div>
+            <div class="row" style="margin-top:6px"><span class="k">Preisetiketten</span><span class="v">24 Stück · Station B</span></div>
+            <div class="row"><span class="k">Sortieren n. Art/Farbe/Größe</span><span class="v">JA</span></div>
+            <div class="row"><span class="k">Prüfung Wareneingang</span><span class="v">Stichprobe</span></div>
+            <div class="row"><span class="k">Boxzettel</span><span class="v">JA</span></div>
+            <div class="row"><span class="k">Sichern</span><span class="v">Nicht sichern</span></div>
+          </div>
+          <div class="alert a-warn">🏷️ <div><b>Erst Etiketten drucken, dann Karton öffnen.</b></div></div>
+          <div class="card">
+            <div class="ck"><span class="box on">✓</span> Etiketten gedruckt (24)</div>
+            <div class="ck"><span class="box">&nbsp;</span> Karton geöffnet</div>
+            <div class="ck dis"><span class="box lock">&nbsp;</span> Füllmaterial entfernt</div>
+            <div class="ck dis"><span class="box lock">&nbsp;</span> Nach Artikel/Farbe/Größe sortiert</div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn primary brand">Karton geöffnet ✓</div>
+          <div class="btn danger sm">Problem melden</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2b · Vorbereitung</b>Etikett-vor-Auspacken erzwungen, echte Häkchen.</div>
+      <div class="note fix"><b>Fix:</b> Heute sind die Häkchen Deko — alle werden grün, sobald „Etiketten gedruckt" gesetzt ist. Hier wird jeder Schritt einzeln bestätigt; Etikettenzahl + Druckstation sind sichtbar.</div>
+    </div>
+
+    <!-- 2c position -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4475</span><span>09:25</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4475 · Position 2 von 3</div><div class="h1">Artikel 123-Peter</div>
+          <div class="seg" style="margin-top:8px"><i class="on"></i><i class="on"></i><i></i></div></div>
+        <div class="body">
+          <div class="card">
+            <div class="row"><span class="k">Farbe</span><span class="v">123-Blau</span></div>
+            <div class="row"><span class="k">WGR</span><span class="v">111130 H-T-Shirt</span></div>
+            <div class="row"><span class="k">Shop / Etage</span><span class="v">210 / EG</span></div>
+          </div>
+          <div class="card flat">
+            <div class="over">Diese Position</div>
+            <div class="ck" style="margin-top:4px">✓ Preisetikett anbringen</div>
+            <div class="ck">✓ Nicht sichern</div>
+            <div class="ck">◐ Stückzahl prüfen (offen)</div>
+          </div>
+          <div class="card">
+            <div class="over">Größen</div>
+            <div class="row" style="margin-top:6px"><span class="k">EAN …041 · Gr. S</span><span class="v">6</span></div>
+            <div class="row"><span class="k">EAN …058 · Gr. M</span><span class="v">10</span></div>
+            <div class="row"><span class="k">EAN …072 · Gr. L</span><span class="v">8</span></div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Stückzahl prüfen (24)</div>
+          <div class="hint">danach: „Position korrekt"</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2c · Position</b>Eine Position zur Zeit, Stückzahl-Gate.</div>
+      <div class="note"><b>Beibehalten (gut):</b> Progressive Disclosure + Mindest-Stückzahl auch bei „Prüfung = Nein". Fortschritts-Segmente zeigen Position X von N.</div>
+    </div>
+
+    <!-- 2d boxen sortieren (NEW) -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4480</span><span>10:10</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4480 · 3 Shops</div><div class="h1">Ware in Boxen sortieren</div><div class="sub">Welcher Artikel kommt in welche Box?</div></div>
+        <div class="body">
+          <div class="alert a-info">🧩 <div>Vorschlag nach Shopbereich. Du kannst Positionen verschieben.</div></div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>Box 1</b><span class="chip c-info">Shopbereich Damen · Shop 210</span></div>
+            <div class="row" style="margin-top:8px"><span class="k">123-Peter Blau</span><span class="v">24</span></div>
+            <div class="row"><span class="k">140-Anna Rot</span><span class="v">30</span></div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>Box 2</b><span class="chip c-info">Shopbereich Herren · Shop 320</span></div>
+            <div class="row" style="margin-top:8px"><span class="k">201-Tom Schwarz</span><span class="v">66</span></div>
+          </div>
+          <div class="card flat">
+            <div class="muted">Nicht zugeordnet: <b>0</b> — alles in einer Box? Tipp „Zusammenlegen".</div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn primary brand">Sortierung übernehmen → 2 Boxen</div>
+          <div class="btn ghost sm">Position verschieben</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2d · Boxen sortieren (NEU)</b>Position→Box-Zuordnung, der eigentliche Pack-Schritt.</div>
+      <div class="note fix"><b>Fehlte komplett:</b> Heute sind Boxen fix vorgegeben, die Zuordnung (IST Punkt 5: nach Artikel/Farbe/Größe in Transportkisten) findet in der App gar nicht statt. Bei Mehr-Shop-Belegen ist genau das die Arbeit.</div>
+    </div>
+
+    <!-- 2e box abschließen -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4480</span><span>10:18</span></div>
+        <div class="appbar"><div class="over">Box 1 von 2</div><div class="h1">Box abschließen</div></div>
+        <div class="body">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>Box 1</b>
+              <div class="chips"><span class="chip c-ready">Zettel</span><span class="chip c-open">Plombe</span><span class="chip c-open">Band</span></div>
+            </div>
+            <div class="row" style="margin-top:8px"><span class="k">Shopbereich</span><span class="v">Damen</span></div>
+            <div class="row"><span class="k">Shop / Etage</span><span class="v">210 / EG</span></div>
+            <div class="row"><span class="k">Warenart</span><span class="v"><span class="chip c-prio">NOS</span></span></div>
+            <div class="row"><span class="k">Menge</span><span class="v">54</span></div>
+          </div>
+          <div class="alert a-ok">🏷️ <div>Boxzettel gedruckt — vorne an die Box stecken.</div></div>
+          <div class="card flat"><div class="muted">Nächster Schritt: Box verplomben, dann aufs Förderband.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Box 1 verplomben</div>
+          <div class="btn danger sm">Problem melden</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2e · Box abschließen (Regal/Palette)</b>Zettel → Plombe → Förderband, Box für Box.</div>
+      <div class="note"><b>Beibehalten:</b> Boxzettel-Inhalt = IST-Schild (Shopbereich, Shop, Etage, Warenart). Drei Status-Chips zeigen den Box-Fortschritt.</div>
+    </div>
+
+    <!-- 2e-hang variant -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4492</span><span>10:40</span></div>
+        <div class="appbar"><div class="over">Hängeware · kein Karton</div><div class="h1">Hängeware abschließen</div></div>
+        <div class="body">
+          <div class="alert a-info">👕 <div><b>Hängeware:</b> keine Box, keine Plombe. Auf den Hängewagen für die Filiale.</div></div>
+          <div class="card">
+            <div class="row"><span class="k">Teile</span><span class="v">30</span></div>
+            <div class="row"><span class="k">Shop / Etage</span><span class="v">210 / 1. OG</span></div>
+            <div class="row"><span class="k">Hängeschild</span><span class="v">gedruckt</span></div>
+          </div>
+          <div class="card">
+            <div class="ck"><span class="box on">✓</span> Etiketten angebracht</div>
+            <div class="ck"><span class="box on">✓</span> Hängeschild an die Stange</div>
+            <div class="ck"><span class="box">&nbsp;</span> Auf Hängewagen Zone Filiale</div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Auf Hängewagen ✓ → Abschluss</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2e· Variante Hängeware</b>Eigener Weg ohne Box/Plombe/Förderband.</div>
+      <div class="note fix"><b>Fix:</b> Heute presst ein linearer Flow Hängeware in „Box → verplomben → Förderband". Falsch. Warenart verzweigt den Abschluss.</div>
+    </div>
+
+    <!-- 2f abschluss / ZST -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4475</span><span>09:40</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4475</div><div class="h1">Beleg abschließen</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="row"><span class="k">Fertige Menge</span><span class="v">24 / 24</span></div>
+            <div class="row"><span class="k">Positionen geprüft</span><span class="v">3 / 3</span></div>
+            <div class="row"><span class="k">Boxen verplombt</span><span class="v">1 / 1</span></div>
+            <div class="row"><span class="k">Offene Probleme</span><span class="v" style="color:var(--success)">0</span></div>
+          </div>
+          <div class="alert a-ok">✅ <div>Alles erledigt — bereit für ZST.</div></div>
+          <div class="card flat">
+            <div class="over">Dein Tempo heute</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span class="big" style="font-size:26px">78</span><span class="muted">Teile/Std · Ziel 75 👍</span></div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">ZST setzen &amp; abschließen</div>
+          <div class="btn ghost sm">Teilabschluss (mit Grund)</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2f · Abschluss / ZST</b>Gate + ehrliches Tempo-Feedback.</div>
+      <div class="note fix"><b>Fix:</b> Offene Probleme blockieren jetzt das ZST (heute nur angezeigt). Tempo-Feedback gibt dem Mitarbeitenden den Wert zurück, den die ZST-Kennzahl ohnehin misst.</div>
+    </div>
+
+    <!-- 2f blocked -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">WE 4480</span><span>10:55</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4480</div><div class="h1">Noch nicht abschließbar</div></div>
+        <div class="body">
+          <div class="alert a-dang">⛔ <div><b>1 offenes Problem</b> — erst klären, dann ZST.</div></div>
+          <div class="card">
+            <div class="row"><span class="k">Fertige Menge</span><span class="v">90 / 120</span></div>
+            <div class="row"><span class="k">Positionen geprüft</span><span class="v">2 / 3</span></div>
+            <div class="row"><span class="k">Offene Probleme</span><span class="v" style="color:var(--danger)">1 · Minderlieferung</span></div>
+          </div>
+          <div class="card flat">
+            <div class="over">Status Problem</div>
+            <div class="muted" style="margin-top:4px">An Teamlead gesendet 10:48 · <span class="chip c-warn">Wartet auf TL</span></div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="btn dis">ZST setzen &amp; abschließen</div>
+          <div class="btn ghost sm">Teilabschluss: fertige 90 Teile losschicken</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>2f · blockiert</b>Problem offen → ZST gesperrt, Teilabschluss möglich.</div>
+      <div class="note"><b>IST-treu:</b> Problembeleg geht zum Teamlead zur Korrektur; fertige Ware kann via Teilabschluss schon heute in die Filiale (Rest folgt morgen).</div>
+    </div>
+
+  </div>
+
+  <!-- ===================== CROSS-CUTTING ===================== -->
+  <h2 class="sec">Übergreifend — Problem, Teilabschluss, Tagesende</h2>
+  <p class="sec-intro">Aktionen, die aus jedem Screen erreichbar sind oder den Tag abrunden.</p>
+  <div class="screens">
+
+    <!-- X1 problem melden -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">Problem</span><span>10:48</span></div>
+        <div class="appbar"><div class="over">Immer erreichbar</div><div class="h1">Problem melden</div><div class="sub">Beleg WE 4480 · Position 3</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="over">Ebene</div>
+            <div class="chips" style="margin-top:7px"><span class="chip c-open">Position</span><span class="chip c-prog">SKU/Größe</span><span class="chip c-open">ganze Box</span><span class="chip c-open">ganzer Beleg</span></div>
+          </div>
+          <div class="card">
+            <div class="over">Was ist das Problem?</div>
+            <div class="chips" style="margin-top:7px">
+              <span class="chip c-open">Minderlieferung</span><span class="chip c-open">Mehrlieferung</span>
+              <span class="chip c-open">falscher Artikel</span><span class="chip c-open">falsche Farbe</span>
+              <span class="chip c-open">falsche Größe</span><span class="chip c-open">beschädigt</span><span class="chip c-open">Etikett</span>
+            </div>
+            <div class="muted" style="margin-top:8px">Nichts vorausgewählt — bewusst wählen.</div>
+          </div>
+          <div class="card flat"><div class="over">Foto (optional)</div><div class="muted" style="margin-top:4px">📷 Foto hinzufügen</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary brand">An Teamlead senden</div>
+          <div class="btn ghost sm">Restware weiter bearbeiten</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>X1 · Problem melden</b>Ebene + Typ als große Chips, keine Vorauswahl.</div>
+      <div class="note fix"><b>Fix:</b> Heute sind Ebene=Position &amp; Typ=„falsche Farbe" vorausgewählt → Fehl-Tags. Chips statt Dropdown/Radio = schneller mit Handschuh, ohne Default-Falle. Markiert die Position als „in Klärung".</div>
+    </div>
+
+    <!-- X2 teilabschluss -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">Teilabschluss</span><span>16:30</span></div>
+        <div class="appbar"><div class="over">Beleg WE 4480</div><div class="h1">Teilabschluss</div></div>
+        <div class="body">
+          <div class="alert a-warn">📦 <div><b>90 von 120 Teilen</b> fertig. Diese gehen heute in die Filiale, der Rest morgen.</div></div>
+          <div class="card">
+            <div class="over">Grund (Pflicht)</div>
+            <div class="chips" style="margin-top:7px">
+              <span class="chip c-prog">Problem offen</span><span class="chip c-open">Zeit reicht nicht</span>
+              <span class="chip c-open">Ware fehlt</span><span class="chip c-open">wartet auf TL</span></div>
+            <div class="card flat" style="margin-top:9px"><div class="muted">Kommentar (optional)…</div></div>
+          </div>
+          <div class="alert a-info">🚚 <div>Verladetag heute 17:00 — fertige 90 Teile sind drin.</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Teilabschluss bestätigen</div>
+          <div class="btn ghost sm">Abbrechen</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>X2 · Teilabschluss</b>Grund-Pflicht, Verladetag-Kontext.</div>
+      <div class="note"><b>Beibehalten + verbessert:</b> Grund-Pflicht bleibt (erzeugt Event), aber als schnelle Chips statt freiem Pflichtfeld; zeigt was rausgeht vs. bleibt.</div>
+    </div>
+
+    <!-- X3 all belege done / nachschub -->
+    <div class="screen">
+      <div class="phone"><div class="scr">
+        <div class="statusbar"><span class="b">Belege fertig</span><span>13:05</span></div>
+        <div class="appbar"><div class="over">Alle zugeteilten Belege erledigt</div><div class="h1">Stark, Lena! 🎉</div></div>
+        <div class="body">
+          <div class="card">
+            <div class="over">Heute</div>
+            <div class="row" style="margin-top:6px"><span class="k">Belege fertig</span><span class="v">7 / 8</span></div>
+            <div class="row"><span class="k">Teile</span><span class="v">588</span></div>
+            <div class="row"><span class="k">Schnitt</span><span class="v">77 Teile/Std</span></div>
+            <div class="row"><span class="k">1 Teilabschluss</span><span class="v">WE 4480 (TL)</span></div>
+          </div>
+          <div class="alert a-info">📥 <div>Es liegt neue Ware in der Schütte. Weitere Belege übernehmen?</div></div>
+        </div>
+        <div class="actions">
+          <div class="btn primary">Weitere Belege holen</div>
+          <div class="btn ghost sm">Pause / Tagesende</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>X3 · Alle fertig / Nachschub</b>Kein Dead-End — neue Belege aus der Schütte.</div>
+      <div class="note fix"><b>Fix:</b> Heute endet die App nach dem Bundle in „warte auf Teamlead". Hier: „Weitere Belege holen" zieht den nächsten Engine-Zuschnitt — entspricht dem realen „X Belege aus der Schütte nehmen".</div>
+    </div>
+
+  </div>
+
+  <!-- ===================== ARBEITSANWEISUNG / ERP ===================== -->
+  <h2 class="sec">Anhang — Arbeitsanweisung (ERP-Formular)</h2>
+  <p class="sec-intro">Die <b>Arbeitsanweisung</b> ist im IST-Prozess der Papier-Beleg, der nach Buchung des Lieferscheins vom ERP (ProHandel) erzeugt wird. Sie ist die <b>einzige Quelle</b>, die der Auszeichnerin sagt, was zu tun ist (Etikett? Sichern? Prüfen? Boxzettel?). In der App ersetzt kein Papier mehr — dieselben ERP-Felder steuern direkt die Screens. Die L&amp;T-Punktnummern (Punkt 5/6/8/10) stammen aus dem IST-Text; die übrigen Felder kommen aus der ERP-Erfassung beim Auftrag.</p>
+
+  <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:26px;align-items:start">
+
+    <!-- facsimile paper form -->
+    <div style="background:#fffef9;border:1px solid #e4dcc4;border-radius:10px;padding:0;box-shadow:0 6px 18px rgba(80,70,30,.12);font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#2a2a22;overflow:hidden">
+      <div style="background:#0a3d62;color:#fff;padding:12px 16px;font-family:inherit">
+        <div style="font-weight:800;letter-spacing:.5px">ARBEITSANWEISUNG</div>
+        <div style="font-size:11px;color:#bcd4e8">ProHandel · WE-Beleg 4475 · Buchung 16.06.26</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #d8cfae;padding-bottom:7px">
+          <span><b>Lagerplatz</b> (Kopf)</span><span style="font-weight:800">REG-07</span></div>
+        <div style="display:flex;justify-content:space-between">
+          <span>Abschnitt</span><span style="font-weight:800">4 — NOS &nbsp;⚡</span></div>
+        <div style="display:flex;justify-content:space-between">
+          <span>Verladetag / Catman</span><span>17.06.26</span></div>
+        <div style="display:flex;justify-content:space-between">
+          <span>Belegmenge</span><span>24 Teile · 3 Pos.</span></div>
+        <div style="border-top:2px solid #0a3d62;margin:4px 0 2px"></div>
+
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">P1</span><span style="flex:1">Preisetikett drucken?</span><span style="font-weight:800">JA (24)</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">—</span><span style="flex:1">Etikettentyp (aus WGR)</span><span style="font-weight:800">Hänger</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">P5</span><span style="flex:1">Sortieren n. Artikel/Farbe/Größe?</span><span style="font-weight:800">JA</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">P6</span><span style="flex:1">Prüfung Wareneingang</span><span style="font-weight:800">Stichprobe 10%</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">P8</span><span style="flex:1">Etikett anbringen — wo?</span><span style="font-weight:800">Nacken</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">P10</span><span style="flex:1">Sichern?</span><span style="font-weight:800">NEIN</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">—</span><span style="flex:1">Boxzettel?</span><span style="font-weight:800">JA</span></div>
+        <div style="display:flex;gap:8px"><span style="font-weight:800;color:#b26a00">—</span><span style="flex:1">ZST setzen?</span><span style="font-weight:800">JA</span></div>
+        <div style="border-top:1px dashed #d8cfae;margin:4px 0 0;padding-top:7px;font-size:11px;color:#6b6354">
+          Pos.-Merkmale: Online (Dessin) · Nachhaltigkeit (Funktion) · WGR 111130 · Shop 210/EG</div>
+      </div>
+    </div>
+
+    <!-- mapping table -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead><tr style="background:var(--brand);color:#fff;text-align:left">
+          <th style="padding:9px 11px">ERP-Attribut (ProHandel)</th>
+          <th style="padding:9px 11px">Arbeitsanweisung</th>
+          <th style="padding:9px 11px">Domain-Feld</th>
+          <th style="padding:9px 11px">App-Screen</th></tr></thead>
+        <tbody>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Lagerplatz</td><td style="padding:8px 11px">Kopf</td><td style="padding:8px 11px"><code>case.storageLocation.code</code></td><td style="padding:8px 11px">1a · 1b Scan</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Abschnitt (1–8; NOS=4, Extra=7, NOS-NB=8)</td><td style="padding:8px 11px">Eilkennzeichen</td><td style="padding:8px 11px"><code>section · priorityFlag</code></td><td style="padding:8px 11px">0 · 1a · 2a (NOS-Chip)</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Catmandatum / Lieferdatum</td><td style="padding:8px 11px">Verladetag</td><td style="padding:8px 11px"><code>case.* (Verladetag)</code></td><td style="padding:8px 11px">0 Tagesstart · X2</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Etikettendruck-Kennzeichen</td><td style="padding:8px 11px">P1 Etikett drucken?</td><td style="padding:8px 11px"><code>wi.priceLabelPrintRequired</code></td><td style="padding:8px 11px">2b Vorbereitung</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Etikettentyp (aus WGR abgeleitet)</td><td style="padding:8px 11px">Etikettenart</td><td style="padding:8px 11px"><code>position.labelType</code></td><td style="padding:8px 11px">2b · 2c</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Etikett-Anbringort</td><td style="padding:8px 11px">P8</td><td style="padding:8px 11px"><code>instruction.priceLabelAttachRequired / …Location</code></td><td style="padding:8px 11px">2c Position</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Sicherungs-Kennzeichen</td><td style="padding:8px 11px">P10 Sichern?</td><td style="padding:8px 11px"><code>instruction.securityRequired / …Location</code></td><td style="padding:8px 11px">2b · 2c</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Sortier-Kennzeichen</td><td style="padding:8px 11px">P5 nach Art/Farbe/Größe</td><td style="padding:8px 11px"><code>wi.sortByArticleColorSizeRequired</code></td><td style="padding:8px 11px">2b · 2d Boxen</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Prüf-Modus (+ %)</td><td style="padding:8px 11px">P6 Prüfung WE</td><td style="padding:8px 11px"><code>wi.goodsReceiptCheckMode / …Percentage</code></td><td style="padding:8px 11px">2b · 2c (Qty-Gate)</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">— (Guardrail, immer)</td><td style="padding:8px 11px">Mind. Stückzahl auch bei „Nein"</td><td style="padding:8px 11px"><code>wi.minimumQuantityCheckAlwaysRequired = true</code></td><td style="padding:8px 11px">2c Position</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Boxzettel-Kennzeichen</td><td style="padding:8px 11px">Boxzettel?</td><td style="padding:8px 11px"><code>wi.boxLabelRequired</code></td><td style="padding:8px 11px">2d · 2e</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Onlinekennzeichen (Dessin)</td><td style="padding:8px 11px">Pos.-Merkmal</td><td style="padding:8px 11px"><code>position.onlineRelevant / instruction.onlineHandlingRequired</code></td><td style="padding:8px 11px">2c Position</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Nachhaltigkeit (Funktion)</td><td style="padding:8px 11px">Pos.-Merkmal</td><td style="padding:8px 11px"><code>position.sustainabilityFlag</code></td><td style="padding:8px 11px">2c Position</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">ZST-Kennzeichen</td><td style="padding:8px 11px">ZST setzen?</td><td style="padding:8px 11px"><code>wi.zstRequired</code></td><td style="padding:8px 11px">2f Abschluss</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">WGR (BTE) · Lief.-Art.-Nr · Lief.-Farbe</td><td style="padding:8px 11px">Pos.-Kopf</td><td style="padding:8px 11px"><code>position.wgr / supplierArticleNo / supplierColor</code></td><td style="padding:8px 11px">2c Position</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Shop/Fläche · Filiale · Etage</td><td style="padding:8px 11px">Routing-Ziel</td><td style="padding:8px 11px"><code>position.shopNo / hShopNo / floor</code></td><td style="padding:8px 11px">2c · 2e Boxzettel</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:8px 11px">Größen + Mengen · EK/VK</td><td style="padding:8px 11px">SKU-Zeilen</td><td style="padding:8px 11px"><code>skuLines[].ean / size / expectedQuantity / vkPrice</code></td><td style="padding:8px 11px">2c Größen</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:16px;max-width:none"><b>Lesart:</b> „P5/P6/P8/P10" sind die im IST-Text genannten L&amp;T-Punktnummern der Papier-Arbeitsanweisung. „P1" und die unnummerierten Zeilen sind ERP-Kennzeichen, deren exakte Punktnummer im IST-Text nicht genannt ist — fachlich aber Teil derselben Anweisung. Alle Werte oben sind synthetische Beispieldaten. Quelle der Feldnamen: <code>packages/domain-types/src/cases.ts</code> (<code>workInstructionHeaderSchema</code>, <code>positionInstructionSchema</code>, <code>receiptPositionSchema</code>).</div>
+
+  <!-- SUMMARY TABLE -->
+  <h2 class="sec">Was sich konkret ändert</h2>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead><tr style="background:var(--brand);color:#fff;text-align:left">
+        <th style="padding:11px 14px">Thema</th><th style="padding:11px 14px">Heute</th><th style="padding:11px 14px">Neu</th></tr></thead>
+      <tbody>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Zuteilung</b></td><td style="padding:10px 14px">Alles in ein starres „Paket 1 von 1" geschoben</td><td style="padding:10px 14px">Einzelne Belege als Liste — alle zu erledigen</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Auswahl / Reihenfolge</b></td><td style="padding:10px 14px">Starr vorgegeben, kein eigenes Antippen</td><td style="padding:10px 14px">Prio-sortiert als Empfehlung, jeder Beleg frei wählbar</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Lagerplatz-Scan</b></td><td style="padding:10px 14px">Code im Klartext, „gefunden" bucht blind</td><td style="padding:10px 14px">Scan wird gegen Erwartung validiert</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Beleg-Wechsel</b></td><td style="padding:10px 14px">Landet wieder auf Stopp 1, kein Status</td><td style="padding:10px 14px">Zurück zur Liste, Status je Beleg, freie Wahl des nächsten</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Boxen</b></td><td style="padding:10px 14px">Fix vorgegeben, keine Zuordnung</td><td style="padding:10px 14px">Position→Box sortieren (der eigentliche Pack-Schritt)</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Hängeware</b></td><td style="padding:10px 14px">In Box/Plombe/Förderband gepresst</td><td style="padding:10px 14px">Eigener Abschlussweg ohne Box</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Probleme</b></td><td style="padding:10px 14px">Nur angezeigt, blockieren ZST nicht; Default-Tags</td><td style="padding:10px 14px">Blockieren ZST, markieren „in Klärung", keine Vorauswahl</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Vorbereitung</b></td><td style="padding:10px 14px">Deko-Häkchen (alle grün auf einmal)</td><td style="padding:10px 14px">Echte Einzelschritte, Etikettenzahl + Station</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Kontext</b></td><td style="padding:10px 14px">Verladetag/Abschnitt unsichtbar</td><td style="padding:10px 14px">Deadline, Eile, Tages-Fortschritt sichtbar</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>Tagesende</b></td><td style="padding:10px 14px">Dead-End nach Bundle</td><td style="padding:10px 14px">„Weitere Belege holen" (Schütten-Nachschub)</td></tr>
+        <tr style="border-top:1px solid var(--border)"><td style="padding:10px 14px"><b>ZST</b></td><td style="padding:10px 14px">Reiner Klick, nur Teile-Zahl</td><td style="padding:10px 14px">Tempo-Feedback an den Mitarbeitenden</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+<footer>Mitarbeiter-App UX-Rework · Konzept-Mockups · L&amp;T paketlagerdispo · kein Produktivcode</footer>
+</body>
+</html>

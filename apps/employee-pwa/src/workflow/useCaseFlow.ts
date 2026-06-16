@@ -28,12 +28,14 @@ import { buildSkipEvent, type SkipInput } from './skip.js';
 import {
   checkQuantity as checkQuantityTx,
   completeCase as completeCaseTx,
+  confirmBoxAssignment as confirmBoxAssignmentTx,
   confirmPickup as confirmPickupTx,
   confirmPosition as confirmPositionTx,
   enterComplete,
   markLabelsPrinted as markLabelsPrintedTx,
   markPrepared as markPreparedTx,
   nextBestAction,
+  openCarton as openCartonTx,
   partialComplete as partialCompleteTx,
   printBoxLabel as printBoxLabelTx,
   putBoxOnConveyor as putBoxOnConveyorTx,
@@ -49,9 +51,11 @@ export interface CaseFlow {
   nextAction?: NextAction;
   confirmPickup: (scannedCode?: string) => Promise<void>;
   printLabels: () => Promise<void>;
+  openCarton: () => Promise<void>;
   markPrepared: () => Promise<void>;
   confirmPosition: (positionId: string) => Promise<void>;
   checkQuantity: (positionId: string) => Promise<void>;
+  confirmBoxAssignment: () => Promise<void>;
   printBoxLabel: (boxNo: number) => Promise<void>;
   sealBox: (boxNo: number) => Promise<void>;
   putBoxOnConveyor: (boxNo: number) => Promise<void>;
@@ -144,6 +148,17 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [commit, caseId],
   );
 
+  const openCarton = useCallback(
+    () =>
+      commit(openCartonTx, {
+        eventType: 'case.started',
+        entityType: 'case',
+        entityId: caseId,
+        payload: { step: 'carton_opened' },
+      }),
+    [commit, caseId],
+  );
+
   const markPrepared = useCallback(
     () =>
       commit(markPreparedTx, { eventType: 'case.started', entityType: 'case', entityId: caseId }),
@@ -166,6 +181,17 @@ export function useCaseFlow(caseId: string): CaseFlow {
         eventType: 'sku.quantity_confirmed',
         entityType: 'position',
         entityId: positionId,
+      }),
+    [commit, caseId],
+  );
+
+  const confirmBoxAssignment = useCallback(
+    () =>
+      commit(confirmBoxAssignmentTx, {
+        eventType: 'case.started',
+        entityType: 'case',
+        entityId: caseId,
+        payload: { step: 'box_assignment_confirmed' },
       }),
     [commit, caseId],
   );
@@ -266,9 +292,11 @@ export function useCaseFlow(caseId: string): CaseFlow {
     nextAction: aggregate && progress ? nextBestAction(progress, aggregate) : undefined,
     confirmPickup,
     printLabels,
+    openCarton,
     markPrepared,
     confirmPosition,
     checkQuantity,
+    confirmBoxAssignment,
     printBoxLabel,
     sealBox,
     putBoxOnConveyor,

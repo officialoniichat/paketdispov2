@@ -2,7 +2,6 @@
 import type { CaseStep } from '../db/types.js';
 
 export const TAGESSTART = '/';
-export const PAKET = '/paket';
 
 export type WorkStep = Exclude<CaseStep, 'done'>;
 
@@ -14,7 +13,7 @@ export function problemPath(caseId: string): string {
   return `/case/${caseId}/problem`;
 }
 
-/** Maps a workflow step to its route; 'done' returns to the bundle overview. */
+/** Maps a workflow step to its route; 'done' returns to the Beleg list (home). */
 export function routeForStep(caseId: string, step: CaseStep): string {
-  return step === 'done' ? PAKET : caseStepPath(caseId, step);
+  return step === 'done' ? TAGESSTART : caseStepPath(caseId, step);
 }
