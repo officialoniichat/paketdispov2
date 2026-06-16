@@ -8,9 +8,9 @@ import { idSchema, isoDateSchema } from './primitives.js';
  * it as a singleton JSON document (AppConfig key `rule_config`), and the frontend
  * projects the read/write payload through the same schema.
  *
- * `loadPlan` and `parserTemplates` are read-only lists in the UI (master-data the
- * cockpit displays but does not edit here), kept in the same object so a single
- * GET/PUT round-trips the whole config.
+ * `loadPlan` is a read-only list in the UI (master-data the cockpit displays but
+ * does not edit here), kept in the same object so a single GET/PUT round-trips the
+ * whole config.
  */
 
 /** Priority weighting + thresholds (§8.1). */
@@ -61,16 +61,6 @@ export const loadPlanRowSchema = z.object({
 });
 export type LoadPlanRow = z.infer<typeof loadPlanRowSchema>;
 
-/** One parser template row (read-only in the cockpit). */
-export const parserTemplateRowSchema = z.object({
-  id: idSchema,
-  name: z.string(),
-  requiredFields: z.array(z.string()),
-  detectionThreshold: z.number().min(0).max(1),
-  fallbackToManual: z.boolean(),
-});
-export type ParserTemplateRow = z.infer<typeof parserTemplateRowSchema>;
-
 /** The whole structured rule config persisted under AppConfig `rule_config`. */
 export const ruleConfigSchema = z.object({
   priority: priorityRuleConfigSchema,
@@ -78,7 +68,6 @@ export const ruleConfigSchema = z.object({
   bundle: bundleRuleConfigSchema,
   effort: effortRuleConfigSchema,
   loadPlan: z.array(loadPlanRowSchema),
-  parserTemplates: z.array(parserTemplateRowSchema),
 });
 export type RuleConfig = z.infer<typeof ruleConfigSchema>;
 
@@ -131,22 +120,6 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
       weekday: 'Mi',
       validFrom: '2026-01-01',
       specialDay: false,
-    },
-  ],
-  parserTemplates: [
-    {
-      id: 'pt-1',
-      name: 'WE-Beleg Standard',
-      requiredFields: ['weBelegNo', 'bookingDate', 'positions'],
-      detectionThreshold: 0.8,
-      fallbackToManual: true,
-    },
-    {
-      id: 'pt-2',
-      name: 'Arbeitsanweisung',
-      requiredFields: ['caseId', 'checkMode'],
-      detectionThreshold: 0.75,
-      fallbackToManual: true,
     },
   ],
 };

@@ -93,7 +93,8 @@ function casePriorityFlags(values: readonly string[]): GoodsReceiptCase['priorit
 function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
   return {
     id: summary.id,
-    documentSetId: `ds-${summary.id}`,
+    source: 'prohandel_api',
+    externalRef: `ph-${summary.id}`,
     weBelegNo: summary.weBelegNo,
     bookingDate: summary.bookingDate,
     branchNo: '1',

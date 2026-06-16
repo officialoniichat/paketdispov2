@@ -266,17 +266,9 @@ export class ZstSummaryDto {
   source!: string;
 }
 
-/** A linked original document (Anhang A Document via DocumentSet). */
-export class CaseDocumentDto {
-  @ApiProperty() id!: string;
-  @ApiProperty({ description: 'DocumentKind: delivery_note|goods_receipt|work_instruction|unknown' })
-  kind!: string;
-  @ApiProperty() fileName!: string;
-}
-
 /**
  * §10.4 Belegdetails read model: rich header + work instruction + positions
- * (with SKU lines) + transport boxes + linked documents + audit history.
+ * (with SKU lines) + transport boxes + audit history.
  */
 export class CaseDetailDto {
   @ApiProperty({ type: CaseSummaryDto }) case!: CaseSummaryDto;
@@ -294,7 +286,6 @@ export class CaseDetailDto {
   workInstruction!: WorkInstructionHeaderDto | null;
   @ApiProperty({ type: [PositionDetailDto] }) positions!: PositionDetailDto[];
   @ApiProperty({ type: [TransportBoxTargetDto] }) transportBoxes!: TransportBoxTargetDto[];
-  @ApiProperty({ type: [CaseDocumentDto] }) documents!: CaseDocumentDto[];
   @ApiProperty({ type: [IssueSummaryDto], description: 'Reported problems, newest first' })
   issues!: IssueSummaryDto[];
   @ApiProperty({ type: [ZstSummaryDto], description: 'ZST completion records, oldest first' })

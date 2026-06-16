@@ -110,18 +110,10 @@ export class LoadPlanRowDto {
   @ApiProperty() @IsBoolean() specialDay!: boolean;
 }
 
-export class ParserTemplateRowDto {
-  @ApiProperty() @IsString() id!: string;
-  @ApiProperty() @IsString() name!: string;
-  @ApiProperty({ type: [String] }) @IsArray() @IsString({ each: true }) requiredFields!: string[];
-  @ApiProperty() @IsNumber() detectionThreshold!: number;
-  @ApiProperty() @IsBoolean() fallbackToManual!: boolean;
-}
-
 /**
- * The whole structured config the cockpit GETs/PUTs. `loadPlan` + `parserTemplates`
- * are read-only lists in the UI; they are accepted on PUT so the round-trip stays
- * lossless, but the cockpit never mutates them.
+ * The whole structured config the cockpit GETs/PUTs. `loadPlan` is a read-only
+ * list in the UI; it is accepted on PUT so the round-trip stays lossless, but the
+ * cockpit never mutates it.
  */
 export class RuleConfigDto {
   @ApiProperty({ type: PriorityRuleConfigDto })
@@ -149,10 +141,4 @@ export class RuleConfigDto {
   @ValidateNested({ each: true })
   @Type(() => LoadPlanRowDto)
   loadPlan!: LoadPlanRowDto[];
-
-  @ApiProperty({ type: [ParserTemplateRowDto] })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ParserTemplateRowDto)
-  parserTemplates!: ParserTemplateRowDto[];
 }

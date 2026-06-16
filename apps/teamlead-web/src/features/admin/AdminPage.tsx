@@ -4,8 +4,8 @@
  * (§11.2 – simple Lagerplatzliste, no routing graph in the MVP).
  *
  * The structured RuleConfig is loaded from and saved to the real backend
- * (`/api/admin/rules`) via {@link ../../data/admin}; loadPlan + parserTemplates are
- * read-only lists. Lagerplätze are edited in {@link ./LocationMasterEditor}.
+ * (`/api/admin/rules`) via {@link ../../data/admin}; loadPlan is a read-only list.
+ * Lagerplätze are edited in {@link ./LocationMasterEditor}.
  */
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,6 +28,7 @@ import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
 import { LocationMasterEditor } from './LocationMasterEditor.js';
 import { EmployeeSettings } from './EmployeeSettings.js';
 import { SchichtplanTab } from './SchichtplanTab.js';
+import { IntegrationenTab } from './IntegrationenTab.js';
 
 const TABS = [
   'Priorität',
@@ -35,16 +36,17 @@ const TABS = [
   'Bündel',
   'Aufwand',
   'Verladeplan',
-  'Parser',
   'Lagerplätze',
   'Mitarbeiter',
   'Schichtplan',
+  'Integrationen',
 ];
 
 /** Tab indices that render a self-contained editor instead of the RuleConfig form. */
-const LOCATIONS_TAB = 6;
-const EMPLOYEES_TAB = 7;
-const SCHICHTPLAN_TAB = 8;
+const LOCATIONS_TAB = 5;
+const EMPLOYEES_TAB = 6;
+const SCHICHTPLAN_TAB = 7;
+const INTEGRATIONS_TAB = 8;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -91,7 +93,9 @@ export function AdminPage(): JSX.Element {
         ))}
       </Tabs>
 
-      {tab === SCHICHTPLAN_TAB ? (
+      {tab === INTEGRATIONS_TAB ? (
+        <IntegrationenTab />
+      ) : tab === SCHICHTPLAN_TAB ? (
         <SchichtplanTab />
       ) : tab === EMPLOYEES_TAB ? (
         <EmployeeSettings />
@@ -260,23 +264,7 @@ export function AdminPage(): JSX.Element {
                 </Stack>
               )}
 
-              {tab === 5 && (
-                <Stack spacing={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    Parser: Dokumentmuster, Pflichtfelder, Erkennungsschwellen, Fallback auf manuelle
-                    Prüfung.
-                  </Typography>
-                  {draft.parserTemplates.map((pt) => (
-                    <Typography key={pt.id} variant="body2">
-                      {pt.name} · Pflichtfelder: {pt.requiredFields.join(', ')} · Schwelle{' '}
-                      {pt.detectionThreshold}
-                      {pt.fallbackToManual ? ' · Fallback manuell' : ''}
-                    </Typography>
-                  ))}
-                </Stack>
-              )}
-
-              {tab !== 4 && tab !== 5 && (
+              {tab !== 4 && (
                 <Button
                   variant="contained"
                   sx={{ mt: 2 }}

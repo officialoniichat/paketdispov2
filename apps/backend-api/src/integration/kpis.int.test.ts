@@ -29,13 +29,11 @@ async function seed(): Promise<void> {
   const loc = await prisma.location.create({
     data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
   });
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'kpi-set-1', status: 'parsed' },
-  });
   // One completed case + one still-open case, both booked on DATE.
   const done = await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'kpi-set-1',
       weBelegNo: 'WE-KPI-DONE',
       bookingDate: asDate(DATE),
       branchNo: '1',
@@ -49,7 +47,8 @@ async function seed(): Promise<void> {
   });
   await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'kpi-set-1',
       weBelegNo: 'WE-KPI-OPEN',
       bookingDate: asDate(DATE),
       branchNo: '1',

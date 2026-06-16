@@ -10,7 +10,8 @@ describe('domain-types schemas', () => {
   it('accepts a prio case without a section (Prio != Abschnitt)', () => {
     const parsed = goodsReceiptCaseSchema.parse({
       id: 'case-1',
-      documentSetId: 'ds-1',
+      source: 'prohandel_api',
+      externalRef: 'ph-booking-100',
       weBelegNo: 'WE-100',
       bookingDate: '2026-06-15',
       branchNo: '001',

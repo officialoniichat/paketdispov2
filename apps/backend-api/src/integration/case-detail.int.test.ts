@@ -16,9 +16,8 @@ import { Role, type Principal } from '../auth/rbac.js';
 /**
  * §10.4 GET /api/teamlead/cases/:caseId — the rich Belegdetails read backing the
  * teamlead detail page. Seeds a case with positions (+ SKU lines + instruction
- * flags), a transport box, linked documents, an assignment + a teamlead event,
- * and asserts the detail returns the header, positions, boxes, documents, and
- * history; a missing case 404s.
+ * flags), a transport box, an assignment + a teamlead event, and asserts the
+ * detail returns the header, positions, boxes, and history; a missing case 404s.
  */
 
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -45,31 +44,10 @@ async function seed(): Promise<{ caseId: string }> {
   const loc = await prisma.location.create({
     data: { code: 'R12', displayName: 'Regal 12', kind: 'regal', sequenceIndex: 12 },
   });
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'det-set-1', status: 'parsed' },
-  });
-  await prisma.document.createMany({
-    data: [
-      {
-        documentSetId: docSet.id,
-        kind: 'work_instruction',
-        fileName: 'arbeitsanweisung.pdf',
-        mimeType: 'application/pdf',
-        storageKey: 'det/ai.pdf',
-      },
-      {
-        documentSetId: docSet.id,
-        kind: 'goods_receipt',
-        fileName: 'we-beleg.pdf',
-        mimeType: 'application/pdf',
-        storageKey: 'det/we.pdf',
-      },
-    ],
-  });
-
   const c = await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'det-set-1',
       weBelegNo: 'WE-DET-1',
       deliveryNoteNo: 'LS-9001',
       bookingDate: asDate(DATE),
@@ -175,7 +153,7 @@ afterAll(async () => {
 });
 
 describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
-  it('returns header + positions + boxes + documents + history', async () => {
+  it('returns header + positions + boxes + history', async () => {
     const { caseId } = await seed();
 
     const detail = await readSvc.caseDetail(caseId);
@@ -214,13 +192,6 @@ describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
     expect(detail.transportBoxes).toHaveLength(1);
     expect(detail.transportBoxes[0]?.boxNo).toBe(1);
     expect(detail.transportBoxes[0]?.plannedQuantity).toBe(30);
-
-    // Documents
-    expect(detail.documents).toHaveLength(2);
-    expect(detail.documents.map((d) => d.kind).sort()).toEqual([
-      'goods_receipt',
-      'work_instruction',
-    ]);
 
     // History (newest first) includes the teamlead prioritize
     expect(detail.history.length).toBeGreaterThan(0);

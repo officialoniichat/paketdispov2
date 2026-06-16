@@ -58,7 +58,7 @@ export interface EnrichedCase {
 /** Inputs to a single assignment run for one planning date. */
 export interface EngineInput {
   date: ISODate;
-  /** Ready pool cases (already parsed/validated upstream — EPIC 2). */
+  /** Ready pool cases (validated upstream from ProHandel). */
   cases: GoodsReceiptCase[];
   /** Planned shifts for the day (derived from SEAK/PEP — capacity module). */
   shifts: EmployeeShift[];

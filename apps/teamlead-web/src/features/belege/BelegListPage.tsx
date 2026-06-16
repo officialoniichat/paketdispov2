@@ -3,8 +3,8 @@
  * (`GET /api/teamlead/cases`) in a dense, filterable, virtualizable TanStack Table.
  *
  * The list is segmented by **lifecycle scope** (see
- * docs/concept/beleg-lifecycle-completion-concept.md): Aktiv (Eingang/Pool/In
- * Arbeit) is the default; Abgeschlossen heute and Archiv give completed/terminal
+ * docs/concept/beleg-lifecycle-completion-concept.md): Aktiv (Pool/In Arbeit) is
+ * the default; Abgeschlossen heute and Archiv give completed/terminal
  * Belege a home instead of burying them in one flat status dump. Filtering/sorting
  * stay client-side (pilot scale: one page of 200). Row click opens the Belegdetails.
  */
@@ -41,7 +41,7 @@ import { useCockpitData } from '../../data/store.js';
 type Scope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'alle';
 
 const SCOPE_PHASES: Record<Scope, CasePhase[] | null> = {
-  aktiv: ['eingang', 'pool', 'arbeit'],
+  aktiv: ['pool', 'arbeit'],
   abgeschlossen: ['abgeschlossen'],
   archiv: ['erledigt'],
   alle: null, // no phase filter

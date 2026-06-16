@@ -39,12 +39,10 @@ async function seed(): Promise<void> {
     data: { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18 },
   });
 
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'erp_export', importKey: 'adm-set-1', status: 'parsed' },
-  });
   await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'adm-set-1',
       weBelegNo: 'WE-ADM-1',
       bookingDate: asDate(DATE),
       branchNo: '1',
@@ -56,7 +54,6 @@ async function seed(): Promise<void> {
 
 async function resetAndSeed(): Promise<void> {
   await prisma.goodsReceiptCase.deleteMany();
-  await prisma.documentSet.deleteMany();
   await prisma.location.deleteMany();
   await seed();
 }

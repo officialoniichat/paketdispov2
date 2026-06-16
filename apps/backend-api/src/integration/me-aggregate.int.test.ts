@@ -52,14 +52,12 @@ async function seed(): Promise<{ caseId: string }> {
   const loc = await prisma.location.create({
     data: { code: 'AGG-R1', displayName: 'Regal 1', kind: 'regal', sequenceIndex: 1 },
   });
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'agg-set-1', status: 'parsed' },
-  });
   const day = todayMidnightUtc();
 
   const c = await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'agg-set-1',
       weBelegNo: 'WE-AGG-1',
       bookingDate: day,
       branchNo: '1',

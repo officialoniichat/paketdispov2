@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema, moneySchema } from './primitives.js';
 import {
+  caseSourceSchema,
   caseStatusSchema,
   checkModeSchema,
   goodsTypeTextSchema,
@@ -89,7 +90,10 @@ export type WorkInstructionHeader = z.infer<typeof workInstructionHeaderSchema>;
 /** Digital goods-receipt processing case (Anhang A GoodsReceiptCase). */
 export const goodsReceiptCaseSchema = z.object({
   id: idSchema,
-  documentSetId: idSchema,
+  /** ProHandel is the system of record; `manual` is for pilot seeds. */
+  source: caseSourceSchema,
+  /** Stable reference back to the originating ProHandel booking (idempotency anchor). */
+  externalRef: z.string(),
   weBelegNo: z.string(),
   deliveryNoteNo: z.string().optional(),
   bookingDate: isoDateSchema,

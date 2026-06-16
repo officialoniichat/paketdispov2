@@ -7,7 +7,6 @@ import {
   type BoardRowDto,
   type CapacityDto,
   type CaseDetailDto,
-  type CaseDocumentDto,
   type CaseSummaryDto,
   type DashboardDto,
   type EventQueryDto,
@@ -336,8 +335,8 @@ export class TeamleadReadService {
 
   /**
    * §10.4 Belegdetails: one rich case read — header + work instruction +
-   * positions (with instruction flags + SKU lines) + transport boxes + linked
-   * original documents + the case's audit history (newest first). 404 if unknown.
+   * positions (with instruction flags + SKU lines) + transport boxes +
+   * the case's audit history (newest first). 404 if unknown.
    */
   async caseDetail(caseId: string): Promise<CaseDetailDto> {
     const found = await this.prisma.goodsReceiptCase.findUnique({
@@ -354,7 +353,6 @@ export class TeamleadReadService {
           },
         },
         transportBoxes: { orderBy: { boxNo: 'asc' } },
-        documentSet: { include: { documents: { orderBy: { fileName: 'asc' } } } },
         issues: { orderBy: { reportedAt: 'desc' } },
         zstRecords: { orderBy: { completedAt: 'asc' } },
       },
@@ -391,7 +389,6 @@ export class TeamleadReadService {
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPositionDetail(p)),
       transportBoxes: found.transportBoxes.map((b) => mapBoxTarget(b)),
-      documents: found.documentSet.documents.map((d) => this.mapDocument(d)),
       issues: found.issues.map((i) => ({
         id: i.id,
         scope: i.scope,
@@ -487,9 +484,5 @@ export class TeamleadReadService {
       status: p.status,
       skuLines,
     };
-  }
-
-  private mapDocument(d: { id: string; kind: string; fileName: string }): CaseDocumentDto {
-    return { id: d.id, kind: d.kind, fileName: d.fileName };
   }
 }

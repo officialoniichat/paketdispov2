@@ -14,7 +14,8 @@ import { DEFAULT_ASSIGNMENT_CONFIG } from '../config.js';
 function makeCase(id: string): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
     id,
-    documentSetId: 'ds',
+    source: 'prohandel_api',
+    externalRef: `WE-${id}`,
     weBelegNo: `WE-${id}`,
     bookingDate: '2026-06-15',
     branchNo: '001',

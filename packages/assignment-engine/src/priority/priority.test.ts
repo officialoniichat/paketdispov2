@@ -7,7 +7,8 @@ const TODAY = '2026-06-15';
 
 function makeCase(overrides: Partial<GoodsReceiptCase> & { id: string }): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
-    documentSetId: 'ds-1',
+    source: 'prohandel_api',
+    externalRef: `WE-${overrides.id}`,
     weBelegNo: `WE-${overrides.id}`,
     bookingDate: '2026-06-15',
     branchNo: '001',
@@ -34,10 +35,10 @@ function enrich(c: GoodsReceiptCase): EnrichedCase {
 }
 
 describe('classifyPriority (§8.1)', () => {
-  it('excludes parked and needs_review cases (rank 0)', () => {
+  it('excludes parked and cancelled cases (rank 0)', () => {
     expect(classifyPriority(makeCase({ id: 'a', status: 'parked' }), { today: TODAY }).rank).toBe(0);
     expect(
-      classifyPriority(makeCase({ id: 'b', status: 'needs_review' }), { today: TODAY }).rank,
+      classifyPriority(makeCase({ id: 'b', status: 'cancelled' }), { today: TODAY }).rank,
     ).toBe(0);
   });
 

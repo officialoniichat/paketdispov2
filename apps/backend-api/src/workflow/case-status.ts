@@ -3,6 +3,9 @@ import type { CaseStatus } from '@paket/domain-types';
 /**
  * Case status transition graph (§7.1), mapped onto the Anhang A CaseStatus enum.
  *
+ * Cases enter at `ready` (ProHandel API is the system of record; there is no
+ * document import/parse stage).
+ *
  * Main flow:
  *   needs_review → ready → assigned → in_progress → completed → zst_done
  *

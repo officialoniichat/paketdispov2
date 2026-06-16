@@ -50,13 +50,11 @@ async function seed(): Promise<void> {
       },
     });
   }
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'cap-set-1', status: 'parsed' },
-  });
   for (let i = 0; i < 5; i++) {
     await prisma.goodsReceiptCase.create({
       data: {
-        documentSetId: docSet.id,
+        source: 'manual',
+        externalRef: 'cap-set-1',
         weBelegNo: `WE-CAP-${i}`,
         bookingDate: asDate(DATE),
         branchNo: '1',

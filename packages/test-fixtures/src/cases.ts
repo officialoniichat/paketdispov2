@@ -3,7 +3,8 @@ import { goodsReceiptCaseSchema, type GoodsReceiptCase } from '@paket/domain-typ
 /** Anonymised sample: a prio case with no section (Prio != Abschnitt guardrail). */
 export const samplePrioCase: GoodsReceiptCase = goodsReceiptCaseSchema.parse({
   id: 'case-sample-0001',
-  documentSetId: 'ds-sample-0001',
+  source: 'prohandel_api',
+  externalRef: 'ph-sample-0001',
   weBelegNo: 'WE-2026-000123',
   deliveryNoteNo: 'LS-2026-000123',
   bookingDate: '2026-06-15',

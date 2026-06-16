@@ -16,7 +16,8 @@ const NOW = '2026-06-16T05:30:00+02:00';
 
 function makeCase(overrides: Partial<GoodsReceiptCase> & { id: string }): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
-    documentSetId: 'ds',
+    source: 'prohandel_api',
+    externalRef: `WE-${overrides.id}`,
     weBelegNo: `WE-${overrides.id}`,
     bookingDate: DATE,
     branchNo: '001',
@@ -63,12 +64,12 @@ function baseInput(overrides: Partial<EngineInput> = {}): EngineInput {
 }
 
 describe('assignWork (§8.3 end-to-end)', () => {
-  it('excludes parked/needs_review cases and assigns the rest', () => {
+  it('excludes parked/cancelled cases and assigns the rest', () => {
     const input = baseInput({
       cases: [
         makeCase({ id: '1' }),
         makeCase({ id: '2', status: 'parked' }),
-        makeCase({ id: '3', status: 'needs_review' }),
+        makeCase({ id: '3', status: 'cancelled' }),
         makeCase({ id: '4' }),
       ],
     });

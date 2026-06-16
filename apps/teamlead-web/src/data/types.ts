@@ -58,7 +58,6 @@ export type LaneId =
   | 'verladeplan_morgen'
   | 'reserve'
   | 'geparkt'
-  | 'needs_review'
   | 'probleme';
 
 /** One card in a lane – a case projection plus its lane-relevant flags. */

@@ -24,7 +24,8 @@ function makeCase(i: number, fromPreviousDay = false): GoodsReceiptCase {
   const flags: PriorityFlag[] = i % 9 === 0 ? ['prio'] : i % 7 === 0 ? ['catman_due'] : [];
   return goodsReceiptCaseSchema.parse({
     id: `case-${i}`,
-    documentSetId: `ds-${i}`,
+    source: 'prohandel_api',
+    externalRef: `WE-${100000 + i}`,
     weBelegNo: `WE-${100000 + i}`,
     bookingDate: fromPreviousDay ? '2026-06-15' : DATE,
     branchNo: '001',
@@ -104,7 +105,8 @@ describe('assignment engine — Bereich/Skill routing (soft preference)', () => 
   function bereichCase(id: string, locCode: string): GoodsReceiptCase {
     return goodsReceiptCaseSchema.parse({
       id,
-      documentSetId: `ds-${id}`,
+      source: 'prohandel_api',
+      externalRef: `WE-${id}`,
       weBelegNo: `WE-${id}`,
       bookingDate: DATE,
       branchNo: '001',

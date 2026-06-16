@@ -1,6 +1,6 @@
 /**
  * Belegdetails (§10.4): Kopf, Priorität, Aufwand, Positionen+SKU, Boxen,
- * Historie und Originaldokumente — read live from the backend
+ * Abschluss, Problem und Historie — read live from the backend
  * (`GET /api/teamlead/cases/:id`). Teamlead actions (Priorisieren/Parken) POST
  * through the store's audited (§8.4) endpoints and invalidate this view + the
  * cockpit on success.
@@ -22,7 +22,6 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
@@ -30,7 +29,6 @@ import {
   fetchBelegDetail,
   type BelegBox,
   type BelegDetail,
-  type BelegDocument,
   type BelegHistoryEntry,
   type BelegIssue,
   type BelegPosition,
@@ -51,7 +49,6 @@ const TABS = [
   'Abschluss',
   'Problem',
   'Historie',
-  'Dokumente',
 ];
 
 export function BelegDetailPage(): JSX.Element {
@@ -215,7 +212,6 @@ export function BelegDetailPage(): JSX.Element {
         {tab === 5 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
         {tab === 6 && <IssuesTab issues={c.issues} />}
         {tab === 7 && <HistoryTab history={c.history} />}
-        {tab === 8 && <DocumentsTab documents={c.documents} />}
       </Paper>
     </Stack>
   );
@@ -322,33 +318,6 @@ function HistoryTab({ history }: { history: BelegHistoryEntry[] }): JSX.Element 
           <strong>{formatAuditAction(e.eventType)}</strong> · {ACTOR_LABELS[toActorType(e.actorType)]}
           {e.reason ? ` — „${e.reason}"` : ''}
         </Typography>
-      ))}
-    </Stack>
-  );
-}
-
-function DocumentsTab({ documents }: { documents: BelegDocument[] }): JSX.Element {
-  if (documents.length === 0) return <Empty text="Keine Originaldokumente verknüpft." />;
-  const labels: Record<string, string> = {
-    work_instruction: 'Arbeitsanweisung',
-    goods_receipt: 'WE-Beleg',
-    delivery_note: 'Lieferschein',
-  };
-  return (
-    <Stack spacing={1}>
-      {documents.map((d) => (
-        <Stack key={d.id} direction="row" spacing={1} alignItems="center">
-          <Chip size="small" label={labels[d.kind] ?? d.kind} />
-          <Tooltip title="Dokumentvorschau folgt (EPIC 3)">
-            <Typography
-              component="span"
-              color="text.disabled"
-              sx={{ textDecoration: 'line-through', cursor: 'not-allowed' }}
-            >
-              {d.fileName}
-            </Typography>
-          </Tooltip>
-        </Stack>
       ))}
     </Stack>
   );

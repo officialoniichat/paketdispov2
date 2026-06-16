@@ -1,46 +1,6 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/api/auth/dev-employees": {
-      "get": {
-        "operationId": "DevLoginController_devEmployees",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "List employees for the pilot login picker (dev only)",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/auth/dev-login": {
-      "post": {
-        "operationId": "DevLoginController_devLogin",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DevLoginDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Mint an employee token for the chosen name (dev only)",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
     "/api/me/stream": {
       "get": {
         "operationId": "LiveController_meStream",
@@ -1639,10 +1599,6 @@
       }
     },
     "schemas": {
-      "DevLoginDto": {
-        "type": "object",
-        "properties": {}
-      },
       "RouteStopDto": {
         "type": "object",
         "properties": {
@@ -2491,26 +2447,6 @@
           "skuLines"
         ]
       },
-      "CaseDocumentDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "description": "DocumentKind: delivery_note|goods_receipt|work_instruction|unknown"
-          },
-          "fileName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "fileName"
-        ]
-      },
       "IssueSummaryDto": {
         "type": "object",
         "properties": {
@@ -2643,12 +2579,6 @@
               "$ref": "#/components/schemas/TransportBoxTargetDto"
             }
           },
-          "documents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CaseDocumentDto"
-            }
-          },
           "issues": {
             "description": "Reported problems, newest first",
             "type": "array",
@@ -2676,7 +2606,6 @@
           "effortPoints",
           "positions",
           "transportBoxes",
-          "documents",
           "issues",
           "zstRecords",
           "history"
@@ -3126,36 +3055,6 @@
           "specialDay"
         ]
       },
-      "ParserTemplateRowDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "requiredFields": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "detectionThreshold": {
-            "type": "number"
-          },
-          "fallbackToManual": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "requiredFields",
-          "detectionThreshold",
-          "fallbackToManual"
-        ]
-      },
       "RuleConfigDto": {
         "type": "object",
         "properties": {
@@ -3176,12 +3075,6 @@
             "items": {
               "$ref": "#/components/schemas/LoadPlanRowDto"
             }
-          },
-          "parserTemplates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ParserTemplateRowDto"
-            }
           }
         },
         "required": [
@@ -3189,8 +3082,7 @@
           "reserve",
           "bundle",
           "effort",
-          "loadPlan",
-          "parserTemplates"
+          "loadPlan"
         ]
       },
       "TodayShiftDto": {

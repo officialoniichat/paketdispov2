@@ -29,7 +29,8 @@ export const EXAMPLE_CASE_ID = 'case-we-3656860';
 
 const exampleCase: GoodsReceiptCase = goodsReceiptCaseSchema.parse({
   id: EXAMPLE_CASE_ID,
-  documentSetId: 'ds-we-3656860',
+  source: 'prohandel_api',
+  externalRef: 'ph-we-3656860',
   weBelegNo: '3656860',
   deliveryNoteNo: '1',
   bookingDate: '2026-06-15',

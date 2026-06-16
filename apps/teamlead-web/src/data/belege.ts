@@ -25,7 +25,6 @@ type CaseDetailDto = components['schemas']['CaseDetailDto'];
 type PositionDetailDto = components['schemas']['PositionDetailDto'];
 type SkuLineDto = components['schemas']['SkuLineDto'];
 type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
-type CaseDocumentDto = components['schemas']['CaseDocumentDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
 type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
 type ZstSummaryDto = components['schemas']['ZstSummaryDto'];
@@ -119,12 +118,6 @@ export interface BelegBox {
   sealed: boolean;
 }
 
-export interface BelegDocument {
-  id: string;
-  kind: string;
-  fileName: string;
-}
-
 export interface BelegIssue {
   id: string;
   scope: string;
@@ -185,7 +178,6 @@ export interface BelegDetail {
   workInstruction: BelegWorkInstruction | null;
   positions: BelegPosition[];
   boxes: BelegBox[];
-  documents: BelegDocument[];
   issues: BelegIssue[];
   zstRecords: BelegZst[];
   history: BelegHistoryEntry[];
@@ -204,7 +196,7 @@ export async function fetchBelegeList(): Promise<BelegRow[]> {
   return dto.items.map(toBelegRow);
 }
 
-/** §10.4 Belegdetails — one case with positions, boxes, documents, history. */
+/** §10.4 Belegdetails — one case with positions, boxes, history. */
 export async function fetchBelegDetail(caseId: string): Promise<BelegDetail> {
   const result = await api.GET('/api/teamlead/cases/{caseId}', {
     params: { path: { caseId } },
@@ -259,7 +251,6 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     workInstruction: dto.workInstruction ? toWorkInstruction(dto.workInstruction) : null,
     positions: dto.positions.map(toBelegPosition),
     boxes: dto.transportBoxes.map(toBelegBox),
-    documents: dto.documents.map(toBelegDocument),
     issues: dto.issues.map(toBelegIssue),
     zstRecords: dto.zstRecords.map(toBelegZst),
     history: dto.history.map(toBelegHistoryEntry),
@@ -315,10 +306,6 @@ function toBelegBox(b: TransportBoxTargetDto): BelegBox {
     labelStatus: b.labelStatus,
     sealed: b.sealed,
   };
-}
-
-function toBelegDocument(d: CaseDocumentDto): BelegDocument {
-  return { id: d.id, kind: d.kind, fileName: d.fileName };
 }
 
 function toBelegIssue(i: IssueSummaryDto): BelegIssue {

@@ -78,7 +78,8 @@ export function toEmployeeShift(shift: Shift, bereiche?: string[]): EmployeeShif
 export function toGoodsReceiptCase(c: PrismaCase & { storageLocation: Location }): GoodsReceiptCase {
   return {
     id: c.id,
-    documentSetId: c.documentSetId,
+    source: c.source,
+    externalRef: c.externalRef,
     weBelegNo: c.weBelegNo,
     deliveryNoteNo: c.deliveryNoteNo ?? undefined,
     bookingDate: ISO_DATE(c.bookingDate),

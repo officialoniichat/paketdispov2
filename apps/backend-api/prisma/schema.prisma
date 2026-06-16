@@ -28,26 +28,9 @@ enum CaseStatus {
   cancelled
 }
 
-enum ParseStatus {
-  pending
-  parsed
-  needs_review
-  failed
-}
-
-enum DocumentKind {
-  delivery_note
-  goods_receipt
-  work_instruction
-  unknown
-}
-
-enum DocumentSource {
+enum CaseSource {
   prohandel_api
-  erp_export
-  pdf_folder
-  print_job
-  manual_upload
+  manual
 }
 
 enum PriorityFlag {
@@ -313,52 +296,14 @@ model Location {
 // Documents
 // ---------------------------------------------------------------------------
 
-model DocumentSet {
-  id              String         @id @default(cuid())
-  source          DocumentSource
-  importKey       String         @unique // idempotency for re-imports (source + external ref)
-  importedAt      DateTime       @default(now())
-  bookingDate     DateTime?      @db.Date
-  weBelegNo       String?
-  deliveryNoteNo  String?
-  parseConfidence Float          @default(0)
-  status          ParseStatus    @default(pending)
-
-  documents Document[]
-  cases     GoodsReceiptCase[]
-
-  @@index([weBelegNo])
-  @@map("document_sets")
-}
-
-model Document {
-  id            String      @id @default(cuid())
-  documentSetId String
-  kind          DocumentKind
-  fileName      String
-  mimeType      String
-  storageKey    String      @unique
-  sha256        String?
-  sizeBytes     Int?
-  parserVersion String?
-  parseStatus   ParseStatus @default(pending)
-  parseWarnings String[]    @default([])
-  createdAt     DateTime    @default(now())
-
-  documentSet DocumentSet @relation(fields: [documentSetId], references: [id], onDelete: Cascade)
-
-  @@unique([documentSetId, sha256], name: "document_set_hash")
-  @@index([documentSetId])
-  @@map("documents")
-}
-
 // ---------------------------------------------------------------------------
 // Goods receipt case + positions + sku lines
 // ---------------------------------------------------------------------------
 
 model GoodsReceiptCase {
   id                String         @id @default(cuid())
-  documentSetId     String
+  source            CaseSource     @default(prohandel_api)
+  externalRef       String // ProHandel booking reference (idempotency anchor)
   weBelegNo         String         @unique
   deliveryNoteNo    String?
   bookingDate       DateTime       @db.Date
@@ -381,7 +326,6 @@ model GoodsReceiptCase {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  documentSet     DocumentSet             @relation(fields: [documentSetId], references: [id])
   storageLocation Location                @relation(fields: [storageLocationId], references: [id])
   assignedBundle  AssignmentBundle?       @relation(fields: [assignedBundleId], references: [id])
   positions       ReceiptPosition[]

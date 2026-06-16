@@ -1,7 +1,7 @@
 // Prisma dev seed (§14.1). Idempotent fixture so the assignment engine has a
 // realistic ready-pool + day shifts + location master to bundle. Re-running is
 // safe: every row is upserted by its natural key (employeeNo, role name,
-// location code, document importKey, case weBelegNo, shift [employeeId,date]).
+// location code, case weBelegNo, shift [employeeId,date]).
 //
 // Consumers of this data:
 //   - AssignmentService.recalculate (src/assignment/assignment.service.ts):
@@ -245,24 +245,10 @@ const CASES: SeedCase[] = [
 
 async function seedCases(locationIds: Record<string, string>): Promise<void> {
   for (const c of CASES) {
-    // One DocumentSet per case, keyed by a stable importKey for idempotency.
-    const importKey = `dev-seed:${c.weBelegNo}`;
-    const documentSet = await prisma.documentSet.upsert({
-      where: { importKey },
-      update: { bookingDate: asDate(c.bookingDate) },
-      create: {
-        importKey,
-        source: 'erp_export',
-        bookingDate: asDate(c.bookingDate),
-        weBelegNo: c.weBelegNo,
-        parseConfidence: 1,
-        status: 'parsed',
-      },
-    });
-
     const storageLocationId = requireId(locationIds, c.storageCode, 'location');
     const caseData = {
-      documentSetId: documentSet.id,
+      source: 'manual' as const,
+      externalRef: `dev-seed:${c.weBelegNo}`,
       deliveryNoteNo: c.weBelegNo.replace('WE', 'LS'),
       bookingDate: asDate(c.bookingDate),
       weDate: asDate(c.bookingDate),
@@ -515,24 +501,11 @@ async function seedLifecycleCases(
   userIds: Record<string, string>,
 ): Promise<void> {
   for (const c of LIFECYCLE_CASES) {
-    const importKey = `dev-seed:${c.weBelegNo}`;
-    const documentSet = await prisma.documentSet.upsert({
-      where: { importKey },
-      update: { bookingDate: asDate(SEED_DATE) },
-      create: {
-        importKey,
-        source: 'erp_export',
-        bookingDate: asDate(SEED_DATE),
-        weBelegNo: c.weBelegNo,
-        parseConfidence: 1,
-        status: 'parsed',
-      },
-    });
-
     const storageLocationId = requireId(locationIds, c.storageCode, 'location');
     const employeeId = requireId(userIds, c.employeeNo, 'user');
     const caseData = {
-      documentSetId: documentSet.id,
+      source: 'manual' as const,
+      externalRef: `dev-seed:${c.weBelegNo}`,
       deliveryNoteNo: c.weBelegNo.replace('WE', 'LS'),
       bookingDate: asDate(SEED_DATE),
       weDate: asDate(SEED_DATE),

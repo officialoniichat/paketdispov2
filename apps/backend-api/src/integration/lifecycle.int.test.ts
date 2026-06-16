@@ -71,15 +71,12 @@ async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
     },
   });
 
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'itest-set-1', status: 'parsed' },
-  });
-
   const caseIds: string[] = [];
   for (let i = 0; i < 3; i++) {
     const c = await prisma.goodsReceiptCase.create({
       data: {
-        documentSetId: docSet.id,
+        source: 'manual',
+        externalRef: 'itest-set-1',
         weBelegNo: `WE-ITEST-${i}`,
         bookingDate: day,
         branchNo: '1',

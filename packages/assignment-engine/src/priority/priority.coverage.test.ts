@@ -13,7 +13,8 @@ const TODAY = '2026-06-15';
 
 function makeCase(overrides: Partial<GoodsReceiptCase> & { id: string }): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
-    documentSetId: 'ds-1',
+    source: 'prohandel_api',
+    externalRef: `WE-${overrides.id}`,
     weBelegNo: `WE-${overrides.id}`,
     bookingDate: '2026-06-15',
     branchNo: '001',
@@ -43,15 +44,7 @@ function enrich(c: GoodsReceiptCase): EnrichedCase {
 describe('classifyPriority — exclusion (§8.1 rank 0)', () => {
   it('excludes any status that is not in the eligible set', () => {
     // Arrange: a sample of non-eligible lifecycle statuses
-    const nonEligible = [
-      'imported',
-      'parsed',
-      'needs_review',
-      'parked',
-      'assigned',
-      'completed',
-      'cancelled',
-    ] as const;
+    const nonEligible = ['parked', 'assigned', 'completed', 'cancelled'] as const;
 
     // Act + Assert
     for (const status of nonEligible) {

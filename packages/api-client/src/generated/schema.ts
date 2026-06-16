@@ -4,40 +4,6 @@
  */
 
 export interface paths {
-    "/api/auth/dev-employees": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List employees for the pilot login picker (dev only) */
-        get: operations["DevLoginController_devEmployees"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/dev-login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mint an employee token for the chosen name (dev only) */
-        post: operations["DevLoginController_devLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/me/stream": {
         parameters: {
             query?: never;
@@ -682,7 +648,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        DevLoginDto: Record<string, never>;
         RouteStopDto: {
             id: string;
             sequence: number;
@@ -917,12 +882,6 @@ export interface components {
             status: string;
             skuLines: components["schemas"]["SkuLineDto"][];
         };
-        CaseDocumentDto: {
-            id: string;
-            /** @description DocumentKind: delivery_note|goods_receipt|work_instruction|unknown */
-            kind: string;
-            fileName: string;
-        };
         IssueSummaryDto: {
             id: string;
             /** @description IssueScope: case|position|sku_line|transport_box */
@@ -964,7 +923,6 @@ export interface components {
             workInstruction?: components["schemas"]["WorkInstructionHeaderDto"] | null;
             positions: components["schemas"]["PositionDetailDto"][];
             transportBoxes: components["schemas"]["TransportBoxTargetDto"][];
-            documents: components["schemas"]["CaseDocumentDto"][];
             /** @description Reported problems, newest first */
             issues: components["schemas"]["IssueSummaryDto"][];
             /** @description ZST completion records, oldest first */
@@ -1113,20 +1071,12 @@ export interface components {
             validTo?: string;
             specialDay: boolean;
         };
-        ParserTemplateRowDto: {
-            id: string;
-            name: string;
-            requiredFields: string[];
-            detectionThreshold: number;
-            fallbackToManual: boolean;
-        };
         RuleConfigDto: {
             priority: components["schemas"]["PriorityRuleConfigDto"];
             reserve: components["schemas"]["ReserveRuleConfigDto"];
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
-            parserTemplates: components["schemas"]["ParserTemplateRowDto"][];
         };
         TodayShiftDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -1222,44 +1172,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    DevLoginController_devEmployees: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    DevLoginController_devLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DevLoginDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     LiveController_meStream: {
         parameters: {
             query?: never;

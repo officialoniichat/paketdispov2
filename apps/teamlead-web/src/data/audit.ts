@@ -40,9 +40,6 @@ export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
  * there is no catch-all, because the event type cannot be anything else.
  */
 export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
-  'document.imported': 'Beleg importiert',
-  'document.parsed': 'Beleg erkannt',
-  'document.validation_failed': 'Belegprüfung fehlgeschlagen',
   'case.ready': 'Freigegeben',
   'case.parked': 'Geparkt',
   'case.prioritized': 'Priorisiert',

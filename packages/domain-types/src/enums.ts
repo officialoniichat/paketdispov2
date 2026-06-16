@@ -33,31 +33,15 @@ export const priorityFlagSchema = z.enum([
 ]);
 export type PriorityFlag = z.infer<typeof priorityFlagSchema>;
 
-export const documentSourceSchema = z.enum([
-  'prohandel_api',
-  'erp_export',
-  'pdf_folder',
-  'print_job',
-  'manual_upload',
-]);
-export type DocumentSource = z.infer<typeof documentSourceSchema>;
-
-export const documentKindSchema = z.enum([
-  'delivery_note',
-  'goods_receipt',
-  'work_instruction',
-  'unknown',
-]);
-export type DocumentKind = z.infer<typeof documentKindSchema>;
-
-export const parseStatusSchema = z.enum(['pending', 'parsed', 'needs_review', 'failed']);
-export type ParseStatus = z.infer<typeof parseStatusSchema>;
+/** Where a case originates. ProHandel API is the system of record; `manual` covers pilot seeds. */
+export const caseSourceSchema = z.enum(['prohandel_api', 'manual']);
+export type CaseSource = z.infer<typeof caseSourceSchema>;
 
 /**
  * Case lifecycle (§7.1) — 10 meaningful statuses. The granular employee work steps
  * (scan → print → confirm → box → ZST) are local PWA progress over real position/box
- * data, not top-level case statuses. Ingest (imported/parsed) lives on the DocumentSet;
- * a case is created directly as `ready` or `needs_review`.
+ * data, not top-level case statuses. A case is created directly from a ProHandel
+ * booking as `ready` (or `needs_review` if a booking needs manual attention).
  */
 export const caseStatusSchema = z.enum([
   'needs_review',
@@ -147,9 +131,6 @@ export type PickupSequenceMode = z.infer<typeof pickupSequenceModeSchema>;
 
 /** Workflow event taxonomy (Anhang A / §7.2). */
 export const workflowEventTypeSchema = z.enum([
-  'document.imported',
-  'document.parsed',
-  'document.validation_failed',
   'case.ready',
   'case.parked',
   'case.prioritized',

@@ -212,13 +212,11 @@ const LANE_META: Record<LaneId, { title: string; description: string }> = {
   },
   reserve: { title: 'Reserve', description: 'Eiserne Reserve schützen' },
   geparkt: { title: 'Geparkt', description: 'Aus Automatik ausgeschlossen' },
-  needs_review: { title: 'Prüfen', description: 'Parser/Validierung unsicher' },
   probleme: { title: 'Problemfälle', description: 'Offene Issues' },
 };
 
 const LANE_ORDER: LaneId[] = [
   'probleme',
-  'needs_review',
   'geparkt',
   'prio',
   'verladeplan_heute',
@@ -233,7 +231,6 @@ const JEDEN_TAG_SECTIONS = new Set([7, 4, 8]);
 /** Deterministic single-lane bucketing for a pool item (precedence = LANE_ORDER). */
 function laneForPoolItem(item: PoolItemDto): LaneId {
   if (item.status === 'issue_open') return 'probleme';
-  if (item.status === 'needs_review') return 'needs_review';
   if (item.status === 'parked') return 'geparkt';
   if (
     item.priorityFlags.includes('prio') ||
@@ -252,12 +249,11 @@ function laneForPoolItem(item: PoolItemDto): LaneId {
  * park-/release-/prioritise-able. A case the engine already placed (`assigned`) or
  * that an employee has started belongs on the Mitarbeiterboard, NOT in a pool lane:
  * showing it here would offer "Parken", which the §7.1 state machine rejects (park is
- * only legal from `ready`/`needs_review`). Restrict lanes to genuine pool residents.
+ * only legal from `ready`). Restrict lanes to genuine pool residents.
  */
 const POOL_LANE_STATUSES = new Set<PoolItemDto['status']>([
   'ready',
   'parked',
-  'needs_review',
   'issue_open',
 ]);
 

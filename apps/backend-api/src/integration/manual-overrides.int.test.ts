@@ -70,15 +70,12 @@ async function seedReadyPool(): Promise<{ employeeId: string; caseIds: string[] 
     },
   });
 
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'itest-overrides-1', status: 'parsed' },
-  });
-
   const caseIds: string[] = [];
   for (let i = 0; i < 4; i++) {
     const c = await prisma.goodsReceiptCase.create({
       data: {
-        documentSetId: docSet.id,
+        source: 'manual',
+        externalRef: 'itest-overrides-1',
         weBelegNo: `WE-OV-${i}`,
         bookingDate: day,
         branchNo: '1',

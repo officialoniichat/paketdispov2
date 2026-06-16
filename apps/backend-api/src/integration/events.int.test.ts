@@ -49,13 +49,11 @@ async function seed(): Promise<void> {
       netCapacityMinutes: 480,
     },
   });
-  const docSet = await prisma.documentSet.create({
-    data: { source: 'pdf_folder', importKey: 'ev-set-1', status: 'parsed' },
-  });
   for (let i = 0; i < 3; i++) {
     await prisma.goodsReceiptCase.create({
       data: {
-        documentSetId: docSet.id,
+        source: 'manual',
+        externalRef: 'ev-set-1',
         weBelegNo: `WE-EV-${i}`,
         bookingDate: asDate(DATE),
         branchNo: '1',
@@ -69,18 +67,19 @@ async function seed(): Promise<void> {
     });
   }
 
-  // A `needs_review` case the engine never picks up (recalculate reads only the
-  // `ready` pool), so it stays parkable. Used to exercise a genuine teamlead park.
+  // A `parked` case the engine never picks up (recalculate reads only the
+  // `ready` pool). Used to exercise a genuine teamlead override (prioritize/park).
   await prisma.goodsReceiptCase.create({
     data: {
-      documentSetId: docSet.id,
+      source: 'manual',
+      externalRef: 'ev-set-1',
       weBelegNo: 'WE-EV-REVIEW',
       bookingDate: asDate(DATE),
       branchNo: '1',
       storageLocationId: loc.id,
       section: 7,
       totalQuantity: 20,
-      status: 'needs_review',
+      status: 'parked',
       effortPoints: 8,
       estimatedMinutes: 20,
     },
