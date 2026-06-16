@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { type AssignmentStatus, type CaseStatus, type PriorityFlag } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import type { ZstExportRow } from '@paket/domain-types';
+import { zstRowsToCsv } from '../modules/reporting/csv-export.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -17,6 +19,7 @@ import {
   type BundlePauseDto,
   type CancelDto,
   type ParkDto,
+  type ZstExportResultDto,
   type PrioritizeDto,
   type ReleaseDto,
   type ReorderBundleDto,
@@ -84,6 +87,52 @@ export class TeamleadService {
    */
   cancel(principal: Principal, caseId: string, dto: CancelDto): Promise<TransitionResultDto> {
     return this.transition(caseId, 'cancelled', 'case.cancelled', principal, { reason: dto.reason });
+  }
+
+  /**
+   * Tagesabschluss / ZST-Export (§15.1) — the bridge that finally makes `zst_done`
+   * reachable. Takes every case currently in `completed`, moves it to the terminal
+   * `zst_done` with a `zst.exported` audit event, stamps `exportedAt` on its ZST
+   * records, and returns the handover as an RFC 4180 CSV. Idempotent: a case
+   * already `zst_done` is simply not in the `completed` set, so re-running exports
+   * only what is newly finished.
+   */
+  async exportZst(principal: Principal): Promise<ZstExportResultDto> {
+    const completed = await this.prisma.goodsReceiptCase.findMany({
+      where: { status: 'completed' },
+      select: { id: true, weBelegNo: true, bookingDate: true },
+    });
+    const now = new Date();
+    const rows: ZstExportRow[] = [];
+    for (const c of completed) {
+      await this.transition(c.id, 'zst_done', 'zst.exported', principal);
+      const records = await this.prisma.zstRecord.findMany({ where: { caseId: c.id } });
+      for (const r of records) {
+        if (!r.exportedAt) {
+          await this.prisma.zstRecord.update({ where: { id: r.id }, data: { exportedAt: now } });
+        }
+        const processingMinutes = r.startedAt
+          ? Math.max(0, Math.round((r.completedAt.getTime() - r.startedAt.getTime()) / 60_000))
+          : 0;
+        rows.push({
+          zstId: r.id,
+          caseId: c.id,
+          weBelegNo: c.weBelegNo,
+          employeeId: r.employeeId,
+          bookingDate: c.bookingDate.toISOString().slice(0, 10),
+          completedQuantity: r.completedQuantity,
+          effortPoints: r.effortPoints,
+          processingMinutes,
+          source: r.source,
+          completedAt: r.completedAt.toISOString(),
+        });
+      }
+    }
+    return {
+      date: now.toISOString().slice(0, 10),
+      exportedCount: completed.length,
+      csv: zstRowsToCsv(rows),
+    };
   }
 
   async prioritize(

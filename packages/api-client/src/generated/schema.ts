@@ -405,6 +405,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/assignments/export-zst": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tagesabschluss (§15.1): export all completed cases (→ zst_done, zst.exported) as a ZST CSV. */
+        post: operations["TeamleadController_exportZst"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/bundles/{bundleId}/withdraw": {
         parameters: {
             query?: never;
@@ -912,6 +929,14 @@ export interface components {
             /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
             durationMs: number;
             loads: components["schemas"]["EmployeeLoadDto"][];
+        };
+        ZstExportResultDto: {
+            /** @description ISO date YYYY-MM-DD the export ran */
+            date: string;
+            /** @description Number of cases moved completed → zst_done */
+            exportedCount: number;
+            /** @description RFC 4180 CSV of the exported ZST rows */
+            csv: string;
         };
         WithdrawDto: {
             /** @description Case to withdraw from the bundle */
@@ -1647,6 +1672,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecalculateResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_exportZst: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZstExportResultDto"];
                 };
             };
         };

@@ -50,6 +50,7 @@ import type {
 export { CURRENT_TEAMLEAD_ID };
 
 type RecalculateResultDto = components['schemas']['RecalculateResultDto'];
+type ZstExportResultDto = components['schemas']['ZstExportResultDto'];
 
 /** Today's planning date (YYYY-MM-DD), local time. */
 function today(): string {
@@ -124,6 +125,8 @@ export interface CockpitApi {
   recalculate: UseMutationResult<RecalculateResultDto, Error, void>;
   /** §E.4 preview "Simulieren" → engine dry-run (persists nothing). */
   preview: UseMutationResult<PreviewResult, Error, void>;
+  /** §15.1 Tagesabschluss: export completed cases (→ zst_done) and download the ZST CSV. */
+  exportZst: UseMutationResult<ZstExportResultDto, Error, void>;
   /** Audited single-case overrides backed by real endpoints. */
   parkCase(caseId: string, reason: string): void;
   releaseCase(caseId: string, reason: string): void;
@@ -207,6 +210,15 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const preview = useMutation<PreviewResult, Error, void>({
     mutationFn: () => previewAssignment(api, date),
     // Preview persists nothing → no invalidation, board stays unchanged.
+  });
+
+  const exportZst = useMutation<ZstExportResultDto, Error, void>({
+    mutationFn: async () => {
+      const { data, error } = await api.POST('/api/teamlead/assignments/export-zst', {});
+      if (error || !data) throw new Error(`export failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const prioritiseMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
@@ -368,6 +380,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       pool: query.data?.pool ?? [],
       recalculate,
       preview,
+      exportZst,
 
       prioritiseCase: (caseId, reason) => prioritiseMutation.mutate({ caseId, reason }),
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
@@ -385,6 +398,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       query,
       recalculate,
       preview,
+      exportZst,
       prioritiseMutation,
       parkMutation,
       unparkMutation,

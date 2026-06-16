@@ -285,6 +285,13 @@ export class CaseDetailDto {
   history!: AuditEventDto[];
 }
 
+/** Result of the Tagesabschluss/ZST export (§15.1): completed cases → zst_done + CSV. */
+export class ZstExportResultDto {
+  @ApiProperty({ description: 'ISO date YYYY-MM-DD the export ran' }) date!: string;
+  @ApiProperty({ description: 'Number of cases moved completed → zst_done' }) exportedCount!: number;
+  @ApiProperty({ description: 'RFC 4180 CSV of the exported ZST rows' }) csv!: string;
+}
+
 export class TransitionResultDto {
   @ApiProperty() caseId!: string;
   @ApiProperty() status!: string;

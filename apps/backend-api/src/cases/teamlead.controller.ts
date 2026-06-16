@@ -26,6 +26,7 @@ import {
   ResolveIssueDto,
   TransitionResultDto,
   WithdrawDto,
+  ZstExportResultDto,
 } from './cases.dto.js';
 
 /** Teamlead pool steering & issue resolution (§14.2). Full operational visibility. */
@@ -175,6 +176,16 @@ export class TeamleadController {
     @Body() dto: RecalculateDto,
   ): Promise<RecalculateResultDto> {
     return this.assignment.preview(principal, dto.date);
+  }
+
+  @Post('assignments/export-zst')
+  @ApiOperation({
+    summary:
+      'Tagesabschluss (§15.1): export all completed cases (→ zst_done, zst.exported) as a ZST CSV.',
+  })
+  @ApiOkResponse({ type: ZstExportResultDto })
+  exportZst(@CurrentUser() principal: Principal): Promise<ZstExportResultDto> {
+    return this.teamlead.exportZst(principal);
   }
 
   // --- §8.4 manual bundle overrides -----------------------------------------

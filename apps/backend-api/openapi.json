@@ -923,6 +923,33 @@
         ]
       }
     },
+    "/api/teamlead/assignments/export-zst": {
+      "post": {
+        "operationId": "TeamleadController_exportZst",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZstExportResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tagesabschluss (§15.1): export all completed cases (→ zst_done, zst.exported) as a ZST CSV.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/bundles/{bundleId}/withdraw": {
       "post": {
         "operationId": "TeamleadController_withdraw",
@@ -2592,6 +2619,28 @@
           "reserveMinutes",
           "durationMs",
           "loads"
+        ]
+      },
+      "ZstExportResultDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD the export ran"
+          },
+          "exportedCount": {
+            "type": "number",
+            "description": "Number of cases moved completed → zst_done"
+          },
+          "csv": {
+            "type": "string",
+            "description": "RFC 4180 CSV of the exported ZST rows"
+          }
+        },
+        "required": [
+          "date",
+          "exportedCount",
+          "csv"
         ]
       },
       "WithdrawDto": {
