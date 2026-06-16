@@ -1,5 +1,6 @@
 import type { Location, Shift, GoodsReceiptCase as PrismaCase } from '@prisma/client';
 import type {
+  CaseStatus,
   EmployeeShift,
   GoodsReceiptCase,
   GoodsTypeText,
@@ -92,7 +93,9 @@ export function toGoodsReceiptCase(c: PrismaCase & { storageLocation: Location }
     catManDate: c.catManDate ? ISO_DATE(c.catManDate) : undefined,
     loadPlanDate: c.loadPlanDate ? ISO_DATE(c.loadPlanDate) : undefined,
     totalQuantity: c.totalQuantity,
-    status: c.status,
+    // The Prisma enum is wider than the domain CaseStatus (schema out of scope);
+    // persisted rows only ever hold valid domain statuses, so narrow at the boundary.
+    status: c.status as CaseStatus,
     effortPoints: c.effortPoints,
     estimatedMinutes: c.estimatedMinutes,
     assignedBundleId: c.assignedBundleId ?? undefined,

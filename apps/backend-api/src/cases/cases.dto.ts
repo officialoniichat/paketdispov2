@@ -418,13 +418,6 @@ export class ResolveIssueDto {
   resolution?: string;
 }
 
-export class ReleaseDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  note?: string;
-}
-
 export class ManualAssignmentDto {
   @ApiProperty()
   @IsString()

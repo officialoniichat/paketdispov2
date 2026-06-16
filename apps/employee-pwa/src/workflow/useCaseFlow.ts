@@ -131,7 +131,7 @@ export function useCaseFlow(caseId: string): CaseFlow {
           entityId: caseId,
           payload: { scannedCode: scannedCode ?? null },
         },
-        // Mark the case in-progress on the backend (assigned → picking).
+        // Mark the case in-progress on the backend (assigned → in_progress).
         () => persistStartPreparation(caseId),
       ),
     [commit, caseId],

@@ -53,24 +53,19 @@ export type DocumentKind = z.infer<typeof documentKindSchema>;
 export const parseStatusSchema = z.enum(['pending', 'parsed', 'needs_review', 'failed']);
 export type ParseStatus = z.infer<typeof parseStatusSchema>;
 
-/** Full case lifecycle (Anhang A – superset of §7 BelegStatus). */
+/**
+ * Case lifecycle (§7.1) — 10 meaningful statuses. The granular employee work steps
+ * (scan → print → confirm → box → ZST) are local PWA progress over real position/box
+ * data, not top-level case statuses. Ingest (imported/parsed) lives on the DocumentSet;
+ * a case is created directly as `ready` or `needs_review`.
+ */
 export const caseStatusSchema = z.enum([
-  'imported',
-  'parsed',
   'needs_review',
   'ready',
   'parked',
   'assigned',
-  'picking',
-  'preparing',
-  'sorting',
-  'checking',
-  'labeling',
-  'securing',
-  'boxing',
+  'in_progress',
   'issue_open',
-  'waiting_teamlead',
-  'released',
   'partially_completed',
   'completed',
   'zst_done',
@@ -158,10 +153,10 @@ export const workflowEventTypeSchema = z.enum([
   'case.ready',
   'case.parked',
   'case.prioritized',
+  'case.deprioritized',
   'case.cancelled',
   'bundle.created',
   'bundle.assigned',
-  'bundle.started',
   'pickup.location_scanned',
   'case.started',
   'position.confirmed',

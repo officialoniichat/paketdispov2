@@ -168,13 +168,13 @@ describe('§8.4 withdraw', () => {
   it('rejects (409) withdrawing a case an employee has already started', async () => {
     const bundle = await aBundle();
     const caseId = bundle.caseIds[0]!;
-    // Employee starts work: assigned → picking.
+    // Employee starts work: assigned → in_progress.
     await cases.startPreparation(employee, caseId);
 
     await expect(teamleadSvc.withdraw(teamlead, bundle.id, { caseId })).rejects.toThrow();
 
     const row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: caseId } });
-    expect(row.status).toBe('picking');
+    expect(row.status).toBe('in_progress');
     expect(row.assignedBundleId).toBe(bundle.id);
   });
 });

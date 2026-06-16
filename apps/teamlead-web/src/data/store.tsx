@@ -26,6 +26,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import type { WorkflowEvent } from '@paket/domain-types';
+import type { AuditPayload } from './audit.js';
 import type { components } from '@paket/api-client';
 import { api, CURRENT_TEAMLEAD_ID } from './api.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
@@ -118,7 +119,7 @@ export interface CockpitApi {
   cockpit: CockpitSummary;
   board: BoardRow[];
   lanes: Lane[];
-  recentOverrides: WorkflowEvent[];
+  recentOverrides: WorkflowEvent<AuditPayload>[];
   /** Ready, unassigned cases that can be added to a bundle (§10.3). */
   pool: PoolCase[];
   /** §E.4 commit "Live zuweisen" → real assignment engine (persists). */
@@ -131,11 +132,16 @@ export interface CockpitApi {
   parkCase(caseId: string, reason: string): void;
   releaseCase(caseId: string, reason: string): void;
   prioritiseCase(caseId: string, reason: string): void;
+  /** Remove a manual teamlead priority (→ back to normal pool order). */
+  deprioritiseCase(caseId: string, reason: string): void;
+  /** Approve a needs_review case into the planning pool (needs_review → ready). */
+  approveCase(caseId: string, reason: string): void;
+  /** Reactivate the remainder of a partially completed case (partially_completed → ready). */
+  reactivateCase(caseId: string, reason: string): void;
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
-  /** Issue triage: resolve (issue_open → waiting_teamlead) and release (→ back to work). */
-  resolveIssue(issueId: string, reason: string): void;
-  releaseIssue(issueId: string, reason: string): void;
+  /** Issue triage: resolve an open issue (issue_open → in_progress). */
+  resolveIssue(caseId: string, reason: string): void;
   /** Audited bundle interventions backed by real endpoints (§8.4). */
   withdraw: BundleMutation<WithdrawVars>;
   addToBundle: BundleMutation<AddVars>;
@@ -233,6 +239,42 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
+  const deprioritiseMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/deprioritize', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`deprioritize failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const approveMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/approve', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`approve failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const reactivateMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/reactivate', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`reactivate failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
   const parkMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
     mutationFn: async ({ caseId, reason }) => {
       const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/park', {
@@ -269,25 +311,13 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const resolveIssueMutation = useMutation<unknown, Error, { issueId: string; reason: string }>({
-    mutationFn: async ({ issueId, reason }) => {
-      const { data, error } = await api.POST('/api/teamlead/issues/{issueId}/resolve', {
-        params: { path: { issueId } },
+  const resolveIssueMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-issue', {
+        params: { path: { caseId } },
         body: { resolution: reason },
       });
       if (error) throw new Error(`resolve failed (${JSON.stringify(error)})`);
-      return data;
-    },
-    onSettled: invalidateCockpitAndBelege,
-  });
-
-  const releaseIssueMutation = useMutation<unknown, Error, { issueId: string; reason: string }>({
-    mutationFn: async ({ issueId, reason }) => {
-      const { data, error } = await api.POST('/api/teamlead/issues/{issueId}/release', {
-        params: { path: { issueId } },
-        body: { note: reason },
-      });
-      if (error) throw new Error(`release failed (${JSON.stringify(error)})`);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -383,11 +413,13 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       exportZst,
 
       prioritiseCase: (caseId, reason) => prioritiseMutation.mutate({ caseId, reason }),
+      deprioritiseCase: (caseId, reason) => deprioritiseMutation.mutate({ caseId, reason }),
+      approveCase: (caseId, reason) => approveMutation.mutate({ caseId, reason }),
+      reactivateCase: (caseId, reason) => reactivateMutation.mutate({ caseId, reason }),
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
-      resolveIssue: (issueId, reason) => resolveIssueMutation.mutate({ issueId, reason }),
-      releaseIssue: (issueId, reason) => releaseIssueMutation.mutate({ issueId, reason }),
+      resolveIssue: (caseId, reason) => resolveIssueMutation.mutate({ caseId, reason }),
 
       withdraw,
       addToBundle,
@@ -400,11 +432,13 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       preview,
       exportZst,
       prioritiseMutation,
+      deprioritiseMutation,
+      approveMutation,
+      reactivateMutation,
       parkMutation,
       unparkMutation,
       cancelMutation,
       resolveIssueMutation,
-      releaseIssueMutation,
       withdraw,
       addToBundle,
       reorder,

@@ -1,6 +1,46 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/auth/dev-employees": {
+      "get": {
+        "operationId": "DevLoginController_devEmployees",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List employees for the pilot login picker (dev only)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/dev-login": {
+      "post": {
+        "operationId": "DevLoginController_devLogin",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Mint an employee token for the chosen name (dev only)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/me/stream": {
       "get": {
         "operationId": "LiveController_meStream",
@@ -159,7 +199,7 @@
             "bearer": []
           }
         ],
-        "summary": "Begin handling a package (assigned → picking, case.started)",
+        "summary": "Begin handling a package (assigned → in_progress, case.started)",
         "tags": [
           "cases"
         ]
@@ -195,7 +235,7 @@
             "bearer": []
           }
         ],
-        "summary": "Complete a package (boxing → completed, case.completed)",
+        "summary": "Complete a package (in_progress → completed, case.completed)",
         "tags": [
           "cases"
         ]
@@ -241,7 +281,7 @@
             "bearer": []
           }
         ],
-        "summary": "Partially complete (boxing → partially_completed)",
+        "summary": "Partially complete (in_progress → partially_completed)",
         "tags": [
           "cases"
         ]
@@ -711,6 +751,144 @@
         ]
       }
     },
+    "/api/teamlead/cases/{caseId}/approve": {
+      "post": {
+        "operationId": "TeamleadController_approve",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Zur Planung freigeben: approve a reviewed case (needs_review → ready).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/reactivate": {
+      "post": {
+        "operationId": "TeamleadController_reactivate",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/deprioritize": {
+      "post": {
+        "operationId": "TeamleadController_deprioritize",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrioritizeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Priorität entfernen: drop the manual teamlead priority (case.deprioritized).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/cases/{caseId}/cancel": {
       "post": {
         "operationId": "TeamleadController_cancel",
@@ -757,12 +935,12 @@
         ]
       }
     },
-    "/api/teamlead/issues/{issueId}/resolve": {
+    "/api/teamlead/cases/{caseId}/resolve-issue": {
       "post": {
         "operationId": "TeamleadController_resolveIssue",
         "parameters": [
           {
-            "name": "issueId",
+            "name": "caseId",
             "required": true,
             "in": "path",
             "schema": {
@@ -797,53 +975,7 @@
             "bearer": []
           }
         ],
-        "summary": "Resolve an issue (issue_open → waiting_teamlead, issue.resolved)",
-        "tags": [
-          "teamlead"
-        ]
-      }
-    },
-    "/api/teamlead/issues/{issueId}/release": {
-      "post": {
-        "operationId": "TeamleadController_releaseIssue",
-        "parameters": [
-          {
-            "name": "issueId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TransitionResultDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Release a case back to work (waiting_teamlead → released → checking)",
+        "summary": "Problem freigeben: resolve a case open issue (issue_open -> in_progress)",
         "tags": [
           "teamlead"
         ]
@@ -1507,6 +1639,10 @@
       }
     },
     "schemas": {
+      "DevLoginDto": {
+        "type": "object",
+        "properties": {}
+      },
       "RouteStopDto": {
         "type": "object",
         "properties": {
@@ -2576,14 +2712,6 @@
         "type": "object",
         "properties": {
           "resolution": {
-            "type": "string"
-          }
-        }
-      },
-      "ReleaseDto": {
-        "type": "object",
-        "properties": {
-          "note": {
             "type": "string"
           }
         }

@@ -60,27 +60,32 @@ const chipIcons: Record<ChipIconKey, SvgIconComponent> = {
 export type ChipSize = 'small' | 'medium';
 
 interface BaseChipProps {
-  meta: ChipMeta;
+  /** May be undefined at runtime if the data carries an out-of-enum value. */
+  meta: ChipMeta | undefined;
   /** Override the default German label from the meta table. */
   label?: string;
   size?: ChipSize;
   title?: string;
 }
 
+/** Neutral fallback so an unknown/stale status never crashes the whole view. */
+const FALLBACK_META: ChipMeta = { label: '–', bg: '#6b6b6b', fg: '#ffffff', icon: 'inbox' };
+
 /** Internal: render a meta descriptor as colour + icon + text. */
 function BaseChip({ meta, label, size = 'medium', title }: BaseChipProps): JSX.Element {
-  const Icon = chipIcons[meta.icon];
-  const text = label ?? meta.label;
+  const safe = meta ?? FALLBACK_META;
+  const Icon = chipIcons[safe.icon] ?? chipIcons.inbox;
+  const text = label ?? safe.label;
   return (
     <Chip
       size={size}
-      icon={<Icon fontSize="small" style={{ color: meta.fg }} aria-hidden />}
+      icon={<Icon fontSize="small" style={{ color: safe.fg }} aria-hidden />}
       label={text}
       title={title ?? text}
       sx={{
-        backgroundColor: meta.bg,
-        color: meta.fg,
-        '& .MuiChip-icon': { color: meta.fg },
+        backgroundColor: safe.bg,
+        color: safe.fg,
+        '& .MuiChip-icon': { color: safe.fg },
         fontWeight: 700,
         height: size === 'medium' ? 32 : undefined,
       }}

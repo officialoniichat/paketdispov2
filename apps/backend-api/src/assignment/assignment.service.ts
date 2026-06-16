@@ -23,7 +23,7 @@ const POOL_STATUS = 'ready' as const;
  * plan but not yet started (`assigned`). After a commit the `ready` pool is empty, so
  * a `ready`-only preview would return an empty proposal; including `assigned` lets
  * "Simulieren" meaningfully re-propose today's plan. Cases an employee has begun
- * (picking/.../completed) are intentionally excluded — they are no longer re-planable.
+ * (in_progress/.../completed) are intentionally excluded — they are no longer re-planable.
  */
 const PREVIEW_POOL_STATUSES = ['ready', 'assigned'] as const;
 
@@ -68,7 +68,7 @@ export class AssignmentService {
     const { plan, durationMs, assignedCaseCount } = await this.prisma.$transaction(async (tx) => {
       // 1. Clear the prior plan for this date so the re-insert is clean and idempotent.
       //    Only revert cases that a PRIOR recalc left in `assigned` — cases an employee
-      //    has already started/completed (picking/checking/.../completed) are left alone.
+      //    has already started/completed (in_progress/.../completed) are left alone.
       await this.clearPriorPlanForDate(tx, dayStart, dayEnd);
 
       // 2. Re-read the now-freed `ready` pool inside the transaction (reverted cases
@@ -233,7 +233,7 @@ export class AssignmentService {
    *
    * Only cases still in `assigned` (i.e. a prior recalc placed them but no employee
    * has begun work) are reverted to `ready` and unlinked. Cases an employee has
-   * already started or finished (picking/preparing/.../completed) keep their bundle
+   * already started or finished (in_progress/.../completed) keep their bundle
    * link — their bundles are skipped from deletion so the FK on assignedBundleId holds.
    */
   private async clearPriorPlanForDate(tx: PrismaTx, dayStart: Date, dayEnd: Date): Promise<void> {

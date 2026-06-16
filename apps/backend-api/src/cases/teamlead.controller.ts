@@ -21,7 +21,6 @@ import {
   PoolListDto,
   PoolQueryDto,
   PrioritizeDto,
-  ReleaseDto,
   ReorderBundleDto,
   ResolveIssueDto,
   TransitionResultDto,
@@ -118,6 +117,39 @@ export class TeamleadController {
     return this.teamlead.unpark(principal, caseId);
   }
 
+  @Post('cases/:caseId/approve')
+  @ApiOperation({ summary: 'Zur Planung freigeben: approve a reviewed case (needs_review → ready).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  approve(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ParkDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.approve(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/reactivate')
+  @ApiOperation({ summary: 'Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  reactivate(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ParkDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.reactivate(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/deprioritize')
+  @ApiOperation({ summary: 'Priorität entfernen: drop the manual teamlead priority (case.deprioritized).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  deprioritize(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: PrioritizeDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.deprioritize(principal, caseId, dto);
+  }
+
   @Post('cases/:caseId/cancel')
   @ApiOperation({ summary: 'Storno: cancel a case (→ cancelled, case.cancelled). Reasoned + audited.' })
   @ApiOkResponse({ type: TransitionResultDto })
@@ -129,26 +161,15 @@ export class TeamleadController {
     return this.teamlead.cancel(principal, caseId, dto);
   }
 
-  @Post('issues/:issueId/resolve')
-  @ApiOperation({ summary: 'Resolve an issue (issue_open → waiting_teamlead, issue.resolved)' })
+  @Post('cases/:caseId/resolve-issue')
+  @ApiOperation({ summary: 'Problem freigeben: resolve a case open issue (issue_open -> in_progress)' })
   @ApiOkResponse({ type: TransitionResultDto })
   resolveIssue(
     @CurrentUser() principal: Principal,
-    @Param('issueId') issueId: string,
+    @Param('caseId') caseId: string,
     @Body() dto: ResolveIssueDto,
   ): Promise<TransitionResultDto> {
-    return this.teamlead.resolveIssue(principal, issueId, dto);
-  }
-
-  @Post('issues/:issueId/release')
-  @ApiOperation({ summary: 'Release a case back to work (waiting_teamlead → released → checking)' })
-  @ApiOkResponse({ type: TransitionResultDto })
-  releaseIssue(
-    @CurrentUser() principal: Principal,
-    @Param('issueId') issueId: string,
-    @Body() dto: ReleaseDto,
-  ): Promise<TransitionResultDto> {
-    return this.teamlead.releaseIssue(principal, issueId, dto);
+    return this.teamlead.resolveIssue(principal, caseId, dto);
   }
 
   // --- Assignment engine (§8.3) ---------------------------------------------

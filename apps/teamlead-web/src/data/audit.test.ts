@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MissingReasonError, assertReason, createOverrideEvent, isValidReason } from './audit.js';
+import {
+  ACTOR_LABELS,
+  MissingReasonError,
+  assertReason,
+  createOverrideEvent,
+  formatAuditAction,
+  isValidReason,
+  toOverrideAction,
+} from './audit.js';
 
 const NOW = new Date('2026-06-15T09:30:00.000Z');
 
@@ -53,5 +61,45 @@ describe('createOverrideEvent (§8.4 audit)', () => {
     );
     expect(park.eventType).toBe('case.parked');
     expect(prio.eventType).toBe('case.prioritized');
+  });
+});
+
+describe('formatAuditAction (§8.4 – human-readable audit feed)', () => {
+  it('prefers the recorded override action label', () => {
+    expect(formatAuditAction('assignment.overridden', 'entziehen')).toBe('Paket entziehen');
+    expect(formatAuditAction('case.parked', 'parken')).toBe('Parken');
+  });
+
+  it('falls back to a German event-type label, never a raw code', () => {
+    expect(formatAuditAction('assignment.overridden')).toBe('Neu zugeteilt');
+    expect(formatAuditAction('case.prioritized')).toBe('Priorisiert');
+    expect(formatAuditAction('employee.profile_updated')).toBe('Stammdaten geändert');
+  });
+
+  it('never renders a raw machine code (no dotted event type leaks through)', () => {
+    expect(formatAuditAction('case.cancelled')).toBe('Storniert');
+    expect(formatAuditAction('case.cancelled')).not.toContain('.');
+  });
+});
+
+describe('toOverrideAction (boundary narrowing, no corrupted-data assumptions)', () => {
+  it('recognises the override vocabulary', () => {
+    expect(toOverrideAction('entziehen')).toBe('entziehen');
+    expect(toOverrideAction('priorisieren')).toBe('priorisieren');
+  });
+
+  it('returns undefined for absent or non-override values', () => {
+    expect(toOverrideAction(undefined)).toBeUndefined();
+    expect(toOverrideAction(null)).toBeUndefined();
+    expect(toOverrideAction('case.cancelled')).toBeUndefined();
+  });
+});
+
+describe('ACTOR_LABELS', () => {
+  it('maps every actor to a German label, never the raw role token', () => {
+    expect(ACTOR_LABELS.teamlead).toBe('Teamlead');
+    expect(ACTOR_LABELS.employee).toBe('Mitarbeiter');
+    expect(ACTOR_LABELS.system).toBe('System');
+    expect(ACTOR_LABELS.admin).toBe('Admin');
   });
 });

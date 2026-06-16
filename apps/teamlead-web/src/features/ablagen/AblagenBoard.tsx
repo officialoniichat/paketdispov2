@@ -1,10 +1,13 @@
 /**
  * Digitale Ablagen (§10.2 / Anhang E.4 "Kanban/Queue-Lanes passend zur heutigen
  * Ablagekästen-Logik"). One column per lane (Prio, Jeden-Tag, Verladeplan
- * heute/morgen, Reserve, Geparkt, Prüfen, Problemfälle). Card actions that change
- * state (Parken/Freigeben/Priorisieren) require a reason and are audited (§8.4).
+ * heute/morgen, Reserve, Geparkt, Prüfen, Problemfälle). Each card's teamlead
+ * actions come from the single-source {@link CaseActions} registry, which derives
+ * the allowed buttons from the case's §7.1 status — so a parked card offers
+ * Entparken, a Problemfall offers „Problem freigeben", etc., with no per-lane
+ * button logic here.
  */
-import { useState, type JSX } from 'react';
+import { type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -18,20 +21,34 @@ import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes } from '../../lib/format.js';
-import { ReasonDialog } from '../../components/ReasonDialog.js';
+import { CaseActions } from '../../components/CaseActions.js';
+import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard } from '../../data/types.js';
 
-interface PendingAction {
-  title: string;
-  description: string;
-  suggestions: string[];
-  run: (reason: string) => void;
-}
-
 export function AblagenBoard(): JSX.Element {
-  const { lanes, parkCase, releaseCase, prioritiseCase } = useCockpitData();
+  const {
+    lanes,
+    parkCase,
+    releaseCase,
+    prioritiseCase,
+    deprioritiseCase,
+    approveCase,
+    reactivateCase,
+    cancelCase,
+    resolveIssue,
+  } = useCockpitData();
   const navigate = useNavigate();
-  const [pending, setPending] = useState<PendingAction | null>(null);
+
+  const store: CaseActionCtx['store'] = {
+    prioritiseCase,
+    deprioritiseCase,
+    parkCase,
+    releaseCase,
+    approveCase,
+    reactivateCase,
+    cancelCase,
+    resolveIssue,
+  };
 
   return (
     <Stack spacing={2}>
@@ -43,71 +60,22 @@ export function AblagenBoard(): JSX.Element {
           <LaneColumn
             key={lane.id}
             lane={lane}
+            store={store}
             onOpen={(caseId) => navigate(`/belege/${caseId}`)}
-            onPark={(c) =>
-              setPending({
-                title: `Beleg ${c.weBelegNo} parken`,
-                description: 'Wird aus der Automatik ausgeschlossen.',
-                suggestions: ['Wartet auf Klärung', 'Unvollständige Ware', 'Rücksprache nötig'],
-                run: (reason) => parkCase(c.caseId, reason),
-              })
-            }
-            onRelease={(c) =>
-              setPending({
-                title: `Beleg ${c.weBelegNo} freigeben`,
-                description: 'Wird wieder für die Zuteilung freigegeben.',
-                suggestions: ['Klärung erledigt', 'Daten korrigiert'],
-                run: (reason) => releaseCase(c.caseId, reason),
-              })
-            }
-            onPrioritise={(c) =>
-              setPending({
-                title: `Beleg ${c.weBelegNo} priorisieren`,
-                description: 'Setzt eine manuelle Teamlead-Priorität.',
-                suggestions: ['Kunde wartet', 'Verladetag heute', 'Eskalation Markt'],
-                run: (reason) => prioritiseCase(c.caseId, reason),
-              })
-            }
           />
         ))}
       </Box>
-
-      <ReasonDialog
-        open={pending !== null}
-        title={pending?.title ?? ''}
-        description={pending?.description}
-        suggestions={pending?.suggestions}
-        onConfirm={(reason) => pending?.run(reason)}
-        onClose={() => setPending(null)}
-      />
     </Stack>
   );
 }
 
 interface LaneColumnProps {
   lane: Lane;
+  store: CaseActionCtx['store'];
   onOpen: (caseId: string) => void;
-  onPark: (c: LaneCard) => void;
-  onRelease: (c: LaneCard) => void;
-  onPrioritise: (c: LaneCard) => void;
 }
 
-/**
- * Parken is only legal from `ready`/`needs_review` (§7.1 state machine); the backend
- * rejects any other source state. Only offer the button when the click will succeed,
- * so the UI can never trigger a rejected park.
- */
-function canPark(card: LaneCard): boolean {
-  return card.status === 'ready' || card.status === 'needs_review';
-}
-
-function LaneColumn({
-  lane,
-  onOpen,
-  onPark,
-  onRelease,
-  onPrioritise,
-}: LaneColumnProps): JSX.Element {
+function LaneColumn({ lane, store, onOpen }: LaneColumnProps): JSX.Element {
   return (
     <Paper
       variant="outlined"
@@ -127,56 +95,58 @@ function LaneColumn({
           </Typography>
         )}
         {lane.cards.map((c) => (
-          <Card key={c.caseId} variant="outlined">
-            <CardContent sx={{ pb: 0.5 }}>
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ mb: 0.5 }}
-              >
-                <Typography sx={{ fontWeight: 700 }}>{c.weBelegNo}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {c.storageCode}
-                </Typography>
-              </Stack>
-              <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 0.5 }}>
-                <CaseStatusChip status={c.status} size="small" />
-                {c.priorityFlags.map((f) => (
-                  <PriorityChip key={f} flag={f} size="small" />
-                ))}
-                {c.section !== null && <Chip size="small" label={`Abschnitt ${c.section}`} />}
-                {c.issueStatus && <ProblemChip status={c.issueStatus} size="small" />}
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                {c.totalQuantity} Teile · {formatMinutes(c.estimatedMinutes)}
-                {c.assignedTo ? ` · ${c.assignedTo}` : ''}
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-              <Button size="small" onClick={() => onOpen(c.caseId)}>
-                Details
-              </Button>
-              {lane.id === 'geparkt' ? (
-                <Button size="small" onClick={() => onRelease(c)}>
-                  Freigeben
-                </Button>
-              ) : (
-                <>
-                  <Button size="small" onClick={() => onPrioritise(c)}>
-                    Priorisieren
-                  </Button>
-                  {canPark(c) && (
-                    <Button size="small" color="warning" onClick={() => onPark(c)}>
-                      Parken
-                    </Button>
-                  )}
-                </>
-              )}
-            </CardActions>
-          </Card>
+          <LaneCardView key={c.caseId} card={c} store={store} onOpen={onOpen} />
         ))}
       </Stack>
     </Paper>
+  );
+}
+
+function LaneCardView({
+  card,
+  store,
+  onOpen,
+}: {
+  card: LaneCard;
+  store: CaseActionCtx['store'];
+  onOpen: (caseId: string) => void;
+}): JSX.Element {
+  // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
+  // so the same ctx works from every surface — incl. the Problemfälle lane card.
+  const ctx: CaseActionCtx = { caseId: card.caseId, store };
+  return (
+    <Card variant="outlined">
+      <CardContent sx={{ pb: 0.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+          <Typography sx={{ fontWeight: 700 }}>{card.weBelegNo}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {card.storageCode}
+          </Typography>
+        </Stack>
+        <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 0.5 }}>
+          <CaseStatusChip status={card.status} size="small" />
+          {card.priorityFlags.map((f) => (
+            <PriorityChip key={f} flag={f} size="small" />
+          ))}
+          {card.section !== null && <Chip size="small" label={`Abschnitt ${card.section}`} />}
+          {card.issueStatus && <ProblemChip status={card.issueStatus} size="small" />}
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          {card.totalQuantity} Teile · {formatMinutes(card.estimatedMinutes)}
+          {card.assignedTo ? ` · ${card.assignedTo}` : ''}
+        </Typography>
+      </CardContent>
+      <CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+        <Button size="small" onClick={() => onOpen(card.caseId)}>
+          Details
+        </Button>
+        <CaseActions
+          variant="card"
+          case={{ status: card.status, priorityFlags: card.priorityFlags }}
+          weBelegNo={card.weBelegNo}
+          ctx={ctx}
+        />
+      </CardActions>
+    </Card>
   );
 }

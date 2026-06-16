@@ -11,6 +11,7 @@ import type { WorkflowEvent } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
 import { unwrap } from './http.js';
+import { toOverrideAction, type AuditPayload } from './audit.js';
 import {
   toActorType,
   toCaseStatus,
@@ -46,7 +47,7 @@ export interface CockpitSnapshot {
   cockpit: CockpitSummary;
   board: BoardRow[];
   lanes: Lane[];
-  recentOverrides: WorkflowEvent[];
+  recentOverrides: WorkflowEvent<AuditPayload>[];
   /** Ready, unassigned cases that can be added to a bundle (§10.3 manual add). */
   pool: PoolCase[];
 }
@@ -301,7 +302,7 @@ function toLaneCard(item: PoolItemDto): LaneCard {
 // §8.4 Audit feed
 // ---------------------------------------------------------------------------
 
-function mapEvent(dto: AuditEventDto): WorkflowEvent {
+function mapEvent(dto: AuditEventDto): WorkflowEvent<AuditPayload> {
   return {
     id: dto.id,
     eventType: toEventType(dto.eventType),
@@ -310,7 +311,7 @@ function mapEvent(dto: AuditEventDto): WorkflowEvent {
     actorType: toActorType(dto.actorType),
     actorId: dto.actorId,
     timestamp: dto.at,
-    payload: { action: dto.action, reason: dto.reason },
+    payload: { action: toOverrideAction(dto.action), reason: dto.reason ?? undefined },
   };
 }
 

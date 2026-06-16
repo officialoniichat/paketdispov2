@@ -6,7 +6,6 @@ import {
   isBlocking,
   openIssue,
   rejectIssue,
-  releaseIssue,
   resolveIssue,
   teamleadInbox,
   type OpenIssueInput,
@@ -97,7 +96,7 @@ describe('issue status transitions', () => {
   });
 });
 
-describe('teamlead resolve / release / reject', () => {
+describe('teamlead resolve / reject', () => {
   const caseIssue: WorkIssue = {
     id: 'iss-c',
     caseId: 'case-1',
@@ -108,21 +107,15 @@ describe('teamlead resolve / release / reject', () => {
     status: 'open',
   };
 
-  it('resolve routes a case-scoped issue to released', () => {
+  it('resolve routes a case-scoped issue back to in_progress and stamps release fields', () => {
     const d = resolveIssue(caseIssue, 'corrected in Prohandel', NOW, TEAMLEAD);
     if (!d.ok) throw new Error('expected ok');
     expect(d.issue.status).toBe('resolved');
     expect(d.issue.resolution).toBe('corrected in Prohandel');
-    expect(d.caseStatus).toBe('released');
-    expect(d.events[0].eventType).toBe('issue.resolved');
-  });
-
-  it('release stamps releasedBy/releasedAt and unblocks the case', () => {
-    const d = releaseIssue(caseIssue, NOW, TEAMLEAD);
-    if (!d.ok) throw new Error('expected ok');
     expect(d.issue.releasedBy).toBe('tl-1');
     expect(d.issue.releasedAt).toBe(NOW);
-    expect(d.caseStatus).toBe('released');
+    expect(d.caseStatus).toBe('in_progress');
+    expect(d.events[0].eventType).toBe('issue.resolved');
   });
 
   it('reject is terminal and never proposes a blocking case status for scoped issues', () => {

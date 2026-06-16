@@ -21,6 +21,8 @@ import {
   type EmployeeProfileUpdate,
 } from '../../data/employees.js';
 import { useBereichCatalog } from '../../data/bereichCatalog.js';
+import { formatAuditAction } from '../../data/audit.js';
+import { toEventType } from '../../data/narrow.js';
 
 type ProfilePatchArgs = [string, EmployeeProfileUpdate];
 
@@ -227,7 +229,7 @@ function AuditSection({ emp }: { emp: EmployeeDetail }): JSX.Element {
       <Typography variant="subtitle2">Audit (§8.4)</Typography>
       {emp.recentAudit.map((a, i) => (
         <Typography key={i} variant="caption" color="text.secondary">
-          {new Date(a.at).toLocaleString('de-DE')} · {a.eventType}
+          {new Date(a.at).toLocaleString('de-DE')} · {formatAuditAction(toEventType(a.eventType))}
         </Typography>
       ))}
     </Stack>

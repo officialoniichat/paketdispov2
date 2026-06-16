@@ -149,10 +149,10 @@ describe('assignment (§8.3 + §17.1 Zuteilung)', () => {
 });
 
 describe('issue-flow (§4.5 + §17.1 Problemfall)', () => {
-  it('report → resolve → release moves the case through the §7.1 states', async () => {
+  it('report → resolve moves the case through the §7.1 states', async () => {
     const owned = await prisma.goodsReceiptCase.findFirstOrThrow({ where: { status: 'assigned' } });
 
-    await cases.startPreparation(employee, owned.id); // assigned → picking
+    await cases.startPreparation(employee, owned.id); // assigned → in_progress
     await cases.reportIssue(employee, owned.id, {
       caseId: owned.id,
       scope: 'case',
@@ -167,11 +167,7 @@ describe('issue-flow (§4.5 + §17.1 Problemfall)', () => {
 
     await teamleadSvc.resolveIssue(teamlead, issue.id, { resolution: 'Nachgezählt' });
     row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: owned.id } });
-    expect(row.status).toBe('waiting_teamlead');
-
-    await teamleadSvc.releaseIssue(teamlead, issue.id, { note: 'weiter' });
-    row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: owned.id } });
-    expect(row.status).toBe('checking'); // released → resume work
+    expect(row.status).toBe('in_progress'); // issue_open → in_progress (resume work)
 
     const resolved = await prisma.issue.findUniqueOrThrow({ where: { id: issue.id } });
     expect(resolved.status).toBe('resolved');
@@ -186,8 +182,11 @@ describe('ZST (§4.6 + §17.1 ZST)', () => {
     const owned = await prisma.goodsReceiptCase.findFirstOrThrow({
       where: { status: 'assigned' },
     });
-    // Fast-forward through the handling steps to the boxing milestone.
-    await prisma.goodsReceiptCase.update({ where: { id: owned.id }, data: { status: 'boxing' } });
+    // Fast-forward to the in-progress state from which completion is legal.
+    await prisma.goodsReceiptCase.update({
+      where: { id: owned.id },
+      data: { status: 'in_progress' },
+    });
 
     await cases.complete(employee, owned.id);
 

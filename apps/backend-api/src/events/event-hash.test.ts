@@ -15,7 +15,7 @@ function event(overrides: Partial<HashableEvent> = {}): HashableEvent {
     actorType: 'employee',
     actorId: 'user-1',
     timestamp: '2026-06-15T10:00:00.000Z',
-    payload: { from: 'boxing', to: 'completed' },
+    payload: { from: 'in_progress', to: 'completed' },
     ...overrides,
   };
 }
@@ -34,8 +34,8 @@ function buildChain(events: HashableEvent[]): ChainLink[] {
 
 describe('event hash chain (§16.2 manipulationsgeschützt)', () => {
   it('is deterministic regardless of object key order', () => {
-    const a = canonicalEventContent(event({ payload: { to: 'completed', from: 'boxing' } }));
-    const b = canonicalEventContent(event({ payload: { from: 'boxing', to: 'completed' } }));
+    const a = canonicalEventContent(event({ payload: { to: 'completed', from: 'in_progress' } }));
+    const b = canonicalEventContent(event({ payload: { from: 'in_progress', to: 'completed' } }));
     expect(a).toBe(b);
     expect(computeEventHash(null, event())).toBe(computeEventHash(null, event()));
   });
@@ -50,7 +50,7 @@ describe('event hash chain (§16.2 manipulationsgeschützt)', () => {
   it('detects a tampered payload', () => {
     const links = buildChain([event({ entityId: 'a' }), event({ entityId: 'b' })]);
     const tampered = [...links];
-    tampered[1] = { ...tampered[1]!, payload: { from: 'boxing', to: 'cancelled' } };
+    tampered[1] = { ...tampered[1]!, payload: { from: 'in_progress', to: 'cancelled' } };
     const result = verifyChainLinks(tampered);
     expect(result.ok).toBe(false);
     expect(result.brokenAtIndex).toBe(1);

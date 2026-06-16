@@ -2,7 +2,7 @@
  * Mitarbeitenden-Board (§10.3 / Anhang E.4 "Workforce dispatch board").
  *
  * Per person: current Paket, Restkapazität, Aufwandspunkte, schwer/leicht mix
- * and Issue-Status. Teamlead actions – Paket entziehen/hinzufügen, Reihenfolge
+ * and Problem-Status. Teamlead actions – Paket entziehen/hinzufügen, Reihenfolge
  * neu setzen, Pause/Abwesenheit – all require a reason and are audited (§8.4),
  * and are POSTed to the real backend with an optimistic board update + rollback.
  */
@@ -23,7 +23,8 @@ import Typography from '@mui/material/Typography';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import { CaseStatusChip } from '@paket/ui';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import { CaseStatusChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
@@ -132,17 +133,22 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           <Typography variant="body2" color="text.secondary">
             {row.effortPoints} Pkt · schwer {row.heavyCaseCount}/leicht {row.lightCaseCount}
           </Typography>
-          <Chip
-            size="small"
-            color={row.openIssues > 0 ? 'error' : 'success'}
-            label={`${row.openIssues} Issues`}
-          />
+          {row.openIssues > 0 && (
+            <ProblemChip status="open" count={row.openIssues} size="small" />
+          )}
           {row.bundleSize != null && (
             <Typography variant="body2">
               Paket {(row.currentCaseIndex ?? 0) + 1}/{row.bundleSize}
             </Typography>
           )}
-          {row.paused && <Chip size="small" color="warning" label="Pause" />}
+          {row.paused && (
+            <Chip
+              size="small"
+              color="warning"
+              icon={<PauseCircleIcon fontSize="small" />}
+              label="Pausiert"
+            />
+          )}
         </Stack>
       </AccordionSummary>
       <AccordionDetails>

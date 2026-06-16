@@ -65,22 +65,12 @@ export type ChipIconKey =
 
 /** Belegstatus chips covering the full case lifecycle (Anhang A / §7). */
 export const caseStatusMeta: Record<CaseStatus, ChipMeta> = {
-  imported: { label: 'Importiert', bg: '#e8edf2', fg: '#1a2430', icon: 'inbox' },
-  parsed: { label: 'Erkannt', bg: '#e8edf2', fg: '#1a2430', icon: 'inbox' },
   needs_review: { label: 'Prüfung nötig', bg: ltColors.warning, fg: '#ffffff', icon: 'warning' },
   ready: { label: 'Bereit', bg: ltColors.success, fg: '#ffffff', icon: 'check' },
   parked: { label: 'Geparkt', bg: '#6b6b6b', fg: '#ffffff', icon: 'pause' },
   assigned: { label: 'Zugewiesen', bg: ltColors.info, fg: '#ffffff', icon: 'play' },
-  picking: { label: 'Abholung', bg: ltColors.brandLight, fg: '#ffffff', icon: 'play' },
-  preparing: { label: 'Vorbereitung', bg: ltColors.brandLight, fg: '#ffffff', icon: 'build' },
-  sorting: { label: 'Sortierung', bg: ltColors.brandLight, fg: '#ffffff', icon: 'build' },
-  checking: { label: 'Kontrolle', bg: ltColors.brandLight, fg: '#ffffff', icon: 'build' },
-  labeling: { label: 'Auszeichnung', bg: ltColors.brandLight, fg: '#ffffff', icon: 'build' },
-  securing: { label: 'Sicherung', bg: ltColors.brandLight, fg: '#ffffff', icon: 'build' },
-  boxing: { label: 'Boxen', bg: ltColors.brandLight, fg: '#ffffff', icon: 'inventory' },
-  issue_open: { label: 'Problem offen', bg: ltColors.danger, fg: '#ffffff', icon: 'error' },
-  waiting_teamlead: { label: 'Wartet auf TL', bg: ltColors.warning, fg: '#ffffff', icon: 'pending' },
-  released: { label: 'Freigegeben', bg: ltColors.info, fg: '#ffffff', icon: 'check' },
+  in_progress: { label: 'In Arbeit', bg: ltColors.brandLight, fg: '#ffffff', icon: 'play' },
+  issue_open: { label: 'Problem', bg: ltColors.danger, fg: '#ffffff', icon: 'error' },
   partially_completed: {
     label: 'Teilfertig',
     bg: ltColors.warning,

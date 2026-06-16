@@ -136,13 +136,13 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
     const keptBundleId = inFlight.assignedBundleId;
     await prisma.goodsReceiptCase.update({
       where: { id: inFlight.id },
-      data: { status: 'picking' },
+      data: { status: 'in_progress' },
     });
 
     await assignment.recalculate(teamlead);
 
     const row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: inFlight.id } });
-    expect(row.status).toBe('picking');
+    expect(row.status).toBe('in_progress');
     expect(row.assignedBundleId).toBe(keptBundleId);
 
     // Its bundle/item must survive (not deleted by the cleanup).

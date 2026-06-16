@@ -53,29 +53,19 @@ export interface BelegRow {
 }
 
 /**
- * Lifecycle phase — the human grouping over the 20 fine-grained §7.1 statuses
+ * Lifecycle phase — the human grouping over the 10 §7.1 case statuses
  * (see docs/concept/beleg-lifecycle-completion-concept.md). Gives the Belege view
  * a one-word answer to "where is my Beleg?" and drives the scope switcher.
  */
 export type CasePhase = 'eingang' | 'pool' | 'arbeit' | 'abgeschlossen' | 'erledigt';
 
 const PHASE_BY_STATUS: Record<CaseStatus, CasePhase> = {
-  imported: 'eingang',
-  parsed: 'eingang',
   needs_review: 'eingang',
   ready: 'pool',
   parked: 'pool',
   assigned: 'arbeit',
-  picking: 'arbeit',
-  preparing: 'arbeit',
-  sorting: 'arbeit',
-  checking: 'arbeit',
-  labeling: 'arbeit',
-  securing: 'arbeit',
-  boxing: 'arbeit',
+  in_progress: 'arbeit',
   issue_open: 'arbeit',
-  waiting_teamlead: 'arbeit',
-  released: 'arbeit',
   partially_completed: 'abgeschlossen',
   completed: 'abgeschlossen',
   zst_done: 'erledigt',

@@ -314,7 +314,18 @@ async function seedCaseDetails(): Promise<void> {
   // empty). Cancelled cases get no detail — there is nothing to show.
   const cases = await prisma.goodsReceiptCase.findMany({
     where: {
-      status: { in: ['ready', 'completed', 'partially_completed', 'zst_done', 'issue_open'] },
+      status: {
+        in: [
+          'needs_review',
+          'ready',
+          'parked',
+          'in_progress',
+          'completed',
+          'partially_completed',
+          'zst_done',
+          'issue_open',
+        ],
+      },
     },
   });
 
@@ -402,7 +413,15 @@ async function seedCaseDetails(): Promise<void> {
 // They are NOT status='ready', so the assignment engine ignores them.
 // See docs/concept/beleg-lifecycle-completion-concept.md.
 
-type LifecycleStatus = 'completed' | 'partially_completed' | 'zst_done' | 'cancelled' | 'issue_open';
+type LifecycleStatus =
+  | 'needs_review'
+  | 'parked'
+  | 'in_progress'
+  | 'completed'
+  | 'partially_completed'
+  | 'zst_done'
+  | 'cancelled'
+  | 'issue_open';
 
 interface SeedLifecycleCase {
   weBelegNo: string;
@@ -450,6 +469,21 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     totalQuantity: 33, effortPoints: 8, estimatedMinutes: 20, status: 'issue_open',
     employeeNo: 'ma-103',
     issue: { issueType: 'wrong_color', description: 'Farbe weicht von Arbeitsanweisung ab' },
+  },
+  {
+    weBelegNo: 'WE-2026-000206', storageCode: 'R7', section: 7, goodsTypeText: 'NOS',
+    totalQuantity: 28, effortPoints: 7, estimatedMinutes: 16, status: 'needs_review',
+    employeeNo: 'ma-101',
+  },
+  {
+    weBelegNo: 'WE-2026-000207', storageCode: 'R18', section: 4, goodsTypeText: 'Nachorder',
+    totalQuantity: 52, effortPoints: 12, estimatedMinutes: 26, status: 'parked',
+    employeeNo: 'ma-102',
+  },
+  {
+    weBelegNo: 'WE-2026-000208', storageCode: 'R27', section: 1, goodsTypeText: 'Vororder',
+    totalQuantity: 41, effortPoints: 10, estimatedMinutes: 22, status: 'in_progress',
+    employeeNo: 'ma-103',
   },
 ];
 
