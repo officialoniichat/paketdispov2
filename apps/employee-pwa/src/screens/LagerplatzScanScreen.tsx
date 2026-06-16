@@ -15,6 +15,7 @@ import { StepScaffold } from '../components/StepScaffold.js';
 import { ScanField } from '../scanner/ScanField.js';
 import { useScanner } from '../scanner/useScanner.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
+import { scanMatches } from '../workflow/workflowModel.js';
 import { caseStepPath, problemPath } from '../routes/paths.js';
 
 export function LagerplatzScanScreen(): JSX.Element {
@@ -30,8 +31,11 @@ export function LagerplatzScanScreen(): JSX.Element {
   }
 
   const c = flow.aggregate.case;
+  const matched = scanned ? scanMatches(scanned, c.storageLocation.code) : false;
 
   const confirmFound = async (): Promise<void> => {
+    // Hard block: only advance when the scan matches the expected Lagerplatz.
+    if (!matched) return;
     await flow.confirmPickup(scanned ?? undefined);
     navigate(caseStepPath(caseId, 'prepare'));
   };
@@ -41,12 +45,12 @@ export function LagerplatzScanScreen(): JSX.Element {
       caseId={caseId}
       where={`Beleg WE ${c.weBelegNo}`}
       title="Lagerplatzscan"
-      primary={{ label: 'Paket gefunden', onClick: confirmFound }}
+      primary={{ label: 'Paket gefunden – weiter', onClick: confirmFound, disabled: !matched }}
     >
       <Stack spacing={2}>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={0.5}>
-            <Typography>Nächster Lagerplatz: {c.storageLocation.code}</Typography>
+            <Typography>Lagerplatz: {c.storageLocation.code}</Typography>
             <Typography>Beleg: WE {c.weBelegNo}</Typography>
             <Typography>Belegmenge: {c.totalQuantity}</Typography>
           </Stack>
@@ -56,7 +60,12 @@ export function LagerplatzScanScreen(): JSX.Element {
           hint={`Erwartet: ${c.storageLocation.code}`}
           onSubmit={(code) => setScanned(code)}
         />
-        {scanned ? <Alert severity="success">Gescannt: {scanned}</Alert> : null}
+        {scanned && matched ? <Alert severity="success">Richtiger Lagerplatz: {scanned}</Alert> : null}
+        {scanned && !matched ? (
+          <Alert severity="error">
+            Falscher Lagerplatz – erwartet {c.storageLocation.code}, gescannt {scanned}
+          </Alert>
+        ) : null}
         <Button color="error" variant="text" onClick={() => navigate(problemPath(caseId))}>
           Paket nicht gefunden
         </Button>

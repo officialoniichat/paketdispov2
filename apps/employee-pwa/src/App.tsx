@@ -11,11 +11,11 @@ import { seedIfEmpty } from './db/seed.js';
 import { loadAssignedWork } from './db/sync.js';
 import { isBackendEnabled } from './data/api.js';
 import { BootstrapProvider } from './data/bootstrapContext.js';
-import { TagesstartScreen } from './screens/TagesstartScreen.js';
-import { PaketReihenfolgeScreen } from './screens/PaketReihenfolgeScreen.js';
+import { BelegListeScreen } from './screens/BelegListeScreen.js';
 import { LagerplatzScanScreen } from './screens/LagerplatzScanScreen.js';
 import { VorbereitungScreen } from './screens/VorbereitungScreen.js';
 import { PositionScreen } from './screens/PositionScreen.js';
+import { BoxenSortierenScreen } from './screens/BoxenSortierenScreen.js';
 import { BoxabschlussScreen } from './screens/BoxabschlussScreen.js';
 import { AbschlussScreen } from './screens/AbschlussScreen.js';
 import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
@@ -54,11 +54,11 @@ export function App(): JSX.Element {
     <BootstrapProvider value={{ loading, error }}>
       <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
         <Routes>
-        <Route path="/" element={<TagesstartScreen />} />
-        <Route path="/paket" element={<PaketReihenfolgeScreen />} />
+        <Route path="/" element={<BelegListeScreen />} />
         <Route path="/case/:caseId/pickup" element={<LagerplatzScanScreen />} />
         <Route path="/case/:caseId/prepare" element={<VorbereitungScreen />} />
         <Route path="/case/:caseId/positions" element={<PositionScreen />} />
+        <Route path="/case/:caseId/sort" element={<BoxenSortierenScreen />} />
         <Route path="/case/:caseId/boxing" element={<BoxabschlussScreen />} />
         <Route path="/case/:caseId/complete" element={<AbschlussScreen />} />
         <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />

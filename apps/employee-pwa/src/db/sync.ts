@@ -23,8 +23,8 @@ import {
   transportBoxTargetSchema,
 } from '@paket/domain-types';
 import { db as defaultDb, type PaketDb } from './db.js';
-import { putAggregate, putBundle, putProgress } from './repository.js';
-import type { AssignedBundle, CaseAggregate, PickupStop } from './types.js';
+import { putAggregate, putBelege, putDay, putProgress } from './repository.js';
+import type { BelegListItem, CaseAggregate, DayContext } from './types.js';
 import { initialProgress } from '../workflow/workflowModel.js';
 import { getApiClient } from '../data/api.js';
 import { getSession } from '../data/session.js';
@@ -131,20 +131,15 @@ function toWorkInstruction(
 }
 
 /**
- * Build domain positions. The DTO carries no SKU lines, so we synthesise one
- * per position with the case quantity spread evenly (remainder to the first),
- * which is what the position/quantity views read (pos.skuLines).
+ * Build domain positions from the DTO, mapping the real SKU lines (EAN/size/
+ * quantity) it carries. Multiple positions and multiple SKU lines per position
+ * are handled dynamically; a position without SKU lines maps to an empty list.
  */
-function toPositions(
-  caseId: string,
-  dtos: ReceiptPositionDto[],
-  totalQuantity: number,
-): ReceiptPosition[] {
-  const count = dtos.length || 1;
-  const base = Math.floor(totalQuantity / count);
-  const remainder = totalQuantity - base * count;
-  return dtos.map((dto, i) => {
-    const expected = base + (i === 0 ? remainder : 0);
+function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPosition[] {
+  return dtos.map((dto) => {
+    const skuDtos =
+      (dto as { skuLines?: Array<{ id?: string; ean?: string; size?: string; expectedQuantity?: number }> })
+        .skuLines ?? [];
     return {
       id: dto.id,
       caseId,
@@ -161,16 +156,14 @@ function toPositions(
         securityRequired: false,
         onlineHandlingRequired: false,
       },
-      skuLines: [
-        {
-          id: `${dto.id}-sku-1`,
-          receiptPositionId: dto.id,
-          ean: '',
-          size: '',
-          expectedQuantity: Math.max(expected, 0),
-          status: 'open' as const,
-        },
-      ],
+      skuLines: skuDtos.map((s, i) => ({
+        id: s.id ?? `${dto.id}-sku-${i + 1}`,
+        receiptPositionId: dto.id,
+        ean: s.ean ?? '',
+        size: s.size ?? '',
+        expectedQuantity: s.expectedQuantity ?? 0,
+        status: 'open' as const,
+      })),
       status: positionStatus(dto.status),
     };
   });
@@ -193,39 +186,50 @@ function toBoxTargets(caseId: string, dtos: TransportBoxTargetDto[]): TransportB
   }));
 }
 
-/** Map the route stops + case summaries onto the ordered pickup list. */
-function toPickupStops(bundle: CurrentBundleDto, cases: CaseSummaryDto[]): PickupStop[] {
-  const byLocation = new Map<string, CaseSummaryDto>();
-  for (const c of cases) byLocation.set(c.storageLocationCode, c);
-  return [...bundle.routeStops]
-    .sort((a, b) => a.sequence - b.sequence)
-    .map((stop, i) => {
-      const summary = byLocation.get(stop.locationCode) ?? cases[i];
-      return {
-        caseId: summary?.id ?? stop.id,
-        sequenceIndex: stop.sequence,
-        locationCode: stop.locationCode,
-        weBelegNo: summary?.weBelegNo ?? '',
-        quantity: summary?.totalQuantity ?? 0,
-        shopAreaNo: typeof summary?.section === 'number' ? String(summary.section) : undefined,
-        note: summary?.priorityFlags.includes('prio') ? 'Prio' : undefined,
-      } satisfies PickupStop;
-    });
+/** Same-day sections (NOS=4, Extra=7, NOS-Nachorder=8) are worked first. */
+const URGENT_SECTIONS = new Set([4, 7, 8]);
+
+function goodsCategory(value: unknown): BelegListItem['goodsType'] {
+  if (value === 'palette' || value === 'haengeware' || value === 'mixed' || value === 'regal') {
+    return value;
+  }
+  return 'regal';
 }
 
-function toAssignedBundle(
-  bundle: CurrentBundleDto,
-  cases: CaseSummaryDto[],
-  employeeName: string,
-): AssignedBundle {
+function isUrgent(summary: CaseSummaryDto): boolean {
+  return (
+    summary.priorityFlags.includes('prio') ||
+    (typeof summary.section === 'number' && URGENT_SECTIONS.has(summary.section))
+  );
+}
+
+/** Priority rank for the recommended sort order (lower = first). */
+function prioRankFor(summary: CaseSummaryDto, index: number): number {
+  return (isUrgent(summary) ? 0 : 100) + index;
+}
+
+/** Map the assigned case summaries onto the selectable Beleg list (no forced order). */
+function toBelegList(cases: CaseSummaryDto[]): BelegListItem[] {
+  return cases.map((c, i) => ({
+    caseId: c.id,
+    weBelegNo: c.weBelegNo,
+    prioRank: prioRankFor(c, i),
+    section: typeof c.section === 'number' ? c.section : null,
+    storageLocationCode: c.storageLocationCode,
+    goodsType: goodsCategory((c as { goodsType?: unknown }).goodsType),
+    totalQuantity: c.totalQuantity,
+    urgent: isUrgent(c),
+  }));
+}
+
+function toDayContext(bundle: CurrentBundleDto | undefined, employeeName: string): DayContext {
   return {
-    bundleId: bundle.bundleId,
+    id: 'today',
     employeeName,
     workstation: DEFAULT_WORKSTATION,
     plannedStart: DEFAULT_PLANNED_START,
     plannedEnd: DEFAULT_PLANNED_END,
-    estimatedMinutes: bundle.plannedEffortMinutes,
-    pickupStops: toPickupStops(bundle, cases),
+    estimatedMinutes: bundle?.plannedEffortMinutes ?? 0,
   };
 }
 
@@ -235,14 +239,12 @@ function toCaseAggregate(dto: CaseAggregateDto): CaseAggregate {
     caseId,
     case: toGoodsReceiptCase(dto.case),
     workInstruction: toWorkInstruction(caseId, dto.workInstruction),
-    positions: toPositions(caseId, dto.positions, dto.case.totalQuantity),
+    positions: toPositions(caseId, dto.positions),
     boxTargets: toBoxTargets(caseId, dto.boxTargets),
   };
 }
 
 export interface LoadResult {
-  /** Bundle id loaded, or undefined when the employee has no assignment. */
-  bundleId?: string;
   caseCount: number;
 }
 
@@ -261,15 +263,17 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
   }
 
   // Idempotent reset of cached work scope (progress is preserved below).
-  await db.bundles.clear();
+  await db.day.clear();
+  await db.belege.clear();
   await db.aggregates.clear();
 
-  if (!today.bundle) {
+  await putDay(toDayContext(today.bundle ?? undefined, session.displayName), db);
+
+  if (!today.cases.length) {
     return { caseCount: 0 };
   }
 
-  const bundle = toAssignedBundle(today.bundle, today.cases, session.displayName);
-  await putBundle(bundle, db);
+  await putBelege(toBelegList(today.cases), db);
 
   const now = new Date().toISOString();
   for (const summary of today.cases) {
@@ -281,9 +285,9 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
     await putAggregate(aggregate, db);
     const existing = await db.progress.get(aggregate.caseId);
     if (!existing) {
-      await putProgress(initialProgress(aggregate, bundle.bundleId, now), db);
+      await putProgress(initialProgress(aggregate, now), db);
     }
   }
 
-  return { bundleId: bundle.bundleId, caseCount: today.cases.length };
+  return { caseCount: today.cases.length };
 }

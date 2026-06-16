@@ -5,6 +5,7 @@
  */
 import type { JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -21,6 +22,38 @@ export function BoxabschlussScreen(): JSX.Element {
 
   if (!flow.aggregate || !flow.progress) {
     return <CaseCardSkeleton />;
+  }
+
+  const c = flow.aggregate.case;
+
+  // Hängeware: no box / no Plombe / no Förderband. Etiketten + Hängeschild,
+  // then onto the Hängewagen for the branch.
+  if (c.storageLocation.type === 'haengebahn') {
+    return (
+      <StepScaffold
+        caseId={caseId}
+        where={`Beleg WE ${c.weBelegNo}`}
+        title="Hängeware abschließen"
+        subtitle="Keine Box, keine Plombe"
+        primary={{
+          label: 'Auf Hängewagen → Abschluss',
+          onClick: () => navigate(caseStepPath(caseId, 'complete')),
+        }}
+      >
+        <Stack spacing={2}>
+          <Alert severity="info">
+            Hängeware: Etiketten anbringen, Hängeschild an die Stange, dann auf den Hängewagen
+            Richtung Filiale.
+          </Alert>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Stack spacing={0.5}>
+              <Typography>Teile: {c.totalQuantity}</Typography>
+              <Typography>Lagerplatz: {c.storageLocation.code}</Typography>
+            </Stack>
+          </Paper>
+        </Stack>
+      </StepScaffold>
+    );
   }
 
   const targets = flow.aggregate.boxTargets;

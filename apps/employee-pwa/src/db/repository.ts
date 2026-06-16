@@ -6,7 +6,7 @@
  * fail fast on a stale base instead of silently overwriting.
  */
 import { db as defaultDb, type PaketDb } from './db.js';
-import type { AssignedBundle, CaseAggregate, CaseProgress } from './types.js';
+import type { BelegListItem, CaseAggregate, CaseProgress, DayContext } from './types.js';
 
 export class OptimisticLockError extends Error {
   constructor(
@@ -19,9 +19,20 @@ export class OptimisticLockError extends Error {
   }
 }
 
-export async function getActiveBundle(db: PaketDb = defaultDb): Promise<AssignedBundle | undefined> {
-  const bundles = await db.bundles.toArray();
-  return bundles[0];
+export async function getDay(db: PaketDb = defaultDb): Promise<DayContext | undefined> {
+  return db.day.get('today');
+}
+
+export async function putDay(day: DayContext, db: PaketDb = defaultDb): Promise<void> {
+  await db.day.put(day);
+}
+
+export async function getBelege(db: PaketDb = defaultDb): Promise<BelegListItem[]> {
+  return db.belege.toArray();
+}
+
+export async function putBelege(items: BelegListItem[], db: PaketDb = defaultDb): Promise<void> {
+  await db.belege.bulkPut(items);
 }
 
 export async function getAggregate(
@@ -36,10 +47,6 @@ export async function getProgress(
   db: PaketDb = defaultDb,
 ): Promise<CaseProgress | undefined> {
   return db.progress.get(caseId);
-}
-
-export async function putBundle(bundle: AssignedBundle, db: PaketDb = defaultDb): Promise<void> {
-  await db.bundles.put(bundle);
 }
 
 export async function putAggregate(agg: CaseAggregate, db: PaketDb = defaultDb): Promise<void> {

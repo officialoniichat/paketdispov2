@@ -40,8 +40,8 @@ export function ProblemMeldenScreen(): JSX.Element {
   const { caseId = '' } = useParams();
   const navigate = useNavigate();
   const flow = useCaseFlow(caseId);
-  const [scope, setScope] = useState('position');
-  const [issueType, setIssueType] = useState('wrong_color');
+  const [scope, setScope] = useState('');
+  const [issueType, setIssueType] = useState('');
   const [comment, setComment] = useState('');
 
   const send = async (): Promise<void> => {
@@ -110,7 +110,7 @@ export function ProblemMeldenScreen(): JSX.Element {
           boxShadow: 8,
         }}
       >
-        <TouchButton emphasis="primary" onClick={send}>
+        <TouchButton emphasis="primary" onClick={send} disabled={!scope || !issueType}>
           An Teamlead senden
         </TouchButton>
         <Button variant="outlined" size="large" fullWidth onClick={() => navigate(-1)}>

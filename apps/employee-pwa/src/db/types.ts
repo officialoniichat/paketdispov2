@@ -1,9 +1,10 @@
 /**
  * Offline aggregate model for the Mitarbeiter-App (§12.4).
  *
- * The PWA only ever caches *already-assigned* work: a bundle ("Paket") plus the
- * per-case aggregates needed to work each Beleg without network. New
- * assignments, teamlead releases and parser checks still require the server.
+ * The PWA only ever caches *already-assigned* work: the day context, the
+ * priority-sorted list of assigned Belege, and the per-case aggregates needed
+ * to work each Beleg offline. Assignment is system-only — the worker never
+ * self-assigns; he only chooses the order among the assigned Belege.
  */
 import type {
   GoodsReceiptCase,
@@ -12,30 +13,37 @@ import type {
   WorkInstructionHeader,
 } from '@paket/domain-types';
 
-/** One ordered pickup stop in the assigned bundle (9.3 Abholreihenfolge – vorgegeben). */
-export interface PickupStop {
-  caseId: string;
-  /** 1-based pickup order. Verbindlich; the app never lets the worker re-plan. */
-  sequenceIndex: number;
-  locationCode: string;
-  weBelegNo: string;
-  quantity: number;
-  shopAreaNo?: string;
-  floor?: string;
-  /** Free hint shown next to the stop, e.g. 'Prio' or 'Online relevant'. */
-  note?: string;
-}
+/** Storage/goods category — drives the close path (Hängeware skips boxing). */
+export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
 
-/** The day's assigned work bundle. Offline scope is exactly one active bundle. */
-export interface AssignedBundle {
-  bundleId: string;
+/** Derived list status for a Beleg row (computed from CaseProgress + issues). */
+export type BelegStatus = 'open' | 'in_progress' | 'done' | 'issue';
+
+/** Day-level context shown on the hub header. Single row, id = 'today'. */
+export interface DayContext {
+  id: 'today';
   employeeName: string;
   workstation: string;
   /** Planned shift window as 'HH:mm' strings for display only. */
   plannedStart: string;
   plannedEnd: string;
   estimatedMinutes: number;
-  pickupStops: PickupStop[];
+  /** Verladetag/Abfahrt as 'HH:mm' or ISO date string, display only. */
+  verladetag?: string;
+}
+
+/** One assigned Beleg as shown in the selectable list (no forced order). */
+export interface BelegListItem {
+  caseId: string;
+  weBelegNo: string;
+  /** Lower = higher priority. Used only for the recommended sort order. */
+  prioRank: number;
+  section: number | null;
+  storageLocationCode: string;
+  goodsType: GoodsCategory;
+  totalQuantity: number;
+  /** True when this Beleg carries a same-day priority flag (NOS/Extra). */
+  urgent: boolean;
 }
 
 /** Everything needed to work one Beleg offline (case + instruction + positions + box targets). */
@@ -48,10 +56,12 @@ export interface CaseAggregate {
 }
 
 /** Linear per-case workflow steps (Progressive Disclosure, §E.3). */
-export type CaseStep = 'pickup' | 'prepare' | 'positions' | 'boxing' | 'complete' | 'done';
+export type CaseStep = 'pickup' | 'prepare' | 'positions' | 'sort' | 'boxing' | 'complete' | 'done';
 
 export interface BoxProgress {
   boxNo: number;
+  /** Positions assigned to this box (seeded from the engine's boxTargets). */
+  positionIds: string[];
   labelPrinted: boolean;
   sealed: boolean;
   onConveyor: boolean;
@@ -64,11 +74,12 @@ export interface BoxProgress {
  */
 export interface CaseProgress {
   caseId: string;
-  bundleId: string;
   step: CaseStep;
   pickupConfirmed: boolean;
   /** Vorbereitung: labels are printed BEFORE the carton is opened (§9.5, G.2). */
   labelsPrinted: boolean;
+  /** Carton opened (individual step, no longer derived from labelsPrinted). */
+  cartonOpened: boolean;
   /** Carton opened, filler removed, sorted by article/colour/size. */
   prepared: boolean;
   confirmedPositionIds: string[];
@@ -78,6 +89,8 @@ export interface CaseProgress {
    * (§G.1 guardrail: Nein still means quantity_only, never none).
    */
   quantityCheckedPositionIds: string[];
+  /** Box-sort step: worker confirmed the engine's position→box mapping. */
+  boxAssignmentConfirmed: boolean;
   boxes: BoxProgress[];
   zstDone: boolean;
   partial: boolean;

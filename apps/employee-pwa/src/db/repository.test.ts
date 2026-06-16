@@ -7,8 +7,7 @@ import { exampleAggregate } from '../domain/exampleAssignment.js';
 
 let counter = 0;
 const newDb = (): PaketDb => new PaketDb(`test-repo-${counter++}`);
-const baseProgress = () =>
-  initialProgress(exampleAggregate, 'bundle-test', '2026-06-15T00:00:00.000Z');
+const baseProgress = () => initialProgress(exampleAggregate, '2026-06-15T00:00:00.000Z');
 
 describe('saveProgress optimistic locking', () => {
   it('increments the version and persists the change', async () => {

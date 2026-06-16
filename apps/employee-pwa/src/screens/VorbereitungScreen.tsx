@@ -40,9 +40,12 @@ export function VorbereitungScreen(): JSX.Element {
     navigate(caseStepPath(caseId, 'positions'));
   };
 
+  // Three real, individually-confirmed steps (label-before-unpack guardrail).
   const primary = !p.labelsPrinted
     ? { label: 'Etiketten drucken', onClick: () => void flow.printLabels() }
-    : { label: 'Sortierung fertig', onClick: finishSort };
+    : !p.cartonOpened
+      ? { label: 'Karton geöffnet', onClick: () => void flow.openCarton() }
+      : { label: 'Sortierung fertig', onClick: finishSort };
 
   return (
     <StepScaffold
@@ -77,22 +80,22 @@ export function VorbereitungScreen(): JSX.Element {
           <Stack>
             <FormControlLabel
               control={<Checkbox checked={p.labelsPrinted} readOnly />}
-              label="Etiketten drucken"
+              label="Etiketten gedruckt"
             />
             <FormControlLabel
-              control={<Checkbox checked={p.labelsPrinted} readOnly />}
-              label="Karton öffnen"
-              disabled={!p.labelsPrinted}
-            />
-            <FormControlLabel
-              control={<Checkbox checked={p.labelsPrinted} readOnly />}
-              label="Füllmaterial entfernen"
+              control={<Checkbox checked={p.cartonOpened} readOnly />}
+              label="Karton geöffnet"
               disabled={!p.labelsPrinted}
             />
             <FormControlLabel
               control={<Checkbox checked={p.prepared} readOnly />}
-              label="Ware nach Artikel/Farbe/Größe sortieren"
-              disabled={!p.labelsPrinted}
+              label="Füllmaterial entfernt"
+              disabled={!p.cartonOpened}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={p.prepared} readOnly />}
+              label="Ware nach Artikel/Farbe/Größe sortiert"
+              disabled={!p.cartonOpened}
             />
           </Stack>
         </Paper>
