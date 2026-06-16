@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software-Lösungsflow ab ProHandel-Buchung — Soll-Flow, Lücken &amp; Best Path</title>
+<style>
+  :root{
+    --ink:#1a1f24; --ink-soft:#43505c; --ink-faint:#6b7884;
+    --paper:#f5f4ef; --card:#ffffff; --line:#dad4c9; --line-soft:#e8e3d9;
+    --built:#1b7f4b; --built-bg:#e6f4ec; --built-line:#bfe2cd;
+    --partial:#b06d00; --partial-bg:#fbf0d9; --partial-line:#ecd6a6;
+    --broken:#b3261e; --broken-bg:#fbe6e3; --broken-line:#f0c4bf;
+    --missing:#6b2db3; --missing-bg:#f0e9fa; --missing-line:#d8c6f0;
+    --accent:#1f3a5f; --accent-2:#9a4a2f; --seam:#1f3a5f;
+    --ph:#1d6fb8; --we:#9a4a2f; --rule:#7a5cc0; --emp:#1b7f4b; --tl:#b06d00; --sys:#5f6b76;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    font-size:15.5px; line-height:1.5;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 26px 80px;}
+  .masthead{border-bottom:3px solid var(--ink); margin-top:34px; padding-bottom:18px;}
+  .kicker{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:var(--accent-2); font-weight:700; margin-bottom:10px;}
+  h1{font-size:37px; line-height:1.06; margin:0 0 12px; letter-spacing:-.01em;}
+  .dek{font-size:17.5px; color:var(--ink-soft); max-width:780px; margin:0; font-style:italic;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:6px 24px; margin-top:18px; font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5px; color:var(--ink-faint);}
+  .meta-row b{color:var(--ink); font-weight:600;}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12px; background:#efece4; border:1px solid var(--line-soft); border-radius:4px; padding:1px 5px; color:#34404b; white-space:nowrap;}
+  h2{font-family:"Helvetica Neue",Arial,sans-serif; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:700; margin:46px 0 4px; padding-bottom:7px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:12px;}
+  h2 .num{font-size:22px; color:var(--accent-2); font-family:Georgia,serif;}
+  .sub{font-family:"Helvetica Neue",Arial,sans-serif; font-size:12.5px; color:var(--ink-faint); margin:8px 0 20px;}
+  p{margin:0 0 12px;}
+  .legend{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:4px 0;}
+  .lg{border:1px solid var(--line); border-radius:9px; padding:11px 12px; background:var(--card);}
+  .lg p{font-size:12px; color:var(--ink-soft); margin:6px 0 0; line-height:1.38;}
+  .badge{display:inline-flex; align-items:center; gap:6px; font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:4px 9px; border-radius:6px; border:1px solid;}
+  .badge::before{content:""; width:8px; height:8px; border-radius:2px; background:currentColor;}
+  .b-built{color:var(--built); background:var(--built-bg); border-color:var(--built-line);}
+  .b-partial{color:var(--partial); background:var(--partial-bg); border-color:var(--partial-line);}
+  .b-broken{color:var(--broken); background:var(--broken-bg); border-color:var(--broken-line);}
+  .b-missing{color:var(--missing); background:var(--missing-bg); border-color:var(--missing-line);}
+  .srcrow{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 2px;}
+  .chip{font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:.04em; padding:3px 8px; border-radius:100px; color:#fff;}
+  .c-ph{background:var(--ph);} .c-we{background:var(--we);} .c-rule{background:var(--rule);} .c-emp{background:var(--emp);} .c-tl{background:var(--tl);} .c-sys{background:var(--sys);}
+  .srcleg{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--ink-faint); display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:8px;}
+  .srcleg b{color:var(--ink);}
+  .flow{margin:10px 0 0; position:relative;}
+  .seam{display:flex; align-items:center; gap:14px; border:1px dashed var(--seam); background:#eef2f7; border-radius:11px; padding:13px 18px; margin-bottom:6px;}
+  .seam .ic{font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; font-weight:800; letter-spacing:.1em; color:#fff; background:var(--seam); padding:5px 10px; border-radius:6px; white-space:nowrap; text-transform:uppercase;}
+  .seam .tx{font-size:13.5px; color:var(--ink-soft);}
+  .seam .tx b{color:var(--ink);}
+  .conn{display:flex; justify-content:center; align-items:center; height:26px; position:relative;}
+  .conn::before{content:""; width:2px; height:100%; background:var(--line);}
+  .conn .arr{position:absolute; bottom:-1px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid var(--line);}
+  .conn.loop{height:30px;}
+  .conn.loop .lbl{position:absolute; left:calc(50% + 14px); font-family:"Helvetica Neue",Arial,sans-serif; font-size:10.5px; color:var(--ink-faint); white-space:nowrap;}
+  .node{border:1px solid var(--line); border-left-width:5px; border-radius:12px; background:var(--card); padding:0; overflow:hidden;}
+  .node.n-built{border-left-color:var(--built);} .node.n-partial{border-left-color:var(--partial);} .node.n-broken{border-left-color:var(--broken);} .node.n-missing{border-left-color:var(--missing);}
+  .nhead{display:flex; align-items:flex-start; gap:13px; padding:13px 16px 10px;}
+  .nstep{font-family:Georgia,serif; font-size:26px; font-weight:700; color:var(--ink-faint); line-height:.9; min-width:30px;}
+  .nstep small{display:block; font-family:"Helvetica Neue",Arial,sans-serif; font-size:8px; letter-spacing:.12em; color:var(--ink-faint); margin-top:3px;}
+  .ntitle{flex:1;}
+  .ntitle h3{margin:0 0 3px; font-size:18.5px; letter-spacing:-.005em;}
+  .ntitle .role{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; letter-spacing:.04em; color:var(--ink-faint); text-transform:uppercase;}
+  .nhead .badge{align-self:flex-start; margin-top:3px;}
+  .nbody{padding:0 16px 14px 59px;}
+  .nbody .srcrow{margin:0 0 9px;}
+  .nlines{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:9px;}
+  .nl{border-radius:8px; padding:9px 11px; font-size:12.6px; line-height:1.5;}
+  .nl code{white-space:normal; overflow-wrap:break-word;}
+  .nl.does{background:#f4f7f4; border:1px solid #e2ece2;}
+  .nl.lack{background:#faf3f3; border:1px solid #efdedd;}
+  .nl .lab{font-family:"Helvetica Neue",Arial,sans-serif; font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:3px;}
+  .nl.does .lab{color:var(--built);} .nl.lack .lab{color:var(--broken);}
+  .nl b{font-weight:700;}
+  .src{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:10.5px; color:var(--accent); display:block; margin-top:4px; line-height:1.35;}
+  .gaps{display:flex; flex-direction:column; gap:10px; margin-top:4px;}
+  .gap{display:grid; grid-template-columns:30px 1fr; gap:13px; border:1px solid var(--line); border-left-width:5px; border-radius:10px; padding:13px 15px; background:var(--card);}
+  .gap.g1{border-left-color:var(--missing);} .gap.g2{border-left-color:var(--missing);} .gap.g3{border-left-color:var(--broken);} .gap.g4{border-left-color:var(--missing);} .gap.g5{border-left-color:var(--partial);}
+  .gap .r{font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--ink-faint);}
+  .gap h4{margin:0 0 3px; font-size:15.5px; display:flex; gap:9px; align-items:center; flex-wrap:wrap;}
+  .gap p{margin:0; font-size:12.8px; color:var(--ink-soft); line-height:1.45;}
+  .gap .src{margin-top:4px;}
+  .seq{counter-reset:s; display:flex; flex-direction:column; gap:0;}
+  .seqi{display:grid; grid-template-columns:46px 1fr; gap:16px; padding:14px 0; border-bottom:1px solid var(--line-soft);}
+  .seqi:last-child{border-bottom:none;}
+  .seqn{width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff; font-family:Georgia,serif; font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+  .seqn::before{counter-increment:s; content:counter(s);}
+  .seqi.now .seqn{background:var(--broken);}
+  .seqc h4{margin:0 0 3px; font-size:16px;}
+  .seqc p{margin:0; font-size:13px; color:var(--ink-soft);}
+  .seqc .why{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--accent-2); font-weight:600; margin-top:4px; display:block; letter-spacing:.02em;}
+  .dec{border:1px solid var(--line); border-radius:11px; background:var(--card); overflow:hidden;}
+  .dec table{width:100%; border-collapse:collapse; font-size:13px;}
+  .dec th{background:#f1ede5; text-align:left; font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); padding:9px 13px; border-bottom:1px solid var(--line);}
+  .dec td{padding:10px 13px; border-bottom:1px solid var(--line-soft); vertical-align:top;}
+  .dec tr:last-child td{border-bottom:none;}
+  .dec td:first-child{font-weight:700; white-space:nowrap;}
+  .dec .rec{color:var(--built); font-weight:700;}
+  .callout{border:1px solid var(--line); border-left:5px solid var(--accent-2); border-radius:10px; background:#fbf6ee; padding:15px 19px; margin:16px 0;}
+  .callout h4{margin:0 0 7px; font-size:15.5px;}
+  .callout p:last-child{margin-bottom:0;}
+  .fazit{background:var(--ink); color:#f1eee7; border-radius:14px; padding:24px 28px; margin-top:18px;}
+  .fazit h3{color:#fff; margin:0 0 9px; font-size:19px;}
+  .fazit p{color:#d3cec3;} .fazit strong{color:#fff;}
+  footer{margin-top:44px; padding-top:15px; border-top:1px solid var(--line); font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--ink-faint); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+  @media print{
+    body{background:#fff; font-size:10.3px;}
+    .wrap{max-width:none; padding:0 6mm;}
+    .node,.gap,.seam,.callout,.fazit,.dec,.seqi,.legend{break-inside:avoid;}
+    h2{break-after:avoid;}
+    .fazit{background:#fff; color:var(--ink); border:2px solid var(--ink);} .fazit h3,.fazit strong{color:var(--ink);} .fazit p{color:var(--ink-soft);}
+    @page{size:A4; margin:12mm 10mm;}
+    .pagebreak{break-before:page;}
+  }
+  @media (max-width:820px){ .legend{grid-template-columns:1fr 1fr;} .nlines{grid-template-columns:1fr;} h1{font-size:28px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="kicker">Software-Lösungsflow · Soll-Bild (TO-BE)</div>
+    <h1>Der Software-Flow ab ProHandel-Buchung</h1>
+    <p class="dek">Realistischer Lösungs-Scope: ProHandel ist das System of Record. Erst <em>ab der gebuchten Wareneingangs-Position</em> übernimmt die Software. Dieser Flow zeigt den vollständigen Soll-Weg von dort bis zur Auslieferung — was schon steht, was fehlt, und den empfohlenen besten Pfad.</p>
+    <div class="meta-row">
+      <span><b>Einstiegspunkt:</b> gebuchter WE in ProHandel</span>
+      <span><b>Software-Stand:</b> HEAD <code>f3fd09f</code></span>
+      <span><b>Grundlage:</b> docs/concept/ingestion-fields-ux-concept.md</span>
+      <span><b>Erstellt:</b> 2026-06-16</span>
+    </div>
+  </header>
+
+  <h2><span class="num">1</span> Leitprinzip — ProHandel ist die Wahrheit</h2>
+  <p class="sub">Kein Feld wird geraten/OCR-geschätzt. Jedes Feld hat genau eine autoritative Quelle. PDFs sind nur noch Archiv/Fallback.</p>
+  <div class="callout">
+    <h4>Warum ab ProHandel-Buchung statt ab dem PDF?</h4>
+    <p>Im IST entsteht beim Buchen des Lieferscheins in ProHandel die <b>bestandswirksame WE-Position</b> samt aller L&amp;T-Attribute (Abschnitt, CatMan, Filiale, WGR, Preise, Soll-Mengen). Diese Daten <em>strukturiert</em> aus ProHandel zu ziehen ist robuster als sie aus gedruckten Belegen zurück­zu­parsen. Der Parser bleibt nur <b>Fallback</b> für echtes Papier / Nicht-ProHandel-Fälle. Damit entfällt das größte Risiko aus dem IST-Audit (synthetische Golden-Master, Tabellen-Layout) — es wird gar nicht erst gebraucht.</p>
+  </div>
+  <div class="srcleg">
+    <span><b>Quellen der Wahrheit:</b></span>
+    <span><span class="chip c-ph">PH</span> ProHandel API</span>
+    <span><span class="chip c-we">WE</span> Einlagerung (Mensch)</span>
+    <span><span class="chip c-rule">RULE</span> L&amp;T-Ableitung/Engine</span>
+    <span><span class="chip c-emp">EMP</span> Mitarbeitende</span>
+    <span><span class="chip c-tl">TL</span> Teamlead</span>
+    <span><span class="chip c-sys">SYS</span> System</span>
+  </div>
+
+  <h2><span class="num">2</span> Status-Legende</h2>
+  <div class="legend">
+    <div class="lg"><span class="badge b-built">Gebaut</span><p>Läuft heute deterministisch (auf Seed-Daten). Code vorhanden &amp; getestet.</p></div>
+    <div class="lg"><span class="badge b-partial">Lückenhaft</span><p>Vorhanden, aber unvollständig oder nur kosmetisch erzwungen.</p></div>
+    <div class="lg"><span class="badge b-broken">Kaputt</span><p>Existiert, ist aber nicht wirksam verdrahtet — tut nichts.</p></div>
+    <div class="lg"><span class="badge b-missing">Fehlt (neu zu bauen)</span><p>Im Konzept designt, aber noch kein Code. Brücke in die reale Welt.</p></div>
+  </div>
+
+  <h2 class="pagebreak"><span class="num">3</span> Der vollständige Soll-Flow</h2>
+  <p class="sub">Von oben nach unten. Jede Stufe: Quelle(n) · Status · was sie tut · was noch fehlt. Der Rückkopplungs-Pfeil (Problem) und der Abschluss-Pfeil zeigen die Schleifen.</p>
+
+  <div class="flow">
+
+    <div class="seam">
+      <span class="ic">Scope-Grenze</span>
+      <span class="tx"><b>ProHandel-Buchung</b> — Lieferschein gegen Auftrag gebucht, WE-Position bestandswirksam angelegt. <em>Alles davor (Buyer-Order, EDI, JobRouter, Anlieferung) bleibt manuell / im ERP.</em> Ab hier beginnt der Software-Scope.</span>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-missing">
+      <div class="nhead">
+        <div class="nstep">0<small>Stufe</small></div>
+        <div class="ntitle"><h3>Ingestion — ProHandel-Pull</h3><span class="role">CaseIngestionPort · automatisch</span></div>
+        <span class="badge b-missing">Fehlt</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-ph">PH</span><span class="chip c-sys">SYS</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Soll-Verhalten</span>Inkrementeller Poll/Webhook ab Cursor → Anti-Corruption-Mapper → idempotenter Upsert (DocumentSet + Case + Positionen + SKU + Arbeitsanweisung) in <b>einer</b> Transaktion → Event <code>case.created</code>. Mapping-Fehler → <b>Quarantäne</b>, nicht verwerfen.</div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Kein Code. <code>DocumentSource</code>-Enum (prohandel_api…) existiert, aber kein Adapter, kein Cursor, kein Mapper. Heute via Dev-Seed. <span class="src">apps/backend-api/prisma/schema.prisma:55–61 · Konzept §3.1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-missing">
+      <div class="nhead">
+        <div class="nstep">1<small>Stufe</small></div>
+        <div class="ntitle"><h3>Case angelegt — Felder gemappt</h3><span class="role">Status: created · automatisch</span></div>
+        <span class="badge b-missing">Fehlt</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-ph">PH</span><span class="chip c-rule">RULE</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Soll-Verhalten</span>Aus PH: weBelegNo+Barcode, Auftrags-/LT-Order-Nr, Lieferant+EDI-Flag, Filiale, <b>Abschnitt (Code 1–8)</b>, <b>CatMan-Datum</b>, Shop/Etage, SKU-Soll-Mengen, EK/VK/Label-VK. Aus RULE abgeleitet: <b>Etikettentyp</b> (WGR-Lookup), Prüfmodus, Aufwand, Priorität, loadPlanDate-Fallback.</div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Datenmodell da, aber Mapping unbefüllt: <code>catManDate</code>, <code>sustainabilityFlag</code>, <code>onlineRelevant</code>, Preise, Label-Marke. <b>Etikettentyp-Ableitung fehlt ganz.</b> Abschnitt als Code statt Text. <span class="src">prisma/schema.prisma:369–478 · Konzept §2</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-missing">
+      <div class="nhead">
+        <div class="nstep">2<small>Stufe</small></div>
+        <div class="ntitle"><h3>WE-Einlagerung — der Lagerplatz <span style="font-size:12px;color:var(--missing);font-family:Helvetica Neue,Arial,sans-serif;letter-spacing:.05em;">★ LINCHPIN</span></h3><span class="role">WE-Worker · neue Station/Rolle</span></div>
+        <span class="badge b-missing">Fehlt</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-we">WE</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Soll-Verhalten</span>Touch/Handheld: Buchungsbeleg scannen → Lagerklasse wählen → Lagerplatz scannen/eingeben (gegen Location-Master validiert) → Case <code>awaiting_storage → ready</code>. Schaden → Issue + Case raus aus Pool. <b>Erst danach</b> ist der Case für die Automatik sichtbar.</div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Komplette Station + Rolle + <code>awaiting_storage</code>-State. <b>Höchster Wert</b>: ohne sie kennt die Software den realen Lagerplatz nicht (heute handschriftlich). <span class="src">Konzept §3.2, §5.1 · Location-Master existiert: schema.prisma:304–320</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-broken">
+      <div class="nhead">
+        <div class="nstep">3<small>Stufe</small></div>
+        <div class="ntitle"><h3>Tagesplanung — Automatik (Recalculate)</h3><span class="role">Engine · deterministisch &lt;5s</span></div>
+        <span class="badge b-broken">Kaputt-verdrahtet</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-rule">RULE</span><span class="chip c-sys">SYS</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Gebaut &amp; gut</span>Schichten aus Wochenmustern materialisieren → Priorität §8.1 (Abschnitt 7/4/8, CatMan-Deadline) → Aufwand §8.2 → Zuteilung §8.3 (Kapazität, eiserne Reserve, Anti-Cherry-Picking, Lastbalance) → ein Bündel je MA + Abholreihenfolge. Idempotent, atomar. <span class="src">assignment.service.ts:43–154 · packages/assignment-engine/*</span></div>
+          <div class="nl lack"><span class="lab">Kaputt</span><b>Admin-Regeln erreichen die Engine nicht:</b> <code>assignWork(input)</code> wird ohne EngineConfig aufgerufen → Engine läuft auf <code>DEFAULT_ENGINE_CONFIG</code>. Jede Prio/Reserve/Bündel/Aufwand-Einstellung im UI bleibt wirkungslos. <span class="src">assignment.service.ts:88,193 · config.ts:129</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-partial">
+      <div class="nhead">
+        <div class="nstep">4<small>Stufe</small></div>
+        <div class="ntitle"><h3>Teamlead-Cockpit — Vorschlag &amp; Eingriff</h3><span class="role">Teamlead · Human-in-the-loop</span></div>
+        <span class="badge b-partial">Lückenhaft</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-tl">TL</span><span class="chip c-sys">SYS</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Gebaut</span>Vorschlag (preview) → Übernehmen → chirurgische Eingriffe (Entziehen/Hinzufügen/Reihenfolge/Pause) mit Grund-Pflicht + Hash-Chain-Audit (§8.4). Live ans Backend verdrahtet. <span class="src">teamlead.service.ts:171–316 · CockpitPage.tsx</span></div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Kein SSE-Push (nur Poll), „Export“ toter Button, <b>ProHandel-Sync-Monitor</b> (Quarantäne/Retry) neu zu bauen. <span class="src">Konzept §5.2</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-partial">
+      <div class="nhead">
+        <div class="nstep">5<small>Stufe</small></div>
+        <div class="ntitle"><h3>Mitarbeiter-App — Auszeichnung</h3><span class="role">Employee · task-first, offline-fähig</span></div>
+        <span class="badge b-partial">Lückenhaft</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-emp">EMP</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Gebaut ~85%</span>Tagesstart → Abholreihenfolge → Lagerplatz-Scan → Vorbereitung (Druck-vor-Auspacken-Guardrail) → Position/Prüfung → Box → ZST. Guardrails &amp; Offline-Reads. <span class="src">apps/employee-pwa/src/screens/*</span></div>
+          <div class="nl lack"><span class="lab">Was fehlt</span><b>Prüfung erfasst keinen echten Zählwert</b> (Mehr/Minder unentdeckbar); Etikettendruck nur Mock; Lagerplatz-Scan ohne Soll/Ist-Abgleich; Etikettentyp nicht angezeigt. <span class="src">PositionScreen.tsx:42–56 · Konzept §5.4</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn loop"><span class="arr"></span><span class="lbl">↺ Problem → Teamlead → Freigabe → zurück in Stufe 5</span></div>
+
+    <div class="node n-partial">
+      <div class="nhead">
+        <div class="nstep">6<small>Schleife</small></div>
+        <div class="ntitle"><h3>Problem-Schleife — Korrektur</h3><span class="role">Employee → Teamlead</span></div>
+        <span class="badge b-partial">Lückenhaft</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-emp">EMP</span><span class="chip c-tl">TL</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Gebaut</span>Melden (Position/SKU/Box/Case) offline-first → Case <code>issue_open</code> → TL Resolve/Release → Case kehrt in den Arbeitsfluss zurück. Auditiert. <span class="src">ProblemMeldenScreen.tsx · teamlead.service.ts:112–169</span></div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Nur generischer Issue-Status — keine Kategorisierung (Mehr/Minder/falscher Artikel) im Modell; Box-Splitting nicht in der PWA; Foto nur Platzhalter.</div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-built">
+      <div class="nhead">
+        <div class="nstep">7<small>Stufe</small></div>
+        <div class="ntitle"><h3>Abschluss — ZST &amp; Teilabschluss</h3><span class="role">Employee → System</span></div>
+        <span class="badge b-built">Gebaut</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-emp">EMP</span><span class="chip c-sys">SYS</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Gebaut</span>Abschluss-Gate (alle Positionen/Mengen/Boxen) → ZST-Datensatz; Teilabschluss (Grund-gated) → Rest am Folgetag. KPI/Audit-Grundlage. <span class="src">AbschlussScreen.tsx · workflowModel.ts:76–96</span></div>
+          <div class="nl lack"><span class="lab">Rest-Lücke</span>ZST lokal statt zentralem PC; <code>productivityFactor</code> (Default 1.0) nicht aus echten ZST-Zeiten kalibriert; keine Pro-MA-Auswertung.</div>
+        </div>
+      </div>
+    </div>
+    <div class="conn"><span class="arr"></span></div>
+
+    <div class="node n-missing">
+      <div class="nhead">
+        <div class="nstep">8<small>Stufe</small></div>
+        <div class="ntitle"><h3>Verladung &amp; Rück­schreibung — Loop schließen</h3><span class="role">Teamlead · System · neu</span></div>
+        <span class="badge b-missing">Fehlt</span>
+      </div>
+      <div class="nbody">
+        <div class="srcrow"><span class="chip c-tl">TL</span><span class="chip c-sys">SYS</span></div>
+        <div class="nlines">
+          <div class="nl does"><span class="lab">Soll-Verhalten</span>Verlade-Board: Boxen in der Auslieferungszone nach Verladetag/Filiale gruppiert → „Transporter beladen/abgefahren“ schließt den Tag (Abend-Transporter zur Filiale). Originaldokumente (LS/AW/WE) ins Archiv/Docuware verlinkt. KPI-Export.</div>
+          <div class="nl lack"><span class="lab">Was fehlt</span>Verlade-Board fehlt; Docuware-Archiv fehlt; „Originaldokumente“-Links tot. Optional: ZST/Lagerplatz <b>zurück</b> nach ProHandel schreiben (offene Frage). <span class="src">Konzept §5.5, §5.3, §7</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2 class="pagebreak"><span class="num">4</span> Was fehlt — die Brücken, priorisiert</h2>
+  <p class="sub">Fünf Lücken trennen „läuft auf Seed-Daten“ von „läuft produktiv ab ProHandel“. Reihenfolge = Wirkung.</p>
+  <div class="gaps">
+    <div class="gap g1"><div class="r">1</div><div>
+      <h4>WE-Einlagerung-Station + <code>awaiting_storage</code> <span class="badge b-missing">Fehlt</span></h4>
+      <p>Der Linchpin: ohne digitale Lagerplatz-Erfassung weiß die Software nicht, wo die Ware liegt — die Abholreihenfolge ist wertlos. Neue Station + Rolle + ein neuer Status zwischen Ingestion und Pool.</p>
+      <span class="src">Konzept §3.2, §5.1 · Stufe 2</span>
+    </div></div>
+    <div class="gap g2"><div class="r">2</div><div>
+      <h4>ProHandel-Ingestion-Port + Feld-Mapping <span class="badge b-missing">Fehlt</span></h4>
+      <p>Ersetzt Seed/Parser durch echte strukturierte Daten. Adapter + Cursor + Anti-Corruption-Mapper + Quarantäne. Inkl. der bisher unbefüllten Felder (Etikettentyp-RULE, sustainability/online, vkLabelPrice, CatMan, Abschnitt-Code).</p>
+      <span class="src">Konzept §3.1, §2 · Stufen 0–1</span>
+    </div></div>
+    <div class="gap g3"><div class="r">3</div><div>
+      <h4>Admin-Regeln → Engine wirksam verdrahten <span class="badge b-broken">Kaputt</span></h4>
+      <p>Kleiner Fix, große Wirkung: einen <code>RuleConfig → EngineConfig</code>-Adapter bauen und <code>assignWork(input, engineConfig)</code> aufrufen. Sonst sind alle Admin-Einstellungen kosmetisch. <b>Schnellster CRITICAL-Gewinn.</b></p>
+      <span class="src">assignment.service.ts:88,193 · config.ts:129 · Stufe 3</span>
+    </div></div>
+    <div class="gap g4"><div class="r">4</div><div>
+      <h4>ProHandel-Sync-Monitor + Originaldokumente-Links <span class="badge b-missing">Fehlt</span></h4>
+      <p>Betriebssicht: Cursor/Last-Pull/Quarantäne mit Retry; und die toten „Originaldokumente“-Links in der Belegdetail an die archivierten PDFs anschließen.</p>
+      <span class="src">Konzept §5.2, §5.3 · Stufe 4 &amp; 8</span>
+    </div></div>
+    <div class="gap g5"><div class="r">5</div><div>
+      <h4>Verlade-Board + echte-Zählwert-Prüfung + Etikettendruck <span class="badge b-partial">Lückenhaft</span></h4>
+      <p>Hinterende schließen (Verladung) und die kosmetischen Guardrails real machen: Stückzahl als <em>Zahl</em> erfassen (Mehr/Minder erkennen), echten Drucker-Call mit Erfolgsprüfung, Lagerplatz-Scan validieren.</p>
+      <span class="src">Konzept §5.5 · PositionScreen.tsx:42–56 · Stufen 5 &amp; 8</span>
+    </div></div>
+  </div>
+
+  <h2><span class="num">5</span> Der beste Pfad — empfohlene Baureihenfolge</h2>
+  <p class="sub">Die Engine &amp; die Mitarbeiter-App stehen schon. Es fehlt nur die Brücke davor und der Abschluss danach. So baut man sie am wirksamsten — jede Stufe macht den nächsten Schritt erst nutzbar.</p>
+  <div class="seq">
+    <div class="seqi now"><div class="seqn"></div><div class="seqc">
+      <h4>Sofort: Admin→Engine-Verdrahtung fixen</h4>
+      <p>Ein Tages-Fix. Macht das bestehende, gute Regelwerk überhaupt erst wirksam — der billigste CRITICAL-Gewinn, unabhängig von allem anderen.</p>
+      <span class="why">Warum zuerst: niedrigster Aufwand, behebt einen echten „tut nichts“-Bug im Kern.</span>
+    </div></div>
+    <div class="seqi"><div class="seqn"></div><div class="seqc">
+      <h4>WE-Einlagerung-Station + <code>awaiting_storage</code></h4>
+      <p>Die Station bauen, den neuen Status einführen, gegen Location-Master validieren. Ab jetzt kennt die Software den realen Lagerplatz.</p>
+      <span class="why">Warum als nächstes: der Linchpin — ohne ihn ist jeder echte Case unpickbar.</span>
+    </div></div>
+    <div class="seqi"><div class="seqn"></div><div class="seqc">
+      <h4>ProHandel-Ingestion-Port + Feld-Mapping</h4>
+      <p>Den Adapter hinter dem <code>CaseIngestionPort</code> implementieren; echte Cases ersetzen den Seed. Felder vollständig mappen, Etikettentyp ableiten. Parser bleibt Fallback.</p>
+      <span class="why">Warum danach: liefert echte Daten in den jetzt funktionierenden Plan- und Einlagerungs-Pfad.</span>
+    </div></div>
+    <div class="seqi"><div class="seqn"></div><div class="seqc">
+      <h4>Guardrails real machen + Sync-Monitor</h4>
+      <p>Echten Zählwert in der Prüfung, echten Drucker-Call, Scan-Validierung; dazu der ProHandel-Sync-Monitor (Quarantäne/Retry) und die Originaldokumente-Links.</p>
+      <span class="why">Warum danach: härtet den nun durchgehenden Flow für den Produktivbetrieb.</span>
+    </div></div>
+    <div class="seqi"><div class="seqn"></div><div class="seqc">
+      <h4>Verladung schließen + Entscheidungen</h4>
+      <p>Verlade-Board (Abend-Transporter), optional Docuware-Archiv &amp; ProHandel-Write-back, optional Schütte-Self-Pull — letztere zwei sind Produkt-Entscheidungen.</p>
+      <span class="why">Warum zuletzt: schließt den Loop; abhängig von noch offenen Entscheidungen.</span>
+    </div></div>
+  </div>
+
+  <h2 class="pagebreak"><span class="num">6</span> Offene Entscheidungen, die den Flow festlegen</h2>
+  <p class="sub">Diese Fragen blockieren den sauberen Bau und sollten vor Stufe 0/2 geklärt werden.</p>
+  <div class="dec">
+    <table>
+      <thead><tr><th>Frage</th><th>Optionen</th><th>Empfehlung</th></tr></thead>
+      <tbody>
+        <tr><td>ProHandel-Zugriff</td><td>REST/DB-API (strukturiert) vs. nur PDF-Export</td><td><span class="rec">Strukturierte API</span> — entfernt das gesamte Parser-Risiko; PDF nur Fallback.</td></tr>
+        <tr><td>Pull-Mechanik</td><td>Intervall-Poll mit Cursor vs. Webhook</td><td><span class="rec">Poll mit Cursor</span> zuerst (einfach, robust, idempotent); Webhook später optional.</td></tr>
+        <tr><td>Lagerplatz-Write-back</td><td>nur in unserem System vs. zurück nach ProHandel</td><td><span class="rec">Erst nur bei uns</span> — Write-back nur wenn ProHandel ihn wirklich braucht.</td></tr>
+        <tr><td>Einlagerungs-Gerät</td><td>feste Station vs. Handheld-Scanner</td><td>Layout/Scan-UX hängt davon ab — früh festlegen (Konzept §7).</td></tr>
+        <tr><td>Verladekonzept-Kalender</td><td>in ProHandel vs. in unseren Regeln</td><td><span class="rec">In unseren Regeln</span>, falls ProHandel <code>loadPlanDate</code> nicht liefert — Ableitung Shopbereich→Verladetag.</td></tr>
+        <tr><td>Schütte-Self-Pull</td><td>nur Auto-Push vs. zusätzlich „Belege holen“</td><td>Modell-Entscheidung — Auto-Push reicht für den Piloten; Self-Pull später.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2><span class="num">7</span> Fazit</h2>
+  <div class="fazit">
+    <h3>Der Motor läuft — es fehlt die Treibstoffzufuhr und der Auspuff</h3>
+    <p>Ab der ProHandel-Buchung ist der Soll-Flow kurz und klar: <strong>Ingestion → Einlagerung → Automatik → Cockpit → App → Abschluss → Verladung</strong>. Die mittleren Stufen (3–7) sind real gebaut und stark. Was fehlt, sind die zwei Enden plus ein Verdrahtungs-Fix:</p>
+    <p><strong>Vorne</strong> die strukturierte ProHandel-Ingestion (Stufe 0–1) und die WE-Einlagerung-Station (Stufe 2) — ohne sie läuft alles nur auf Seed-Daten. <strong>In der Mitte</strong> die Admin→Engine-Verdrahtung (Stufe 3), die heute schlicht nichts tut. <strong>Hinten</strong> das Verlade-Board (Stufe 8), das den Tag schließt.</p>
+    <p><strong>Bester Pfad:</strong> erst den Engine-Fix (1 Tag), dann die Einlagerung-Station (Linchpin), dann die ProHandel-Ingestion — danach läuft der Flow durchgehend produktiv, und der Parser wird als Fallback gar nicht gebraucht. Die größte Risikoquelle aus dem IST-Audit (PDF-Parsing) verschwindet durch die ProHandel-First-Strategie von selbst.</p>
+  </div>
+
+  <footer>
+    <span>Software-Lösungsflow ab ProHandel-Buchung · Soll-Bild · paketlagerdispov2</span>
+    <span>Grundlage: ingestion-fields-ux-concept.md · Stand f3fd09f · 2026-06-16</span>
+  </footer>
+
+</div>
+</body>
+</html>
