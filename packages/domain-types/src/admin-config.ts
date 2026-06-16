@@ -71,22 +71,12 @@ export const parserTemplateRowSchema = z.object({
 });
 export type ParserTemplateRow = z.infer<typeof parserTemplateRowSchema>;
 
-/**
- * Admin-managed catalog of Bereiche/Skills (Handling-/Lagerklassen). The teamlead
- * edits this list in the Regelpflege; employees and Lagerplätze reference these
- * exact labels, and the engine routes by matching them. NOT hardcoded anywhere.
- */
-export const bereichCatalogSchema = z.array(z.string());
-export type BereichCatalog = z.infer<typeof bereichCatalogSchema>;
-
 /** The whole structured rule config persisted under AppConfig `rule_config`. */
 export const ruleConfigSchema = z.object({
   priority: priorityRuleConfigSchema,
   reserve: reserveRuleConfigSchema,
   bundle: bundleRuleConfigSchema,
   effort: effortRuleConfigSchema,
-  /** Editable Bereich/Skill catalog (labels) — see {@link bereichCatalogSchema}. */
-  bereiche: bereichCatalogSchema,
   loadPlan: z.array(loadPlanRowSchema),
   parserTemplates: z.array(parserTemplateRowSchema),
 });
@@ -125,8 +115,6 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     checkShareFactor: 1.25,
     boxSplittingFactor: 1.4,
   },
-  // Starter catalog — fully editable by the teamlead in the Regelpflege.
-  bereiche: ['Hängebahn', 'Palette', 'Regal'],
   loadPlan: [
     {
       id: 'lp-1',

@@ -29,8 +29,6 @@ export class LocationDto {
   @ApiProperty() displayName!: string;
   @ApiProperty({ description: 'LocationKind enum value' }) kind!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) zone!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Bereich/Skill label' })
-  bereich!: string | null;
   @ApiPropertyOptional({ type: Number, nullable: true }) sequenceIndex!: number | null;
   @ApiPropertyOptional({ type: String, nullable: true }) scanCode!: string | null;
   @ApiProperty() active!: boolean;
@@ -55,11 +53,6 @@ export class LocationUpsertDto {
   @IsOptional()
   @IsString()
   zone?: string | null;
-
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Bereich/Skill label' })
-  @IsOptional()
-  @IsString()
-  bereich?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
@@ -150,11 +143,6 @@ export class RuleConfigDto {
   @ValidateNested()
   @Type(() => EffortRuleConfigDto)
   effort!: EffortRuleConfigDto;
-
-  @ApiProperty({ type: [String], description: 'Editable Bereich/Skill catalog (labels)' })
-  @IsArray()
-  @IsString({ each: true })
-  bereiche!: string[];
 
   @ApiProperty({ type: [LoadPlanRowDto] })
   @IsArray()

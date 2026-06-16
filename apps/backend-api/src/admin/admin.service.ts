@@ -14,7 +14,6 @@ interface LocationWriteData {
   displayName: string;
   kind: LocationKind;
   zone: string | null;
-  bereich: string | null;
   sequenceIndex: number | null;
   scanCode: string | null;
   active: boolean;
@@ -145,7 +144,6 @@ export class AdminService {
     displayName: string;
     kind: LocationKind;
     zone: string | null;
-    bereich: string | null;
     sequenceIndex: number | null;
     scanCode: string | null;
     active: boolean;
@@ -156,7 +154,6 @@ export class AdminService {
       displayName: l.displayName,
       kind: l.kind,
       zone: l.zone,
-      bereich: l.bereich,
       sequenceIndex: l.sequenceIndex,
       scanCode: l.scanCode,
       active: l.active,
@@ -169,7 +166,6 @@ export class AdminService {
       displayName: row.displayName,
       kind: row.kind as LocationKind,
       zone: row.zone ?? null,
-      bereich: row.bereich ?? null,
       sequenceIndex: row.sequenceIndex ?? null,
       scanCode: row.scanCode ?? null,
       active: row.active,

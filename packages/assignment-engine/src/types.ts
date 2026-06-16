@@ -49,7 +49,7 @@ export interface EnrichedCase {
   effortPoints: number;
   /** Warengruppen codes for the case (specialist-avoidance signal, §8.4). Empty if unknown. */
   wgrCodes: string[];
-  /** Bereich/Skill of the case (from its Lagerplatz's LocationMaster.bereich), if any. */
+  /** Fixed Bereich/Skill of the case, derived from its Lagerplatz storage class (LocationKind). */
   bereich?: string;
   /** True when the case originates from previous days (starter-package candidate). */
   fromPreviousDays: boolean;

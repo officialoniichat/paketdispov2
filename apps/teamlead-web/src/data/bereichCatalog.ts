@@ -1,17 +1,12 @@
 /**
- * Reusable Bereich/Skill catalog — the admin-managed list of Bereiche from the
- * Regelpflege (RuleConfig.bereiche). Employees and Lagerplätze pick from THIS list
- * (no free text, no hardcoded enum). One cached source for every picker.
+ * Reusable Bereich/Skill catalog. Bereiche are NOT free text and NOT admin-editable —
+ * they are the FIXED warehouse storage classes (Hängebahn/Palette/Regal), derived from
+ * the Lagerklasse (LocationKind). A Beleg's Bereich is fixed by where its goods are
+ * stored; employees can only be assigned these values. Single source: @paket/domain-types.
  */
-import { useQuery } from '@tanstack/react-query';
-import { fetchRuleConfig } from './admin.js';
+import { BEREICHE } from '@paket/domain-types';
 
-/** The editable Bereich catalog (labels). Empty while loading / if none configured. */
-export function useBereichCatalog(): string[] {
-  const { data } = useQuery({
-    queryKey: ['admin', 'rules'],
-    queryFn: fetchRuleConfig,
-    staleTime: 60 * 1000,
-  });
-  return data?.bereiche ?? [];
+/** The fixed Bereich catalog (labels). */
+export function useBereichCatalog(): readonly string[] {
+  return BEREICHE;
 }

@@ -996,8 +996,6 @@ export interface components {
             /** @description LocationKind enum value */
             kind: string;
             zone?: string | null;
-            /** @description Bereich/Skill label */
-            bereich?: string | null;
             sequenceIndex?: number | null;
             scanCode?: string | null;
             active: boolean;
@@ -1010,8 +1008,6 @@ export interface components {
             /** @description LocationKind enum value */
             kind: string;
             zone?: string | null;
-            /** @description Bereich/Skill label */
-            bereich?: string | null;
             sequenceIndex?: number | null;
             scanCode?: string | null;
             active: boolean;
@@ -1063,8 +1059,6 @@ export interface components {
             reserve: components["schemas"]["ReserveRuleConfigDto"];
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
-            /** @description Editable Bereich/Skill catalog (labels) */
-            bereiche: string[];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
             parserTemplates: components["schemas"]["ParserTemplateRowDto"][];
         };

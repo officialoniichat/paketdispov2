@@ -1,5 +1,6 @@
 import {
   assignmentBundleSchema,
+  bereichFromLocationKind,
   type AssignmentBundle,
   type BundlePickupSequence,
   type GoodsReceiptCase,
@@ -88,12 +89,14 @@ export function assignWork(
   options: AssignWorkOptions = {},
 ): AssignmentPlan {
   const now = options.now ?? new Date().toISOString();
-  // Resolve each case's Bereich from its Lagerplatz (LocationMaster.bereich) so the
-  // weighted distribution can prefer matching specialists (§8.4 routing).
-  const bereichByLocationCode = new Map(input.locations.map((l) => [l.code, l.bereich]));
+  // A case's Bereich is FIXED by its Lagerplatz storage class (LocationKind), not a
+  // free-text tag. The weighted distribution uses it to prefer matching specialists
+  // and keep out-of-Bereich work off them (§8.4 routing).
+  const kindByLocationCode = new Map(input.locations.map((l) => [l.code, l.kind]));
   const enriched = input.cases.map((c) => {
     const e = enrichCase(c, input, config);
-    e.bereich = bereichByLocationCode.get(c.storageLocation.code) ?? undefined;
+    const kind = kindByLocationCode.get(c.storageLocation.code);
+    e.bereich = kind ? bereichFromLocationKind(kind) : undefined;
     return e;
   });
 

@@ -33,7 +33,6 @@ export function toLocationMaster(loc: Location): LocationMaster {
     displayName: loc.displayName,
     kind: loc.kind,
     zone: loc.zone ?? undefined,
-    bereich: loc.bereich ?? undefined,
     sequenceIndex: loc.sequenceIndex ?? undefined,
     scanCode: loc.scanCode ?? undefined,
     active: loc.active,

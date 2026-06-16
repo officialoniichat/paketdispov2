@@ -307,7 +307,6 @@ model Location {
   displayName   String
   kind          LocationKind
   zone          String?
-  bereich       String?
   sequenceIndex Int?
   scanCode      String?      @unique
   active        Boolean      @default(true)

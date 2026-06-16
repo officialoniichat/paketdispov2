@@ -132,9 +132,10 @@ describe('assignment engine — Bereich/Skill routing (soft preference)', () => 
         bereichCase('r1', 'R1'),
       ],
       shifts: [bereichShift(1, ['Hängebahn']), bereichShift(2)], // E1 specialist, E2 Allrounder
+      // Bereich is derived from the Lagerplatz kind: haengebahn → Hängebahn, regal → Regal.
       locations: [
-        { id: 'loc-HB', code: 'HB', displayName: 'Hängebahn 1', kind: 'haengebahn', bereich: 'Hängebahn', active: true },
-        { id: 'loc-R1', code: 'R1', displayName: 'Regal 1', kind: 'regal', bereich: 'Regal', active: true },
+        { id: 'loc-HB', code: 'HB', displayName: 'Hängebahn 1', kind: 'haengebahn', active: true },
+        { id: 'loc-R1', code: 'R1', displayName: 'Regal 1', kind: 'regal', active: true },
       ],
     };
     const plan = assignWork(input);

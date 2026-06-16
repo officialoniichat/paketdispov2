@@ -173,17 +173,17 @@ interface SeedLocation {
   kind: LocationKind;
   zone: string;
   sequenceIndex: number;
-  /** Bereich/Skill label (matches the admin catalog) for engine routing. */
-  bereich: string;
 }
 
+// A Lagerplatz's Bereich is derived from its `kind` (regal/lagerplatz_d → Regal,
+// palette_* → Palette, haengebahn → Hängebahn), so it is not stored per location.
 const LOCATIONS: SeedLocation[] = [
-  { code: 'R7', displayName: 'Regal 7', kind: 'regal', zone: 'Zone A', sequenceIndex: 7, bereich: 'Regal' },
-  { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18, bereich: 'Regal' },
-  { code: 'R27', displayName: 'Regal 27', kind: 'regal', zone: 'Zone B', sequenceIndex: 27, bereich: 'Regal' },
-  { code: 'B-4', displayName: 'Palette B/4', kind: 'palette_b', zone: 'Zone C', sequenceIndex: 54, bereich: 'Palette' },
-  { code: 'HB-5/234', displayName: 'Haengebahn 5/234', kind: 'haengebahn', zone: 'Zone D', sequenceIndex: 70, bereich: 'Hängebahn' },
-  { code: 'D-3', displayName: 'Lagerplatz D-3', kind: 'lagerplatz_d', zone: 'Zone D', sequenceIndex: 83, bereich: 'Regal' },
+  { code: 'R7', displayName: 'Regal 7', kind: 'regal', zone: 'Zone A', sequenceIndex: 7 },
+  { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18 },
+  { code: 'R27', displayName: 'Regal 27', kind: 'regal', zone: 'Zone B', sequenceIndex: 27 },
+  { code: 'B-4', displayName: 'Palette B/4', kind: 'palette_b', zone: 'Zone C', sequenceIndex: 54 },
+  { code: 'HB-5/234', displayName: 'Haengebahn 5/234', kind: 'haengebahn', zone: 'Zone D', sequenceIndex: 70 },
+  { code: 'D-3', displayName: 'Lagerplatz D-3', kind: 'lagerplatz_d', zone: 'Zone D', sequenceIndex: 83 },
 ];
 
 async function seedLocations(): Promise<Record<string, string>> {
@@ -191,8 +191,8 @@ async function seedLocations(): Promise<Record<string, string>> {
   for (const l of LOCATIONS) {
     const loc = await prisma.location.upsert({
       where: { code: l.code },
-      update: { displayName: l.displayName, kind: l.kind, zone: l.zone, bereich: l.bereich, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
-      create: { code: l.code, displayName: l.displayName, kind: l.kind, zone: l.zone, bereich: l.bereich, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
+      update: { displayName: l.displayName, kind: l.kind, zone: l.zone, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
+      create: { code: l.code, displayName: l.displayName, kind: l.kind, zone: l.zone, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
     });
     idByCode[l.code] = loc.id;
   }
