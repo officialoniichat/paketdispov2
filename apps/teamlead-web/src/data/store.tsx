@@ -26,6 +26,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import type { WorkflowEvent } from '@paket/domain-types';
+import type { AuditPayload } from './audit.js';
 import type { components } from '@paket/api-client';
 import { api, CURRENT_TEAMLEAD_ID } from './api.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
@@ -118,7 +119,7 @@ export interface CockpitApi {
   cockpit: CockpitSummary;
   board: BoardRow[];
   lanes: Lane[];
-  recentOverrides: WorkflowEvent[];
+  recentOverrides: WorkflowEvent<AuditPayload>[];
   /** Ready, unassigned cases that can be added to a bundle (§10.3). */
   pool: PoolCase[];
   /** §E.4 commit "Live zuweisen" → real assignment engine (persists). */

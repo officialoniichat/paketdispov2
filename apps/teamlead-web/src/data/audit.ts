@@ -7,7 +7,7 @@
  * assignment. Producing an event without a reason is a programming error and
  * throws; the UI enforces this through ReasonDialog before any state change.
  */
-import type { WorkflowEvent, WorkflowEventType } from '@paket/domain-types';
+import type { ActorType, WorkflowEvent, WorkflowEventType } from '@paket/domain-types';
 
 export type OverrideAction =
   | 'vorziehen'
@@ -34,33 +34,73 @@ export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
 };
 
 /**
- * German labels for raw WorkflowEvent types, so the audit feed never shows machine
- * codes like "assignment.overridden" to the user. Used as a fallback when an event
- * carries no `payload.action` (e.g. events emitted outside the override flow).
+ * German label for every WorkflowEventType, so the audit feed never shows a raw
+ * machine code. Exhaustive by construction: this is a total `Record` over the
+ * domain enum, so adding an event type fails to compile until it is labelled —
+ * there is no catch-all, because the event type cannot be anything else.
  */
-export const AUDIT_EVENT_LABELS: Record<string, string> = {
-  'assignment.overridden': 'Neu zugeteilt',
-  'case.parked': 'Geparkt',
+export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
+  'document.imported': 'Beleg importiert',
+  'document.parsed': 'Beleg erkannt',
+  'document.validation_failed': 'Belegprüfung fehlgeschlagen',
   'case.ready': 'Freigegeben',
+  'case.parked': 'Geparkt',
   'case.prioritized': 'Priorisiert',
   'case.cancelled': 'Storniert',
+  'bundle.created': 'Paket gebildet',
+  'bundle.assigned': 'Paket zugeteilt',
+  'bundle.started': 'Paket gestartet',
+  'pickup.location_scanned': 'Lagerplatz gescannt',
+  'case.started': 'Bearbeitung gestartet',
+  'position.confirmed': 'Position bestätigt',
+  'sku.quantity_confirmed': 'Menge bestätigt',
+  'issue.created': 'Problem gemeldet',
+  'issue.resolved': 'Problem gelöst',
+  'box.label_printed': 'Etikett gedruckt',
+  'box.sealed': 'Box verschlossen',
+  'print.job_created': 'Druckauftrag erstellt',
+  'print.job_completed': 'Druck fertig',
+  'print.job_failed': 'Druck fehlgeschlagen',
+  'case.completed': 'Abgeschlossen',
+  'case.partially_completed': 'Teilabschluss',
+  'zst.created': 'ZST erfasst',
+  'zst.exported': 'ZST exportiert',
+  'assignment.overridden': 'Neu zugeteilt',
   'employee.profile_updated': 'Stammdaten geändert',
   'employee.shift_overridden': 'Schicht geändert',
-  'employee.absence_recorded': 'Abwesenheit erfasst',
 };
 
-function isOverrideAction(value: string): value is OverrideAction {
-  return value in OVERRIDE_ACTION_LABELS;
+/** German label for each actor, so the audit feed never shows the raw role token. */
+export const ACTOR_LABELS: Record<ActorType, string> = {
+  system: 'System',
+  employee: 'Mitarbeiter',
+  teamlead: 'Teamlead',
+  admin: 'Admin',
+};
+
+/**
+ * Narrow the optional, free-form audit `action` to a known OverrideAction. The
+ * field is legitimately absent for non-override events; this only recognises the
+ * override vocabulary and returns undefined otherwise — it makes no assumption
+ * that the data is malformed.
+ */
+export function toOverrideAction(value: string | null | undefined): OverrideAction | undefined {
+  return value != null && value in OVERRIDE_ACTION_LABELS ? (value as OverrideAction) : undefined;
 }
 
 /**
- * Clean German label for one audit row. Prefers the recorded override action
- * (e.g. "Paket entziehen"), falls back to the event type ("Geparkt"), and never
- * leaks a raw machine code — unknown types render as a neutral "Aktualisiert".
+ * The single human-readable label for one audit row. Prefers the specific override
+ * action (e.g. "Paket entziehen") and otherwise uses the event-type label. Reused
+ * by the cockpit feed, the Beleg-Historie and the Mitarbeiter-Audit.
  */
-export function formatAuditAction(eventType: string, action?: string): string {
-  if (action && isOverrideAction(action)) return OVERRIDE_ACTION_LABELS[action];
-  return AUDIT_EVENT_LABELS[eventType] ?? 'Aktualisiert';
+export function formatAuditAction(eventType: WorkflowEventType, action?: OverrideAction): string {
+  return action ? OVERRIDE_ACTION_LABELS[action] : AUDIT_EVENT_LABELS[eventType];
+}
+
+/** Audit payload the teamlead surfaces read (the only fields projected by the API). */
+export interface AuditPayload {
+  action?: OverrideAction;
+  reason?: string;
 }
 
 export interface OverrideInput {

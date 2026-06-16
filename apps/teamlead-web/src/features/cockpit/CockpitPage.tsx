@@ -22,6 +22,7 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import type { WorkflowEventType } from '@paket/domain-types';
 import { useCockpitData } from '../../data/store.js';
 import { useEmployeeNames } from '../../data/employeeNames.js';
 import { useCaseLabels } from '../../data/caseLabels.js';
@@ -120,22 +121,11 @@ export function CockpitPage(): JSX.Element {
     ? `● Plan aktuell${recalcResult ? ` · zuletzt verteilt ${recalcResult.assignedCaseCount} Belege` : ''}`
     : `⏳ ${automatik ? 'verteilt …' : 'Vorschlag verfügbar'}: ${freeOpen} ${freeOpen === 1 ? 'freier Beleg' : 'freie Belege'}`;
 
-  // --- Audit: turn raw entity ids into human labels (Beleg-Nr / Mitarbeitername) ---
-  const caseLabel = (id: string): string | undefined => caseLabelFromList(id);
-  const bundleEmployee = (id: string): string | undefined =>
-    board.find((r) => r.bundleId === id)?.displayName;
-  const shortId = (id: string): string => (id.length > 8 ? `…${id.slice(-5)}` : id);
-
-  const auditLabel = (eventType: string, entityId: string, caseId?: string): string => {
-    if (eventType.startsWith('employee.')) return employeeName(entityId) ?? shortId(entityId);
-    if (eventType.startsWith('case.')) return caseLabel(entityId) ?? shortId(entityId);
-    if (eventType === 'assignment.overridden') {
-      const beleg = caseId ? (caseLabel(caseId) ?? shortId(caseId)) : undefined;
-      const who = bundleEmployee(entityId);
-      const parts = [beleg, who ? `(${who})` : undefined].filter(Boolean);
-      return parts.length > 0 ? parts.join(' ') : shortId(entityId);
-    }
-    return caseLabel(entityId) ?? shortId(entityId);
+  // --- Audit: resolve the event's entity id to a human label (Mitarbeitername for
+  // employee events, Beleg-Nr otherwise). Both override and case events target a case. ---
+  const auditLabel = (eventType: WorkflowEventType, entityId: string): string => {
+    if (eventType.startsWith('employee.')) return employeeName(entityId) ?? entityId;
+    return caseLabelFromList(entityId) ?? entityId;
   };
 
   return (
@@ -306,16 +296,15 @@ export function CockpitPage(): JSX.Element {
         ) : (
           <Stack spacing={0.75} sx={{ mt: 1 }}>
             {recentOverrides.slice(0, 8).map((e) => {
-              const payload = readAuditPayload(e.payload);
-              const target = auditLabel(e.eventType, e.entityId, payload.caseId);
+              const target = auditLabel(e.eventType, e.entityId);
               return (
                 <Typography key={e.id} variant="body2">
                   <Box component="span" sx={{ color: 'text.secondary', mr: 1 }}>
                     {formatDateTime(e.timestamp)}
                   </Box>
-                  <strong>{formatAuditAction(e.eventType, payload.action)}</strong>
+                  <strong>{formatAuditAction(e.eventType, e.payload.action)}</strong>
                   {target ? `: ${target}` : ''}
-                  {payload.reason ? ` — „${payload.reason}"` : ''}
+                  {e.payload.reason ? ` — „${e.payload.reason}"` : ''}
                 </Typography>
               );
             })}
@@ -326,25 +315,6 @@ export function CockpitPage(): JSX.Element {
       <SimulationPanel open={simulationOpen} onClose={() => setSimulationOpen(false)} />
     </Stack>
   );
-}
-
-/** Audit payload fields the cockpit renders (§8.4); `WorkflowEvent.payload` is `unknown`. */
-interface AuditPayload {
-  action?: string;
-  reason?: string;
-  caseId?: string;
-}
-
-function readAuditPayload(payload: unknown): AuditPayload {
-  if (typeof payload !== 'object' || payload === null) return {};
-  const action = 'action' in payload ? payload.action : undefined;
-  const reason = 'reason' in payload ? payload.reason : undefined;
-  const caseId = 'caseId' in payload ? payload.caseId : undefined;
-  return {
-    action: typeof action === 'string' ? action : undefined,
-    reason: typeof reason === 'string' ? reason : undefined,
-    caseId: typeof caseId === 'string' ? caseId : undefined,
-  };
 }
 
 function KpiSkeletons({ count }: { count: number }): JSX.Element {

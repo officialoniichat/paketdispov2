@@ -39,6 +39,8 @@ import {
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
+import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
+import { toActorType } from '../../data/narrow.js';
 
 const TABS = [
   'Kopf',
@@ -342,8 +344,11 @@ function HistoryTab({ history }: { history: BelegHistoryEntry[] }): JSX.Element 
     <Stack spacing={0.5}>
       {history.map((e) => (
         <Typography key={e.id} variant="body2">
-          <strong>{formatDateTime(e.timestamp)}</strong> · {e.eventType} · {e.actorType}
-          {e.reason ? ` – „${e.reason}"` : ''}
+          <Box component="span" sx={{ color: 'text.secondary', mr: 1 }}>
+            {formatDateTime(e.timestamp)}
+          </Box>
+          <strong>{formatAuditAction(e.eventType)}</strong> · {ACTOR_LABELS[toActorType(e.actorType)]}
+          {e.reason ? ` — „${e.reason}"` : ''}
         </Typography>
       ))}
     </Stack>

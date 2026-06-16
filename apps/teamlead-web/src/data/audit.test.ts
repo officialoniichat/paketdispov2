@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTOR_LABELS,
   MissingReasonError,
   assertReason,
   createOverrideEvent,
   formatAuditAction,
   isValidReason,
+  toOverrideAction,
 } from './audit.js';
 
 const NOW = new Date('2026-06-15T09:30:00.000Z');
@@ -74,8 +76,30 @@ describe('formatAuditAction (§8.4 – human-readable audit feed)', () => {
     expect(formatAuditAction('employee.profile_updated')).toBe('Stammdaten geändert');
   });
 
-  it('renders unknown event types as a neutral label, not the machine string', () => {
-    expect(formatAuditAction('some.unknown_event')).toBe('Aktualisiert');
-    expect(formatAuditAction('some.unknown_event')).not.toContain('.');
+  it('never renders a raw machine code (no dotted event type leaks through)', () => {
+    expect(formatAuditAction('case.cancelled')).toBe('Storniert');
+    expect(formatAuditAction('case.cancelled')).not.toContain('.');
+  });
+});
+
+describe('toOverrideAction (boundary narrowing, no corrupted-data assumptions)', () => {
+  it('recognises the override vocabulary', () => {
+    expect(toOverrideAction('entziehen')).toBe('entziehen');
+    expect(toOverrideAction('priorisieren')).toBe('priorisieren');
+  });
+
+  it('returns undefined for absent or non-override values', () => {
+    expect(toOverrideAction(undefined)).toBeUndefined();
+    expect(toOverrideAction(null)).toBeUndefined();
+    expect(toOverrideAction('case.cancelled')).toBeUndefined();
+  });
+});
+
+describe('ACTOR_LABELS', () => {
+  it('maps every actor to a German label, never the raw role token', () => {
+    expect(ACTOR_LABELS.teamlead).toBe('Teamlead');
+    expect(ACTOR_LABELS.employee).toBe('Mitarbeiter');
+    expect(ACTOR_LABELS.system).toBe('System');
+    expect(ACTOR_LABELS.admin).toBe('Admin');
   });
 });
