@@ -267,14 +267,12 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     // is reflected by the case status itself (§7.1 issue_open).
     hasOpenIssue: status === 'issue_open',
     workInstruction: dto.workInstruction ? toWorkInstruction(dto.workInstruction) : null,
-    // Guard each collection: a not-yet-restarted backend (or a future DTO change)
-    // may omit a field, and an undefined `.map` would crash the whole detail view.
-    positions: (dto.positions ?? []).map(toBelegPosition),
-    boxes: (dto.transportBoxes ?? []).map(toBelegBox),
-    documents: (dto.documents ?? []).map(toBelegDocument),
-    issues: (dto.issues ?? []).map(toBelegIssue),
-    zstRecords: (dto.zstRecords ?? []).map(toBelegZst),
-    history: (dto.history ?? []).map(toBelegHistoryEntry),
+    positions: dto.positions.map(toBelegPosition),
+    boxes: dto.transportBoxes.map(toBelegBox),
+    documents: dto.documents.map(toBelegDocument),
+    issues: dto.issues.map(toBelegIssue),
+    zstRecords: dto.zstRecords.map(toBelegZst),
+    history: dto.history.map(toBelegHistoryEntry),
   };
 }
 
