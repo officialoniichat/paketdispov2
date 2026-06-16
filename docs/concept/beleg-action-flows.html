@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Beleg-Aktionsflüsse — Best-Possible-Konzept</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161a22;
+        --panel-2: #1d222c;
+        --ink: #eef1f6;
+        --muted: #98a2b3;
+        --line: #2a313d;
+        --radius: 14px;
+
+        /* Actor colours */
+        --system: #7c8696;
+        --teamlead: #8b7cf6;
+        --employee: #2dd4a7;
+
+        /* Entity-type colours */
+        --t-docset: #b8a47a;
+        --t-beleg: #f5b955;
+        --t-position: #56b6ff;
+        --t-sku: #34d3e0;
+        --t-box: #ff8a4c;
+        --t-bundle: #c084fc;
+        --t-issue: #ff6b6b;
+        --t-zst: #3fd07f;
+
+        /* Phase tints */
+        --p1: #2b3550;
+        --p2: #16314a;
+        --p3: #2a3a2b;
+        --p4: #143a35;
+        --p5: #3a2b2b;
+
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 700px at 80% -10%, #1b2030 0%, var(--bg) 55%);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 28px 80px;
+      }
+
+      /* ---------- header ---------- */
+      header.hero {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        padding: 30px 32px;
+        position: relative;
+        overflow: hidden;
+      }
+      header.hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -40px -120px auto;
+        width: 320px;
+        height: 320px;
+        background: radial-gradient(circle, rgba(139, 124, 246, 0.25), transparent 60%);
+      }
+      .eyebrow {
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      h1 {
+        margin: 8px 0 6px;
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      h1 span {
+        background: linear-gradient(90deg, var(--employee), var(--teamlead));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .lede {
+        color: var(--muted);
+        max-width: 70ch;
+        font-size: 15.5px;
+        line-height: 1.6;
+        margin: 6px 0 0;
+      }
+      .note {
+        margin-top: 14px;
+        font-size: 13px;
+        color: var(--muted);
+        border-left: 3px solid var(--teamlead);
+        padding: 4px 0 4px 12px;
+      }
+
+      /* ---------- section scaffolding ---------- */
+      section {
+        margin-top: 40px;
+      }
+      .sec-head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+      .sec-num {
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+        color: var(--teamlead);
+        font-size: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 3px 9px;
+        background: var(--panel);
+      }
+      h2 {
+        font-size: 21px;
+        margin: 0;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .sec-sub {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 2px 0 0;
+      }
+
+      /* ---------- legend ---------- */
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 18px;
+      }
+      .legend .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 14px 16px;
+      }
+      .legend h3 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .swatch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        margin: 3px 10px 3px 0;
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #0d1016;
+        white-space: nowrap;
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+      }
+
+      /* ---------- entity map ---------- */
+      .entity-map {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 22px;
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 18px;
+      }
+      .ent {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: var(--panel-2);
+      }
+      .ent .name {
+        font-weight: 800;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ent .meta {
+        color: var(--muted);
+        font-size: 12.5px;
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+      .ent .bar {
+        height: 3px;
+        border-radius: 3px;
+        margin: -12px -14px 12px;
+        border-radius: 12px 12px 0 0;
+      }
+      .tree {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .rel {
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.7;
+      }
+      .rel b {
+        color: var(--ink);
+      }
+      .rel code {
+        color: var(--employee);
+        background: #0d1016;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 12px;
+      }
+
+      /* ---------- phase flow ---------- */
+      .phases {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        align-items: start;
+      }
+      .phase {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        background: var(--panel);
+        position: relative;
+      }
+      .phase h3 {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .phase .states {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.5;
+        margin-bottom: 10px;
+        font-variant: small-caps;
+        letter-spacing: 0.02em;
+      }
+      .phase .tag {
+        position: absolute;
+        top: -9px;
+        left: 12px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 999px;
+        color: #0b0d12;
+      }
+      .act {
+        border: 1px solid var(--line);
+        border-left-width: 3px;
+        border-radius: 9px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        background: var(--panel-2);
+      }
+      .act .t {
+        font-weight: 700;
+        font-size: 12.5px;
+        line-height: 1.25;
+      }
+      .act .d {
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 3px;
+        line-height: 1.45;
+      }
+      .act .ev {
+        margin-top: 6px;
+        font-size: 10px;
+        color: var(--employee);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .act .types {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .micro {
+        font-size: 9.5px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+      .a-system {
+        border-left-color: var(--system);
+      }
+      .a-teamlead {
+        border-left-color: var(--teamlead);
+      }
+      .a-employee {
+        border-left-color: var(--employee);
+      }
+
+      .flowline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        margin: 16px 2px 4px;
+        flex-wrap: wrap;
+      }
+      .flowline .arrow {
+        color: var(--teamlead);
+        font-weight: 800;
+      }
+
+      /* ---------- special transitions ---------- */
+      .loops {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .loop {
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: var(--panel);
+      }
+      .loop .h {
+        font-weight: 800;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .loop .p {
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.55;
+      }
+      .loop code {
+        color: var(--t-beleg);
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11.5px;
+      }
+
+      /* ---------- matrix ---------- */
+      .matrix-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--panel-2);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        z-index: 1;
+      }
+      tbody tr:hover {
+        background: #12161e;
+      }
+      td.act-name {
+        font-weight: 700;
+      }
+      .y {
+        color: #0b0d12;
+        font-weight: 800;
+        border-radius: 6px;
+        padding: 1px 7px;
+        font-size: 11px;
+      }
+      .dash {
+        color: #3a414d;
+      }
+      td.req {
+        color: var(--muted);
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        white-space: normal;
+      }
+
+      /* ---------- actor lanes ---------- */
+      .lanes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .lane {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 16px 18px;
+      }
+      .lane h3 {
+        margin: 0 0 12px;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: s;
+      }
+      .steps li {
+        position: relative;
+        padding: 8px 0 12px 30px;
+        border-left: 2px solid var(--line);
+        margin-left: 8px;
+        counter-increment: s;
+      }
+      .steps li::before {
+        content: counter(s);
+        position: absolute;
+        left: -13px;
+        top: 6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--ink);
+      }
+      .steps li:last-child {
+        border-left-color: transparent;
+      }
+      .steps .st {
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .steps .sd {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+        line-height: 1.5;
+      }
+      .guard {
+        display: inline-block;
+        margin-top: 5px;
+        font-size: 10.5px;
+        color: var(--t-beleg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 7px;
+      }
+
+      footer {
+        margin-top: 48px;
+        color: var(--muted);
+        font-size: 12px;
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        line-height: 1.6;
+      }
+      footer code {
+        color: var(--employee);
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11.5px;
+      }
+
+      @media (max-width: 900px) {
+        .phases,
+        .legend,
+        .lanes,
+        .loops,
+        .entity-map {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media print {
+        :root {
+          --bg: #fff;
+          --panel: #fff;
+          --panel-2: #f6f7f9;
+          --ink: #14181f;
+          --muted: #5a6472;
+          --line: #d6dae1;
+        }
+        body {
+          background: #fff;
+        }
+        header.hero::after {
+          display: none;
+        }
+        section {
+          break-inside: avoid;
+        }
+        .phase,
+        .lane,
+        .loop {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <div class="eyebrow">Konzept · Best-Possible · §7.1 / §4.x / §8.x</div>
+        <h1>Beleg-Aktionsflüsse<br /><span>als ideales Zielbild</span></h1>
+        <p class="lede">
+          Eine vollständige, idealtypische Landkarte <b>aller Aktionen</b>, die System, Teamlead und
+          Mitarbeiter auf einem <b>Beleg</b> (und seinen Positionen, SKU-Zeilen, Boxen, Bündeln,
+          Problemen und ZST-Datensätzen) ausführen — gruppiert nach <b>Lebenszyklus-Phase</b> und
+          verknüpft mit dem <b>Typ (Entität)</b>, auf den jede Aktion wirkt.
+        </p>
+        <p class="note">
+          Dies ist das <b>angestrebte Konzept</b>, nicht der heutige Implementierungsstand: Flüsse
+          sind durchgängig gedacht (Scan-Validierung, serverseitige Arbeitsverifikation, lückenloser
+          Audit-Trail, geschlossene Endzustände). Es zeigt, <i>wie es sein soll</i> — und wie jede
+          Aktion an Entitätstyp und Zustand hängt.
+        </p>
+
+        <div class="legend">
+          <div class="card">
+            <h3>Akteur</h3>
+            <span class="swatch"><span class="dot" style="background: var(--system)"></span>System / Ingestion</span>
+            <span class="swatch"><span class="dot" style="background: var(--teamlead)"></span>Teamlead</span>
+            <span class="swatch"><span class="dot" style="background: var(--employee)"></span>Mitarbeiter</span>
+          </div>
+          <div class="card">
+            <h3>Entitätstyp</h3>
+            <span class="chip"><span class="dot" style="background: var(--t-docset)"></span>DocumentSet</span>
+            <span class="chip"><span class="dot" style="background: var(--t-beleg)"></span>Beleg</span>
+            <span class="chip"><span class="dot" style="background: var(--t-position)"></span>Position</span>
+            <span class="chip"><span class="dot" style="background: var(--t-sku)"></span>SKU-Zeile</span>
+            <span class="chip"><span class="dot" style="background: var(--t-box)"></span>Box</span>
+            <span class="chip"><span class="dot" style="background: var(--t-bundle)"></span>Bündel</span>
+            <span class="chip"><span class="dot" style="background: var(--t-issue)"></span>Problem</span>
+            <span class="chip"><span class="dot" style="background: var(--t-zst)"></span>ZST</span>
+          </div>
+          <div class="card">
+            <h3>Lesehilfe</h3>
+            <span class="swatch"><code style="font-family: ui-monospace, Menlo, monospace; color: var(--employee)">event</code>&nbsp;= Audit-Event (§7.2)</span>
+            <span class="swatch" style="margin-top: 6px">Phase-Tag = Lebenszyklus-Gruppe (5)</span>
+            <span class="swatch" style="margin-top: 6px">Micro-Chip = betroffener Typ</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ============ 1 · ENTITY TYPES ============ -->
+      <section>
+        <div class="sec-head">
+          <span class="sec-num">01</span>
+          <div>
+            <h2>Typen & ihre Beziehung</h2>
+            <p class="sec-sub">Auf welche Entität jede Aktion wirkt — die „relation to type".</p>
+          </div>
+        </div>
+        <div class="entity-map">
+          <div class="tree">
+            <div class="ent">
+              <div class="bar" style="background: var(--t-docset)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-docset)"></span>DocumentSet</div>
+              <div class="meta">Lieferschein + Arbeitsanweisung + WE-Beleg, gruppiert beim Ingest. Quelle der Wahrheit pro Wareneingang.</div>
+            </div>
+            <div class="ent">
+              <div class="bar" style="background: var(--t-beleg)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-beleg)"></span>Beleg (GoodsReceiptCase)</div>
+              <div class="meta">Die zentrale Arbeitseinheit. Trägt Status (§7.1), Priorität, Aufwand, Lagerplatz. 1 DocumentSet → 1 Beleg.</div>
+            </div>
+            <div class="ent">
+              <div class="bar" style="background: var(--t-position)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-position)"></span>Position → <span class="dot" style="background: var(--t-sku)"></span>SKU-Zeile</div>
+              <div class="meta">Beleg → n Positionen → n SKU-Zeilen (EAN · Größe · Soll/Ist). Granularität der Mengenkontrolle.</div>
+            </div>
+            <div class="ent">
+              <div class="bar" style="background: var(--t-box)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-box)"></span>Transport-Box</div>
+              <div class="meta">Eine Box je Shopbereich/Etage (Box-Splitting). Trägt Boxzettel-/Plombe-/Band-Status.</div>
+            </div>
+          </div>
+          <div class="tree">
+            <div class="ent">
+              <div class="bar" style="background: var(--t-bundle)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-bundle)"></span>Bündel (AssignmentBundle)</div>
+              <div class="meta">Rollwagen eines Mitarbeiters: n Belege + Abhol-Reihenfolge (RouteStops). Von der Engine erzeugt.</div>
+            </div>
+            <div class="ent">
+              <div class="bar" style="background: var(--t-issue)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-issue)"></span>Problem (Issue)</div>
+              <div class="meta">Scope: Beleg / Position / SKU / Box. Blockiert genau seinen Scope bis zur Teamlead-Lösung.</div>
+            </div>
+            <div class="ent">
+              <div class="bar" style="background: var(--t-zst)"></div>
+              <div class="name"><span class="dot" style="background: var(--t-zst)"></span>ZST-Datensatz</div>
+              <div class="meta">Bucht fertige Menge + Aufwand (Voll/Teil). Exportiert → Altsystem (zst_done).</div>
+            </div>
+            <div class="ent" style="border-style: dashed">
+              <div class="name">Faustregel</div>
+              <div class="rel" style="margin-top: 6px">
+                <b>Teamlead-Aktionen</b> wirken auf <code>Beleg</code> oder <code>Bündel</code>.<br />
+                <b>Mitarbeiter-Aktionen</b> wirken granular auf <code>Position</code>, <code>SKU</code>, <code>Box</code> — und schließen den <code>Beleg</code> via <code>ZST</code> ab.<br />
+                <b>System</b> erzeugt <code>DocumentSet</code> &amp; <code>Beleg</code>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 2 · PHASE FLOW ============ -->
+      <section>
+        <div class="sec-head">
+          <span class="sec-num">02</span>
+          <div>
+            <h2>Lebenszyklus & Aktionen je Phase</h2>
+            <p class="sec-sub">5 Phasen über 20 Status (§7.1). Jede Karte: Aktion · Event · betroffener Typ.</p>
+          </div>
+        </div>
+
+        <div class="phases">
+          <!-- Phase 1 -->
+          <div class="phase" style="background: linear-gradient(180deg, var(--p1), var(--panel))">
+            <span class="tag" style="background: var(--t-beleg)">1 · Eingang</span>
+            <h3>Eingang</h3>
+            <div class="states">imported · parsed · needs_review</div>
+            <div class="act a-system">
+              <div class="t">Dokument importieren</div>
+              <div class="d">ProHandel/Parser erzeugt DocumentSet + Beleg, extrahiert Felder.</div>
+              <div class="ev">document.imported · document.parsed</div>
+              <div class="types"><span class="micro" style="background: var(--t-docset); color: #1a1a1a">DocumentSet</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-system">
+              <div class="t">Validieren / Klärung</div>
+              <div class="d">Niedrige Parser-Konfidenz → needs_review (menschliche Prüfung).</div>
+              <div class="ev">document.validation_failed</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+          </div>
+
+          <!-- Phase 2 -->
+          <div class="phase" style="background: linear-gradient(180deg, var(--p2), var(--panel))">
+            <span class="tag" style="background: var(--t-position)">2 · Pool</span>
+            <h3>Pool</h3>
+            <div class="states">ready · parked</div>
+            <div class="act a-teamlead">
+              <div class="t">Priorisieren</div>
+              <div class="d">Manuelle Teamlead-Priorität (mit Grund + Audit).</div>
+              <div class="ev">case.prioritized</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-teamlead">
+              <div class="t">Parken / Freigeben</div>
+              <div class="d">Hält zurück (ready↔parked), bewusst aus der Automatik.</div>
+              <div class="ev">case.parked · case.ready</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-teamlead">
+              <div class="t">Stornieren</div>
+              <div class="d">Dublette / ERP-Korrektur → terminal cancelled.</div>
+              <div class="ev">case.cancelled</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-teamlead">
+              <div class="t">Verteilen (Automatik)</div>
+              <div class="d">Engine bündelt ready → assigned, erzeugt Rollwagen + Route.</div>
+              <div class="ev">bundle.created · bundle.assigned</div>
+              <div class="types"><span class="micro" style="background: var(--t-bundle); color: #1a1a1a">Bündel</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+          </div>
+
+          <!-- Phase 3 -->
+          <div class="phase" style="background: linear-gradient(180deg, var(--p3), var(--panel))">
+            <span class="tag" style="background: var(--employee)">3 · In Arbeit</span>
+            <h3>In Arbeit</h3>
+            <div class="states">assigned · picking · preparing · sorting · checking · labeling · securing · boxing · issue_open · waiting_teamlead · released</div>
+            <div class="act a-employee">
+              <div class="t">Lagerplatz scannen</div>
+              <div class="d">assigned→picking. Ideal: Soll/Ist-Abgleich, Mismatch-Warnung.</div>
+              <div class="ev">pickup.location_scanned</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Etiketten drucken</div>
+              <div class="d">Druck-vor-Auspacken erzwungen.</div>
+              <div class="ev">print.job_created · box.label_printed</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Position bestätigen</div>
+              <div class="d">Je Position; Ist-Stand serverseitig persistiert.</div>
+              <div class="ev">position.confirmed</div>
+              <div class="types"><span class="micro" style="background: var(--t-position); color: #1a1a1a">Position</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Stückzahl prüfen</div>
+              <div class="d">Mindest-Kontrolle immer; bestätigte Menge je SKU.</div>
+              <div class="ev">sku.quantity_confirmed</div>
+              <div class="types"><span class="micro" style="background: var(--t-sku); color: #1a1a1a">SKU</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Box verplomben / aufs Band</div>
+              <div class="d">Boxzettel → Plombe → Förderband, je Box.</div>
+              <div class="ev">box.sealed · box.conveyor_placed</div>
+              <div class="types"><span class="micro" style="background: var(--t-box); color: #1a1a1a">Box</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Problem melden</div>
+              <div class="d">Jederzeit; Scope + konkrete ID + Foto. → issue_open.</div>
+              <div class="ev">issue.created</div>
+              <div class="types"><span class="micro" style="background: var(--t-issue); color: #1a1a1a">Problem</span><span class="micro" style="background: var(--t-position); color: #1a1a1a">Position</span><span class="micro" style="background: var(--t-box); color: #1a1a1a">Box</span></div>
+            </div>
+            <div class="act a-teamlead">
+              <div class="t">Problem lösen / freigeben</div>
+              <div class="d">issue_open→waiting_teamlead→released→zurück in Arbeit.</div>
+              <div class="ev">issue.resolved</div>
+              <div class="types"><span class="micro" style="background: var(--t-issue); color: #1a1a1a">Problem</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-teamlead">
+              <div class="t">Bündel-Eingriff</div>
+              <div class="d">Entziehen / Hinzufügen / Reihenfolge / Pause (Grund+Audit).</div>
+              <div class="ev">assignment.overridden</div>
+              <div class="types"><span class="micro" style="background: var(--t-bundle); color: #1a1a1a">Bündel</span></div>
+            </div>
+          </div>
+
+          <!-- Phase 4 -->
+          <div class="phase" style="background: linear-gradient(180deg, var(--p4), var(--panel))">
+            <span class="tag" style="background: var(--t-zst)">4 · Abgeschlossen</span>
+            <h3>Abgeschlossen</h3>
+            <div class="states">completed · partially_completed</div>
+            <div class="act a-employee">
+              <div class="t">ZST setzen & abschließen</div>
+              <div class="d">Gate: alle Positionen/Mengen/Boxen ok. boxing→completed.</div>
+              <div class="ev">case.completed · zst.created</div>
+              <div class="types"><span class="micro" style="background: var(--t-zst); color: #1a1a1a">ZST</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act a-employee">
+              <div class="t">Teilabschluss</div>
+              <div class="d">Fertige Teilmenge bucht ZST; Rest → nächster Tag.</div>
+              <div class="ev">case.partially_completed · zst.created</div>
+              <div class="types"><span class="micro" style="background: var(--t-zst); color: #1a1a1a">ZST</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+          </div>
+
+          <!-- Phase 5 -->
+          <div class="phase" style="background: linear-gradient(180deg, var(--p5), var(--panel))">
+            <span class="tag" style="background: var(--t-issue)">5 · Erledigt</span>
+            <h3>Erledigt / Storniert</h3>
+            <div class="states">zst_done · cancelled</div>
+            <div class="act a-teamlead">
+              <div class="t">Tagesabschluss / ZST-Export</div>
+              <div class="d">Alle completed → zst_done, CSV an Altsystem.</div>
+              <div class="ev">zst.exported</div>
+              <div class="types"><span class="micro" style="background: var(--t-zst); color: #1a1a1a">ZST</span><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+            <div class="act" style="border-left-color: #4a525f">
+              <div class="t">Archiv</div>
+              <div class="d">Terminale Belege; nur noch lesbar (Recherche, Audit).</div>
+              <div class="types"><span class="micro" style="background: var(--t-beleg); color: #1a1a1a">Beleg</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flowline">
+          <span class="chip"><span class="dot" style="background: var(--t-beleg)"></span>Haupt-Fluss</span>
+          Eingang <span class="arrow">→</span> Pool <span class="arrow">→</span> In Arbeit
+          <span class="arrow">→</span> Abgeschlossen <span class="arrow">→</span> Erledigt
+        </div>
+
+        <div class="loops">
+          <div class="loop">
+            <div class="h">↩ Parken-Schleife</div>
+            <div class="p"><code>ready ⇄ parked</code> — Teamlead hält zurück und gibt wieder frei, ohne den Beleg zu verlieren.</div>
+          </div>
+          <div class="loop">
+            <div class="h">⚠ Problem-Schleife</div>
+            <div class="p"><code>…arbeit → issue_open → waiting_teamlead → released → …arbeit</code> — blockiert nur den Problem-Scope, läuft danach weiter.</div>
+          </div>
+          <div class="loop">
+            <div class="h">⏭ Teilabschluss-Carry-over</div>
+            <div class="p"><code>boxing → partially_completed → ready</code> — Restmenge erscheint am Folgetag wieder im Pool.</div>
+          </div>
+          <div class="loop">
+            <div class="h">✖ Storno</div>
+            <div class="p"><code>(Eingang/Pool) → cancelled</code> — vor Arbeitsbeginn; danach gesperrt (erst entziehen).</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 3 · ACTION × TYPE MATRIX ============ -->
+      <section>
+        <div class="sec-head">
+          <span class="sec-num">03</span>
+          <div>
+            <h2>Aktion × Typ — Matrix</h2>
+            <p class="sec-sub">Jede Aktion: Akteur · benötigter Zustand · betroffene Entitätstypen · Event.</p>
+          </div>
+        </div>
+        <div class="matrix-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Aktion</th>
+                <th>Akteur</th>
+                <th>Zustand (Vor → Nach)</th>
+                <th>DocSet</th>
+                <th>Beleg</th>
+                <th>Pos</th>
+                <th>SKU</th>
+                <th>Box</th>
+                <th>Bündel</th>
+                <th>Problem</th>
+                <th>ZST</th>
+                <th>Event</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="act-name">Import</td><td><span class="chip"><span class="dot" style="background: var(--system)"></span>System</span></td>
+                <td class="req">∅ → imported/parsed</td>
+                <td><span class="y" style="background: var(--t-docset)">✓</span></td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">document.imported</td>
+              </tr>
+              <tr>
+                <td class="act-name">Priorisieren</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">ready/* (Flag)</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">case.prioritized</td>
+              </tr>
+              <tr>
+                <td class="act-name">Parken / Freigeben</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">ready ⇄ parked</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">case.parked / case.ready</td>
+              </tr>
+              <tr>
+                <td class="act-name">Stornieren</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">Eingang/Pool → cancelled</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">case.cancelled</td>
+              </tr>
+              <tr>
+                <td class="act-name">Verteilen (Engine)</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">ready → assigned</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-bundle)">✓</span></td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">bundle.created / .assigned</td>
+              </tr>
+              <tr>
+                <td class="act-name">Bündel-Eingriff</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">assigned (Bündel)</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-bundle)">✓</span></td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">assignment.overridden</td>
+              </tr>
+              <tr>
+                <td class="act-name">Lagerplatz scannen</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">assigned → picking</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">pickup.location_scanned</td>
+              </tr>
+              <tr>
+                <td class="act-name">Position bestätigen</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">checking</td>
+                <td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-position)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">position.confirmed</td>
+              </tr>
+              <tr>
+                <td class="act-name">Stückzahl prüfen</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">checking</td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-sku)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">sku.quantity_confirmed</td>
+              </tr>
+              <tr>
+                <td class="act-name">Box verplomben</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">boxing</td>
+                <td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-box)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td>
+                <td class="req">box.sealed</td>
+              </tr>
+              <tr>
+                <td class="act-name">Problem melden</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">* → issue_open</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td><td><span class="y" style="background: var(--t-position)">✓</span></td><td><span class="y" style="background: var(--t-sku)">✓</span></td><td><span class="y" style="background: var(--t-box)">✓</span></td><td class="dash">—</td><td><span class="y" style="background: var(--t-issue)">✓</span></td><td class="dash">—</td>
+                <td class="req">issue.created</td>
+              </tr>
+              <tr>
+                <td class="act-name">Problem lösen/freigeben</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">issue_open → … → checking</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-issue)">✓</span></td><td class="dash">—</td>
+                <td class="req">issue.resolved</td>
+              </tr>
+              <tr>
+                <td class="act-name">ZST / Abschluss</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">boxing → completed</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-zst)">✓</span></td>
+                <td class="req">case.completed / zst.created</td>
+              </tr>
+              <tr>
+                <td class="act-name">Teilabschluss</td><td><span class="chip"><span class="dot" style="background: var(--employee)"></span>MA</span></td>
+                <td class="req">boxing → partially_completed</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-zst)">✓</span></td>
+                <td class="req">case.partially_completed</td>
+              </tr>
+              <tr>
+                <td class="act-name">Tagesabschluss / Export</td><td><span class="chip"><span class="dot" style="background: var(--teamlead)"></span>TL</span></td>
+                <td class="req">completed → zst_done</td>
+                <td class="dash">—</td><td><span class="y" style="background: var(--t-beleg)">✓</span></td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td class="dash">—</td><td><span class="y" style="background: var(--t-zst)">✓</span></td>
+                <td class="req">zst.exported</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ 4 · ACTOR LANES ============ -->
+      <section>
+        <div class="sec-head">
+          <span class="sec-num">04</span>
+          <div>
+            <h2>Idealer Fluss je Akteur</h2>
+            <p class="sec-sub">Die zwei Hauptpfade durchgängig gedacht — mit Guardrails.</p>
+          </div>
+        </div>
+        <div class="lanes">
+          <div class="lane">
+            <h3><span class="dot" style="background: var(--employee)"></span>Mitarbeiter — Belegabarbeitung</h3>
+            <ul class="steps">
+              <li><div class="st">Tagesstart & Paket</div><div class="sd">Bündel + verbindliche Abholreihenfolge. Gerät-Problem-Shortcut.</div></li>
+              <li><div class="st">Lagerplatz scannen</div><div class="sd">picking. <span class="guard">Guard: Soll/Ist-Abgleich</span></div></li>
+              <li><div class="st">Vorbereitung & Druck</div><div class="sd">Etiketten zuerst. <span class="guard">Guard: Druck vor Auspacken</span></div></li>
+              <li><div class="st">Position + SKU prüfen</div><div class="sd">Je Position/SKU bestätigt. <span class="guard">Guard: Mindest-Stückzahl immer</span></div></li>
+              <li><div class="st">Boxen abschließen</div><div class="sd">Zettel → Plombe → Band, je Shopbereich.</div></li>
+              <li><div class="st">ZST / Teilabschluss</div><div class="sd">completed. <span class="guard">Gate: alles bestätigt & verplombt</span></div></li>
+            </ul>
+          </div>
+          <div class="lane">
+            <h3><span class="dot" style="background: var(--teamlead)"></span>Teamlead — Steuerung</h3>
+            <ul class="steps">
+              <li><div class="st">Automatik / Vorschlag</div><div class="sd">Engine verteilt; Ausnahmen surfacen. Vorschlag→Übernehmen.</div></li>
+              <li><div class="st">Pool pflegen</div><div class="sd">Priorisieren · Parken · Stornieren (Grund+Audit).</div></li>
+              <li><div class="st">Bündel-Eingriff</div><div class="sd">Entziehen/Hinzufügen/Reihenfolge/Pause — optimistisch + Rollback.</div></li>
+              <li><div class="st">Probleme triagen</div><div class="sd">issue_open lösen → freigeben → zurück in Arbeit. <span class="guard">Guard: kein Beleg bleibt stecken</span></div></li>
+              <li><div class="st">Belegdetail prüfen</div><div class="sd">Phasen-Scope, Positionen/Boxen, Abschluss-/Problem-Tab.</div></li>
+              <li><div class="st">Tagesabschluss</div><div class="sd">completed → zst_done, ZST-CSV an Altsystem.</div></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <b>Beleg-Aktionsflüsse — Best-Possible-Konzept.</b> Idealtypisches Zielbild; verknüpft jede
+        Aktion mit Akteur, Lebenszyklus-Phase (§7.1) und betroffenem Entitätstyp. Begleitend zu
+        <code>docs/concept/beleg-lifecycle-completion-concept.md</code> und
+        <code>docs/analysis/beleg-actions-critical-review.md</code>. Single-File, druckbar (A4).
+      </footer>
+    </div>
+  </body>
+</html>
