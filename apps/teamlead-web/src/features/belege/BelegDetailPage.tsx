@@ -26,7 +26,6 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
-import type { CaseStatus } from '@paket/domain-types';
 import {
   fetchBelegDetail,
   type BelegBox,
@@ -38,7 +37,8 @@ import {
   type BelegZst,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
-import { ReasonDialog } from '../../components/ReasonDialog.js';
+import { CaseActions } from '../../components/CaseActions.js';
+import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
 
@@ -54,15 +54,11 @@ const TABS = [
   'Dokumente',
 ];
 
-/** Storno is only sensible before an employee has started work (the backend rejects the rest). */
-const CANCELLABLE: CaseStatus[] = ['imported', 'parsed', 'needs_review', 'ready', 'parked', 'assigned'];
-
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
-  const { prioritiseCase, parkCase, cancelCase, resolveIssue, releaseIssue } = useCockpitData();
+  const { prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
-  const [pending, setPending] = useState<{ title: string; run: (r: string) => void } | null>(null);
 
   const query = useQuery<BelegDetail, Error>({
     queryKey: ['beleg', caseId],
@@ -109,6 +105,15 @@ export function BelegDetailPage(): JSX.Element {
     );
   }
 
+  // The case detail carries the full issue list, so „Problem freigeben" has a
+  // concrete target: the first still-open issue.
+  const openIssueId = c.issues.find((i) => i.status === 'open')?.id ?? null;
+  const actionCtx: CaseActionCtx = {
+    caseId: c.id,
+    issueId: openIssueId,
+    store: { prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue },
+  };
+
   return (
     <Stack spacing={2}>
       <Stack
@@ -130,42 +135,7 @@ export function BelegDetailPage(): JSX.Element {
             {c.hasOpenIssue && <ProblemChip status="open" size="small" />}
           </Stack>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={() =>
-              setPending({
-                title: `Beleg ${c.weBelegNo} priorisieren`,
-                run: (r) => prioritiseCase(c.id, r),
-              })
-            }
-          >
-            Priorisieren
-          </Button>
-          <Button
-            variant="outlined"
-            color="warning"
-            onClick={() =>
-              setPending({ title: `Beleg ${c.weBelegNo} parken`, run: (r) => parkCase(c.id, r) })
-            }
-          >
-            Parken
-          </Button>
-          {CANCELLABLE.includes(c.status) && (
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={() =>
-                setPending({
-                  title: `Beleg ${c.weBelegNo} stornieren`,
-                  run: (r) => cancelCase(c.id, r),
-                })
-              }
-            >
-              Stornieren
-            </Button>
-          )}
-        </Stack>
+        <CaseActions variant="header" caseStatus={c.status} weBelegNo={c.weBelegNo} ctx={actionCtx} />
       </Stack>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
@@ -224,27 +194,10 @@ export function BelegDetailPage(): JSX.Element {
         {tab === 3 && <PositionsTab positions={c.positions} />}
         {tab === 4 && <BoxesTab boxes={c.boxes} />}
         {tab === 5 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
-        {tab === 6 && (
-          <IssuesTab
-            issues={c.issues}
-            onResolve={(id) =>
-              setPending({ title: 'Problem lösen', run: (r) => resolveIssue(id, r) })
-            }
-            onRelease={(id) =>
-              setPending({ title: 'Beleg freigeben', run: (r) => releaseIssue(id, r) })
-            }
-          />
-        )}
+        {tab === 6 && <IssuesTab issues={c.issues} />}
         {tab === 7 && <HistoryTab history={c.history} />}
         {tab === 8 && <DocumentsTab documents={c.documents} />}
       </Paper>
-
-      <ReasonDialog
-        open={pending !== null}
-        title={pending?.title ?? ''}
-        onConfirm={(reason) => pending?.run(reason)}
-        onClose={() => setPending(null)}
-      />
     </Stack>
   );
 }
@@ -440,19 +393,12 @@ function AbschlussTab({
 }
 
 /**
- * Problem tab — the case's reported issues (§4.5) with the teamlead triage path:
- * an open issue can be resolved (→ waiting_teamlead), a resolved-pending one can
- * be released back to work (→ checking). Without this the Problemfall is stuck.
+ * Problem tab — read-only view of the case's reported issues (§4.5). The triage
+ * action („Problem freigeben", issue_open → in_progress) lives in the header
+ * {@link CaseActions} bar, driven by the §7.1 case status, so this tab is pure
+ * information.
  */
-function IssuesTab({
-  issues,
-  onResolve,
-  onRelease,
-}: {
-  issues: BelegIssue[];
-  onResolve: (issueId: string) => void;
-  onRelease: (issueId: string) => void;
-}): JSX.Element {
+function IssuesTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
   if (issues.length === 0) return <Empty text="Keine Probleme gemeldet." />;
   return (
     <Stack spacing={1.5}>
@@ -476,22 +422,10 @@ function IssuesTab({
             </Typography>
           )}
           {i.resolution && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
               Lösung: {i.resolution}
             </Typography>
           )}
-          <Stack direction="row" spacing={1}>
-            {i.status === 'open' && (
-              <Button size="small" variant="outlined" onClick={() => onResolve(i.id)}>
-                Problem lösen
-              </Button>
-            )}
-            {i.status === 'in_review' && (
-              <Button size="small" variant="outlined" color="success" onClick={() => onRelease(i.id)}>
-                Freigeben (zurück in Arbeit)
-              </Button>
-            )}
-          </Stack>
         </Box>
       ))}
     </Stack>

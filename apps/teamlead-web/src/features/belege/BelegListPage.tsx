@@ -12,6 +12,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Skeleton from '@mui/material/Skeleton';
@@ -32,6 +33,8 @@ import {
 } from '../../data/belege.js';
 import { formatMinutes } from '../../lib/format.js';
 import { DataTable } from '../../components/DataTable.js';
+import { CaseActions } from '../../components/CaseActions.js';
+import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
 
 /** A lifecycle scope = a named set of phases the list can be narrowed to. */
@@ -57,7 +60,12 @@ export function BelegListPage(): JSX.Element {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const { exportZst } = useCockpitData();
+  const { exportZst, prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue } =
+    useCockpitData();
+  const store = useMemo<CaseActionCtx['store']>(
+    () => ({ prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue }),
+    [prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue],
+  );
   const query = useQuery<BelegRow[], Error>({
     queryKey: ['belege'],
     queryFn: fetchBelegeList,
@@ -144,8 +152,25 @@ export function BelegListPage(): JSX.Element {
       },
       { accessorKey: 'storageCode', header: 'Lagerplatz' },
       { accessorKey: 'assignedTo', header: 'Zugeteilt' },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        // Row click navigates to the detail; stop propagation so an action click
+        // never doubles as "open Beleg".
+        cell: (ctx) => (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex' }}>
+            <CaseActions
+              variant="row"
+              caseStatus={ctx.row.original.status}
+              weBelegNo={ctx.row.original.weBelegNo}
+              ctx={{ caseId: ctx.row.original.id, issueId: null, store }}
+            />
+          </Box>
+        ),
+      },
     ],
-    [],
+    [store],
   );
 
   return (
