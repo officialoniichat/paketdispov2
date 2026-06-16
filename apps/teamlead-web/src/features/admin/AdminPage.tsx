@@ -128,6 +128,7 @@ export function AdminPage(): JSX.Element {
                     label="Gewichtung CatMan"
                     value={draft.priority.catManWeight}
                     onChange={(v) => patch('priority', { ...draft.priority, catManWeight: v })}
+                    hint="Vorzug für Belege mit CatMan-Liefertermin (Aktionsware). Höher = früher zugeteilt."
                   />
                   <Num
                     label="Überfälligkeitsschwelle (h)"
@@ -135,16 +136,19 @@ export function AdminPage(): JSX.Element {
                     onChange={(v) =>
                       patch('priority', { ...draft.priority, overdueThresholdHours: v })
                     }
+                    hint="Ab so vielen Stunden seit Buchung gilt ein Beleg als überfällig und wird vorgezogen."
                   />
                   <Toggle
                     label="FIFO aktiv"
                     checked={draft.priority.fifoEnabled}
                     onChange={(v) => patch('priority', { ...draft.priority, fifoEnabled: v })}
+                    hint="First-In-First-Out: bei gleicher Priorität wird der älteste Beleg zuerst zugeteilt."
                   />
                   <Toggle
                     label="Manuelle Prio gewinnt"
                     checked={draft.priority.manualPriorityWins}
                     onChange={(v) => patch('priority', { ...draft.priority, manualPriorityWins: v })}
+                    hint="Ein vom Teamlead manuell gesetzter Prio-Beleg schlägt alle Automatikregeln."
                   />
                 </Grid>
               )}
@@ -155,6 +159,7 @@ export function AdminPage(): JSX.Element {
                     label="% nächste Frühschicht"
                     value={draft.reserve.nextShiftCapacityPct}
                     onChange={(v) => patch('reserve', { ...draft.reserve, nextShiftCapacityPct: v })}
+                    hint="Anteil der morgigen Frühschicht-Kapazität, der heute als eiserne Reserve freigehalten wird."
                   />
                   <Num
                     label="Min. Minuten / MA"
@@ -162,6 +167,7 @@ export function AdminPage(): JSX.Element {
                     onChange={(v) =>
                       patch('reserve', { ...draft.reserve, minMinutesPerEmployee: v })
                     }
+                    hint="Mindest-Reserve in Minuten je geplantem Mitarbeiter (greift, falls der %-Wert zu klein wäre)."
                   />
                 </Grid>
               )}
@@ -172,21 +178,25 @@ export function AdminPage(): JSX.Element {
                     label="Min. Minuten"
                     value={draft.bundle.minMinutes}
                     onChange={(v) => patch('bundle', { ...draft.bundle, minMinutes: v })}
+                    hint="Mindestaufwand je Paket; kleinere Reste werden zu einem Paket zusammengelegt."
                   />
                   <Num
                     label="Max. Minuten"
                     value={draft.bundle.maxMinutes}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxMinutes: v })}
+                    hint="Maximaler Aufwand je Paket; danach wird ein neues Paket begonnen."
                   />
                   <Num
                     label="Max. Belege / Paket"
                     value={draft.bundle.maxCases}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxCases: v })}
+                    hint="Höchstzahl Belege je Paket (Rollwagen-/Kapazitätsgrenze)."
                   />
                   <Num
                     label="Max. schwere Belege"
                     value={draft.bundle.maxHeavyCases}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxHeavyCases: v })}
+                    hint="Höchstzahl aufwändiger Belege je Paket, damit schwer/leicht gemischt bleibt."
                   />
                 </Grid>
               )}
@@ -197,31 +207,37 @@ export function AdminPage(): JSX.Element {
                     label="Faktor Etikettendruck"
                     value={draft.effort.priceLabelPrintFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, priceLabelPrintFactor: v })}
+                    hint="Aufwand-Multiplikator für das Drucken von Preisetiketten."
                   />
                   <Num
                     label="Faktor Sicherung"
                     value={draft.effort.securingFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
+                    hint="Aufwand-Multiplikator für Warensicherung (Sicherungsetiketten/-tags)."
                   />
                   <Num
                     label="Faktor Online"
                     value={draft.effort.onlineFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
+                    hint="Aufwand-Multiplikator für online-relevante Artikel (zusätzliche Behandlung)."
                   />
                   <Num
                     label="Faktor Rotpreis"
                     value={draft.effort.redPriceFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
+                    hint="Aufwand-Multiplikator für Rotpreis-/reduzierte Artikel."
                   />
                   <Num
                     label="Faktor Prüfanteil"
                     value={draft.effort.checkShareFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
+                    hint="Aufwand-Multiplikator für den Prüfaufwand (Mengen-/Stichproben-/Vollkontrolle)."
                   />
                   <Num
                     label="Faktor Box-Splitting"
                     value={draft.effort.boxSplittingFactor}
                     onChange={(v) => patch('effort', { ...draft.effort, boxSplittingFactor: v })}
+                    hint="Aufwand-Multiplikator je zusätzlicher Transportbox beim Aufteilen."
                   />
                 </Grid>
               )}
@@ -293,10 +309,13 @@ function Num({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
+  /** Short plain-language explanation shown under the field. */
+  hint?: string;
 }): JSX.Element {
   return (
     <TextField
@@ -306,6 +325,7 @@ function Num({
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       inputProps={{ step: 'any' }}
+      helperText={hint}
     />
   );
 }
@@ -314,15 +334,25 @@ function Toggle({
   label,
   checked,
   onChange,
+  hint,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  /** Short plain-language explanation shown under the switch. */
+  hint?: string;
 }): JSX.Element {
   return (
-    <FormControlLabel
-      control={<Switch checked={checked} onChange={(e) => onChange(e.target.checked)} />}
-      label={label}
-    />
+    <Stack spacing={0}>
+      <FormControlLabel
+        control={<Switch checked={checked} onChange={(e) => onChange(e.target.checked)} />}
+        label={label}
+      />
+      {hint && (
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5, mt: -0.5 }}>
+          {hint}
+        </Typography>
+      )}
+    </Stack>
   );
 }
