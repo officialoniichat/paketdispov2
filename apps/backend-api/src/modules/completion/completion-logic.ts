@@ -6,7 +6,7 @@ import { type Actor, eventDraft, type WorkflowEventDraft } from '../events.js';
  * Full completion emits a ZST record reproducing today's parts/IST-time figure and
  * additionally stores effort points + process time. A partial completion ships the
  * finished part, books its proportional ZST, and carries the remainder to the next
- * day with status `partially_completed` (§7.1 boxing → partially_completed → ready_next_day).
+ * day with status `partially_completed` (§7.1 in_progress → partially_completed → ready).
  */
 
 export interface CompletionInput {

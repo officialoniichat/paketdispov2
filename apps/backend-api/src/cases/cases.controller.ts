@@ -17,7 +17,7 @@ export class CasesController {
   constructor(private readonly cases: CasesService) {}
 
   @Post('cases/:caseId/start-preparation')
-  @ApiOperation({ summary: 'Begin handling a package (assigned → picking, case.started)' })
+  @ApiOperation({ summary: 'Begin handling a package (assigned → in_progress, case.started)' })
   @ApiOkResponse({ type: TransitionResultDto })
   startPreparation(
     @CurrentUser() principal: Principal,
@@ -27,7 +27,7 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/complete')
-  @ApiOperation({ summary: 'Complete a package (boxing → completed, case.completed)' })
+  @ApiOperation({ summary: 'Complete a package (in_progress → completed, case.completed)' })
   @ApiOkResponse({ type: TransitionResultDto })
   complete(
     @CurrentUser() principal: Principal,
@@ -37,7 +37,7 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/partial-complete')
-  @ApiOperation({ summary: 'Partially complete (boxing → partially_completed)' })
+  @ApiOperation({ summary: 'Partially complete (in_progress → partially_completed)' })
   @ApiOkResponse({ type: TransitionResultDto })
   partialComplete(
     @CurrentUser() principal: Principal,

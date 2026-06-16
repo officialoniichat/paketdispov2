@@ -117,6 +117,39 @@ export class TeamleadController {
     return this.teamlead.unpark(principal, caseId);
   }
 
+  @Post('cases/:caseId/approve')
+  @ApiOperation({ summary: 'Zur Planung freigeben: approve a reviewed case (needs_review → ready).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  approve(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ParkDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.approve(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/reactivate')
+  @ApiOperation({ summary: 'Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  reactivate(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ParkDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.reactivate(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/deprioritize')
+  @ApiOperation({ summary: 'Priorität entfernen: drop the manual teamlead priority (case.deprioritized).' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  deprioritize(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: PrioritizeDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.deprioritize(principal, caseId, dto);
+  }
+
   @Post('cases/:caseId/cancel')
   @ApiOperation({ summary: 'Storno: cancel a case (→ cancelled, case.cancelled). Reasoned + audited.' })
   @ApiOkResponse({ type: TransitionResultDto })

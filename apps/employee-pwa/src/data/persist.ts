@@ -39,7 +39,7 @@ function resolveVersion(
   return typeof result.data?.version === 'number' ? result.data.version : undefined;
 }
 
-/** POST /api/cases/:id/start-preparation → assigned→picking; returns version. */
+/** POST /api/cases/:id/start-preparation → assigned → in_progress; returns version. */
 export async function persistStartPreparation(caseId: string): Promise<ServerVersion> {
   if (!isBackendEnabled) return undefined;
   return resolveVersion(

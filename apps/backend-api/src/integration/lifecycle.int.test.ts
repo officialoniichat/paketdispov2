@@ -183,10 +183,9 @@ describe('ZST (§4.6 + §17.1 ZST)', () => {
       where: { status: 'assigned' },
     });
     // Fast-forward to the in-progress state from which completion is legal.
-    // Cast: the generated Prisma client enum still lags the domain CaseStatus until regen.
     await prisma.goodsReceiptCase.update({
       where: { id: owned.id },
-      data: { status: 'in_progress' as never },
+      data: { status: 'in_progress' },
     });
 
     await cases.complete(employee, owned.id);

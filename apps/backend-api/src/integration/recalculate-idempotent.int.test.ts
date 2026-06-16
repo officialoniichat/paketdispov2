@@ -136,8 +136,7 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
     const keptBundleId = inFlight.assignedBundleId;
     await prisma.goodsReceiptCase.update({
       where: { id: inFlight.id },
-      // Cast: the generated Prisma client enum still lags the domain CaseStatus until regen.
-      data: { status: 'in_progress' as never },
+      data: { status: 'in_progress' },
     });
 
     await assignment.recalculate(teamlead);

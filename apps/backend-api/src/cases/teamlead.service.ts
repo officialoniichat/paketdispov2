@@ -10,6 +10,7 @@ import type { CaseStatus, ZstExportRow } from '@paket/domain-types';
 import { zstRowsToCsv } from '../modules/reporting/csv-export.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
+import { assertTransition } from '../workflow/case-state-machine.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
@@ -31,14 +32,6 @@ type PrismaTx = Prisma.TransactionClient;
 
 /** Bundle statuses an employee work already passed; these block destructive overrides. */
 const TERMINAL_BUNDLE_STATUSES: AssignmentStatus[] = ['completed', 'cancelled'];
-/** Case statuses where an employee has begun work — withdrawing then is illegal (§7.1). */
-const STARTED_CASE_STATUSES: CaseStatus[] = [
-  'in_progress',
-  'issue_open',
-  'partially_completed',
-  'completed',
-  'zst_done',
-];
 
 /** True iff `candidate` contains exactly the same ids as `current` (any order). */
 function isPermutation(current: string[], candidate: string[]): boolean {
@@ -69,15 +62,56 @@ export class TeamleadService {
     return this.transition(caseId, 'ready', 'case.ready', principal);
   }
 
+  /** „Zur Planung freigeben" — approve a reviewed case into the pool (needs_review → ready). */
+  approve(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
+    return this.transition(caseId, 'ready', 'case.ready', principal, { reason: dto.reason });
+  }
+
+  /** „Rest reaktivieren" — put a part-finished case's remainder back to work (partially_completed → ready). */
+  reactivate(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
+    return this.transition(caseId, 'ready', 'case.ready', principal, { reason: dto.reason });
+  }
+
   /**
    * Storno — cancel a case (e.g. duplicate import, ERP correction). Moves it to
    * the terminal `cancelled` state (§7.1) with a reasoned `case.cancelled` audit
-   * event. The state machine only permits this from non-started states
-   * (needs_review/ready/parked/assigned) and rejects the rest, so a case an
-   * employee already works on cannot be silently voided.
+   * event. The state machine permits this from every non-terminal state incl.
+   * mid-work (needs_review/ready/parked/assigned/in_progress/issue_open). In the
+   * same transaction the case is detached from any bundle (assignedBundleId=null)
+   * so a cancelled case never stays linked to a bundle.
    */
-  cancel(principal: Principal, caseId: string, dto: CancelDto): Promise<TransitionResultDto> {
-    return this.transition(caseId, 'cancelled', 'case.cancelled', principal, { reason: dto.reason });
+  async cancel(principal: Principal, caseId: string, dto: CancelDto): Promise<TransitionResultDto> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.goodsReceiptCase.findUnique({
+        where: { id: caseId },
+        select: { id: true, status: true, version: true },
+      });
+      if (!current) throw new NotFoundException(`Case ${caseId} not found`);
+      assertTransition(current.status as CaseStatus, 'cancelled');
+
+      const updated = await tx.goodsReceiptCase.updateMany({
+        where: { id: current.id, version: current.version },
+        data: { status: 'cancelled', assignedBundleId: null, version: { increment: 1 } },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Case was modified concurrently');
+      }
+
+      const event = await this.events.append(
+        {
+          eventType: 'case.cancelled',
+          entityType: 'GoodsReceiptCase',
+          entityId: current.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { from: current.status, to: 'cancelled', reason: dto.reason },
+        },
+        tx,
+      );
+
+      return { caseId: current.id, status: 'cancelled', version: current.version + 1, event };
+    });
+    return this.toResult(result);
   }
 
   /**
@@ -161,11 +195,41 @@ export class TeamleadService {
     return { caseId, status: found.status, version: found.version + 1, eventId: null };
   }
 
-  /**
-   * Resolve an issue and release the case back into work in one step: marks the
-   * Issue `resolved` (with resolution + releasedBy/releasedAt) and transitions the
-   * case `issue_open → in_progress` via an `issue.resolved` audit event.
-   */
+  async deprioritize(
+    principal: Principal,
+    caseId: string,
+    dto: PrioritizeDto,
+  ): Promise<TransitionResultDto> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { id: true, status: true, version: true, priorityFlags: true },
+    });
+    if (!found) throw new NotFoundException(`Case ${caseId} not found`);
+
+    const flags = new Set<PriorityFlag>(found.priorityFlags);
+    flags.delete('manual_teamlead_priority');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.goodsReceiptCase.update({
+        where: { id: caseId },
+        data: { priorityFlags: [...flags], version: { increment: 1 } },
+      });
+      await this.events.append(
+        {
+          eventType: 'case.deprioritized',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseId,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { reason: dto.reason },
+        },
+        tx,
+      );
+    });
+
+    return { caseId, status: found.status, version: found.version + 1, eventId: null };
+  }
+
   /**
    * „Problem freigeben" — resolve a case's open problem and put it back to work.
    * Case-scoped (not issue-scoped) so the action works from every surface that
@@ -178,7 +242,7 @@ export class TeamleadService {
     dto: ResolveIssueDto,
   ): Promise<TransitionResultDto> {
     const issue = await this.prisma.issue.findFirst({
-      where: { caseId, status: 'open' },
+      where: { caseId, status: { in: ['open', 'in_review', 'waiting_external'] } },
       select: { id: true },
     });
     if (!issue) throw new NotFoundException(`Case ${caseId} has no open issue`);
@@ -227,11 +291,6 @@ export class TeamleadService {
         where: { id: dto.caseId },
         select: { id: true, status: true, version: true },
       });
-      if (STARTED_CASE_STATUSES.includes(theCase.status as CaseStatus)) {
-        throw new ConflictException(
-          `Case ${dto.caseId} is already in progress (${theCase.status}) and cannot be withdrawn`,
-        );
-      }
       if (theCase.status !== 'assigned') {
         throw new ConflictException(
           `Only an assigned case can be withdrawn (case is ${theCase.status})`,

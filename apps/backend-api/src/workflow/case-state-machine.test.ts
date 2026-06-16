@@ -23,8 +23,8 @@ describe('case state machine (§7.1)', () => {
       assigned: ['in_progress', 'ready', 'cancelled'],
       in_progress: ['issue_open', 'partially_completed', 'completed', 'cancelled'],
       issue_open: ['in_progress', 'cancelled'],
-      partially_completed: ['ready', 'completed', 'cancelled'],
-      completed: ['zst_done', 'cancelled'],
+      partially_completed: ['ready'],
+      completed: ['zst_done'],
       zst_done: [],
       cancelled: [],
     };
@@ -57,10 +57,10 @@ describe('case state machine (§7.1)', () => {
     expect(canTransition('issue_open', 'in_progress')).toBe(true);
   });
 
-  it('allows the partially_completed Sonderpfad (ready_next_day) and direct completion', () => {
+  it('allows the partially_completed Sonderpfad (ready_next_day)', () => {
     expect(canTransition('in_progress', 'partially_completed')).toBe(true);
     expect(canTransition('partially_completed', 'ready')).toBe(true);
-    expect(canTransition('partially_completed', 'completed')).toBe(true);
+    expect(canTransition('partially_completed', 'completed')).toBe(false);
   });
 
   it('allows the teamlead unassign override assigned → ready', () => {

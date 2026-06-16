@@ -10,7 +10,7 @@ import type { CaseStatus } from '@paket/domain-types';
  *   ready ↔ parked                              (deliberately held back)
  *   assigned → ready                            (unassigned_by_teamlead override)
  *   in_progress → issue_open → in_progress      (issue raised then resolved)
- *   in_progress → partially_completed → ready   (ready_next_day) | completed
+ *   in_progress → partially_completed → ready   (ready_next_day)
  *
  * `cancelled` and `zst_done` are terminal.
  */
@@ -21,8 +21,8 @@ export const CASE_TRANSITIONS: Record<CaseStatus, readonly CaseStatus[]> = {
   assigned: ['in_progress', 'ready', 'cancelled'],
   in_progress: ['issue_open', 'partially_completed', 'completed', 'cancelled'],
   issue_open: ['in_progress', 'cancelled'],
-  partially_completed: ['ready', 'completed', 'cancelled'],
-  completed: ['zst_done', 'cancelled'],
+  partially_completed: ['ready'],
+  completed: ['zst_done'],
   zst_done: [],
   cancelled: [],
 };
