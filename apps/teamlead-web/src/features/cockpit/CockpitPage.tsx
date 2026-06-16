@@ -23,6 +23,7 @@ import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useCockpitData } from '../../data/store.js';
+import { useEmployeeNames } from '../../data/employeeNames.js';
 import { SimulationPanel } from '../simulation/SimulationPanel.js';
 import { formatDate, formatDateTime, formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
@@ -56,6 +57,7 @@ export function CockpitPage(): JSX.Element {
   const navigate = useNavigate();
   const [automatik, setAutomatik] = useAutomatik();
   const [simulationOpen, setSimulationOpen] = useState(false);
+  const employeeName = useEmployeeNames();
   const { capacity, pool, zst } = cockpit;
   const zstPct = zst.totalCases === 0 ? 0 : (zst.completedCases / zst.totalCases) * 100;
   const recalcResult = recalculate.data;
@@ -287,7 +289,7 @@ export function CockpitPage(): JSX.Element {
               return (
                 <Typography key={e.id} variant="body2">
                   <strong>{formatDateTime(e.timestamp)}</strong> · {payload.action ?? e.eventType} ·{' '}
-                  {e.entityId}
+                  {employeeName(e.entityId) ?? e.entityId}
                   {payload.reason ? ` – „${payload.reason}"` : ''}
                 </Typography>
               );

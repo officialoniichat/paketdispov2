@@ -23,6 +23,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
 import { useCockpitData } from '../../data/store.js';
+import { useEmployeeNames } from '../../data/employeeNames.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
 
@@ -32,10 +33,9 @@ export interface SimulationPanelProps {
 }
 
 export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.Element {
-  const { preview, recalculate, board } = useCockpitData();
+  const { preview, recalculate } = useCockpitData();
+  const employeeName = useEmployeeNames();
   const result = preview.data ?? null;
-  // Map employeeId → readable name (the engine load list keys by id).
-  const nameById = new Map(board.map((r) => [r.employeeId, r.displayName]));
 
   const runPreview = preview.mutate;
   const resetPreview = preview.reset;
@@ -111,7 +111,7 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
                       : (load.assignedMinutes / load.capacityMinutes) * 100;
                   return (
                     <TableRow key={load.employeeId}>
-                      <TableCell>{nameById.get(load.employeeId) ?? load.employeeId}</TableCell>
+                      <TableCell>{employeeName(load.employeeId) ?? load.employeeId}</TableCell>
                       <TableCell align="right">{load.bundleCount}</TableCell>
                       <TableCell align="right">{formatMinutes(load.assignedMinutes)}</TableCell>
                       <TableCell align="right">{formatMinutes(load.capacityMinutes)}</TableCell>
