@@ -6,12 +6,18 @@
  * (see App.tsx) and this client is never called.
  */
 import { createApiClient, type PaketApiClient } from '@paket/api-client';
+import { resolveEnv } from '../config/runtimeEnv.js';
 
-/** Backend base URL; undefined toggles offline-demo mode. */
-export const apiBaseUrl: string | undefined = import.meta.env.VITE_API_BASE_URL;
+// resolveEnv reads the runtime value (window.__ENV__ from /env.js) first, then the
+// build-time import.meta.env. On Railway this lets the deployed app point at the
+// real backend without a rebuild. See src/config/runtimeEnv.ts.
+
+/** Backend base URL; undefined toggles offline-demo mode. Trailing slash stripped so
+ *  openapi-fetch never builds a double-slash URL that 404s on Fastify. */
+export const apiBaseUrl: string | undefined = resolveEnv('VITE_API_BASE_URL')?.replace(/\/+$/, '');
 
 /** Dev bearer token (RS256). Minted out-of-band, see .env.example. */
-export const devToken: string | undefined = import.meta.env.VITE_DEV_TOKEN;
+export const devToken: string | undefined = resolveEnv('VITE_DEV_TOKEN');
 
 /** True when a backend is configured and the app should load live work. */
 export const isBackendEnabled = Boolean(apiBaseUrl);

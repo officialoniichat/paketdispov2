@@ -25,7 +25,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // /env.js carries runtime config regenerated on each deploy. Never precache it
+        // (Workbox would serve the stale build-time placeholder) or let the SPA
+        // navigation fallback swallow it — keep it a plain network fetch.
+        globIgnores: ['**/env.js'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/env\.js$/],
       },
       devOptions: { enabled: false },
     }),

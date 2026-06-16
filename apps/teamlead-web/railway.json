@@ -5,6 +5,6 @@
     "buildCommand": "pnpm --filter @paket/teamlead-web build"
   },
   "deploy": {
-    "startCommand": "pnpm --filter @paket/teamlead-web preview"
+    "startCommand": "pnpm --filter @paket/teamlead-web start:prod"
   }
 }

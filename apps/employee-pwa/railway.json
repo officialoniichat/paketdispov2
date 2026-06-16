@@ -5,6 +5,6 @@
     "buildCommand": "pnpm --filter @paket/employee-pwa build"
   },
   "deploy": {
-    "startCommand": "pnpm --filter @paket/employee-pwa preview"
+    "startCommand": "pnpm --filter @paket/employee-pwa start:prod"
   }
 }

@@ -8,6 +8,10 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <title>L&amp;T Warenauszeichnung</title>
+    <!-- Runtime config: sets window.__ENV__ BEFORE the app module below. In prod this
+         /env.js is regenerated from env vars at container start (scripts/write-runtime-env.mjs);
+         in dev it is the empty placeholder from public/env.js. Excluded from the SW precache. -->
+    <script src="/env.js"></script>
   </head>
   <body>
     <div id="root"></div>

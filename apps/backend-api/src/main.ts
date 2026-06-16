@@ -29,24 +29,28 @@ async function main(): Promise<void> {
     }),
   );
 
-  // CORS for the Vite frontends (teamlead :5174, employee :5175). In production set
-  // CORS_ORIGINS (comma-separated allowed origins, e.g. the deployed web app URLs)
-  // to open cross-origin access; without it prod stays same-origin / behind a gateway.
-  // Locally the hardcoded dev origins keep things zero-config.
+  // CORS for the browser frontends (teamlead-web, employee-pwa). In production set
+  // CORS_ORIGINS to the deployed web app origins (comma-separated), e.g.
+  //   CORS_ORIGINS=https://teamlead-web.up.railway.app,https://employee-pwa.up.railway.app
+  // A "Failed to fetch" in the cockpit is often a CORS block, not just a wrong URL, so
+  // the origins must match the frontends exactly (scheme + host). Trailing slashes are
+  // tolerated and CORS_ORIGINS=* reflects any origin (handy for a quick demo). Without
+  // CORS_ORIGINS prod stays same-origin; locally the dev origins keep things zero-config.
   const corsOrigins = (process.env.CORS_ORIGINS ?? '')
     .split(',')
-    .map((o) => o.trim())
+    .map((o) => o.trim().replace(/\/+$/, '')) // tolerate trailing slashes from dashboards
     .filter(Boolean);
+  const allowAnyOrigin = corsOrigins.includes('*');
   const allowedOrigins =
     corsOrigins.length > 0 ? corsOrigins : ['http://localhost:5174', 'http://localhost:5175'];
   if (config.env !== 'production' || corsOrigins.length > 0) {
     app.enableCors({
-      origin: allowedOrigins,
+      origin: allowAnyOrigin ? true : allowedOrigins,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type', 'x-correlation-id'],
       credentials: true,
     });
-    logger.info({ origins: allowedOrigins }, 'CORS enabled');
+    logger.info({ origins: allowAnyOrigin ? '*' : allowedOrigins }, 'CORS enabled');
   }
 
   app.enableShutdownHooks();
