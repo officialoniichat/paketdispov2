@@ -13,6 +13,6 @@ describe('Teamlead cockpit shell', () => {
     expect(screen.getByRole('heading', { name: /Logistik Warenauszeichnung/i })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: /Hauptnavigation/i })).toBeTruthy();
     expect(screen.getAllByText(/Digitale Ablagen/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Neu berechnen/i)).toBeTruthy();
+    expect(screen.getByText(/Vorschlag ansehen/i)).toBeTruthy();
   });
 });

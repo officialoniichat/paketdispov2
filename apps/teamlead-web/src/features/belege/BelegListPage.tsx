@@ -21,6 +21,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import type { ColumnDef, SortingState } from '@tanstack/react-table';
+import DownloadIcon from '@mui/icons-material/Download';
 import { CaseStatusChip, PriorityChip } from '@paket/ui';
 import {
   casePhase,
@@ -31,6 +32,7 @@ import {
 } from '../../data/belege.js';
 import { formatMinutes } from '../../lib/format.js';
 import { DataTable } from '../../components/DataTable.js';
+import { useCockpitData } from '../../data/store.js';
 
 /** A lifecycle scope = a named set of phases the list can be narrowed to. */
 type Scope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'alle';
@@ -55,11 +57,25 @@ export function BelegListPage(): JSX.Element {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
+  const { exportZst } = useCockpitData();
   const query = useQuery<BelegRow[], Error>({
     queryKey: ['belege'],
     queryFn: fetchBelegeList,
   });
   const allRows = query.data ?? [];
+
+  // §15.1 Tagesabschluss lives where finished work lives: the Abgeschlossen scope.
+  // Exports all completed cases (→ zst_done) and downloads the ZST CSV.
+  const handleExport = async (): Promise<void> => {
+    const res = await exportZst.mutateAsync();
+    const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zst-export-${res.date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Per-scope counts for the toggle badges, and the rows for the active scope.
   const countByScope = useMemo<Record<Scope, number>>(() => {
@@ -174,6 +190,16 @@ export function BelegListPage(): JSX.Element {
           onChange={(e) => setGlobalFilter(e.target.value)}
           sx={{ minWidth: 280 }}
         />
+        {scope === 'abgeschlossen' && (
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            disabled={exportZst.isPending || countByScope.abgeschlossen === 0}
+            onClick={() => void handleExport()}
+          >
+            {exportZst.isPending ? 'Export läuft …' : 'Tagesabschluss / ZST-Export'}
+          </Button>
+        )}
       </Stack>
 
       {query.isLoading ? (
