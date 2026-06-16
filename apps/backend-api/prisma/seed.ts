@@ -17,8 +17,9 @@ import { DEFAULT_RULE_CONFIG, RULE_CONFIG_KEY } from '@paket/domain-types';
 
 const prisma = new PrismaClient();
 
-// Dates are YYYY-MM-DD. The day the engine + dev tokens target.
-const SEED_DATE = '2026-06-15';
+// Dates are YYYY-MM-DD. Seed targets "today" so the cockpit/board (which query the
+// current day) always have data after a reseed — no stale fixed demo date.
+const SEED_DATE = new Date().toISOString().slice(0, 10);
 
 /** A @db.Date column wants a UTC midnight Date for the given calendar day. */
 function asDate(day: string): Date {

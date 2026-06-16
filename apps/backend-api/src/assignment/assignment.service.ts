@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { assignWork, type EngineInput } from '@paket/assignment-engine';
-import type { AssignmentBundle, BundlePickupSequence } from '@paket/domain-types';
+import {
+  weeklyPatternSchema,
+  type AssignmentBundle,
+  type BundlePickupSequence,
+  type WeeklyPattern,
+} from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 type PrismaTx = Prisma.TransactionClient;
@@ -41,6 +46,12 @@ export class AssignmentService {
     const end = day + 'T23:59:59.999Z';
     const dayStart = new Date(start);
     const dayEnd = new Date(end);
+
+    // Ensure each active employee's concrete shift for the day exists, derived from
+    // their weekly pattern (Wochenplan drives capacity). This makes recalculate work
+    // for ANY day — not just a pre-seeded one — so the board is never empty just
+    // because the calendar rolled over to a new (un-materialized) date.
+    await this.materializeShiftsForDate(day, dayStart);
 
     const [shiftRows, locationRows] = await Promise.all([
       this.prisma.shift.findMany({
@@ -95,6 +106,52 @@ export class AssignmentService {
     });
 
     return this.toResultDto(day, plan, assignedCaseCount, durationMs);
+  }
+
+  /**
+   * Materialize each active employee's concrete Shift for `dayIso` from their weekly
+   * pattern (Wochenplan → capacity). A non-working day drops any existing shift; a
+   * working day upserts the derived netCapacity (source='pattern'). Idempotent.
+   */
+  private async materializeShiftsForDate(dayIso: string, dayDate: Date): Promise<void> {
+    const users = await this.prisma.user.findMany({
+      where: { active: true },
+      select: { id: true, productivityFactor: true, weeklyPattern: true },
+    });
+    const keys: (keyof WeeklyPattern)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const key = keys[dayDate.getUTCDay()]!;
+    for (const u of users) {
+      const parsed = weeklyPatternSchema.safeParse(u.weeklyPattern);
+      const plan = parsed.success ? parsed.data[key] : undefined;
+      if (!plan || !plan.working || !plan.start || !plan.end) {
+        await this.prisma.shift.deleteMany({ where: { employeeId: u.id, date: dayDate } });
+        continue;
+      }
+      const [sh, sm] = plan.start.split(':').map(Number);
+      const [eh, em] = plan.end.split(':').map(Number);
+      const startMin = (sh ?? 0) * 60 + (sm ?? 0);
+      const endMin = (eh ?? 0) * 60 + (em ?? 0);
+      const net = Math.round(
+        Math.max(0, endMin - startMin - plan.breakMinutes) *
+          u.productivityFactor *
+          (plan.partTimePct / 100),
+      );
+      const data = {
+        plannedStart: new Date(`${dayIso}T${plan.start}:00`),
+        plannedEnd: new Date(`${dayIso}T${plan.end}:00`),
+        breakMinutes: plan.breakMinutes,
+        plannedHours: Math.round((Math.max(0, endMin - startMin) / 60) * 100) / 100,
+        netCapacityMinutes: net,
+        active: net > 0,
+        source: 'pattern' as const,
+        productivityFactor: u.productivityFactor,
+      };
+      await this.prisma.shift.upsert({
+        where: { shift_employee_date: { employeeId: u.id, date: dayDate } },
+        create: { employeeId: u.id, date: dayDate, ...data },
+        update: data,
+      });
+    }
   }
 
   /**
