@@ -95,24 +95,20 @@ export class AdminService {
 
   // --- Rule config ----------------------------------------------------------
 
-  /**
-   * Read the structured rule config (the SINGLE SOURCE OF TRUTH the cockpit and the
-   * reserve engine both consume); falls back to the default if unset/invalid. Returns
-   * the strongly-typed domain `RuleConfig` (the `RuleConfigDto` is documentation-only).
-   */
-  async getRuleConfig(): Promise<RuleConfig> {
+  /** Read the structured rule config; falls back to the default if unset/invalid. */
+  async getRuleConfig(): Promise<RuleConfigDto> {
     const row = await this.prisma.appConfig.findUnique({ where: { key: RULE_CONFIG_KEY } });
     const parsed = ruleConfigSchema.safeParse(row?.value);
-    return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG;
+    const config = parsed.success ? parsed.data : DEFAULT_RULE_CONFIG;
+    return config as RuleConfigDto;
   }
 
   /**
    * Validate the incoming config against the domain Zod schema (the single source
    * of truth) and persist it as the singleton JSON document. A parse failure is
-   * surfaced as a 400 with the field-level Zod issues, not a 500. Accepts the
-   * documentation DTO and narrows it to the domain `RuleConfig` via the Zod parse.
+   * surfaced as a 400 with the field-level Zod issues, not a 500.
    */
-  async replaceRuleConfig(input: RuleConfigDto): Promise<RuleConfig> {
+  async replaceRuleConfig(input: RuleConfig): Promise<RuleConfigDto> {
     const parsed = ruleConfigSchema.safeParse(input);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -121,7 +117,7 @@ export class AdminService {
       });
     }
     await this.persistRuleConfig(parsed.data);
-    return parsed.data;
+    return parsed.data as RuleConfigDto;
   }
 
   /** Idempotent default seed: only writes the default when no row exists yet. */

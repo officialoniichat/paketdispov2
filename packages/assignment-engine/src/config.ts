@@ -69,13 +69,6 @@ export const reserveConfigSchema = z.object({
   mode: z.literal('max_of_percentage_and_minutes_per_employee'),
   percentageOfNextMorningCapacity: z.number().min(0).max(1),
   minimumMinutesPerPlannedEmployee: z.number().nonnegative(),
-  /**
-   * Morning gap (concept §5): the window from early-shift start until fresh belege
-   * are booked. The eiserne Reserve target is `earlyShiftWorkerCount × morningGapMinutes`,
-   * i.e. enough startable carryover to bridge that gap. Replaces the flat 20% heuristic
-   * for the reserve-status model (`computeReserveStatus`).
-   */
-  morningGapMinutes: z.number().nonnegative(),
   /** Priority flags that may consume the reserve (Prio/CatMan/overdue/Teamlead). */
   overrideAllowedFor: z.array(priorityFlagSchema),
 });
@@ -87,7 +80,6 @@ export const DEFAULT_RESERVE_CONFIG: ReserveConfig = {
   mode: 'max_of_percentage_and_minutes_per_employee',
   percentageOfNextMorningCapacity: 0.2,
   minimumMinutesPerPlannedEmployee: 60,
-  morningGapMinutes: 105,
   overrideAllowedFor: ['prio', 'catman_due', 'overdue', 'manual_teamlead_priority'],
 };
 

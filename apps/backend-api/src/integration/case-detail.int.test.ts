@@ -10,7 +10,6 @@ import { EventLogService } from '../events/event-log.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
-import { AdminService } from '../admin/admin.service.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
@@ -166,7 +165,7 @@ beforeAll(async () => {
   const events = new EventLogService(p);
   const workflow = new WorkflowService(p, events);
   const live = new LiveStatusService();
-  readSvc = new TeamleadReadService(p, new AdminService(p));
+  readSvc = new TeamleadReadService(p);
   teamleadSvc = new TeamleadService(p, workflow, events, live);
 }, 180_000);
 

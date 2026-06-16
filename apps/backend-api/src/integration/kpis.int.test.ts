@@ -6,7 +6,6 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
-import { AdminService } from '../admin/admin.service.js';
 
 /**
  * Integration test for GET /api/teamlead/kpis (Task 1.3). Aggregates over
@@ -86,7 +85,7 @@ beforeAll(async () => {
   });
   prisma = new PrismaClient({ datasourceUrl: url });
   const p = prisma as unknown as PrismaService;
-  teamleadSvc = new TeamleadReadService(p, new AdminService(p));
+  teamleadSvc = new TeamleadReadService(p);
   await seed();
 }, 180_000);
 

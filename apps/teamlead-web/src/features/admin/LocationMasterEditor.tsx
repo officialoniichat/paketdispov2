@@ -23,11 +23,9 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { LocationKind, LocationMaster } from '@paket/domain-types';
 import { fetchLocations, saveLocations } from '../../data/admin.js';
 
@@ -131,22 +129,7 @@ export function LocationMasterEditor(): JSX.Element {
             <TableCell>Bezeichnung</TableCell>
             <TableCell>Art</TableCell>
             <TableCell>Zone</TableCell>
-            <TableCell>
-              <Stack component="span" direction="row" spacing={0.5} alignItems="center" useFlexGap>
-                <span>Sortier-Index</span>
-                <Tooltip
-                  title="Reihenfolge innerhalb der Zone beim Abfahren (kleiner = früher)."
-                  arrow
-                  enterTouchDelay={0}
-                >
-                  <InfoOutlinedIcon
-                    fontSize="inherit"
-                    color="action"
-                    sx={{ cursor: 'help', fontSize: '1rem', verticalAlign: 'middle', opacity: 0.7 }}
-                  />
-                </Tooltip>
-              </Stack>
-            </TableCell>
+            <TableCell>Sortier-Index</TableCell>
             <TableCell>Aktiv</TableCell>
             <TableCell />
           </TableRow>

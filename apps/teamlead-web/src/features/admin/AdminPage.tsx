@@ -11,19 +11,15 @@ import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { RuleConfig } from '@paket/domain-types';
 import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
 import { LocationMasterEditor } from './LocationMasterEditor.js';
@@ -130,13 +126,11 @@ export function AdminPage(): JSX.Element {
                 <Grid>
                   <Num
                     label="Gewichtung CatMan"
-                    hint="Gewicht des Catman-Termins in der Priorisierung. Höher → CatMan-fällige Belege werden stärker vorgezogen."
                     value={draft.priority.catManWeight}
                     onChange={(v) => patch('priority', { ...draft.priority, catManWeight: v })}
                   />
                   <Num
                     label="Überfälligkeitsschwelle (h)"
-                    hint="Ab so vielen Stunden seit Buchung gilt ein Beleg als überfällig und wird hochpriorisiert."
                     value={draft.priority.overdueThresholdHours}
                     onChange={(v) =>
                       patch('priority', { ...draft.priority, overdueThresholdHours: v })
@@ -144,13 +138,11 @@ export function AdminPage(): JSX.Element {
                   />
                   <Toggle
                     label="FIFO aktiv"
-                    hint="First-In-First-Out: bei gleicher Priorität zuerst den ältesten Beleg."
                     checked={draft.priority.fifoEnabled}
                     onChange={(v) => patch('priority', { ...draft.priority, fifoEnabled: v })}
                   />
                   <Toggle
                     label="Manuelle Prio gewinnt"
-                    hint="Manuell vom Teamlead gesetzte Priorität schlägt die automatische Reihenfolge."
                     checked={draft.priority.manualPriorityWins}
                     onChange={(v) => patch('priority', { ...draft.priority, manualPriorityWins: v })}
                   />
@@ -158,87 +150,20 @@ export function AdminPage(): JSX.Element {
               )}
 
               {tab === 1 && (
-                <Stack spacing={2}>
-                  <Typography variant="body2" color="text.secondary">
-                    Eiserne Reserve (§5): hält morgens genug startbare Carryover-Belege zurück, damit
-                    die Frühschicht um 09:00 nicht leerläuft. Ziel = Frühschicht-MA × Morgen-Lücke.
-                  </Typography>
-                  <Grid>
-                    <Toggle
-                      label="Eiserne Reserve aktiv"
-                      checked={draft.reserve.enabled}
-                      onChange={(v) => patch('reserve', { ...draft.reserve, enabled: v })}
-                    />
-                    <Num
-                      label="Morgen-Lücke (Min.)"
-                      hint="Zeitfenster, das die Frühschicht morgens überbrücken muss, bis frische Ware gebucht ist. Reserve-Ziel = Frühschicht-MA × diese Minuten."
-                      value={draft.reserve.morningGapMinutes}
-                      onChange={(v) =>
-                        patch('reserve', {
-                          ...draft.reserve,
-                          morningGapMinutes: Math.max(1, Math.round(v)),
-                        })
-                      }
-                    />
-                    <TextField
-                      select
-                      size="small"
-                      label={
-                        <LabelWithHint
-                          label="Frühschicht-Quelle"
-                          hint="Woher die Anzahl Frühschicht-MA kommt: ‚Folgetag‘ (Schichtplan) oder ‚Heute‘ als Näherung (solange kein PEP-Feed)."
-                        />
-                      }
-                      value={draft.reserve.earlyShiftSource}
-                      onChange={(e) =>
-                        patch('reserve', {
-                          ...draft.reserve,
-                          earlyShiftSource:
-                            e.target.value === 'next_morning' ? 'next_morning' : 'today_proxy',
-                        })
-                      }
-                    >
-                      <MenuItem value="today_proxy">Heutige Schichten (Proxy)</MenuItem>
-                      <MenuItem value="next_morning">Nächster Arbeitstag</MenuItem>
-                    </TextField>
-                    <Toggle
-                      label="Fristen respektieren"
-                      hint="Ein zurückgehaltener Beleg darf nie sein Catman-/Verladedatum überschreiten."
-                      checked={draft.reserve.respectDeadlines}
-                      onChange={(v) => patch('reserve', { ...draft.reserve, respectDeadlines: v })}
-                    />
-                  </Grid>
-                  <Stack spacing={1}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      component="div"
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                    >
-                      Nie zurückhalten — Abteilungen (fix):
-                      <InfoHint text="Abschnitte, die nie zurückgehalten werden – NOS (4), Extrabestellung (7), NOS-Nachorder (8) müssen am selben Tag raus." />
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {draft.reserve.neverReserveSections.map((s) => (
-                        <Chip key={s} label={`Abt. ${s}`} size="small" variant="outlined" />
-                      ))}
-                    </Stack>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      component="div"
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-                    >
-                      Nie zurückhalten — Prio-Flags (fix):
-                      <InfoHint text="Dringlichkeits-Kennzeichen, die nie in die Reserve wandern (Prio, CatMan, überfällig, manuell)." />
-                    </Typography>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {draft.reserve.neverReserveFlags.map((f) => (
-                        <Chip key={f} label={f} size="small" variant="outlined" />
-                      ))}
-                    </Stack>
-                  </Stack>
-                </Stack>
+                <Grid>
+                  <Num
+                    label="% nächste Frühschicht"
+                    value={draft.reserve.nextShiftCapacityPct}
+                    onChange={(v) => patch('reserve', { ...draft.reserve, nextShiftCapacityPct: v })}
+                  />
+                  <Num
+                    label="Min. Minuten / MA"
+                    value={draft.reserve.minMinutesPerEmployee}
+                    onChange={(v) =>
+                      patch('reserve', { ...draft.reserve, minMinutesPerEmployee: v })
+                    }
+                  />
+                </Grid>
               )}
 
               {tab === 2 && (
@@ -260,7 +185,6 @@ export function AdminPage(): JSX.Element {
                   />
                   <Num
                     label="Max. schwere Belege"
-                    hint="Max. Anzahl schwerer/aufwändiger Belege pro Bündel."
                     value={draft.bundle.maxHeavyCases}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxHeavyCases: v })}
                   />
@@ -268,51 +192,38 @@ export function AdminPage(): JSX.Element {
               )}
 
               {tab === 3 && (
-                <Stack spacing={2}>
-                  <Typography variant="body2" color="text.secondary">
-                    Aufwands-Faktoren multiplizieren den Basisaufwand (&gt;1 = mehr Aufwand).
-                  </Typography>
-                  <Grid>
-                    <Num
-                      label="Faktor Etikettendruck"
-                      hint="… wenn Preisetiketten gedruckt werden"
-                      value={draft.effort.priceLabelPrintFactor}
-                      onChange={(v) =>
-                        patch('effort', { ...draft.effort, priceLabelPrintFactor: v })
-                      }
-                    />
-                    <Num
-                      label="Faktor Sicherung"
-                      hint="… wenn Ware gesichert werden muss"
-                      value={draft.effort.securingFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
-                    />
-                    <Num
-                      label="Faktor Online"
-                      hint="… für online-relevante Artikel (Sonderhandling)"
-                      value={draft.effort.onlineFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
-                    />
-                    <Num
-                      label="Faktor Rotpreis"
-                      hint="… für rote Preise/Reduzierungen"
-                      value={draft.effort.redPriceFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
-                    />
-                    <Num
-                      label="Faktor Prüfanteil"
-                      hint="… bei hohem Prüfanteil (WE-Prüfung)"
-                      value={draft.effort.checkShareFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
-                    />
-                    <Num
-                      label="Faktor Box-Splitting"
-                      hint="… bei Verteilung auf mehrere Transportkisten"
-                      value={draft.effort.boxSplittingFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, boxSplittingFactor: v })}
-                    />
-                  </Grid>
-                </Stack>
+                <Grid>
+                  <Num
+                    label="Faktor Etikettendruck"
+                    value={draft.effort.priceLabelPrintFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, priceLabelPrintFactor: v })}
+                  />
+                  <Num
+                    label="Faktor Sicherung"
+                    value={draft.effort.securingFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
+                  />
+                  <Num
+                    label="Faktor Online"
+                    value={draft.effort.onlineFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
+                  />
+                  <Num
+                    label="Faktor Rotpreis"
+                    value={draft.effort.redPriceFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
+                  />
+                  <Num
+                    label="Faktor Prüfanteil"
+                    value={draft.effort.checkShareFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
+                  />
+                  <Num
+                    label="Faktor Box-Splitting"
+                    value={draft.effort.boxSplittingFactor}
+                    onChange={(v) => patch('effort', { ...draft.effort, boxSplittingFactor: v })}
+                  />
+                </Grid>
               )}
 
               {tab === 4 && (
@@ -337,23 +248,10 @@ export function AdminPage(): JSX.Element {
                     Prüfung.
                   </Typography>
                   {draft.parserTemplates.map((pt) => (
-                    <Typography
-                      key={pt.id}
-                      variant="body2"
-                      component="div"
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}
-                    >
-                      <span>
-                        {pt.name} · Pflichtfelder: {pt.requiredFields.join(', ')} · Schwelle{' '}
-                        {pt.detectionThreshold}
-                      </span>
-                      <InfoHint text="Ab welcher Trefferquote (0–1) das Dokument automatisch erkannt wird." />
-                      {pt.fallbackToManual && (
-                        <>
-                          <span>· Fallback manuell</span>
-                          <InfoHint text="Bei Unsicherheit manuelle Nachbearbeitung." />
-                        </>
-                      )}
+                    <Typography key={pt.id} variant="body2">
+                      {pt.name} · Pflichtfelder: {pt.requiredFields.join(', ')} · Schwelle{' '}
+                      {pt.detectionThreshold}
+                      {pt.fallbackToManual ? ' · Fallback manuell' : ''}
                     </Typography>
                   ))}
                 </Stack>
@@ -391,52 +289,20 @@ function Grid({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
-/**
- * A small InfoOutlined icon carrying a plain-language explainer in a tooltip. Used
- * next to the labels of the non-self-evident rule settings only (e.g. FIFO, CatMan
- * weight, Morgen-Lücke) — obvious fields (an/aus toggles, min/max Minuten) stay bare
- * so the form doesn't get cluttered. This is the ONE consistent explainer pattern.
- */
-function InfoHint({ text }: { text: string }): JSX.Element {
-  return (
-    <Tooltip title={text} arrow enterTouchDelay={0}>
-      <InfoOutlinedIcon
-        fontSize="inherit"
-        color="action"
-        sx={{ cursor: 'help', fontSize: '1rem', verticalAlign: 'middle', opacity: 0.7 }}
-      />
-    </Tooltip>
-  );
-}
-
-/** A field label with an optional trailing {@link InfoHint} explainer icon. */
-function LabelWithHint({ label, hint }: { label: string; hint?: string }): JSX.Element {
-  if (!hint) return <>{label}</>;
-  return (
-    <Stack component="span" direction="row" spacing={0.5} alignItems="center" useFlexGap>
-      <span>{label}</span>
-      <InfoHint text={hint} />
-    </Stack>
-  );
-}
-
 function Num({
   label,
   value,
   onChange,
-  hint,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
-  /** Plain-language explainer rendered as an info icon next to the label (optional). */
-  hint?: string;
 }): JSX.Element {
   return (
     <TextField
       type="number"
       size="small"
-      label={<LabelWithHint label={label} hint={hint} />}
+      label={label}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       inputProps={{ step: 'any' }}
@@ -448,18 +314,15 @@ function Toggle({
   label,
   checked,
   onChange,
-  hint,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
-  /** Plain-language explainer rendered as an info icon next to the label (optional). */
-  hint?: string;
 }): JSX.Element {
   return (
     <FormControlLabel
       control={<Switch checked={checked} onChange={(e) => onChange(e.target.checked)} />}
-      label={<LabelWithHint label={label} hint={hint} />}
+      label={label}
     />
   );
 }

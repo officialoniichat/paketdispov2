@@ -136,16 +136,6 @@ function minutes(hhmm: string): number {
 
 async function seedShifts(userIds: Record<string, string>): Promise<void> {
   const date = asDate(SEED_DATE);
-  // Idempotency guard: drop any shift on SEED_DATE that does NOT belong to a
-  // current patterned seed user, so re-running leaves exactly the canonical set
-  // (a prior run's orphan shifts against now-stale user ids cannot be reconciled
-  // by the [employeeId, date] upsert alone).
-  const currentEmployeeIds = USERS.filter((u) => u.pattern).map((u) =>
-    requireId(userIds, u.employeeNo, 'user'),
-  );
-  await prisma.shift.deleteMany({
-    where: { date, employeeId: { notIn: currentEmployeeIds } },
-  });
   for (const u of USERS) {
     if (!u.pattern) continue;
     const employeeId = requireId(userIds, u.employeeNo, 'user');

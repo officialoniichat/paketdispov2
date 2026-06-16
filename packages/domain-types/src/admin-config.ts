@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { priorityFlagSchema } from './enums.js';
 import { idSchema, isoDateSchema } from './primitives.js';
 
 /**
@@ -23,27 +22,10 @@ export const priorityRuleConfigSchema = z.object({
 });
 export type PriorityRuleConfig = z.infer<typeof priorityRuleConfigSchema>;
 
-/**
- * Eiserne Reserve rule (Reserve & Starterpaket concept §5/§8). This is the SINGLE
- * SOURCE OF TRUTH the Admin/Regeln form edits — the engine's reserve-status model
- * (`computeReserveStatus`) is driven by exactly these values, mapped at the call
- * site. No second, divergent reserve config exists.
- *
- * - `morningGapMinutes` sizes the floor: target = earlyShiftWorkerCount × this.
- * - `earlyShiftSource` selects how the early-shift worker count is resolved:
- *   `next_morning` = active shifts on the next working day; `today_proxy` = active
- *   shifts on the planning date itself (default — no PEP feed yet).
- * - `neverReserveSections` / `neverReserveFlags` exclude everyday/urgent ware from
- *   being held back overnight (concept §5.1).
- * - `respectDeadlines` keeps a held case from breaching its Catmandatum/Verladetag.
- */
+/** Iron-reserve protection (§8.3 / B.2). */
 export const reserveRuleConfigSchema = z.object({
-  enabled: z.boolean(),
-  morningGapMinutes: z.number().int().positive(),
-  earlyShiftSource: z.enum(['next_morning', 'today_proxy']),
-  neverReserveSections: z.array(z.number().int()),
-  neverReserveFlags: z.array(priorityFlagSchema),
-  respectDeadlines: z.boolean(),
+  nextShiftCapacityPct: z.number().min(0).max(100),
+  minMinutesPerEmployee: z.number().nonnegative(),
 });
 export type ReserveRuleConfig = z.infer<typeof reserveRuleConfigSchema>;
 
@@ -116,12 +98,8 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     manualPriorityWins: true,
   },
   reserve: {
-    enabled: true,
-    morningGapMinutes: 105,
-    earlyShiftSource: 'today_proxy',
-    neverReserveSections: [4, 7, 8],
-    neverReserveFlags: ['prio', 'catman_due', 'overdue', 'manual_teamlead_priority'],
-    respectDeadlines: true,
+    nextShiftCapacityPct: 20,
+    minMinutesPerEmployee: 30,
   },
   bundle: {
     minMinutes: 20,
