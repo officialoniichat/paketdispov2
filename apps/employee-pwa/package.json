@@ -6,7 +6,7 @@
   "description": "Mitarbeiter-App",
   "scripts": {
     "dev": "vite --port 5175",
-    "build": "vite build",
+    "build": "pnpm --filter \"@paket/employee-pwa^...\" build && vite build",
     "preview": "vite preview --port 5175",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
