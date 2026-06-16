@@ -250,6 +250,22 @@ export class IssueSummaryDto {
   @ApiProperty({ description: 'ISO-8601 timestamp' }) reportedAt!: string;
 }
 
+/** One ZST completion record (Anhang A ZstRecord) — the Belegdetail Abschluss tab. */
+export class ZstSummaryDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'Confirmed quantity booked by this ZST' }) completedQuantity!: number;
+  @ApiProperty() effortPoints!: number;
+  @ApiProperty({ description: 'ISO-8601 timestamp the ZST was set' }) completedAt!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'ISO-8601 timestamp the ZST batch was exported (zst_done), else null',
+  })
+  exportedAt!: string | null;
+  @ApiProperty({ description: 'ZstSource: mobile_app|teamlead_dashboard|manual_import' })
+  source!: string;
+}
+
 /** A linked original document (Anhang A Document via DocumentSet). */
 export class CaseDocumentDto {
   @ApiProperty() id!: string;
@@ -281,6 +297,8 @@ export class CaseDetailDto {
   @ApiProperty({ type: [CaseDocumentDto] }) documents!: CaseDocumentDto[];
   @ApiProperty({ type: [IssueSummaryDto], description: 'Reported problems, newest first' })
   issues!: IssueSummaryDto[];
+  @ApiProperty({ type: [ZstSummaryDto], description: 'ZST completion records, oldest first' })
+  zstRecords!: ZstSummaryDto[];
   @ApiProperty({ type: [AuditEventDto], description: 'Audit history, newest first' })
   history!: AuditEventDto[];
 }

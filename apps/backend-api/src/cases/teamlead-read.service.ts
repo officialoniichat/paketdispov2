@@ -356,6 +356,7 @@ export class TeamleadReadService {
         transportBoxes: { orderBy: { boxNo: 'asc' } },
         documentSet: { include: { documents: { orderBy: { fileName: 'asc' } } } },
         issues: { orderBy: { reportedAt: 'desc' } },
+        zstRecords: { orderBy: { completedAt: 'asc' } },
       },
     });
     if (!found) {
@@ -399,6 +400,14 @@ export class TeamleadReadService {
         description: i.description,
         resolution: i.resolution,
         reportedAt: i.reportedAt.toISOString(),
+      })),
+      zstRecords: found.zstRecords.map((z) => ({
+        id: z.id,
+        completedQuantity: z.completedQuantity,
+        effortPoints: z.effortPoints,
+        completedAt: z.completedAt.toISOString(),
+        exportedAt: z.exportedAt ? z.exportedAt.toISOString() : null,
+        source: z.source,
       })),
       history,
     };

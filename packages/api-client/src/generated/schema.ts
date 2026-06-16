@@ -867,6 +867,18 @@ export interface components {
             /** @description ISO-8601 timestamp */
             reportedAt: string;
         };
+        ZstSummaryDto: {
+            id: string;
+            /** @description Confirmed quantity booked by this ZST */
+            completedQuantity: number;
+            effortPoints: number;
+            /** @description ISO-8601 timestamp the ZST was set */
+            completedAt: string;
+            /** @description ISO-8601 timestamp the ZST batch was exported (zst_done), else null */
+            exportedAt?: string | null;
+            /** @description ZstSource: mobile_app|teamlead_dashboard|manual_import */
+            source: string;
+        };
         CaseDetailDto: {
             case: components["schemas"]["CaseSummaryDto"];
             /** @description Effort points (Aufwandspunkte) */
@@ -886,6 +898,8 @@ export interface components {
             documents: components["schemas"]["CaseDocumentDto"][];
             /** @description Reported problems, newest first */
             issues: components["schemas"]["IssueSummaryDto"][];
+            /** @description ZST completion records, oldest first */
+            zstRecords: components["schemas"]["ZstSummaryDto"][];
             /** @description Audit history, newest first */
             history: components["schemas"]["AuditEventDto"][];
         };

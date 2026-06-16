@@ -2414,6 +2414,41 @@
           "reportedAt"
         ]
       },
+      "ZstSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "completedQuantity": {
+            "type": "number",
+            "description": "Confirmed quantity booked by this ZST"
+          },
+          "effortPoints": {
+            "type": "number"
+          },
+          "completedAt": {
+            "type": "string",
+            "description": "ISO-8601 timestamp the ZST was set"
+          },
+          "exportedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 timestamp the ZST batch was exported (zst_done), else null"
+          },
+          "source": {
+            "type": "string",
+            "description": "ZstSource: mobile_app|teamlead_dashboard|manual_import"
+          }
+        },
+        "required": [
+          "id",
+          "completedQuantity",
+          "effortPoints",
+          "completedAt",
+          "source"
+        ]
+      },
       "CaseDetailDto": {
         "type": "object",
         "properties": {
@@ -2485,6 +2520,13 @@
               "$ref": "#/components/schemas/IssueSummaryDto"
             }
           },
+          "zstRecords": {
+            "description": "ZST completion records, oldest first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZstSummaryDto"
+            }
+          },
           "history": {
             "description": "Audit history, newest first",
             "type": "array",
@@ -2500,6 +2542,7 @@
           "transportBoxes",
           "documents",
           "issues",
+          "zstRecords",
           "history"
         ]
       },

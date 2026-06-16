@@ -35,11 +35,22 @@ import {
   type BelegHistoryEntry,
   type BelegIssue,
   type BelegPosition,
+  type BelegZst,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 
-const TABS = ['Kopf', 'Priorität', 'Aufwand', 'Positionen', 'Boxen', 'Problem', 'Historie', 'Dokumente'];
+const TABS = [
+  'Kopf',
+  'Priorität',
+  'Aufwand',
+  'Positionen',
+  'Boxen',
+  'Abschluss',
+  'Problem',
+  'Historie',
+  'Dokumente',
+];
 
 /** Storno is only sensible before an employee has started work (the backend rejects the rest). */
 const CANCELLABLE: CaseStatus[] = ['imported', 'parsed', 'needs_review', 'ready', 'parked', 'assigned'];
@@ -210,7 +221,8 @@ export function BelegDetailPage(): JSX.Element {
         )}
         {tab === 3 && <PositionsTab positions={c.positions} />}
         {tab === 4 && <BoxesTab boxes={c.boxes} />}
-        {tab === 5 && (
+        {tab === 5 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
+        {tab === 6 && (
           <IssuesTab
             issues={c.issues}
             onResolve={(id) =>
@@ -221,8 +233,8 @@ export function BelegDetailPage(): JSX.Element {
             }
           />
         )}
-        {tab === 6 && <HistoryTab history={c.history} />}
-        {tab === 7 && <DocumentsTab documents={c.documents} />}
+        {tab === 7 && <HistoryTab history={c.history} />}
+        {tab === 8 && <DocumentsTab documents={c.documents} />}
       </Paper>
 
       <ReasonDialog
@@ -361,6 +373,63 @@ function DocumentsTab({ documents }: { documents: BelegDocument[] }): JSX.Elemen
           </Tooltip>
         </Stack>
       ))}
+    </Stack>
+  );
+}
+
+/**
+ * Abschluss tab — the case's ZST completion result (§4.6/§15.1): one row per
+ * ZST record (full or partial), with the booked quantity, effort, who/when, and
+ * whether it has been exported to the legacy system (zst_done). For a terminal
+ * case this is the meaningful state, where Positionen/Boxen show the work setup.
+ */
+function AbschlussTab({
+  zstRecords,
+  totalQuantity,
+}: {
+  zstRecords: BelegZst[];
+  totalQuantity: number;
+}): JSX.Element {
+  if (zstRecords.length === 0) return <Empty text="Noch kein Abschluss (keine ZST gebucht)." />;
+  const bookedQuantity = zstRecords.reduce((sum, z) => sum + z.completedQuantity, 0);
+  return (
+    <Stack spacing={2}>
+      <FieldGrid
+        rows={[
+          ['Gebuchte Menge', `${bookedQuantity} / ${totalQuantity}`],
+          ['ZST-Datensätze', String(zstRecords.length)],
+          [
+            'Export',
+            zstRecords.every((z) => z.exportedAt !== null)
+              ? 'Exportiert (zst_done)'
+              : 'Noch nicht exportiert',
+          ],
+        ]}
+      />
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Art</TableCell>
+            <TableCell align="right">Menge</TableCell>
+            <TableCell align="right">Aufwand</TableCell>
+            <TableCell>ZST gesetzt</TableCell>
+            <TableCell>Exportiert</TableCell>
+            <TableCell>Quelle</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {zstRecords.map((z) => (
+            <TableRow key={z.id}>
+              <TableCell>{z.completedQuantity < totalQuantity ? 'Teilabschluss' : 'Vollabschluss'}</TableCell>
+              <TableCell align="right">{z.completedQuantity}</TableCell>
+              <TableCell align="right">{z.effortPoints}</TableCell>
+              <TableCell>{formatDateTime(z.completedAt)}</TableCell>
+              <TableCell>{z.exportedAt ? formatDateTime(z.exportedAt) : '–'}</TableCell>
+              <TableCell>{z.source}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Stack>
   );
 }

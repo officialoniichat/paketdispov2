@@ -28,6 +28,7 @@ type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
 type CaseDocumentDto = components['schemas']['CaseDocumentDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
 type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
+type ZstSummaryDto = components['schemas']['ZstSummaryDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
 
 const BELEGE_PAGE_LIMIT = 200;
@@ -144,6 +145,15 @@ export interface BelegIssue {
   reportedAt: string;
 }
 
+export interface BelegZst {
+  id: string;
+  completedQuantity: number;
+  effortPoints: number;
+  completedAt: string;
+  exportedAt: string | null;
+  source: string;
+}
+
 export interface BelegHistoryEntry {
   id: string;
   timestamp: string;
@@ -187,6 +197,7 @@ export interface BelegDetail {
   boxes: BelegBox[];
   documents: BelegDocument[];
   issues: BelegIssue[];
+  zstRecords: BelegZst[];
   history: BelegHistoryEntry[];
 }
 
@@ -260,6 +271,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     boxes: dto.transportBoxes.map(toBelegBox),
     documents: dto.documents.map(toBelegDocument),
     issues: dto.issues.map(toBelegIssue),
+    zstRecords: dto.zstRecords.map(toBelegZst),
     history: dto.history.map(toBelegHistoryEntry),
   };
 }
@@ -328,6 +340,17 @@ function toBelegIssue(i: IssueSummaryDto): BelegIssue {
     description: i.description ?? null,
     resolution: i.resolution ?? null,
     reportedAt: i.reportedAt,
+  };
+}
+
+function toBelegZst(z: ZstSummaryDto): BelegZst {
+  return {
+    id: z.id,
+    completedQuantity: z.completedQuantity,
+    effortPoints: z.effortPoints,
+    completedAt: z.completedAt,
+    exportedAt: z.exportedAt ?? null,
+    source: z.source,
   };
 }
 

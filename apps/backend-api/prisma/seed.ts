@@ -306,9 +306,15 @@ function splitQuantity(total: number): number[] {
 }
 
 async function seedCaseDetails(): Promise<void> {
-  // Cover ALL ready cases so any case the engine assigns to ma-101/102/103 has
-  // a completable aggregate (positions + boxes), not just the first two.
-  const cases = await prisma.goodsReceiptCase.findMany({ where: { status: 'ready' } });
+  // Cover every case that benefits from a detail aggregate: the ready pool (so any
+  // engine-assigned case is completable in the PWA) AND the terminal/issue
+  // lifecycle cases (so their Belegdetail Positionen/Boxen tabs are populated, not
+  // empty). Cancelled cases get no detail — there is nothing to show.
+  const cases = await prisma.goodsReceiptCase.findMany({
+    where: {
+      status: { in: ['ready', 'completed', 'partially_completed', 'zst_done', 'issue_open'] },
+    },
+  });
 
   for (const c of cases) {
     await prisma.workInstructionHeader.upsert({
@@ -558,8 +564,10 @@ async function main(): Promise<void> {
   await seedShifts(userIds);
   const locationIds = await seedLocations();
   await seedCases(locationIds);
-  await seedCaseDetails();
   await seedLifecycleCases(locationIds, userIds);
+  // After both case sets exist, attach detail (positions/boxes/SKU) to every case
+  // that should show it — ready pool + lifecycle cases.
+  await seedCaseDetails();
   await seedRuleConfig();
 
   const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =
