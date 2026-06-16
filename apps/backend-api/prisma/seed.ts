@@ -387,6 +387,156 @@ async function seedCaseDetails(): Promise<void> {
   }
 }
 
+// --- Lifecycle cases (populate the Belege scopes Abgeschlossen / Archiv) ----
+// The 14 ready cases above feed the engine. These extra cases sit in terminal /
+// completion / issue states so the §10.4 Belege view's scope switcher (Aktiv /
+// Abgeschlossen heute / Archiv) and the Problemfälle lane are non-empty in dev.
+// They are NOT status='ready', so the assignment engine ignores them.
+// See docs/concept/beleg-lifecycle-completion-concept.md.
+
+type LifecycleStatus = 'completed' | 'partially_completed' | 'zst_done' | 'cancelled' | 'issue_open';
+
+interface SeedLifecycleCase {
+  weBelegNo: string;
+  storageCode: string;
+  section: number | null;
+  goodsTypeText: 'Vororder' | 'Nachorder' | 'NOS' | 'Sonderposten' | 'Prio';
+  totalQuantity: number;
+  effortPoints: number;
+  estimatedMinutes: number;
+  status: LifecycleStatus;
+  employeeNo: 'ma-101' | 'ma-102' | 'ma-103';
+  /** Confirmed quantity booked into a ZstRecord (omit for cancelled/issue_open). */
+  completedQuantity?: number;
+  /** HH:mm the ZST/abschluss happened (UTC, on the seed day). */
+  completedAt?: string;
+  /** Set for zst_done: the day the ZST batch was exported to the legacy system. */
+  exportedAt?: string;
+  /** issue_open only: the open problem reported against the case. */
+  issue?: { issueType: 'wrong_color' | 'damaged_goods' | 'missing_quantity'; description: string };
+}
+
+const LIFECYCLE_CASES: SeedLifecycleCase[] = [
+  {
+    weBelegNo: 'WE-2026-000201', storageCode: 'R7', section: 2, goodsTypeText: 'Vororder',
+    totalQuantity: 60, effortPoints: 14, estimatedMinutes: 28, status: 'completed',
+    employeeNo: 'ma-101', completedQuantity: 60, completedAt: '14:32',
+  },
+  {
+    weBelegNo: 'WE-2026-000202', storageCode: 'R18', section: 3, goodsTypeText: 'Nachorder',
+    totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'partially_completed',
+    employeeNo: 'ma-102', completedQuantity: 40, completedAt: '14:05',
+  },
+  {
+    weBelegNo: 'WE-2026-000203', storageCode: 'R27', section: 7, goodsTypeText: 'NOS',
+    totalQuantity: 45, effortPoints: 11, estimatedMinutes: 22, status: 'zst_done',
+    employeeNo: 'ma-101', completedQuantity: 45, completedAt: '13:40', exportedAt: '17:00',
+  },
+  {
+    weBelegNo: 'WE-2026-000204', storageCode: 'B-4', section: 4, goodsTypeText: 'Sonderposten',
+    totalQuantity: 18, effortPoints: 5, estimatedMinutes: 12, status: 'cancelled',
+    employeeNo: 'ma-103',
+  },
+  {
+    weBelegNo: 'WE-2026-000205', storageCode: 'D-3', section: 8, goodsTypeText: 'Prio',
+    totalQuantity: 33, effortPoints: 8, estimatedMinutes: 20, status: 'issue_open',
+    employeeNo: 'ma-103',
+    issue: { issueType: 'wrong_color', description: 'Farbe weicht von Arbeitsanweisung ab' },
+  },
+];
+
+async function seedLifecycleCases(
+  locationIds: Record<string, string>,
+  userIds: Record<string, string>,
+): Promise<void> {
+  for (const c of LIFECYCLE_CASES) {
+    const importKey = `dev-seed:${c.weBelegNo}`;
+    const documentSet = await prisma.documentSet.upsert({
+      where: { importKey },
+      update: { bookingDate: asDate(SEED_DATE) },
+      create: {
+        importKey,
+        source: 'erp_export',
+        bookingDate: asDate(SEED_DATE),
+        weBelegNo: c.weBelegNo,
+        parseConfidence: 1,
+        status: 'parsed',
+      },
+    });
+
+    const storageLocationId = requireId(locationIds, c.storageCode, 'location');
+    const employeeId = requireId(userIds, c.employeeNo, 'user');
+    const caseData = {
+      documentSetId: documentSet.id,
+      deliveryNoteNo: c.weBelegNo.replace('WE', 'LS'),
+      bookingDate: asDate(SEED_DATE),
+      weDate: asDate(SEED_DATE),
+      branchNo: '001',
+      primaryShopAreaNo: '21',
+      primaryFloor: 'EG',
+      storageLocationId,
+      section: c.section,
+      goodsTypeText: c.goodsTypeText,
+      priorityFlags: [],
+      catManDate: null,
+      totalQuantity: c.totalQuantity,
+      status: c.status,
+      effortPoints: c.effortPoints,
+      estimatedMinutes: c.estimatedMinutes,
+    };
+    const gcase = await prisma.goodsReceiptCase.upsert({
+      where: { weBelegNo: c.weBelegNo },
+      update: { ...caseData, assignedBundleId: null },
+      create: { weBelegNo: c.weBelegNo, ...caseData },
+    });
+
+    // ZST record for the completion-bearing states (drives the §15 KPI tile +
+    // future Tagesjournal). exportedAt is set only once the case reached zst_done.
+    if (c.completedQuantity !== undefined && c.completedAt) {
+      await prisma.zstRecord.upsert({
+        where: { idempotencyKey: `seed-zst:${c.weBelegNo}` },
+        update: {
+          completedQuantity: c.completedQuantity,
+          effortPoints: c.effortPoints,
+          completedAt: asTime(SEED_DATE, c.completedAt),
+          exportedAt: c.exportedAt ? asTime(SEED_DATE, c.exportedAt) : null,
+        },
+        create: {
+          idempotencyKey: `seed-zst:${c.weBelegNo}`,
+          caseId: gcase.id,
+          employeeId,
+          completedQuantity: c.completedQuantity,
+          effortPoints: c.effortPoints,
+          startedAt: asTime(SEED_DATE, '11:00'),
+          completedAt: asTime(SEED_DATE, c.completedAt),
+          source: 'mobile_app',
+          exportedAt: c.exportedAt ? asTime(SEED_DATE, c.exportedAt) : null,
+        },
+      });
+    }
+
+    // Open problem for the issue_open case (Problemfälle lane). Idempotent: only
+    // create when this case has no open issue yet.
+    if (c.issue) {
+      const existing = await prisma.issue.findFirst({
+        where: { caseId: gcase.id, status: 'open' },
+      });
+      if (!existing) {
+        await prisma.issue.create({
+          data: {
+            caseId: gcase.id,
+            scope: 'case',
+            employeeId,
+            issueType: c.issue.issueType,
+            description: c.issue.description,
+            status: 'open',
+          },
+        });
+      }
+    }
+  }
+}
+
 // --- App config (§11 structured rule config singleton) ---------------------
 // Idempotent: only writes the default when no row exists yet, so re-running the
 // seed never clobbers a rule config a teamlead/admin has since edited via the API.
@@ -409,19 +559,25 @@ async function main(): Promise<void> {
   const locationIds = await seedLocations();
   await seedCases(locationIds);
   await seedCaseDetails();
+  await seedLifecycleCases(locationIds, userIds);
   await seedRuleConfig();
 
-  const [users, shifts, locations, readyCases, positions, boxes] = await Promise.all([
-    prisma.user.count(),
-    prisma.shift.count({ where: { date: asDate(SEED_DATE), active: true } }),
-    prisma.location.count({ where: { active: true } }),
-    prisma.goodsReceiptCase.count({ where: { status: 'ready' } }),
-    prisma.receiptPosition.count(),
-    prisma.transportBox.count(),
-  ]);
+  const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.shift.count({ where: { date: asDate(SEED_DATE), active: true } }),
+      prisma.location.count({ where: { active: true } }),
+      prisma.goodsReceiptCase.count({ where: { status: 'ready' } }),
+      prisma.receiptPosition.count(),
+      prisma.transportBox.count(),
+      prisma.goodsReceiptCase.count({
+        where: { status: { in: ['completed', 'partially_completed', 'zst_done', 'cancelled', 'issue_open'] } },
+      }),
+      prisma.zstRecord.count(),
+    ]);
   // eslint-disable-next-line no-console
   console.log(
-    `[seed] users=${users} shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCases} positions=${positions} boxes=${boxes}`,
+    `[seed] users=${users} shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCases} positions=${positions} boxes=${boxes} lifecycleCases=${lifecycleCases} zstRecords=${zstRecords}`,
   );
 }
 

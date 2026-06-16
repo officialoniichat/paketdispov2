@@ -1,28 +1,57 @@
 /**
- * Beleg-Liste (§10.4 list view): the full operational pool from the live backend
- * (`GET /api/teamlead/cases`) in a dense, filterable, virtualizable TanStack
- * Table with saved views (§12.2 / Anhang E.6). Filtering/sorting/saved-views stay
- * client-side (pilot scale: one page of 200). Row click opens the Belegdetails.
+ * Beleg-Liste (§10.4 list view): the full case population from the live backend
+ * (`GET /api/teamlead/cases`) in a dense, filterable, virtualizable TanStack Table.
+ *
+ * The list is segmented by **lifecycle scope** (see
+ * docs/concept/beleg-lifecycle-completion-concept.md): Aktiv (Eingang/Pool/In
+ * Arbeit) is the default; Abgeschlossen heute and Archiv give completed/terminal
+ * Belege a home instead of burying them in one flat status dump. Filtering/sorting
+ * stay client-side (pilot scale: one page of 200). Row click opens the Belegdetails.
  */
 import { useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import type { ColumnDef, SortingState } from '@tanstack/react-table';
 import { CaseStatusChip, PriorityChip } from '@paket/ui';
-import { fetchBelegeList, type BelegRow } from '../../data/belege.js';
+import {
+  casePhase,
+  fetchBelegeList,
+  PHASE_LABEL,
+  type BelegRow,
+  type CasePhase,
+} from '../../data/belege.js';
 import { formatMinutes } from '../../lib/format.js';
 import { DataTable } from '../../components/DataTable.js';
-import { SavedViews } from '../../components/SavedViews.js';
-import type { SavedViewState } from '../../data/savedViews.js';
+
+/** A lifecycle scope = a named set of phases the list can be narrowed to. */
+type Scope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'alle';
+
+const SCOPE_PHASES: Record<Scope, CasePhase[] | null> = {
+  aktiv: ['eingang', 'pool', 'arbeit'],
+  abgeschlossen: ['abgeschlossen'],
+  archiv: ['erledigt'],
+  alle: null, // no phase filter
+};
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  aktiv: 'Aktiv',
+  abgeschlossen: 'Abgeschlossen',
+  archiv: 'Archiv',
+  alle: 'Alle',
+};
 
 export function BelegListPage(): JSX.Element {
   const navigate = useNavigate();
+  const [scope, setScope] = useState<Scope>('aktiv');
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -30,15 +59,44 @@ export function BelegListPage(): JSX.Element {
     queryKey: ['belege'],
     queryFn: fetchBelegeList,
   });
-  const rows = query.data ?? [];
+  const allRows = query.data ?? [];
+
+  // Per-scope counts for the toggle badges, and the rows for the active scope.
+  const countByScope = useMemo<Record<Scope, number>>(() => {
+    const counts: Record<Scope, number> = {
+      aktiv: 0,
+      abgeschlossen: 0,
+      archiv: 0,
+      alle: allRows.length,
+    };
+    for (const row of allRows) {
+      const phase = casePhase(row.status);
+      if (SCOPE_PHASES.aktiv?.includes(phase)) counts.aktiv += 1;
+      if (SCOPE_PHASES.abgeschlossen?.includes(phase)) counts.abgeschlossen += 1;
+      if (SCOPE_PHASES.archiv?.includes(phase)) counts.archiv += 1;
+    }
+    return counts;
+  }, [allRows]);
+
+  const rows = useMemo(() => {
+    const phases = SCOPE_PHASES[scope];
+    if (phases === null) return allRows;
+    return allRows.filter((r) => phases.includes(casePhase(r.status)));
+  }, [allRows, scope]);
 
   const columns = useMemo<ColumnDef<BelegRow>[]>(
     () => [
       { accessorKey: 'weBelegNo', header: 'WE-Beleg' },
       {
-        accessorKey: 'status',
-        header: 'Status',
-        cell: (ctx) => <CaseStatusChip status={ctx.row.original.status} size="small" />,
+        id: 'phase',
+        header: 'Phase',
+        accessorFn: (r) => PHASE_LABEL[casePhase(r.status)],
+        cell: (ctx) => (
+          <Stack direction="row" gap={0.5} alignItems="center">
+            <Chip size="small" label={PHASE_LABEL[casePhase(ctx.row.original.status)]} />
+            <CaseStatusChip status={ctx.row.original.status} size="small" />
+          </Stack>
+        ),
       },
       {
         accessorKey: 'section',
@@ -74,13 +132,6 @@ export function BelegListPage(): JSX.Element {
     [],
   );
 
-  const currentViewState: SavedViewState = { globalFilter, sorting };
-
-  function applyView(state: SavedViewState): void {
-    setGlobalFilter(typeof state.globalFilter === 'string' ? state.globalFilter : '');
-    setSorting(Array.isArray(state.sorting) ? (state.sorting as SortingState) : []);
-  }
-
   return (
     <Stack spacing={2}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
@@ -101,6 +152,21 @@ export function BelegListPage(): JSX.Element {
       )}
 
       <Stack direction="row" spacing={2} flexWrap="wrap" alignItems="center">
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={scope}
+          onChange={(_e, next) => {
+            if (next !== null) setScope(next as Scope);
+          }}
+          aria-label="Lebenszyklus-Scope"
+        >
+          {(Object.keys(SCOPE_PHASES) as Scope[]).map((s) => (
+            <ToggleButton key={s} value={s}>
+              {SCOPE_LABEL[s]} ({countByScope[s]})
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
         <TextField
           size="small"
           label="Filter (WE-Nr, Status, Lagerplatz …)"
@@ -108,7 +174,6 @@ export function BelegListPage(): JSX.Element {
           onChange={(e) => setGlobalFilter(e.target.value)}
           sx={{ minWidth: 280 }}
         />
-        <SavedViews scope="belege" currentState={currentViewState} onApply={applyView} />
       </Stack>
 
       {query.isLoading ? (
@@ -127,7 +192,7 @@ export function BelegListPage(): JSX.Element {
           getRowId={(r) => r.id}
           onRowClick={(r) => navigate(`/belege/${r.id}`)}
           maxHeight={560}
-          emptyText="Keine Belege für diesen Filter."
+          emptyText="Keine Belege in diesem Scope."
         />
       )}
     </Stack>
