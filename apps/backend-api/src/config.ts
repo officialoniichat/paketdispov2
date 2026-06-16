@@ -46,7 +46,9 @@ export const config = {
       : ['realm_access.roles', 'roles', 'groups'],
     employeeNoClaim: process.env.OIDC_EMPLOYEE_NO_CLAIM ?? 'employee_no',
     // Dev/CI only: PEM-encoded RS256 public key to verify locally-issued tokens.
-    devPublicKeyPem: process.env.AUTH_DEV_PUBLIC_KEY ?? '',
+    // Accept both a real multi-line PEM and one pasted with literal "\n" escapes
+    // (a common dashboard paste form), so the verifier configures reliably.
+    devPublicKeyPem: (process.env.AUTH_DEV_PUBLIC_KEY ?? '').replace(/\\n/g, '\n'),
   },
   swagger: {
     enabled: bool(process.env.SWAGGER_ENABLED, true),
