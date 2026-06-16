@@ -32,8 +32,10 @@ export interface SimulationPanelProps {
 }
 
 export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.Element {
-  const { preview, recalculate } = useCockpitData();
+  const { preview, recalculate, board } = useCockpitData();
   const result = preview.data ?? null;
+  // Map employeeId → readable name (the engine load list keys by id).
+  const nameById = new Map(board.map((r) => [r.employeeId, r.displayName]));
 
   const runPreview = preview.mutate;
   const resetPreview = preview.reset;
@@ -50,13 +52,13 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Neu berechnen – Vorschau (Simulation)</DialogTitle>
+      <DialogTitle>Verteilungs-Vorschlag</DialogTitle>
       <DialogContent>
         {preview.isPending && (
           <Stack alignItems="center" sx={{ py: 4 }}>
             <CircularProgress />
             <Typography sx={{ mt: 2 }} color="text.secondary">
-              Engine simuliert die Verteilung…
+              Engine berechnet den Vorschlag…
             </Typography>
           </Stack>
         )}
@@ -109,7 +111,7 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
                       : (load.assignedMinutes / load.capacityMinutes) * 100;
                   return (
                     <TableRow key={load.employeeId}>
-                      <TableCell>{load.employeeId}</TableCell>
+                      <TableCell>{nameById.get(load.employeeId) ?? load.employeeId}</TableCell>
                       <TableCell align="right">{load.bundleCount}</TableCell>
                       <TableCell align="right">{formatMinutes(load.assignedMinutes)}</TableCell>
                       <TableCell align="right">{formatMinutes(load.capacityMinutes)}</TableCell>
@@ -122,8 +124,7 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
             </Table>
 
             <Typography variant="body2" color="text.secondary">
-              Dies ist nur eine Vorschau – es wird nichts gespeichert. Erst „Live zuweisen" schreibt
-              die Verteilung (Human-in-the-loop, Engine-Lauf {result.durationMs} ms).
+              Vorschau – es wird nichts gespeichert. Erst „Übernehmen" schreibt die Verteilung.
             </Typography>
 
             {recalculate.isError && (
@@ -146,7 +147,7 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
           }
           onClick={handleCommit}
         >
-          Live zuweisen
+          Übernehmen
         </Button>
       </DialogActions>
     </Dialog>
