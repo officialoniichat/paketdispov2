@@ -14,7 +14,7 @@ import { type Actor, eventDraft, type WorkflowEventDraft } from '../events.js';
  * Issue management (§4.5 Flow: Problemfall). A reported deviation blocks **only the
  * affected level** – SKU line, position, transport box or the whole case – so the
  * rest of the goods keep flowing ("Restware weiter"). The teamlead inbox drives
- * resolve / release back into the picking flow.
+ * resolve back into the work flow.
  */
 
 /** What a still-open issue blocks. Sibling work continues unless the whole case is blocked. */
@@ -83,7 +83,7 @@ export function computeBlockingEffect(
 /**
  * Decide the effect of a newly reported problem. A scoped (position/sku/box) issue
  * leaves the case status untouched so remaining work continues; a case-scoped issue
- * moves the case into `issue_open` (§7.1 checking → issue_open → waiting_teamlead).
+ * moves the case into `issue_open` (§7.1 in_progress → issue_open).
  */
 export function openIssue(
   input: OpenIssueInput,
@@ -128,9 +128,10 @@ export function openIssue(
 }
 
 /**
- * Teamlead resolves the issue (problem clarified / corrected). Marks the issue
- * resolved and unblocks its level. A resolved case-scoped issue routes the case to
- * `released` so the worker can continue (§4.5 Freigabe / Ersatzanweisung).
+ * Teamlead resolves the issue (problem clarified / corrected) and releases the
+ * block in one step. Marks the issue resolved, stamps releasedBy/releasedAt, and
+ * routes a case-scoped issue back to `in_progress` so the worker can continue
+ * (§4.5 Freigabe / Ersatzanweisung).
  */
 export function resolveIssue(
   issue: WorkIssue,
@@ -141,7 +142,13 @@ export function resolveIssue(
   if (!canTransitionIssue(issue.status, 'resolved')) {
     return { ok: false, error: `cannot resolve issue in status "${issue.status}"` };
   }
-  const resolved: WorkIssue = { ...issue, status: 'resolved', resolution };
+  const resolved: WorkIssue = {
+    ...issue,
+    status: 'resolved',
+    resolution,
+    releasedBy: actor.id,
+    releasedAt: now,
+  };
   return {
     ok: true,
     issue: resolved,
@@ -153,36 +160,7 @@ export function resolveIssue(
         outcome: 'resolved',
       }),
     ],
-    caseStatus: issue.scope === 'case' ? 'released' : undefined,
-  };
-}
-
-/**
- * Teamlead releases the block without a formal resolution (continue and clarify
- * later). Stamps releasedBy/releasedAt and lifts the case-level block.
- */
-export function releaseIssue(issue: WorkIssue, now: ISODateTime, actor: Actor): IssueDecision {
-  if (issue.status === 'rejected') {
-    return { ok: false, error: 'cannot release a rejected issue' };
-  }
-  const released: WorkIssue = {
-    ...issue,
-    status: 'resolved',
-    releasedBy: actor.id,
-    releasedAt: now,
-  };
-  return {
-    ok: true,
-    issue: released,
-    effect: { ...computeBlockingEffect(released), blocksWholeCase: false },
-    events: [
-      eventDraft('issue.resolved', ENTITY_TYPE, issue.id, actor, {
-        caseId: issue.caseId,
-        scope: issue.scope,
-        outcome: 'released',
-      }),
-    ],
-    caseStatus: issue.scope === 'case' ? 'released' : undefined,
+    caseStatus: issue.scope === 'case' ? 'in_progress' : undefined,
   };
 }
 
@@ -207,7 +185,7 @@ export function rejectIssue(
         outcome: 'rejected',
       }),
     ],
-    caseStatus: issue.scope === 'case' ? 'released' : undefined,
+    caseStatus: issue.scope === 'case' ? 'in_progress' : undefined,
   };
 }
 

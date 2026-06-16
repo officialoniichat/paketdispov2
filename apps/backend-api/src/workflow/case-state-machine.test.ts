@@ -15,17 +15,30 @@ describe('case state machine (§7.1)', () => {
     }
   });
 
+  it('matches the expected transition graph (§7.1)', () => {
+    const expected: Record<CaseStatus, CaseStatus[]> = {
+      needs_review: ['ready', 'cancelled'],
+      ready: ['assigned', 'parked', 'cancelled'],
+      parked: ['ready', 'cancelled'],
+      assigned: ['in_progress', 'ready', 'cancelled'],
+      in_progress: ['issue_open', 'partially_completed', 'completed', 'cancelled'],
+      issue_open: ['in_progress', 'cancelled'],
+      partially_completed: ['ready', 'completed', 'cancelled'],
+      completed: ['zst_done', 'cancelled'],
+      zst_done: [],
+      cancelled: [],
+    };
+    for (const status of caseStatusSchema.options) {
+      expect([...CASE_TRANSITIONS[status as CaseStatus]]).toEqual(expected[status as CaseStatus]);
+    }
+  });
+
   it('walks the main happy path', () => {
     const path: CaseStatus[] = [
-      'imported',
-      'parsed',
+      'needs_review',
       'ready',
       'assigned',
-      'picking',
-      'preparing',
-      'sorting',
-      'checking',
-      'boxing',
+      'in_progress',
       'completed',
       'zst_done',
     ];
@@ -39,20 +52,13 @@ describe('case state machine (§7.1)', () => {
     expect(canTransition('parked', 'ready')).toBe(true);
   });
 
-  it('allows the needs_review Sonderpfad', () => {
-    expect(canTransition('parsed', 'needs_review')).toBe(true);
-    expect(canTransition('needs_review', 'ready')).toBe(true);
-  });
-
-  it('allows the issue Sonderpfad issue_open → waiting_teamlead → released → checking', () => {
-    expect(canTransition('checking', 'issue_open')).toBe(true);
-    expect(canTransition('issue_open', 'waiting_teamlead')).toBe(true);
-    expect(canTransition('waiting_teamlead', 'released')).toBe(true);
-    expect(canTransition('released', 'checking')).toBe(true);
+  it('allows the issue Sonderpfad in_progress → issue_open → in_progress', () => {
+    expect(canTransition('in_progress', 'issue_open')).toBe(true);
+    expect(canTransition('issue_open', 'in_progress')).toBe(true);
   });
 
   it('allows the partially_completed Sonderpfad (ready_next_day) and direct completion', () => {
-    expect(canTransition('boxing', 'partially_completed')).toBe(true);
+    expect(canTransition('in_progress', 'partially_completed')).toBe(true);
     expect(canTransition('partially_completed', 'ready')).toBe(true);
     expect(canTransition('partially_completed', 'completed')).toBe(true);
   });
@@ -62,16 +68,16 @@ describe('case state machine (§7.1)', () => {
   });
 
   it('rejects illegal transitions', () => {
-    expect(canTransition('imported', 'completed')).toBe(false);
+    expect(canTransition('needs_review', 'completed')).toBe(false);
     expect(canTransition('ready', 'zst_done')).toBe(false);
-    expect(canTransition('completed', 'picking')).toBe(false);
+    expect(canTransition('completed', 'in_progress')).toBe(false);
   });
 
   it('assertTransition throws InvalidCaseTransitionError on an illegal edge', () => {
-    expect(() => assertTransition('imported', 'completed')).toThrowError(
+    expect(() => assertTransition('needs_review', 'completed')).toThrowError(
       InvalidCaseTransitionError,
     );
-    expect(() => assertTransition('parsed', 'ready')).not.toThrow();
+    expect(() => assertTransition('needs_review', 'ready')).not.toThrow();
   });
 
   it('treats zst_done and cancelled as terminal (no outgoing edges)', () => {
@@ -83,6 +89,6 @@ describe('case state machine (§7.1)', () => {
 
   it('lets nearly every non-terminal status be cancelled', () => {
     expect(canTransition('ready', 'cancelled')).toBe(true);
-    expect(canTransition('checking', 'cancelled')).toBe(true);
+    expect(canTransition('in_progress', 'cancelled')).toBe(true);
   });
 });

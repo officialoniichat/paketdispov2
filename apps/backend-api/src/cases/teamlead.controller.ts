@@ -21,7 +21,6 @@ import {
   PoolListDto,
   PoolQueryDto,
   PrioritizeDto,
-  ReleaseDto,
   ReorderBundleDto,
   ResolveIssueDto,
   TransitionResultDto,
@@ -130,7 +129,7 @@ export class TeamleadController {
   }
 
   @Post('issues/:issueId/resolve')
-  @ApiOperation({ summary: 'Resolve an issue (issue_open → waiting_teamlead, issue.resolved)' })
+  @ApiOperation({ summary: 'Resolve an issue (issue_open → in_progress, issue.resolved)' })
   @ApiOkResponse({ type: TransitionResultDto })
   resolveIssue(
     @CurrentUser() principal: Principal,
@@ -138,17 +137,6 @@ export class TeamleadController {
     @Body() dto: ResolveIssueDto,
   ): Promise<TransitionResultDto> {
     return this.teamlead.resolveIssue(principal, issueId, dto);
-  }
-
-  @Post('issues/:issueId/release')
-  @ApiOperation({ summary: 'Release a case back to work (waiting_teamlead → released → checking)' })
-  @ApiOkResponse({ type: TransitionResultDto })
-  releaseIssue(
-    @CurrentUser() principal: Principal,
-    @Param('issueId') issueId: string,
-    @Body() dto: ReleaseDto,
-  ): Promise<TransitionResultDto> {
-    return this.teamlead.releaseIssue(principal, issueId, dto);
   }
 
   // --- Assignment engine (§8.3) ---------------------------------------------
