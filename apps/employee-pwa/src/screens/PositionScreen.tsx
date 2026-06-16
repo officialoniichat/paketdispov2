@@ -36,7 +36,7 @@ export function PositionScreen(): JSX.Element {
   const unconfirmed = positions.filter((x) => !p.confirmedPositionIds.includes(x.id));
 
   if (!pos || unconfirmed.length === 0) {
-    navigate(caseStepPath(caseId, 'boxing'));
+    navigate(caseStepPath(caseId, 'sort'));
     return <CaseCardSkeleton />;
   }
 
@@ -47,7 +47,7 @@ export function PositionScreen(): JSX.Element {
 
   const onCorrect = async (): Promise<void> => {
     await flow.confirmPosition(pos.id);
-    if (isLast) navigate(caseStepPath(caseId, 'boxing'));
+    if (isLast) navigate(caseStepPath(caseId, 'sort'));
   };
 
   const primary =

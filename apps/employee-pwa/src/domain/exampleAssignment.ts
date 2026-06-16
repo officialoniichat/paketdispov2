@@ -23,10 +23,9 @@ import {
   type TransportBoxTarget,
   type WorkInstructionHeader,
 } from '@paket/domain-types';
-import type { AssignedBundle, CaseAggregate } from '../db/types.js';
+import type { BelegListItem, CaseAggregate, DayContext } from '../db/types.js';
 
 export const EXAMPLE_CASE_ID = 'case-we-3656860';
-export const EXAMPLE_BUNDLE_ID = 'bundle-day-0001';
 
 const exampleCase: GoodsReceiptCase = goodsReceiptCaseSchema.parse({
   id: EXAMPLE_CASE_ID,
@@ -171,23 +170,24 @@ export const exampleAggregate: CaseAggregate = {
   boxTargets: [exampleBox],
 };
 
-export const exampleBundle: AssignedBundle = {
-  bundleId: EXAMPLE_BUNDLE_ID,
+export const exampleDay: DayContext = {
+  id: 'today',
   employeeName: 'Anna',
   workstation: 'Tisch 4',
   plannedStart: '09:00',
   plannedEnd: '16:00',
   estimatedMinutes: 14,
-  pickupStops: [
-    {
-      caseId: EXAMPLE_CASE_ID,
-      sequenceIndex: 1,
-      locationCode: 'R27',
-      weBelegNo: '3656860',
-      quantity: 9,
-      shopAreaNo: '21',
-      floor: 'EG',
-      note: 'Vororder',
-    },
-  ],
 };
+
+export const exampleBelegList: BelegListItem[] = [
+  {
+    caseId: EXAMPLE_CASE_ID,
+    weBelegNo: '3656860',
+    prioRank: 100,
+    section: null,
+    storageLocationCode: 'R27',
+    goodsType: 'regal',
+    totalQuantity: 9,
+    urgent: false,
+  },
+];

@@ -18,7 +18,7 @@ import { SkipDialog } from '../components/SkipDialog.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
 import { db } from '../db/db.js';
-import { PAKET } from '../routes/paths.js';
+import { TAGESSTART } from '../routes/paths.js';
 
 export function AbschlussScreen(): JSX.Element {
   const { caseId = '' } = useParams();
@@ -46,7 +46,7 @@ export function AbschlussScreen(): JSX.Element {
 
   const agg = flow.aggregate;
   const p = flow.progress;
-  const gate = canCompleteCase(p, agg);
+  const gate = canCompleteCase(p, agg, openIssues);
 
   const doneQuantity = agg.positions
     .filter((pos) => p.confirmedPositionIds.includes(pos.id))
@@ -57,13 +57,13 @@ export function AbschlussScreen(): JSX.Element {
 
   const complete = async (): Promise<void> => {
     await flow.complete();
-    navigate(PAKET);
+    navigate(TAGESSTART);
   };
 
   const partial = async (reason: string): Promise<void> => {
     await flow.partialComplete(reason);
     setPartialOpen(false);
-    navigate(PAKET);
+    navigate(TAGESSTART);
   };
 
   return (

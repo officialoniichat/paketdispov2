@@ -1,29 +1,31 @@
 /**
  * Dexie/IndexedDB store for the employee app.
  *
- * Holds exactly the already-assigned work: one bundle, its case aggregates,
- * per-case progress and a local append-only event log. New assignments are
- * never created here — they require the server.
+ * Holds exactly the already-assigned work: the day context, the assigned Beleg
+ * list, case aggregates, per-case progress and a local append-only event log.
+ * Assignment is never created here — it requires the server.
  */
 import Dexie, { type Table } from 'dexie';
-import type { AssignedBundle, CaseAggregate, CaseProgress } from './types.js';
+import type { BelegListItem, CaseAggregate, CaseProgress, DayContext } from './types.js';
 import type { LocalEvent } from '../events/types.js';
 
 export class PaketDb extends Dexie {
-  bundles!: Table<AssignedBundle, string>;
+  day!: Table<DayContext, string>;
+  belege!: Table<BelegListItem, string>;
   aggregates!: Table<CaseAggregate, string>;
   progress!: Table<CaseProgress, string>;
   events!: Table<LocalEvent, string>;
 
   constructor(name = 'paket-employee') {
     super(name);
-    // v2: dropped the sync-flavoured "outbox" (status index) in favour of a
-    // plain local event log. Bump required so existing clients re-create the
-    // store with the new index instead of throwing a SchemaError.
-    this.version(2).stores({
-      bundles: 'bundleId',
+    // v3: dropped the single forced "bundles" table (AssignedBundle/PickupStop)
+    // in favour of a day-context row + a selectable Beleg list. Bump required so
+    // existing clients re-create the store instead of throwing a SchemaError.
+    this.version(3).stores({
+      day: 'id',
+      belege: 'caseId, prioRank',
       aggregates: 'caseId',
-      progress: 'caseId, bundleId, step',
+      progress: 'caseId, step',
       events: 'id, createdAt',
     });
   }
