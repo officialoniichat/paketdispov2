@@ -5,6 +5,7 @@
     "buildCommand": "pnpm --filter @paket/backend-api build"
   },
   "deploy": {
+    "preDeployCommand": "pnpm --filter @paket/backend-api exec prisma migrate deploy",
     "startCommand": "pnpm --filter @paket/backend-api start"
   }
 }
