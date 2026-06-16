@@ -346,25 +346,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve an issue (issue_open → waiting_teamlead, issue.resolved) */
+        /** Resolve an issue (issue_open → in_progress, issue.resolved) */
         post: operations["TeamleadController_resolveIssue"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/teamlead/issues/{issueId}/release": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Release a case back to work (waiting_teamlead → released → checking) */
-        post: operations["TeamleadController_releaseIssue"];
         delete?: never;
         options?: never;
         head?: never;
@@ -916,9 +899,6 @@ export interface components {
         };
         ResolveIssueDto: {
             resolution?: string;
-        };
-        ReleaseDto: {
-            note?: string;
         };
         RecalculateDto: {
             /**
@@ -1606,31 +1586,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ResolveIssueDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TransitionResultDto"];
-                };
-            };
-        };
-    };
-    TeamleadController_releaseIssue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issueId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReleaseDto"];
             };
         };
         responses: {
