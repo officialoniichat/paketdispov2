@@ -26,22 +26,27 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
+import type { CaseStatus } from '@paket/domain-types';
 import {
   fetchBelegDetail,
   type BelegBox,
   type BelegDetail,
   type BelegDocument,
   type BelegHistoryEntry,
+  type BelegIssue,
   type BelegPosition,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 
-const TABS = ['Kopf', 'Priorität', 'Aufwand', 'Positionen', 'Boxen', 'Historie', 'Dokumente'];
+const TABS = ['Kopf', 'Priorität', 'Aufwand', 'Positionen', 'Boxen', 'Problem', 'Historie', 'Dokumente'];
+
+/** Storno is only sensible before an employee has started work (the backend rejects the rest). */
+const CANCELLABLE: CaseStatus[] = ['imported', 'parsed', 'needs_review', 'ready', 'parked', 'assigned'];
 
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
-  const { prioritiseCase, parkCase } = useCockpitData();
+  const { prioritiseCase, parkCase, cancelCase, resolveIssue, releaseIssue } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [pending, setPending] = useState<{ title: string; run: (r: string) => void } | null>(null);
@@ -133,6 +138,20 @@ export function BelegDetailPage(): JSX.Element {
           >
             Parken
           </Button>
+          {CANCELLABLE.includes(c.status) && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() =>
+                setPending({
+                  title: `Beleg ${c.weBelegNo} stornieren`,
+                  run: (r) => cancelCase(c.id, r),
+                })
+              }
+            >
+              Stornieren
+            </Button>
+          )}
         </Stack>
       </Stack>
 
@@ -191,8 +210,19 @@ export function BelegDetailPage(): JSX.Element {
         )}
         {tab === 3 && <PositionsTab positions={c.positions} />}
         {tab === 4 && <BoxesTab boxes={c.boxes} />}
-        {tab === 5 && <HistoryTab history={c.history} />}
-        {tab === 6 && <DocumentsTab documents={c.documents} />}
+        {tab === 5 && (
+          <IssuesTab
+            issues={c.issues}
+            onResolve={(id) =>
+              setPending({ title: 'Problem lösen', run: (r) => resolveIssue(id, r) })
+            }
+            onRelease={(id) =>
+              setPending({ title: 'Beleg freigeben', run: (r) => releaseIssue(id, r) })
+            }
+          />
+        )}
+        {tab === 6 && <HistoryTab history={c.history} />}
+        {tab === 7 && <DocumentsTab documents={c.documents} />}
       </Paper>
 
       <ReasonDialog
@@ -330,6 +360,65 @@ function DocumentsTab({ documents }: { documents: BelegDocument[] }): JSX.Elemen
             </Typography>
           </Tooltip>
         </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * Problem tab — the case's reported issues (§4.5) with the teamlead triage path:
+ * an open issue can be resolved (→ waiting_teamlead), a resolved-pending one can
+ * be released back to work (→ checking). Without this the Problemfall is stuck.
+ */
+function IssuesTab({
+  issues,
+  onResolve,
+  onRelease,
+}: {
+  issues: BelegIssue[];
+  onResolve: (issueId: string) => void;
+  onRelease: (issueId: string) => void;
+}): JSX.Element {
+  if (issues.length === 0) return <Empty text="Keine Probleme gemeldet." />;
+  return (
+    <Stack spacing={1.5}>
+      {issues.map((i) => (
+        <Box key={i.id}>
+          <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
+            <Typography sx={{ fontWeight: 700 }}>{i.issueType}</Typography>
+            <Chip size="small" label={i.scope} />
+            <Chip
+              size="small"
+              color={i.status === 'open' ? 'error' : i.status === 'in_review' ? 'warning' : 'default'}
+              label={i.status}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {formatDateTime(i.reportedAt)}
+            </Typography>
+          </Stack>
+          {i.description && (
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              „{i.description}"
+            </Typography>
+          )}
+          {i.resolution && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              Lösung: {i.resolution}
+            </Typography>
+          )}
+          <Stack direction="row" spacing={1}>
+            {i.status === 'open' && (
+              <Button size="small" variant="outlined" onClick={() => onResolve(i.id)}>
+                Problem lösen
+              </Button>
+            )}
+            {i.status === 'in_review' && (
+              <Button size="small" variant="outlined" color="success" onClick={() => onRelease(i.id)}>
+                Freigeben (zurück in Arbeit)
+              </Button>
+            )}
+          </Stack>
+        </Box>
       ))}
     </Stack>
   );

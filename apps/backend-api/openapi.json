@@ -711,6 +711,52 @@
         ]
       }
     },
+    "/api/teamlead/cases/{caseId}/cancel": {
+      "post": {
+        "operationId": "TeamleadController_cancel",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Storno: cancel a case (→ cancelled, case.cancelled). Reasoned + audited.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/issues/{issueId}/resolve": {
       "post": {
         "operationId": "TeamleadController_resolveIssue",
@@ -2302,6 +2348,45 @@
           "fileName"
         ]
       },
+      "IssueSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "description": "IssueScope: case|position|sku_line|transport_box"
+          },
+          "issueType": {
+            "type": "string",
+            "description": "IssueType (Anhang A)"
+          },
+          "status": {
+            "type": "string",
+            "description": "IssueStatus: open|in_review|waiting_external|resolved|rejected"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolution": {
+            "type": "string",
+            "nullable": true
+          },
+          "reportedAt": {
+            "type": "string",
+            "description": "ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "issueType",
+          "status",
+          "reportedAt"
+        ]
+      },
       "CaseDetailDto": {
         "type": "object",
         "properties": {
@@ -2366,6 +2451,13 @@
               "$ref": "#/components/schemas/CaseDocumentDto"
             }
           },
+          "issues": {
+            "description": "Reported problems, newest first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummaryDto"
+            }
+          },
           "history": {
             "description": "Audit history, newest first",
             "type": "array",
@@ -2380,6 +2472,7 @@
           "positions",
           "transportBoxes",
           "documents",
+          "issues",
           "history"
         ]
       },
@@ -2397,6 +2490,15 @@
         "properties": {
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "CancelDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the case.cancelled audit event"
           }
         }
       },

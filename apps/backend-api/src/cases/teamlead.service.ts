@@ -15,6 +15,7 @@ import {
   type AddToBundleDto,
   type BundleMutationResultDto,
   type BundlePauseDto,
+  type CancelDto,
   type ParkDto,
   type PrioritizeDto,
   type ReleaseDto,
@@ -72,6 +73,17 @@ export class TeamleadService {
 
   unpark(principal: Principal, caseId: string): Promise<TransitionResultDto> {
     return this.transition(caseId, 'ready', 'case.ready', principal);
+  }
+
+  /**
+   * Storno — cancel a case (e.g. duplicate import, ERP correction). Moves it to
+   * the terminal `cancelled` state (§7.1) with a reasoned `case.cancelled` audit
+   * event. The state machine only permits this from non-started states
+   * (imported/parsed/needs_review/ready/parked/assigned) and rejects the rest,
+   * so a case an employee already works on cannot be silently voided.
+   */
+  cancel(principal: Principal, caseId: string, dto: CancelDto): Promise<TransitionResultDto> {
+    return this.transition(caseId, 'cancelled', 'case.cancelled', principal, { reason: dto.reason });
   }
 
   async prioritize(

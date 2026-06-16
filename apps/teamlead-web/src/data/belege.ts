@@ -27,6 +27,7 @@ type SkuLineDto = components['schemas']['SkuLineDto'];
 type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
 type CaseDocumentDto = components['schemas']['CaseDocumentDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
+type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
 
 const BELEGE_PAGE_LIMIT = 200;
@@ -133,6 +134,16 @@ export interface BelegDocument {
   fileName: string;
 }
 
+export interface BelegIssue {
+  id: string;
+  scope: string;
+  issueType: string;
+  status: string;
+  description: string | null;
+  resolution: string | null;
+  reportedAt: string;
+}
+
 export interface BelegHistoryEntry {
   id: string;
   timestamp: string;
@@ -175,6 +186,7 @@ export interface BelegDetail {
   positions: BelegPosition[];
   boxes: BelegBox[];
   documents: BelegDocument[];
+  issues: BelegIssue[];
   history: BelegHistoryEntry[];
 }
 
@@ -247,6 +259,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     positions: dto.positions.map(toBelegPosition),
     boxes: dto.transportBoxes.map(toBelegBox),
     documents: dto.documents.map(toBelegDocument),
+    issues: dto.issues.map(toBelegIssue),
     history: dto.history.map(toBelegHistoryEntry),
   };
 }
@@ -304,6 +317,18 @@ function toBelegBox(b: TransportBoxTargetDto): BelegBox {
 
 function toBelegDocument(d: CaseDocumentDto): BelegDocument {
   return { id: d.id, kind: d.kind, fileName: d.fileName };
+}
+
+function toBelegIssue(i: IssueSummaryDto): BelegIssue {
+  return {
+    id: i.id,
+    scope: i.scope,
+    issueType: i.issueType,
+    status: i.status,
+    description: i.description ?? null,
+    resolution: i.resolution ?? null,
+    reportedAt: i.reportedAt,
+  };
 }
 
 function toBelegHistoryEntry(e: AuditEventDto): BelegHistoryEntry {

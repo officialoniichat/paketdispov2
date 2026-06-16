@@ -238,6 +238,18 @@ export class PositionDetailDto {
   @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
 }
 
+/** A problem reported against the case (Anhang A Issue) — the Belegdetail issue list. */
+export class IssueSummaryDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'IssueScope: case|position|sku_line|transport_box' }) scope!: string;
+  @ApiProperty({ description: 'IssueType (Anhang A)' }) issueType!: string;
+  @ApiProperty({ description: 'IssueStatus: open|in_review|waiting_external|resolved|rejected' })
+  status!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) description!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) resolution!: string | null;
+  @ApiProperty({ description: 'ISO-8601 timestamp' }) reportedAt!: string;
+}
+
 /** A linked original document (Anhang A Document via DocumentSet). */
 export class CaseDocumentDto {
   @ApiProperty() id!: string;
@@ -267,6 +279,8 @@ export class CaseDetailDto {
   @ApiProperty({ type: [PositionDetailDto] }) positions!: PositionDetailDto[];
   @ApiProperty({ type: [TransportBoxTargetDto] }) transportBoxes!: TransportBoxTargetDto[];
   @ApiProperty({ type: [CaseDocumentDto] }) documents!: CaseDocumentDto[];
+  @ApiProperty({ type: [IssueSummaryDto], description: 'Reported problems, newest first' })
+  issues!: IssueSummaryDto[];
   @ApiProperty({ type: [AuditEventDto], description: 'Audit history, newest first' })
   history!: AuditEventDto[];
 }
@@ -360,6 +374,13 @@ export class PrioritizeDto {
 
 export class ParkDto {
   @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CancelDto {
+  @ApiPropertyOptional({ description: 'Reason logged in the case.cancelled audit event' })
   @IsOptional()
   @IsString()
   reason?: string;

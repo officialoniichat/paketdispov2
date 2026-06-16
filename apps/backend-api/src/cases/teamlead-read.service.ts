@@ -355,6 +355,7 @@ export class TeamleadReadService {
         },
         transportBoxes: { orderBy: { boxNo: 'asc' } },
         documentSet: { include: { documents: { orderBy: { fileName: 'asc' } } } },
+        issues: { orderBy: { reportedAt: 'desc' } },
       },
     });
     if (!found) {
@@ -390,6 +391,15 @@ export class TeamleadReadService {
       positions: found.positions.map((p) => this.mapPositionDetail(p)),
       transportBoxes: found.transportBoxes.map((b) => mapBoxTarget(b)),
       documents: found.documentSet.documents.map((d) => this.mapDocument(d)),
+      issues: found.issues.map((i) => ({
+        id: i.id,
+        scope: i.scope,
+        issueType: i.issueType,
+        status: i.status,
+        description: i.description,
+        resolution: i.resolution,
+        reportedAt: i.reportedAt.toISOString(),
+      })),
       history,
     };
   }

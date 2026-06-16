@@ -11,6 +11,7 @@ import {
   BoardDto,
   BundleMutationResultDto,
   BundlePauseDto,
+  CancelDto,
   CapacityDto,
   CaseDetailDto,
   DashboardDto,
@@ -114,6 +115,17 @@ export class TeamleadController {
     @Param('caseId') caseId: string,
   ): Promise<TransitionResultDto> {
     return this.teamlead.unpark(principal, caseId);
+  }
+
+  @Post('cases/:caseId/cancel')
+  @ApiOperation({ summary: 'Storno: cancel a case (→ cancelled, case.cancelled). Reasoned + audited.' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  cancel(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: CancelDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.cancel(principal, caseId, dto);
   }
 
   @Post('issues/:issueId/resolve')

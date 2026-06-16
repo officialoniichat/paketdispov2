@@ -320,6 +320,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/{caseId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Storno: cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
+        post: operations["TeamleadController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/issues/{issueId}/resolve": {
         parameters: {
             query?: never;
@@ -820,6 +837,19 @@ export interface components {
             kind: string;
             fileName: string;
         };
+        IssueSummaryDto: {
+            id: string;
+            /** @description IssueScope: case|position|sku_line|transport_box */
+            scope: string;
+            /** @description IssueType (Anhang A) */
+            issueType: string;
+            /** @description IssueStatus: open|in_review|waiting_external|resolved|rejected */
+            status: string;
+            description?: string | null;
+            resolution?: string | null;
+            /** @description ISO-8601 timestamp */
+            reportedAt: string;
+        };
         CaseDetailDto: {
             case: components["schemas"]["CaseSummaryDto"];
             /** @description Effort points (Aufwandspunkte) */
@@ -837,6 +867,8 @@ export interface components {
             positions: components["schemas"]["PositionDetailDto"][];
             transportBoxes: components["schemas"]["TransportBoxTargetDto"][];
             documents: components["schemas"]["CaseDocumentDto"][];
+            /** @description Reported problems, newest first */
+            issues: components["schemas"]["IssueSummaryDto"][];
             /** @description Audit history, newest first */
             history: components["schemas"]["AuditEventDto"][];
         };
@@ -845,6 +877,10 @@ export interface components {
             reason?: string;
         };
         ParkDto: {
+            reason?: string;
+        };
+        CancelDto: {
+            /** @description Reason logged in the case.cancelled audit event */
             reason?: string;
         };
         ResolveIssueDto: {
@@ -1483,6 +1519,31 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
