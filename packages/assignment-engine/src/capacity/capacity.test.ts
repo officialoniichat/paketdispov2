@@ -87,14 +87,12 @@ describe('net capacity (§4.3)', () => {
     expect(computeNetCapacityMinutes(e1, undefined, 0.5)).toBe(240);
   });
 
-  it('applies and records the per-head factor + seak source on the built shift', () => {
+  it('applies the per-head factor when deriving the built shift capacity', () => {
     const { rows } = parseShiftImportCsv(SAMPLE_CSV);
     const e1 = rows.find((r) => r.employeeNo === 'E-0001')!;
     const shift = toEmployeeShift(e1, {
       resolveProductivityFactor: (no) => (no === 'E-0001' ? 0.8 : undefined),
     });
     expect(shift.netCapacityMinutes).toBe(384); // 480 × 0.8
-    expect(shift.productivityFactor).toBe(0.8);
-    expect(shift.source).toBe('seak');
   });
 });

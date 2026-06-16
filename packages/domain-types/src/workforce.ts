@@ -12,14 +12,11 @@ export const employeeRoleSchema = z.enum(['employee', 'teamlead', 'admin', 'it']
 export type EmployeeRole = z.infer<typeof employeeRoleSchema>;
 
 /**
- * Where a shift's values came from (Mitarbeiter-Einstellungen-Konzept §c, Prinzip 2):
- * `seak` = SEAK/PEP CSV import (default), `pattern` = generated from the weekly pattern,
- * `teamlead` = manually overridden in the cockpit (wins; protected from re-import).
+ * Daily shift / planned capacity the engine consumes (Anhang A EmployeeShift).
+ * Provenance (`source`) and the applied per-head `productivityFactor` are persistence/
+ * UI concerns and live on the Prisma `Shift` row — the engine only needs the derived
+ * `netCapacityMinutes`, so they are intentionally NOT part of this domain type.
  */
-export const shiftSourceSchema = z.enum(['seak', 'pattern', 'teamlead']);
-export type ShiftSource = z.infer<typeof shiftSourceSchema>;
-
-/** Daily shift / planned capacity (Anhang A EmployeeShift). */
 export const employeeShiftSchema = z.object({
   id: idSchema,
   employeeId: idSchema,
@@ -31,10 +28,6 @@ export const employeeShiftSchema = z.object({
   netCapacityMinutes: z.number().nonnegative(),
   workstationId: idSchema.optional(),
   active: z.boolean(),
-  /** Provenance/hoheit of this shift's values (defaults to seak when absent). */
-  source: shiftSourceSchema.optional(),
-  /** Per-head productivity factor applied when deriving netCapacityMinutes. */
-  productivityFactor: z.number().positive().optional(),
 });
 export type EmployeeShift = z.infer<typeof employeeShiftSchema>;
 

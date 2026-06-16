@@ -53,7 +53,7 @@ function useAutomatik(): readonly [boolean, (on: boolean) => void] {
 }
 
 export function CockpitPage(): JSX.Element {
-  const { cockpit, board, pool: poolCases, recentOverrides, isLoading, error, refetch, recalculate } =
+  const { cockpit, board, recentOverrides, isLoading, error, refetch, recalculate } =
     useCockpitData();
   const navigate = useNavigate();
   const [automatik, setAutomatik] = useAutomatik();
@@ -120,15 +120,7 @@ export function CockpitPage(): JSX.Element {
     : `⏳ ${automatik ? 'verteilt …' : 'Vorschlag verfügbar'}: ${freeOpen} ${freeOpen === 1 ? 'freier Beleg' : 'freie Belege'}`;
 
   // --- Audit: turn raw entity ids into human labels (Beleg-Nr / Mitarbeitername) ---
-  const caseLabel = (id: string): string | undefined => {
-    const fromList = caseLabelFromList(id);
-    if (fromList) return fromList;
-    for (const row of board) {
-      const c = row.cases.find((bc) => bc.caseId === id);
-      if (c) return c.weBelegNo;
-    }
-    return poolCases.find((p) => p.caseId === id)?.weBelegNo;
-  };
+  const caseLabel = (id: string): string | undefined => caseLabelFromList(id);
   const bundleEmployee = (id: string): string | undefined =>
     board.find((r) => r.bundleId === id)?.displayName;
   const shortId = (id: string): string => (id.length > 8 ? `…${id.slice(-5)}` : id);

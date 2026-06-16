@@ -68,8 +68,6 @@ export function toEmployeeShift(
     netCapacityMinutes: computeNetCapacityMinutes(row, config, productivityFactor),
     workstationId,
     active: row.active,
-    source: 'seak',
-    productivityFactor: productivityFactor ?? config.productivityFactor,
   });
 }
 
