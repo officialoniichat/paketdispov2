@@ -7,6 +7,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import { AppHeader } from './components/AppHeader.js';
 import { seedIfEmpty } from './db/seed.js';
 import { loadAssignedWork } from './db/sync.js';
 import { isBackendEnabled } from './data/api.js';
@@ -53,6 +54,7 @@ export function App(): JSX.Element {
   return (
     <BootstrapProvider value={{ loading, error }}>
       <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
+        <AppHeader />
         <Routes>
         <Route path="/" element={<BelegListeScreen />} />
         <Route path="/case/:caseId/pickup" element={<LagerplatzScanScreen />} />

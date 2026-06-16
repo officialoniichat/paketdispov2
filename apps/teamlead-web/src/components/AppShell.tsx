@@ -7,6 +7,7 @@ import type { JSX } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -15,7 +16,9 @@ import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import GroupsIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import { ltColors } from '@paket/ui';
+import { EMPLOYEE_APP_URL } from '../config/appLinks.js';
 
 interface NavItem {
   to: string;
@@ -97,6 +100,16 @@ export function AppShell(): JSX.Element {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Teamlead-Dashboard
             </Typography>
+            <Button
+              component="a"
+              href={EMPLOYEE_APP_URL}
+              size="small"
+              variant="outlined"
+              startIcon={<PhoneAndroidIcon />}
+              sx={{ ml: 'auto' }}
+            >
+              Zur Mitarbeiter-App
+            </Button>
           </Toolbar>
         </AppBar>
         <Container maxWidth={false} sx={{ py: 3, flexGrow: 1 }}>
