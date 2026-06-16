@@ -25,6 +25,7 @@ import Typography from '@mui/material/Typography';
 import { useCockpitData } from '../../data/store.js';
 import { useEmployeeNames } from '../../data/employeeNames.js';
 import { useCaseLabels } from '../../data/caseLabels.js';
+import { formatAuditAction } from '../../data/audit.js';
 import { SimulationPanel } from '../simulation/SimulationPanel.js';
 import { formatDate, formatDateTime, formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
@@ -303,14 +304,18 @@ export function CockpitPage(): JSX.Element {
             Noch keine Eingriffe heute.
           </Typography>
         ) : (
-          <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Stack spacing={0.75} sx={{ mt: 1 }}>
             {recentOverrides.slice(0, 8).map((e) => {
               const payload = readAuditPayload(e.payload);
+              const target = auditLabel(e.eventType, e.entityId, payload.caseId);
               return (
                 <Typography key={e.id} variant="body2">
-                  <strong>{formatDateTime(e.timestamp)}</strong> · {payload.action ?? e.eventType} ·{' '}
-                  {auditLabel(e.eventType, e.entityId, payload.caseId)}
-                  {payload.reason ? ` – „${payload.reason}"` : ''}
+                  <Box component="span" sx={{ color: 'text.secondary', mr: 1 }}>
+                    {formatDateTime(e.timestamp)}
+                  </Box>
+                  <strong>{formatAuditAction(e.eventType, payload.action)}</strong>
+                  {target ? `: ${target}` : ''}
+                  {payload.reason ? ` — „${payload.reason}"` : ''}
                 </Typography>
               );
             })}

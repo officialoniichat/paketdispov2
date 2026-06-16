@@ -33,6 +33,36 @@ export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
   pause: 'Pause / Abwesenheit',
 };
 
+/**
+ * German labels for raw WorkflowEvent types, so the audit feed never shows machine
+ * codes like "assignment.overridden" to the user. Used as a fallback when an event
+ * carries no `payload.action` (e.g. events emitted outside the override flow).
+ */
+export const AUDIT_EVENT_LABELS: Record<string, string> = {
+  'assignment.overridden': 'Neu zugeteilt',
+  'case.parked': 'Geparkt',
+  'case.ready': 'Freigegeben',
+  'case.prioritized': 'Priorisiert',
+  'case.cancelled': 'Storniert',
+  'employee.profile_updated': 'Stammdaten geändert',
+  'employee.shift_overridden': 'Schicht geändert',
+  'employee.absence_recorded': 'Abwesenheit erfasst',
+};
+
+function isOverrideAction(value: string): value is OverrideAction {
+  return value in OVERRIDE_ACTION_LABELS;
+}
+
+/**
+ * Clean German label for one audit row. Prefers the recorded override action
+ * (e.g. "Paket entziehen"), falls back to the event type ("Geparkt"), and never
+ * leaks a raw machine code — unknown types render as a neutral "Aktualisiert".
+ */
+export function formatAuditAction(eventType: string, action?: string): string {
+  if (action && isOverrideAction(action)) return OVERRIDE_ACTION_LABELS[action];
+  return AUDIT_EVENT_LABELS[eventType] ?? 'Aktualisiert';
+}
+
 export interface OverrideInput {
   action: OverrideAction;
   /** The case (or employee for pause) the action targets. */
