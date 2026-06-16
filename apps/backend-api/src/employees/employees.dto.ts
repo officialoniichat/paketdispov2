@@ -68,8 +68,7 @@ export class EmployeeListItemDto {
   @ApiProperty() overtimeTolerancePct!: number;
   @ApiPropertyOptional({ type: TodayShiftDto, nullable: true })
   todayShift!: TodayShiftDto | null;
-  @ApiProperty({ description: 'Absent today (capacity 0)' }) absentToday!: boolean;
-  @ApiProperty({ description: 'Net capacity counted today (0 if absent/inactive)' })
+  @ApiProperty({ description: 'Net capacity counted today (0 if inactive/frei)' })
   netCapacityToday!: number;
   @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
   weeklyPattern!: WeeklyPatternDto | null;
@@ -124,11 +123,3 @@ export class EmployeeProfileUpdateDto {
   weeklyPattern?: WeeklyPatternDto | null;
 }
 
-export class AbsenceCreateDto {
-  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) @IsString() dateFrom!: string;
-  @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) @IsString() dateTo!: string;
-  @ApiProperty({ description: 'krank | urlaub | abwesend' })
-  @IsString()
-  kind!: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
-}

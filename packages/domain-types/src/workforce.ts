@@ -120,20 +120,3 @@ export const employeeProfileSchema = z.object({
   weeklyPattern: weeklyPatternSchema.nullish(),
 });
 export type EmployeeProfile = z.infer<typeof employeeProfileSchema>;
-
-/** Kind of absence — full-day; zeroes capacity for the date range. */
-export const absenceKindSchema = z.enum(['krank', 'urlaub', 'abwesend']);
-export type AbsenceKind = z.infer<typeof absenceKindSchema>;
-
-/** A recorded absence that zeroes capacity for its date range. */
-export const absenceSchema = z.object({
-  id: idSchema,
-  employeeId: idSchema,
-  dateFrom: isoDateSchema,
-  dateTo: isoDateSchema,
-  kind: absenceKindSchema,
-  reason: z.string().optional(),
-  createdBy: z.string().optional(),
-  createdAt: isoDateTimeSchema.optional(),
-});
-export type Absence = z.infer<typeof absenceSchema>;

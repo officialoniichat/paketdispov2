@@ -77,7 +77,7 @@ export function EmployeeDetailPanel({
         </Typography>
         <Typography variant="caption" color="text.secondary">
           Heute geplant: {emp.netCapacityToday} min{' '}
-          {emp.absentToday ? '· abwesend' : emp.todayShift ? `(${emp.todayShift.source})` : '· keine Schicht'}
+          {emp.todayShift ? `(${emp.todayShift.source})` : '· keine Schicht'}
           {' '}· Arbeitszeit im Tab „Schichtplan“
         </Typography>
       </div>

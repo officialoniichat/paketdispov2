@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type AbsenceKind } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
-  absenceKindSchema,
   employeeRoleSchema,
   weeklyPatternSchema,
   type EmployeeRole,
@@ -12,7 +11,6 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import type { Principal } from '../auth/rbac.js';
 import type {
-  AbsenceCreateDto,
   EmployeeDetailDto,
   EmployeeListItemDto,
   EmployeeListResponseDto,
@@ -47,7 +45,6 @@ interface UserWithRelations {
     source: string;
     active: boolean;
   }[];
-  absences: { id: string }[];
 }
 
 const USER_INCLUDE = { roles: { include: { role: true } } } as const;
@@ -75,7 +72,6 @@ export class EmployeesService {
       include: {
         ...USER_INCLUDE,
         shifts: { where: { date: day } },
-        absences: { where: { dateFrom: { lte: day }, dateTo: { gte: day } } },
       },
       orderBy: { displayName: 'asc' },
     });
@@ -148,57 +144,13 @@ export class EmployeesService {
     return this.loadDetail(id, date);
   }
 
-  async createAbsence(
-    principal: Principal,
-    id: string,
-    dto: AbsenceCreateDto,
-  ): Promise<EmployeeDetailDto> {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
-    if (!user) throw new NotFoundException(`Employee ${id} not found`);
-    const kind = absenceKindSchema.parse(dto.kind);
-    const from = parseDate(dto.dateFrom);
-    const to = parseDate(dto.dateTo);
-    if (to < from) throw new BadRequestException('dateTo darf nicht vor dateFrom liegen');
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.absence.create({
-        data: {
-          employeeId: id,
-          dateFrom: from,
-          dateTo: to,
-          kind: kind as AbsenceKind,
-          reason: dto.reason ?? null,
-          createdBy: principal.sub,
-        },
-      });
-      // Absence zeroes the materialized capacity over the range (full-day).
-      await tx.shift.updateMany({
-        where: { employeeId: id, date: { gte: from, lte: to } },
-        data: { netCapacityMinutes: 0, active: false },
-      });
-      await this.events.append(
-        {
-          eventType: 'employee.absence_recorded',
-          entityType: 'User',
-          entityId: id,
-          actorType: 'teamlead',
-          actorId: principal.sub,
-          payload: { kind, dateFrom: dto.dateFrom, dateTo: dto.dateTo, reason: dto.reason ?? null },
-        },
-        tx,
-      );
-    });
-
-    return this.loadDetail(id, dto.dateFrom);
-  }
-
   // --- internals ------------------------------------------------------------
 
   /**
    * Derive the concrete Shift for `date` from the employee's weekly pattern and
-   * persist it (source='pattern'). A non-working day, an inactive employee, or an
-   * active absence yields zero capacity. This is the one bridge from the planned
-   * Wochenplan to the capacity the engine consumes.
+   * persist it (source='pattern'). A non-working day or an inactive employee yields
+   * zero capacity. This is the one bridge from the planned Wochenplan to the
+   * capacity the engine consumes.
    */
   private async materializeShift(tx: PrismaTx, employeeId: string, date: string): Promise<void> {
     const user = await tx.user.findUnique({
@@ -207,16 +159,12 @@ export class EmployeesService {
     });
     if (!user) return;
     const day = parseDate(date);
-    const absence = await tx.absence.findFirst({
-      where: { employeeId, dateFrom: { lte: day }, dateTo: { gte: day } },
-      select: { id: true },
-    });
 
     const pattern = weeklyPatternSchema.safeParse(user.weeklyPattern);
     const plan: WeeklyDayPlan | undefined = pattern.success
       ? pattern.data[WEEKDAY_KEYS[day.getUTCDay()]!]
       : undefined;
-    const working = user.active && !absence && !!plan?.working && !!plan.start && !!plan.end;
+    const working = user.active && !!plan?.working && !!plan.start && !!plan.end;
 
     if (!working || !plan?.start || !plan.end) {
       // No capacity this day: drop any materialized shift so the engine sees nothing.
@@ -258,7 +206,6 @@ export class EmployeesService {
       include: {
         ...USER_INCLUDE,
         shifts: { where: { date: day } },
-        absences: { where: { dateFrom: { lte: day }, dateTo: { gte: day } } },
       },
     });
     if (!user) throw new NotFoundException(`Employee ${id} not found`);
@@ -283,7 +230,6 @@ export class EmployeesService {
 
   private toListItem(u: UserWithRelations, date: string): EmployeeListItemDto {
     const shift = u.shifts.find((s) => isoDate(s.date) === date) ?? u.shifts[0] ?? null;
-    const absentToday = u.absences.length > 0;
     const todayShift: TodayShiftDto | null = shift
       ? {
           date,
@@ -296,7 +242,7 @@ export class EmployeesService {
         }
       : null;
     const netCapacityToday =
-      u.active && shift && shift.active && !absentToday ? shift.netCapacityMinutes : 0;
+      u.active && shift && shift.active ? shift.netCapacityMinutes : 0;
     return {
       id: u.id,
       employeeNo: u.employeeNo,
@@ -307,7 +253,6 @@ export class EmployeesService {
       productivityFactor: u.productivityFactor,
       overtimeTolerancePct: u.overtimeTolerancePct,
       todayShift,
-      absentToday,
       netCapacityToday,
       weeklyPattern: parseWeeklyPattern(u.weeklyPattern),
     };

@@ -194,11 +194,6 @@ enum ShiftSource {
   teamlead
 }
 
-enum AbsenceKind {
-  krank
-  urlaub
-  abwesend
-}
 
 // ---------------------------------------------------------------------------
 // Identity & RBAC
@@ -224,7 +219,6 @@ model User {
   bundles         AssignmentBundle[]
   issuesReported  Issue[]            @relation("IssueReporter")
   zstRecords      ZstRecord[]
-  absences        Absence[]
 
   @@map("users")
 }
@@ -292,25 +286,6 @@ model Shift {
   @@unique([employeeId, date], name: "shift_employee_date")
   @@index([date])
   @@map("shifts")
-}
-
-// Recorded absence (Verfügbarkeit/Abwesenheit, concept §d Screen 4). Zeroes or
-// shortens an employee's capacity over its date range; surfaced as an audit event.
-model Absence {
-  id           String      @id @default(cuid())
-  employeeId   String
-  dateFrom     DateTime    @db.Date
-  dateTo       DateTime    @db.Date
-  kind         AbsenceKind
-  reason       String?
-  createdBy    String?
-  createdAt    DateTime    @default(now())
-
-  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@index([employeeId])
-  @@index([dateFrom])
-  @@map("absences")
 }
 
 model Workstation {

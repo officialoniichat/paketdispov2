@@ -544,23 +544,6 @@ export interface paths {
         patch: operations["EmployeesController_updateProfile"];
         trace?: never;
     };
-    "/api/admin/employees/{id}/absence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record an absence; zeroes/shortens affected shift capacity. */
-        post: operations["EmployeesController_createAbsence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1047,9 +1030,7 @@ export interface components {
             productivityFactor: number;
             overtimeTolerancePct: number;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
-            /** @description Absent today (capacity 0) */
-            absentToday: boolean;
-            /** @description Net capacity counted today (0 if absent/inactive) */
+            /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
         };
@@ -1077,9 +1058,7 @@ export interface components {
             productivityFactor: number;
             overtimeTolerancePct: number;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
-            /** @description Absent today (capacity 0) */
-            absentToday: boolean;
-            /** @description Net capacity counted today (0 if absent/inactive) */
+            /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
             recentAudit: components["schemas"]["AuditEntryDto"][];
@@ -1092,15 +1071,6 @@ export interface components {
             /** @description 0…25 */
             overtimeTolerancePct?: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
-        };
-        AbsenceCreateDto: {
-            /** @description ISO date YYYY-MM-DD */
-            dateFrom: string;
-            /** @description ISO date YYYY-MM-DD */
-            dateTo: string;
-            /** @description krank | urlaub | abwesend */
-            kind: string;
-            reason?: string;
         };
     };
     responses: never;
@@ -1887,31 +1857,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EmployeeProfileUpdateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmployeeDetailDto"];
-                };
-            };
-        };
-    };
-    EmployeesController_createAbsence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AbsenceCreateDto"];
             };
         };
         responses: {
