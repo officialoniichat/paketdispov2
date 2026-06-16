@@ -56,6 +56,7 @@ export class AssignmentService {
     const [shiftRows, locationRows] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
+        include: { employee: { select: { bereiche: true } } },
       }),
       this.prisma.location.findMany({ where: { active: true } }),
     ]);
@@ -80,7 +81,7 @@ export class AssignmentService {
       const input: EngineInput = {
         date: day,
         cases: casesRows.map(toGoodsReceiptCase),
-        shifts: shiftRows.map(toEmployeeShift),
+        shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
         locations: locationRows.map(toLocationMaster),
       };
 
@@ -167,7 +168,10 @@ export class AssignmentService {
     const dayEnd = new Date(day + 'T23:59:59.999Z');
 
     const [shiftRows, locationRows, casesRows] = await Promise.all([
-      this.prisma.shift.findMany({ where: { date: { gte: dayStart, lte: dayEnd }, active: true } }),
+      this.prisma.shift.findMany({
+        where: { date: { gte: dayStart, lte: dayEnd }, active: true },
+        include: { employee: { select: { bereiche: true } } },
+      }),
       this.prisma.location.findMany({ where: { active: true } }),
       this.prisma.goodsReceiptCase.findMany({
         where: { status: { in: [...PREVIEW_POOL_STATUSES] } },
@@ -185,7 +189,7 @@ export class AssignmentService {
       cases: casesRows
         .map(toGoodsReceiptCase)
         .map((c) => (c.status === 'assigned' ? { ...c, status: 'ready' as const } : c)),
-      shifts: shiftRows.map(toEmployeeShift),
+      shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
       locations: locationRows.map(toLocationMaster),
     };
 

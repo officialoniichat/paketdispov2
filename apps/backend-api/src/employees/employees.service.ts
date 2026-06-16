@@ -31,7 +31,7 @@ interface UserWithRelations {
   employeeNo: string;
   displayName: string;
   active: boolean;
-  areaTags: string[];
+  bereiche: string[];
   productivityFactor: number;
   overtimeTolerancePct: number;
   weeklyPattern: Prisma.JsonValue;
@@ -51,7 +51,7 @@ const USER_INCLUDE = { roles: { include: { role: true } } } as const;
 
 /**
  * Mitarbeiter-Einstellungen service (concept employee-settings-ux). Clean separation:
- *   - Stammdaten (who): role, active, areaTags, productivity, overtime tolerance.
+ *   - Stammdaten (who): role, active, bereiche, productivity, overtime tolerance.
  *   - Wochenplan (when): the weekly pattern is the single source of capacity. Saving
  *     it MATERIALIZES the concrete Shift the assignment engine reads — there is no
  *     hand-edited per-day shift. Absences zero the materialized capacity.
@@ -104,7 +104,7 @@ export class EmployeesService {
 
     const data: Prisma.UserUpdateInput = {};
     if (dto.active !== undefined) data.active = dto.active;
-    if (dto.areaTags !== undefined) data.areaTags = dto.areaTags;
+    if (dto.bereiche !== undefined) data.bereiche = dto.bereiche;
     if (dto.overtimeTolerancePct !== undefined) data.overtimeTolerancePct = dto.overtimeTolerancePct;
     if (dto.productivityFactor !== undefined) data.productivityFactor = dto.productivityFactor;
     if (dto.weeklyPattern !== undefined) {
@@ -249,7 +249,7 @@ export class EmployeesService {
       displayName: u.displayName,
       roles: u.roles.map((r) => normalizeRole(r.role.name)),
       active: u.active,
-      areaTags: u.areaTags,
+      bereiche: u.bereiche,
       productivityFactor: u.productivityFactor,
       overtimeTolerancePct: u.overtimeTolerancePct,
       todayShift,

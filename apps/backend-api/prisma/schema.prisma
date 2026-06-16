@@ -207,7 +207,7 @@ model User {
   active      Boolean  @default(true)
   // Mitarbeiter-Einstellungen (capacity/effort per head) — see
   // docs/concept/employee-settings-ux-concept.md.
-  areaTags             String[] @default([])
+  bereiche             String[] @default([])
   productivityFactor   Float    @default(1)
   overtimeTolerancePct Float    @default(0)
   weeklyPattern        Json?
@@ -307,6 +307,7 @@ model Location {
   displayName   String
   kind          LocationKind
   zone          String?
+  bereich       String?
   sequenceIndex Int?
   scanCode      String?      @unique
   active        Boolean      @default(true)

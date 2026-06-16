@@ -11,6 +11,8 @@ export const locationMasterSchema = z.object({
   displayName: z.string(),
   kind: locationKindSchema,
   zone: z.string().optional(),
+  /** Bereich/Skill this Lagerplatz belongs to (a label from the admin catalog). */
+  bereich: z.string().optional(),
   sequenceIndex: z.number().int().optional(), // fallback order without meter plan
   scanCode: z.string().optional(),
   active: z.boolean(),

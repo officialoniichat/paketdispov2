@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -39,12 +40,15 @@ const TABS = [
   'Lagerplätze',
   'Mitarbeiter',
   'Schichtplan',
+  'Bereiche',
 ];
 
 /** Tab indices that render a self-contained editor instead of the RuleConfig form. */
 const LOCATIONS_TAB = 6;
 const EMPLOYEES_TAB = 7;
 const SCHICHTPLAN_TAB = 8;
+/** Bereich/Skill catalog tab — edits RuleConfig.bereiche via the same draft + save. */
+const BEREICHE_TAB = 9;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -52,6 +56,7 @@ export function AdminPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
   const [draft, setDraft] = useState<RuleConfig | null>(null);
+  const [newBereich, setNewBereich] = useState('');
 
   const query = useQuery<RuleConfig, Error>({
     queryKey: RULES_QUERY_KEY,
@@ -273,6 +278,43 @@ export function AdminPage(): JSX.Element {
                       {pt.fallbackToManual ? ' · Fallback manuell' : ''}
                     </Typography>
                   ))}
+                </Stack>
+              )}
+
+              {tab === BEREICHE_TAB && (
+                <Stack spacing={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Bereiche / Skills (Handling-/Lagerklassen). Mitarbeiter und Lagerplätze wählen
+                    aus dieser Liste; die Engine bevorzugt passende Spezialisten.
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {draft.bereiche.length === 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        Noch keine Bereiche – unten anlegen.
+                      </Typography>
+                    )}
+                    {draft.bereiche.map((b) => (
+                      <Chip
+                        key={b}
+                        label={b}
+                        onDelete={() => patch('bereiche', draft.bereiche.filter((x) => x !== b))}
+                      />
+                    ))}
+                  </Stack>
+                  <TextField
+                    size="small"
+                    label="Bereich hinzufügen (Enter)"
+                    value={newBereich}
+                    onChange={(e) => setNewBereich(e.target.value)}
+                    onKeyDown={(e) => {
+                      const v = newBereich.trim();
+                      if (e.key === 'Enter' && v && !draft.bereiche.includes(v)) {
+                        patch('bereiche', [...draft.bereiche, v]);
+                        setNewBereich('');
+                      }
+                    }}
+                    sx={{ maxWidth: 280 }}
+                  />
                 </Stack>
               )}
 

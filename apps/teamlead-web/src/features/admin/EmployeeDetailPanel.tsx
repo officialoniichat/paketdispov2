@@ -13,7 +13,6 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import {
   fetchEmployee,
@@ -21,6 +20,7 @@ import {
   type EmployeeDetail,
   type EmployeeProfileUpdate,
 } from '../../data/employees.js';
+import { useBereichCatalog } from '../../data/bereichCatalog.js';
 
 type ProfilePatchArgs = [string, EmployeeProfileUpdate];
 
@@ -98,13 +98,19 @@ function ProfileSection({
   emp: EmployeeDetail;
   onSaved: (e: EmployeeDetail) => void;
 }): JSX.Element {
-  const [areaInput, setAreaInput] = useState('');
+  const catalog = useBereichCatalog();
   const mutation = useMutation({
     mutationFn: ([id, patch]: ProfilePatchArgs) => updateEmployeeProfile(id, patch),
     onSuccess: onSaved,
   });
   const save = (patch: EmployeeProfileUpdate): void => {
     mutation.mutate([emp.id, patch]);
+  };
+  const toggle = (bereich: string): void => {
+    const next = emp.bereiche.includes(bereich)
+      ? emp.bereiche.filter((b) => b !== bereich)
+      : [...emp.bereiche, bereich];
+    save({ bereiche: next });
   };
 
   return (
@@ -114,32 +120,31 @@ function ProfileSection({
         control={<Switch checked={emp.active} onChange={(e) => save({ active: e.target.checked })} />}
         label="Aktiv"
       />
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-        <Typography variant="body2" color="text.secondary">
-          Bereich/Skill:
+      <div>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+          Bereich / Skill {emp.bereiche.length === 0 && '· Allrounder (übernimmt alles)'}
         </Typography>
-        {emp.areaTags.map((tag) => (
-          <Chip
-            key={tag}
-            label={tag}
-            size="small"
-            onDelete={() => save({ areaTags: emp.areaTags.filter((t) => t !== tag) })}
-          />
-        ))}
-        <TextField
-          size="small"
-          placeholder="+ Bereich"
-          value={areaInput}
-          onChange={(e) => setAreaInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && areaInput.trim()) {
-              save({ areaTags: [...emp.areaTags, areaInput.trim()] });
-              setAreaInput('');
-            }
-          }}
-          sx={{ width: 140 }}
-        />
-      </Stack>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {catalog.length === 0 && (
+            <Typography variant="caption" color="text.secondary">
+              Kein Katalog gepflegt – im Tab „Bereiche" anlegen.
+            </Typography>
+          )}
+          {catalog.map((b) => (
+            <Chip
+              key={b}
+              label={b}
+              size="small"
+              color={emp.bereiche.includes(b) ? 'primary' : 'default'}
+              variant={emp.bereiche.includes(b) ? 'filled' : 'outlined'}
+              onClick={() => toggle(b)}
+            />
+          ))}
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          Belege dieses Bereichs werden bevorzugt zugeteilt; fehlt ein Spezialist, springt jeder ein.
+        </Typography>
+      </div>
       <SaveFeedback mutation={mutation} />
     </Stack>
   );

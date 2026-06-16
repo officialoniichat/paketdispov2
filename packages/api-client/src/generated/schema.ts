@@ -996,6 +996,8 @@ export interface components {
             /** @description LocationKind enum value */
             kind: string;
             zone?: string | null;
+            /** @description Bereich/Skill label */
+            bereich?: string | null;
             sequenceIndex?: number | null;
             scanCode?: string | null;
             active: boolean;
@@ -1008,6 +1010,8 @@ export interface components {
             /** @description LocationKind enum value */
             kind: string;
             zone?: string | null;
+            /** @description Bereich/Skill label */
+            bereich?: string | null;
             sequenceIndex?: number | null;
             scanCode?: string | null;
             active: boolean;
@@ -1059,6 +1063,8 @@ export interface components {
             reserve: components["schemas"]["ReserveRuleConfigDto"];
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
+            /** @description Editable Bereich/Skill catalog (labels) */
+            bereiche: string[];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
             parserTemplates: components["schemas"]["ParserTemplateRowDto"][];
         };
@@ -1101,7 +1107,7 @@ export interface components {
             displayName: string;
             roles: string[];
             active: boolean;
-            areaTags: string[];
+            bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
@@ -1129,7 +1135,7 @@ export interface components {
             displayName: string;
             roles: string[];
             active: boolean;
-            areaTags: string[];
+            bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
@@ -1140,7 +1146,7 @@ export interface components {
         };
         EmployeeProfileUpdateDto: {
             active?: boolean;
-            areaTags?: string[];
+            bereiche?: string[];
             /** @description 0,5…1,2 */
             productivityFactor?: number;
             /** @description 0…25 */

@@ -28,6 +28,12 @@ export const employeeShiftSchema = z.object({
   netCapacityMinutes: z.number().nonnegative(),
   workstationId: idSchema.optional(),
   active: z.boolean(),
+  /**
+   * Bereiche/Skills the employee handles (labels). The engine prefers assigning a
+   * case to an employee whose Bereiche include the case's Bereich. Empty/absent =
+   * Allrounder (no preference). Consumed by distribute() — not a persistence field.
+   */
+  bereiche: z.array(z.string()).optional(),
 });
 export type EmployeeShift = z.infer<typeof employeeShiftSchema>;
 
@@ -104,8 +110,11 @@ export const employeeProfileSchema = z.object({
   email: z.string().email().nullish(),
   roles: z.array(employeeRoleSchema),
   active: z.boolean(),
-  /** Bereich/Skill tags surfaced to the board (optional, not Pflicht). */
-  areaTags: z.array(z.string()).default([]),
+  /**
+   * Bereiche/Skills this employee handles, as labels from the admin Bereich catalog
+   * (RuleConfig.bereiche). Empty = Allrounder (handles everything, no routing penalty).
+   */
+  bereiche: z.array(z.string()).default([]),
   /** Per-head productivity factor (0,5…1,2; default 1,0) scaling netCapacity. */
   productivityFactor: z.number().min(0.5).max(1.2).default(1),
   /** Allowed overload before the load ⚠ warning fires, in percent (0…25). */

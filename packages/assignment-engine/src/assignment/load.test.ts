@@ -99,3 +99,47 @@ describe('assignment engine — batch load (§17.2, Anhang E.5)', () => {
     expect(shape(a)).toEqual(shape(b));
   });
 });
+
+describe('assignment engine — Bereich/Skill routing (soft preference)', () => {
+  function bereichCase(id: string, locCode: string): GoodsReceiptCase {
+    return goodsReceiptCaseSchema.parse({
+      id,
+      documentSetId: `ds-${id}`,
+      weBelegNo: `WE-${id}`,
+      bookingDate: DATE,
+      branchNo: '001',
+      storageLocation: { id: `loc-${locCode}`, type: 'regal', code: locCode, active: true },
+      section: null,
+      priorityFlags: [],
+      totalQuantity: 20,
+      status: 'ready',
+      effortPoints: 10,
+      estimatedMinutes: 20,
+      version: 0,
+    });
+  }
+  function bereichShift(n: number, bereiche?: string[]): EmployeeShift {
+    return employeeShiftSchema.parse({ ...shift(n), id: `shift-E${n}`, employeeId: `E${n}`, bereiche });
+  }
+
+  it('keeps out-of-Bereich work off a specialist; Allrounder absorbs it', () => {
+    const input: EngineInput = {
+      date: DATE,
+      cases: [
+        bereichCase('h0', 'HB'),
+        bereichCase('h1', 'HB'),
+        bereichCase('r0', 'R1'),
+        bereichCase('r1', 'R1'),
+      ],
+      shifts: [bereichShift(1, ['Hängebahn']), bereichShift(2)], // E1 specialist, E2 Allrounder
+      locations: [
+        { id: 'loc-HB', code: 'HB', displayName: 'Hängebahn 1', kind: 'haengebahn', bereich: 'Hängebahn', active: true },
+        { id: 'loc-R1', code: 'R1', displayName: 'Regal 1', kind: 'regal', bereich: 'Regal', active: true },
+      ],
+    };
+    const plan = assignWork(input);
+    const e1 = plan.bundles.find((b) => b.employeeId === 'E1');
+    // The Hängebahn-specialist is repelled from Regal work → no R* case on E1.
+    expect(e1?.caseIds.some((id) => id.startsWith('r'))).toBe(false);
+  });
+});

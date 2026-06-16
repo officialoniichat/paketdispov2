@@ -26,7 +26,25 @@ import type { ProtoBundle } from './bundling.js';
 
 const SPECIALIST_PENALTY = 0.05;
 const HEAVY_PENALTY = 0.03;
+/** Soft penalty per case whose Bereich a (non-Allrounder) employee does not handle. */
+const BEREICH_PENALTY = 0.04;
 const EPSILON = 1e-9;
+
+/**
+ * Soft Bereich/Skill mismatch cost for assigning `proto` to an employee with the
+ * given `bereiche`. Allrounder (empty/undefined) → 0 (handles anything). Otherwise
+ * each case whose Bereich is set and not handled adds a penalty — preferring
+ * specialists without ever blocking work (everyone equal ⇒ load decides).
+ */
+function bereichMismatchPenalty(bereiche: readonly string[] | undefined, proto: ProtoBundle): number {
+  if (!bereiche || bereiche.length === 0) return 0;
+  const handled = new Set(bereiche);
+  let mismatches = 0;
+  for (const c of proto.cases) {
+    if (c.bereich && !handled.has(c.bereich)) mismatches += 1;
+  }
+  return mismatches * BEREICH_PENALTY;
+}
 
 export interface DistributeOptions {
   avoidSpecialists?: boolean;
@@ -109,7 +127,8 @@ export function distributeBundlesByWeightedLoad(
           ? (st.wgrCounts.get(proto.dominantWgr) ?? 0) * SPECIALIST_PENALTY
           : 0;
       const heavy = balanceHeavyLight && proto.containsHeavy ? st.heavyCount * HEAVY_PENALTY : 0;
-      const score = ratio + specialist + heavy;
+      const bereich = bereichMismatchPenalty(st.shift.bereiche, proto);
+      const score = ratio + specialist + heavy + bereich;
 
       const isBetter = score < bestScore - EPSILON;
       const isTie = Math.abs(score - bestScore) <= EPSILON;

@@ -72,7 +72,7 @@ interface SeedUser {
   email: string;
   role: 'teamlead' | 'employee';
   /** Mitarbeiter-Einstellungen demo fields (concept employee-settings-ux). */
-  areaTags?: string[];
+  bereiche?: string[];
   productivityFactor?: number;
   /** Mo–Fr shift model; capacity is derived from this (Wochenplan drives capacity). */
   pattern?: ShiftModel;
@@ -83,9 +83,9 @@ const SPAET: ShiftModel = { model: 'Spätschicht', start: '10:00', end: '18:00',
 
 const USERS: SeedUser[] = [
   { employeeNo: 'tl-001', displayName: 'TL Logistik', email: 'tl-001@dev.local', role: 'teamlead' },
-  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', areaTags: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH },
-  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', areaTags: ['Palette'], productivityFactor: 0.9, pattern: SPAET },
-  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', areaTags: ['NOS'], productivityFactor: 1.0, pattern: FRUEH },
+  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', bereiche: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH },
+  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', bereiche: ['Palette'], productivityFactor: 0.9, pattern: SPAET },
+  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', productivityFactor: 1.0, pattern: FRUEH },
 ];
 
 /** Mo–Fr working with the model, weekend frei — matches weeklyPatternSchema. */
@@ -101,7 +101,7 @@ async function seedUsers(roleIds: Record<string, string>): Promise<Record<string
   for (const u of USERS) {
     const weeklyPattern = buildWeeklyPattern(u.pattern);
     const profile = {
-      areaTags: u.areaTags ?? [],
+      bereiche: u.bereiche ?? [],
       productivityFactor: u.productivityFactor ?? 1,
       ...(weeklyPattern ? { weeklyPattern } : {}),
     };
@@ -173,15 +173,17 @@ interface SeedLocation {
   kind: LocationKind;
   zone: string;
   sequenceIndex: number;
+  /** Bereich/Skill label (matches the admin catalog) for engine routing. */
+  bereich: string;
 }
 
 const LOCATIONS: SeedLocation[] = [
-  { code: 'R7', displayName: 'Regal 7', kind: 'regal', zone: 'Zone A', sequenceIndex: 7 },
-  { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18 },
-  { code: 'R27', displayName: 'Regal 27', kind: 'regal', zone: 'Zone B', sequenceIndex: 27 },
-  { code: 'B-4', displayName: 'Palette B/4', kind: 'palette_b', zone: 'Zone C', sequenceIndex: 54 },
-  { code: 'HB-5/234', displayName: 'Haengebahn 5/234', kind: 'haengebahn', zone: 'Zone D', sequenceIndex: 70 },
-  { code: 'D-3', displayName: 'Lagerplatz D-3', kind: 'lagerplatz_d', zone: 'Zone D', sequenceIndex: 83 },
+  { code: 'R7', displayName: 'Regal 7', kind: 'regal', zone: 'Zone A', sequenceIndex: 7, bereich: 'Regal' },
+  { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18, bereich: 'Regal' },
+  { code: 'R27', displayName: 'Regal 27', kind: 'regal', zone: 'Zone B', sequenceIndex: 27, bereich: 'Regal' },
+  { code: 'B-4', displayName: 'Palette B/4', kind: 'palette_b', zone: 'Zone C', sequenceIndex: 54, bereich: 'Palette' },
+  { code: 'HB-5/234', displayName: 'Haengebahn 5/234', kind: 'haengebahn', zone: 'Zone D', sequenceIndex: 70, bereich: 'Hängebahn' },
+  { code: 'D-3', displayName: 'Lagerplatz D-3', kind: 'lagerplatz_d', zone: 'Zone D', sequenceIndex: 83, bereich: 'Regal' },
 ];
 
 async function seedLocations(): Promise<Record<string, string>> {
@@ -189,8 +191,8 @@ async function seedLocations(): Promise<Record<string, string>> {
   for (const l of LOCATIONS) {
     const loc = await prisma.location.upsert({
       where: { code: l.code },
-      update: { displayName: l.displayName, kind: l.kind, zone: l.zone, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
-      create: { code: l.code, displayName: l.displayName, kind: l.kind, zone: l.zone, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
+      update: { displayName: l.displayName, kind: l.kind, zone: l.zone, bereich: l.bereich, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
+      create: { code: l.code, displayName: l.displayName, kind: l.kind, zone: l.zone, bereich: l.bereich, sequenceIndex: l.sequenceIndex, scanCode: l.code, active: true },
     });
     idByCode[l.code] = loc.id;
   }

@@ -88,7 +88,14 @@ export function assignWork(
   options: AssignWorkOptions = {},
 ): AssignmentPlan {
   const now = options.now ?? new Date().toISOString();
-  const enriched = input.cases.map((c) => enrichCase(c, input, config));
+  // Resolve each case's Bereich from its Lagerplatz (LocationMaster.bereich) so the
+  // weighted distribution can prefer matching specialists (§8.4 routing).
+  const bereichByLocationCode = new Map(input.locations.map((l) => [l.code, l.bereich]));
+  const enriched = input.cases.map((c) => {
+    const e = enrichCase(c, input, config);
+    e.bereich = bereichByLocationCode.get(c.storageLocation.code) ?? undefined;
+    return e;
+  });
 
   const unassigned: UnassignedCase[] = [];
   const eligible: EnrichedCase[] = [];

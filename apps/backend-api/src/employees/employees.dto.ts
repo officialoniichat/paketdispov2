@@ -63,7 +63,7 @@ export class EmployeeListItemDto {
   @ApiProperty() displayName!: string;
   @ApiProperty({ type: [String] }) roles!: string[];
   @ApiProperty() active!: boolean;
-  @ApiProperty({ type: [String] }) areaTags!: string[];
+  @ApiProperty({ type: [String] }) bereiche!: string[];
   @ApiProperty() productivityFactor!: number;
   @ApiProperty() overtimeTolerancePct!: number;
   @ApiPropertyOptional({ type: TodayShiftDto, nullable: true })
@@ -103,7 +103,7 @@ export class EmployeeProfileUpdateDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  areaTags?: string[];
+  bereiche?: string[];
   @ApiPropertyOptional({ description: '0,5…1,2' })
   @IsOptional()
   @IsNumber()

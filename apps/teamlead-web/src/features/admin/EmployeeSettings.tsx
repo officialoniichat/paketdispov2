@@ -116,7 +116,7 @@ function EmployeeRow({
     <TableRow hover selected={selected} onClick={onSelect} sx={{ cursor: 'pointer' }}>
       <TableCell>{emp.displayName}</TableCell>
       <TableCell>{emp.roles.join(', ')}</TableCell>
-      <TableCell>{emp.areaTags.length ? emp.areaTags.join(', ') : '—'}</TableCell>
+      <TableCell>{emp.bereiche.length ? emp.bereiche.join(', ') : 'Allrounder'}</TableCell>
       <TableCell align="right">{emp.netCapacityToday} min</TableCell>
       <TableCell>
         <Chip size="small" label={statusLabel} color={statusColor} variant={selected ? 'filled' : 'outlined'} />

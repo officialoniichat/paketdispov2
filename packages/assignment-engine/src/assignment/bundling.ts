@@ -19,6 +19,8 @@ export interface ProtoBundle {
   effortPoints: number;
   /** Most frequent Warengruppe in the bundle — specialist-avoidance signal (§8.4). */
   dominantWgr: string;
+  /** Bereich/Skill of the bundle (bundles are kept Bereich-homogeneous). */
+  bereich?: string;
   /** True if any case in the bundle is "heavy" (for the heavy/light mix, §8.4). */
   containsHeavy: boolean;
 }
@@ -69,6 +71,7 @@ export function createBalancedBundles(
       effortMinutes: round2(current.reduce((sum, c) => sum + c.effortMinutes, 0)),
       effortPoints: round2(current.reduce((sum, c) => sum + c.effortPoints, 0)),
       dominantWgr: dominantWgr(current),
+      bereich: current[0]?.bereich,
       containsHeavy: current.some((c) => c.effortMinutes >= config.heavyCaseMinutes),
     });
     current = [];
@@ -80,6 +83,9 @@ export function createBalancedBundles(
       overflow.push(c);
       continue;
     }
+    // Keep a bundle Bereich-homogeneous so it can be routed to a matching specialist
+    // (cases without a Bereich group together).
+    if (current.length > 0 && (current[0]?.bereich ?? '') !== (c.bereich ?? '')) close();
     current.push(c);
     currentMinutes += c.effortMinutes;
     used += c.effortMinutes;

@@ -33,6 +33,7 @@ export function toLocationMaster(loc: Location): LocationMaster {
     displayName: loc.displayName,
     kind: loc.kind,
     zone: loc.zone ?? undefined,
+    bereich: loc.bereich ?? undefined,
     sequenceIndex: loc.sequenceIndex ?? undefined,
     scanCode: loc.scanCode ?? undefined,
     active: loc.active,
@@ -57,7 +58,7 @@ function toGoodsType(value: PrismaCase['goodsTypeText']): GoodsTypeText | undefi
   return (value === 'NOS_Nachorder' ? 'NOS-Nachorder' : value) as GoodsTypeText;
 }
 
-export function toEmployeeShift(shift: Shift): EmployeeShift {
+export function toEmployeeShift(shift: Shift, bereiche?: string[]): EmployeeShift {
   return {
     id: shift.id,
     employeeId: shift.employeeId,
@@ -69,6 +70,7 @@ export function toEmployeeShift(shift: Shift): EmployeeShift {
     netCapacityMinutes: shift.netCapacityMinutes,
     workstationId: shift.workstationId ?? undefined,
     active: shift.active,
+    bereiche: bereiche ?? [],
   };
 }
 

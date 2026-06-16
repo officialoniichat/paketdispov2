@@ -2810,6 +2810,11 @@
             "type": "string",
             "nullable": true
           },
+          "bereich": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bereich/Skill label"
+          },
           "sequenceIndex": {
             "type": "number",
             "nullable": true
@@ -2850,6 +2855,11 @@
           "zone": {
             "type": "string",
             "nullable": true
+          },
+          "bereich": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bereich/Skill label"
           },
           "sequenceIndex": {
             "type": "number",
@@ -3043,6 +3053,13 @@
           "effort": {
             "$ref": "#/components/schemas/EffortRuleConfigDto"
           },
+          "bereiche": {
+            "description": "Editable Bereich/Skill catalog (labels)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "loadPlan": {
             "type": "array",
             "items": {
@@ -3061,6 +3078,7 @@
           "reserve",
           "bundle",
           "effort",
+          "bereiche",
           "loadPlan",
           "parserTemplates"
         ]
@@ -3191,7 +3209,7 @@
           "active": {
             "type": "boolean"
           },
-          "areaTags": {
+          "bereiche": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3232,7 +3250,7 @@
           "displayName",
           "roles",
           "active",
-          "areaTags",
+          "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
           "netCapacityToday"
@@ -3313,7 +3331,7 @@
           "active": {
             "type": "boolean"
           },
-          "areaTags": {
+          "bereiche": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3360,7 +3378,7 @@
           "displayName",
           "roles",
           "active",
-          "areaTags",
+          "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
           "netCapacityToday",
@@ -3373,7 +3391,7 @@
           "active": {
             "type": "boolean"
           },
-          "areaTags": {
+          "bereiche": {
             "type": "array",
             "items": {
               "type": "string"

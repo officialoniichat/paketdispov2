@@ -28,6 +28,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { LocationKind, LocationMaster } from '@paket/domain-types';
 import { fetchLocations, saveLocations } from '../../data/admin.js';
+import { useBereichCatalog } from '../../data/bereichCatalog.js';
 
 const KINDS: LocationKind[] = [
   'regal',
@@ -47,6 +48,7 @@ const LOCATIONS_QUERY_KEY = ['admin', 'locations'] as const;
 
 export function LocationMasterEditor(): JSX.Element {
   const queryClient = useQueryClient();
+  const catalog = useBereichCatalog();
   const [rows, setRows] = useState<LocationMaster[]>([]);
 
   const query = useQuery<LocationMaster[], Error>({
@@ -129,6 +131,7 @@ export function LocationMasterEditor(): JSX.Element {
             <TableCell>Bezeichnung</TableCell>
             <TableCell>Art</TableCell>
             <TableCell>Zone</TableCell>
+            <TableCell>Bereich</TableCell>
             <TableCell>Sortier-Index</TableCell>
             <TableCell>Aktiv</TableCell>
             <TableCell />
@@ -176,6 +179,23 @@ export function LocationMasterEditor(): JSX.Element {
                   value={r.zone ?? ''}
                   onChange={(e) => update(r.id, { zone: e.target.value || undefined })}
                 />
+              </TableCell>
+              <TableCell>
+                <TextField
+                  select
+                  size="small"
+                  variant="standard"
+                  value={r.bereich ?? ''}
+                  onChange={(e) => update(r.id, { bereich: e.target.value || undefined })}
+                  sx={{ minWidth: 120 }}
+                >
+                  <MenuItem value="">—</MenuItem>
+                  {catalog.map((b) => (
+                    <MenuItem key={b} value={b}>
+                      {b}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </TableCell>
               <TableCell>
                 <TextField
