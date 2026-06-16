@@ -132,6 +132,12 @@ export interface CockpitApi {
   parkCase(caseId: string, reason: string): void;
   releaseCase(caseId: string, reason: string): void;
   prioritiseCase(caseId: string, reason: string): void;
+  /** Remove a manual teamlead priority (→ back to normal pool order). */
+  deprioritiseCase(caseId: string, reason: string): void;
+  /** Approve a needs_review case into the planning pool (needs_review → ready). */
+  approveCase(caseId: string, reason: string): void;
+  /** Reactivate the remainder of a partially completed case (partially_completed → ready). */
+  reactivateCase(caseId: string, reason: string): void;
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
   /** Issue triage: resolve an open issue (issue_open → in_progress). */
@@ -228,6 +234,42 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         body: { reason },
       });
       if (error) throw new Error(`prioritize failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const deprioritiseMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/deprioritize', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`deprioritize failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const approveMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/approve', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`approve failed (${JSON.stringify(error)})`);
+      return data;
+    },
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const reactivateMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/reactivate', {
+        params: { path: { caseId } },
+        body: { reason },
+      });
+      if (error) throw new Error(`reactivate failed (${JSON.stringify(error)})`);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -371,6 +413,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       exportZst,
 
       prioritiseCase: (caseId, reason) => prioritiseMutation.mutate({ caseId, reason }),
+      deprioritiseCase: (caseId, reason) => deprioritiseMutation.mutate({ caseId, reason }),
+      approveCase: (caseId, reason) => approveMutation.mutate({ caseId, reason }),
+      reactivateCase: (caseId, reason) => reactivateMutation.mutate({ caseId, reason }),
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
@@ -387,6 +432,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       preview,
       exportZst,
       prioritiseMutation,
+      deprioritiseMutation,
+      approveMutation,
+      reactivateMutation,
       parkMutation,
       unparkMutation,
       cancelMutation,

@@ -26,14 +26,26 @@ import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard } from '../../data/types.js';
 
 export function AblagenBoard(): JSX.Element {
-  const { lanes, parkCase, releaseCase, prioritiseCase, cancelCase, resolveIssue } =
-    useCockpitData();
+  const {
+    lanes,
+    parkCase,
+    releaseCase,
+    prioritiseCase,
+    deprioritiseCase,
+    approveCase,
+    reactivateCase,
+    cancelCase,
+    resolveIssue,
+  } = useCockpitData();
   const navigate = useNavigate();
 
   const store: CaseActionCtx['store'] = {
     prioritiseCase,
+    deprioritiseCase,
     parkCase,
     releaseCase,
+    approveCase,
+    reactivateCase,
     cancelCase,
     resolveIssue,
   };
@@ -128,7 +140,12 @@ function LaneCardView({
         <Button size="small" onClick={() => onOpen(card.caseId)}>
           Details
         </Button>
-        <CaseActions variant="card" caseStatus={card.status} weBelegNo={card.weBelegNo} ctx={ctx} />
+        <CaseActions
+          variant="card"
+          case={{ status: card.status, priorityFlags: card.priorityFlags }}
+          weBelegNo={card.weBelegNo}
+          ctx={ctx}
+        />
       </CardActions>
     </Card>
   );

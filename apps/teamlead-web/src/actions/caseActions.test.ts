@@ -1,41 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import { caseActions, type CaseActionDescriptor } from './caseActions.js';
+import type { PriorityFlag } from '@paket/domain-types';
+import { caseActions, type CaseActionDescriptor, type CaseLike } from './caseActions.js';
 
-function ids(status: Parameters<typeof caseActions>[0]): CaseActionDescriptor['id'][] {
-  return caseActions(status).map((a) => a.id);
+function ids(c: CaseLike): CaseActionDescriptor['id'][] {
+  return caseActions(c).map((a) => a.id);
 }
 
+const PRIO: readonly PriorityFlag[] = ['manual_teamlead_priority'];
+
 describe('caseActions registry', () => {
-  it('issue_open offers resolve_issue', () => {
-    expect(ids('issue_open')).toContain('resolve_issue');
+  it('needs_review offers approve, park, cancel and prioritise (no flags) but not deprioritise', () => {
+    const got = ids({ status: 'needs_review', priorityFlags: [] });
+    expect(got).toContain('approve');
+    expect(got).toContain('park');
+    expect(got).toContain('cancel');
+    expect(got).toContain('prioritise');
+    expect(got).not.toContain('deprioritise');
   });
 
-  it('ready offers park, prioritise and cancel but not unpark', () => {
-    const got = ids('ready');
-    expect(got).toContain('park');
+  it('ready WITH manual priority offers deprioritise, not prioritise', () => {
+    const got = ids({ status: 'ready', priorityFlags: PRIO });
+    expect(got).toContain('deprioritise');
+    expect(got).not.toContain('prioritise');
+  });
+
+  it('ready WITHOUT manual priority offers prioritise, not deprioritise', () => {
+    const got = ids({ status: 'ready', priorityFlags: [] });
     expect(got).toContain('prioritise');
-    expect(got).toContain('cancel');
-    expect(got).not.toContain('unpark');
+    expect(got).not.toContain('deprioritise');
   });
 
   it('parked offers unpark, not park', () => {
-    const got = ids('parked');
+    const got = ids({ status: 'parked', priorityFlags: [] });
     expect(got).toContain('unpark');
     expect(got).not.toContain('park');
   });
 
-  it('in_progress offers only prioritise', () => {
-    expect(ids('in_progress')).toEqual(['prioritise']);
+  it('assigned offers only cancel (out of pool, no prioritise)', () => {
+    expect(ids({ status: 'assigned', priorityFlags: [] })).toEqual(['cancel']);
+  });
+
+  it('in_progress offers only cancel', () => {
+    expect(ids({ status: 'in_progress', priorityFlags: [] })).toEqual(['cancel']);
+  });
+
+  it('issue_open offers resolve_issue and cancel, not prioritise', () => {
+    const got = ids({ status: 'issue_open', priorityFlags: [] });
+    expect(got).toContain('resolve_issue');
+    expect(got).toContain('cancel');
+    expect(got).not.toContain('prioritise');
+  });
+
+  it('partially_completed offers only reactivate', () => {
+    expect(ids({ status: 'partially_completed', priorityFlags: [] })).toEqual(['reactivate']);
   });
 
   it('terminal statuses offer no actions', () => {
-    expect(ids('completed')).toEqual([]);
-    expect(ids('zst_done')).toEqual([]);
-    expect(ids('cancelled')).toEqual([]);
+    expect(ids({ status: 'completed', priorityFlags: [] })).toEqual([]);
+    expect(ids({ status: 'zst_done', priorityFlags: [] })).toEqual([]);
+    expect(ids({ status: 'cancelled', priorityFlags: [] })).toEqual([]);
   });
 
   it('sorts primary actions before secondary', () => {
-    const got = caseActions('ready');
+    const got = caseActions({ status: 'needs_review', priorityFlags: [] });
     const firstSecondary = got.findIndex((a) => !a.primary);
     const lastPrimary = got.map((a) => a.primary).lastIndexOf(true);
     if (firstSecondary !== -1) expect(lastPrimary).toBeLessThan(firstSecondary);

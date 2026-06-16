@@ -60,11 +60,38 @@ export function BelegListPage(): JSX.Element {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const { exportZst, prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue } =
-    useCockpitData();
+  const {
+    exportZst,
+    prioritiseCase,
+    deprioritiseCase,
+    parkCase,
+    releaseCase,
+    approveCase,
+    reactivateCase,
+    cancelCase,
+    resolveIssue,
+  } = useCockpitData();
   const store = useMemo<CaseActionCtx['store']>(
-    () => ({ prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue }),
-    [prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue],
+    () => ({
+      prioritiseCase,
+      deprioritiseCase,
+      parkCase,
+      releaseCase,
+      approveCase,
+      reactivateCase,
+      cancelCase,
+      resolveIssue,
+    }),
+    [
+      prioritiseCase,
+      deprioritiseCase,
+      parkCase,
+      releaseCase,
+      approveCase,
+      reactivateCase,
+      cancelCase,
+      resolveIssue,
+    ],
   );
   const query = useQuery<BelegRow[], Error>({
     queryKey: ['belege'],
@@ -162,7 +189,10 @@ export function BelegListPage(): JSX.Element {
           <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex' }}>
             <CaseActions
               variant="row"
-              caseStatus={ctx.row.original.status}
+              case={{
+                status: ctx.row.original.status,
+                priorityFlags: ctx.row.original.priorityFlags,
+              }}
               weBelegNo={ctx.row.original.weBelegNo}
               ctx={{ caseId: ctx.row.original.id, store }}
             />

@@ -14,19 +14,20 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
-import type { CaseStatus } from '@paket/domain-types';
 import {
   caseActions,
   type ActionTone,
   type CaseActionCtx,
   type CaseActionDescriptor,
+  type CaseLike,
 } from '../actions/caseActions.js';
 import { ReasonDialog } from './ReasonDialog.js';
 
 type Variant = 'row' | 'card' | 'header';
 
 export interface CaseActionsProps {
-  caseStatus: CaseStatus;
+  /** §7.1 status + §8.2 priority flags decide which actions render. */
+  case: CaseLike;
   ctx: CaseActionCtx;
   weBelegNo: string;
   variant?: Variant;
@@ -38,7 +39,7 @@ function toneColor(tone: ActionTone): 'inherit' | 'primary' | 'warning' | 'error
 }
 
 export function CaseActions({
-  caseStatus,
+  case: caseLike,
   ctx,
   weBelegNo,
   variant = 'row',
@@ -46,7 +47,7 @@ export function CaseActions({
   const [pending, setPending] = useState<CaseActionDescriptor | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
-  const actions = caseActions(caseStatus);
+  const actions = caseActions(caseLike);
   if (actions.length === 0) return null;
 
   const primary = actions.filter((a) => a.primary);

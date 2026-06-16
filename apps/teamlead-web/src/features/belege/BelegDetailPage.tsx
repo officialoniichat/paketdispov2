@@ -56,7 +56,16 @@ const TABS = [
 
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
-  const { prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue } = useCockpitData();
+  const {
+    prioritiseCase,
+    deprioritiseCase,
+    parkCase,
+    releaseCase,
+    approveCase,
+    reactivateCase,
+    cancelCase,
+    resolveIssue,
+  } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
 
@@ -107,7 +116,16 @@ export function BelegDetailPage(): JSX.Element {
 
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
-    store: { prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue },
+    store: {
+      prioritiseCase,
+      deprioritiseCase,
+      parkCase,
+      releaseCase,
+      approveCase,
+      reactivateCase,
+      cancelCase,
+      resolveIssue,
+    },
   };
 
   return (
@@ -131,7 +149,12 @@ export function BelegDetailPage(): JSX.Element {
             {c.hasOpenIssue && <ProblemChip status="open" size="small" />}
           </Stack>
         </Box>
-        <CaseActions variant="header" caseStatus={c.status} weBelegNo={c.weBelegNo} ctx={actionCtx} />
+        <CaseActions
+          variant="header"
+          case={{ status: c.status, priorityFlags: c.priorityFlags }}
+          weBelegNo={c.weBelegNo}
+          ctx={actionCtx}
+        />
       </Stack>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
