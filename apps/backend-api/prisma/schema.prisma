@@ -16,22 +16,12 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 enum CaseStatus {
-  imported
-  parsed
   needs_review
   ready
   parked
   assigned
-  picking
-  preparing
-  sorting
-  checking
-  labeling
-  securing
-  boxing
+  in_progress
   issue_open
-  waiting_teamlead
-  released
   partially_completed
   completed
   zst_done
@@ -383,7 +373,7 @@ model GoodsReceiptCase {
   catManDate        DateTime?      @db.Date
   loadPlanDate      DateTime?      @db.Date
   totalQuantity     Int            @default(0)
-  status            CaseStatus     @default(imported)
+  status            CaseStatus     @default(ready)
   effortPoints      Float          @default(0)
   estimatedMinutes  Float          @default(0)
   assignedBundleId  String?
