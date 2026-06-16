@@ -182,6 +182,8 @@ neuer Belege, Quarantäne-Zähler, aktiv/inaktiv.
 
 ### 4.4 ASCII-Wireframe — Settings-Seite „Integrationen → ProHandel"
 
+> Visuelles Mockup (gerendert): `docs/concept/prohandel-integration-ux-mockup.html`.
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Admin · Einstellungen                                        │

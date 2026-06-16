@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProHandel-Integration — UX-Mockup</title>
+<style>
+  :root{
+    --brand:#0a3d62; --brand2:#0c2f4a; --brand-light:#3c6e8f; --accent:#e58e26;
+    --surface:#f5f7fa; --raised:#ffffff; --text:#1a2430; --text2:#516170;
+    --border:#d6dde5; --danger:#c62828; --warning:#b26a00; --success:#2e7d32; --info:#1565c0;
+    --r:14px; --mono:ui-monospace,Menlo,"SFMono-Regular",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e7ecf1;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45;-webkit-font-smoothing:antialiased}
+  header.page{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:38px 32px 30px}
+  header.page h1{margin:0 0 6px;font-size:29px;letter-spacing:-.3px}
+  header.page p{margin:2px 0;color:#cddcea;max-width:900px}
+  header.page .meta{margin-top:13px;font-size:13px;color:#9fbdd6}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 32px 60px}
+
+  /* flow strip */
+  .flowmap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--r);padding:15px 18px;margin:0 0 6px}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600}
+  .pill.a{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .pill.b{background:#fff;color:var(--brand);border-color:var(--brand)}
+  .pill.ok{background:var(--success);color:#fff;border-color:var(--success)}
+  .arrow{color:var(--text2);font-weight:700}
+  .flow-note{font-size:12.5px;color:var(--text2);margin:0 0 26px}
+  .flow-note b{color:var(--danger)}
+
+  h2.sec{font-size:18px;margin:34px 0 4px;padding-bottom:7px;border-bottom:3px solid var(--accent);display:inline-block}
+  .sec-intro{color:var(--text2);margin:8px 0 18px;max-width:880px;font-size:14px}
+
+  /* app shell */
+  .app{background:var(--raised);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(10,30,50,.16)}
+  .appbar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  .appbar .logo{font-weight:800;letter-spacing:.4px}
+  .appbar .crumbs{font-size:13px;color:#bcd3e6}
+  .appbar .who{margin-left:auto;font-size:13px;color:#bcd3e6;display:flex;align-items:center;gap:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#3a2400;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+  .tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 14px}
+  .tab{padding:13px 16px;font-size:14px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;cursor:default}
+  .tab.on{color:var(--brand);border-bottom-color:var(--accent);font-weight:800}
+
+  .content{display:grid;grid-template-columns:1.35fr 1fr;gap:0;background:var(--surface)}
+  .col{padding:24px 26px}
+  .col.left{border-right:1px solid var(--border)}
+
+  .titlerow{display:flex;align-items:center;gap:12px;margin:0 0 4px}
+  .titlerow h3{margin:0;font-size:18px}
+  .desc{font-size:13px;color:var(--text2);margin:2px 0 20px}
+
+  /* toggle */
+  .toggle{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;color:var(--success)}
+  .sw{width:46px;height:26px;border-radius:999px;background:var(--success);position:relative;flex-shrink:0}
+  .sw::after{content:"";position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+  /* form */
+  .field{margin:0 0 16px}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:var(--text2);margin:0 0 6px;letter-spacing:.2px}
+  .inp{width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;color:var(--text);font-family:inherit}
+  .inp.mono{font-family:var(--mono);font-size:13px}
+  .inp.sel{display:flex;align-items:center;justify-content:space-between}
+  .inp .cv{color:var(--text2);font-size:12px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .hint{font-size:12px;color:var(--text2);margin:6px 0 0}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;white-space:nowrap;background:#fff;border:1px solid var(--border)}
+  .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .chip.add{border-style:dashed;color:var(--text2)}
+
+  /* secret row */
+  .secret{display:flex;align-items:center;gap:11px;background:#eef4fb;border:1px solid #c7ddf2;border-radius:10px;padding:12px 14px}
+  .secret .dot{width:9px;height:9px;border-radius:50%;background:var(--success);flex-shrink:0;box-shadow:0 0 0 3px rgba(46,125,50,.18)}
+  .secret .t b{font-size:13.5px;display:block} .secret .t span{font-size:12px;color:var(--text2)}
+  .secret .env{margin-left:auto;font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7ddf2;border-radius:7px;padding:4px 8px;color:var(--brand)}
+
+  /* buttons */
+  .actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+  .btn{border:none;border-radius:11px;padding:12px 18px;font-size:14px;font-weight:800;cursor:default}
+  .btn.primary{background:var(--accent);color:#3a2400}
+  .btn.brand{background:var(--brand);color:#fff}
+  .btn.ghost{background:#fff;border:1.5px solid var(--border);color:var(--text)}
+
+  /* status panel */
+  .panel{background:#fff;border:1px solid var(--border);border-radius:14px;padding:4px 0;margin:0 0 18px}
+  .panel h4{margin:0;padding:14px 16px 10px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)}
+  .statline{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--surface);font-size:13.5px}
+  .statline .k{color:var(--text2);width:120px;flex-shrink:0}
+  .statline .v{font-weight:700}
+  .statline .v.mono{font-family:var(--mono);font-weight:600;font-size:13px}
+  .ok{color:var(--success);font-weight:800}
+  .dotok{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block}
+
+  /* quarantine */
+  .qhead{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .qhead .badge{background:var(--warning);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px}
+  .qhead .retryall{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--brand);border:1.5px solid var(--border);background:#fff;border-radius:9px;padding:6px 11px}
+  .qitem{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--warning);border-radius:11px;padding:12px 14px;margin-bottom:9px}
+  .qitem .id{font-family:var(--mono);font-size:13px;font-weight:700}
+  .qitem .rsn{font-size:12.5px;color:var(--warning)}
+  .qitem .retry{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--brand);border:1.5px solid var(--border);background:#fff;border-radius:9px;padding:7px 13px;flex-shrink:0}
+
+  .alert{border-radius:10px;padding:11px 13px;font-size:12.5px;display:flex;gap:9px;align-items:flex-start;margin-top:14px}
+  .a-ok{background:#e9f6ea;color:#1f5a23}
+  .a-info{background:#e7f0fb;color:#0d3c70}
+
+  /* toast */
+  .toast{position:relative;margin:16px 0 0;background:var(--brand);color:#fff;border-radius:11px;padding:12px 15px;font-size:13.5px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 22px rgba(10,40,70,.3)}
+  .toast .tk{width:22px;height:22px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0}
+
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:22px}
+  .lg{background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .lg b{color:var(--brand);font-size:13.5px} .lg p{margin:5px 0 0;font-size:12.5px;color:var(--text2)}
+  .footnote{margin-top:26px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:14px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>ProHandel-Integration — UX-Mockup</h1>
+  <p>Admin-/Teamlead-Settings, Tab „Integrationen“. ProHandel (ERP) = System of Record. Ein settings-konfigurierter Delta-Pull
+     erzeugt Belege direkt im Status <b style="color:#fff">ready</b> — kein Parser, kein Upload, keine Einlagerungs-Station.</p>
+  <div class="meta">Statisches Mockup · begleitet <code>docs/concept/prohandel-integration-concept.md</code> · 2026-06-16</div>
+</header>
+
+<div class="wrap">
+
+  <!-- flow strip -->
+  <div class="flowmap">
+    <span class="pill a">Lieferschein in ProHandel gebucht</span><span class="arrow">→</span>
+    <span class="pill b">Delta-Pull (Cursor, alle 3 min)</span><span class="arrow">→</span>
+    <span class="pill b">Anti-Corruption-Mapper</span><span class="arrow">→</span>
+    <span class="pill b">idempotenter Upsert · weBelegNo</span><span class="arrow">→</span>
+    <span class="pill ok">Beleg = ready</span><span class="arrow">→</span>
+    <span class="pill">Automatik verteilt</span>
+  </div>
+  <p class="flow-note"><b>Entfällt:</b> PDF-Parser · DocumentSet/Document · Golden-Master-Tests · WE-Einlagerungs-Station · Status <code>awaiting_storage</code>.</p>
+
+  <h2 class="sec">Settings-Seite</h2>
+  <p class="sec-intro">Bewusst minimal: Verbindung, Mandant, Intervall — mehr nicht. Kein Feld-Mapping-UI, keine Konfidenz-/Retry-Regler.
+     Zugangsdaten ausschließlich per ENV.</p>
+
+  <div class="app">
+    <!-- app bar -->
+    <div class="appbar">
+      <span class="logo">L&amp;T · Dispo</span>
+      <span class="crumbs">Admin / Einstellungen / Integrationen</span>
+      <span class="who"><span>Teamlead</span><span class="avatar">TL</span></span>
+    </div>
+    <!-- tabs -->
+    <div class="tabs">
+      <div class="tab">Regeln</div>
+      <div class="tab">Bereiche</div>
+      <div class="tab">Mitarbeiter</div>
+      <div class="tab on">Integrationen</div>
+    </div>
+
+    <!-- content -->
+    <div class="content">
+      <!-- LEFT: connection form -->
+      <div class="col left">
+        <div class="titlerow">
+          <h3>ProHandel-Anbindung</h3>
+          <div class="toggle"><span>aktiv</span><span class="sw"></span></div>
+        </div>
+        <div class="desc">Quelle für Aufträge, Positionen, Größenverteilung, Arbeitsanweisung und Lagerplatz.</div>
+
+        <div class="field">
+          <label>Basis-URL</label>
+          <input class="inp mono" value="https://erp.example.de/prohandel/api/v2" readonly>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label>Mandant / Filiale</label>
+            <div class="inp sel">01 — Osnabrück <span class="cv">▾</span></div>
+          </div>
+          <div class="field">
+            <label>Pull-Intervall</label>
+            <div class="inp sel">180 Sek. <span class="cv">≈ 3 min</span></div>
+          </div>
+        </div>
+        <div class="chips">
+          <span class="chip on">01 Osnabrück ✕</span>
+          <span class="chip on">04 Bielefeld ✕</span>
+          <span class="chip add">+ Filiale</span>
+        </div>
+        <div class="hint">Gezogen werden nur Buchungen der gewählten Filialen.</div>
+
+        <div class="field" style="margin-top:18px">
+          <label>Zugangsdaten</label>
+          <div class="secret">
+            <span class="dot"></span>
+            <div class="t"><b>per ENV gesetzt</b><span>Secrets werden nicht in der UI gepflegt</span></div>
+            <span class="env">PROHANDEL_API_KEY</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn ghost">Verbindung testen</button>
+          <button class="btn brand">Jetzt pullen</button>
+          <button class="btn primary">Speichern</button>
+        </div>
+
+        <div class="toast">
+          <span class="tk">✓</span>
+          <div>Verbindung erfolgreich · API v2 erreichbar · 2 Filialen sichtbar · Antwort 240&nbsp;ms</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: status + quarantine -->
+      <div class="col">
+        <div class="panel">
+          <h4>Status</h4>
+          <div class="statline"><span class="k">Verbindung</span><span class="v"><span class="dotok"></span> <span class="ok">aktiv</span></span></div>
+          <div class="statline"><span class="k">Letzter Pull</span><span class="v">12:48:07 &nbsp;<span class="ok">✓ erfolgreich</span></span></div>
+          <div class="statline"><span class="k">Cursor</span><span class="v mono">Buchung #88421</span></div>
+          <div class="statline"><span class="k">Neue Belege</span><span class="v">7</span></div>
+          <div class="statline"><span class="k">Nächster Pull</span><span class="v">in 2:14 min</span></div>
+        </div>
+
+        <div class="qhead">
+          <span class="badge">Quarantäne · 2</span>
+          <button class="retryall">Alle wiederholen</button>
+        </div>
+        <div class="qitem">
+          <div>
+            <div class="id">WE-2026-000139</div>
+            <div class="rsn">Mapping-Fehler: WGR fehlt</div>
+          </div>
+          <button class="retry">Retry</button>
+        </div>
+        <div class="qitem">
+          <div>
+            <div class="id">WE-2026-000140</div>
+            <div class="rsn">Lieferant unbekannt</div>
+          </div>
+          <button class="retry">Retry</button>
+        </div>
+
+        <div class="alert a-info">
+          <span>ⓘ</span>
+          <div>Quarantänierte Buchungen werden nie verworfen. Nach Korrektur in ProHandel beim nächsten Pull (oder per Retry) automatisch übernommen.</div>
+        </div>
+        <div class="alert a-ok">
+          <span>✓</span>
+          <div>Read-only v1 — es wird nichts nach ProHandel zurückgeschrieben.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- provenance legend -->
+  <h2 class="sec">Was der Pull füllt</h2>
+  <p class="sec-intro">Jedes Feld kommt strukturiert aus ProHandel — kein OCR, keine Schätzung.</p>
+  <div class="legend">
+    <div class="lg"><b>Kopf</b><p>weBelegNo · Lieferant · Filiale · Buchungsdatum · Abschnitt · Catman · Verladetag</p></div>
+    <div class="lg"><b>Lagerplatz</b><p>Lagerplatz-Code + Klasse → <code>storageLocationId</code>. Macht die Einlagerungs-Station überflüssig.</p></div>
+    <div class="lg"><b>Position</b><p>WGR · Artikel · Farbe · Label/Marke · Funktion · Dessin → Etikettentyp (RULE)</p></div>
+    <div class="lg"><b>Arbeitsanweisung</b><p>Etikett drucken · Sichern · Prüfmodus (Pkt 6) · Sortierung (Pkt 5)</p></div>
+    <div class="lg"><b>Größenverteilung</b><p>EAN · Größe · Soll-Menge · EK/VK/VK-Etikettenpreis</p></div>
+    <div class="lg"><b>Priorität &amp; Aufwand</b><p>Abschnitt + Termine → Engine §8.1/§8.2, ohne Zutun</p></div>
+  </div>
+
+  <p class="footnote">Statisches Konzept-Mockup. Keine Live-Daten, keine echten Endpunkte. Beispiel-URL und ENV-Name sind synthetisch.</p>
+</div>
+</body>
+</html>
