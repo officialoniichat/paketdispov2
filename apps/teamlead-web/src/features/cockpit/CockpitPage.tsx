@@ -24,6 +24,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useCockpitData } from '../../data/store.js';
 import { useEmployeeNames } from '../../data/employeeNames.js';
+import { useCaseLabels } from '../../data/caseLabels.js';
 import { SimulationPanel } from '../simulation/SimulationPanel.js';
 import { formatDate, formatDateTime, formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 import { MetricCard } from '../../components/MetricCard.js';
@@ -52,12 +53,13 @@ function useAutomatik(): readonly [boolean, (on: boolean) => void] {
 }
 
 export function CockpitPage(): JSX.Element {
-  const { cockpit, board, recentOverrides, isLoading, error, refetch, recalculate } =
+  const { cockpit, board, pool: poolCases, recentOverrides, isLoading, error, refetch, recalculate } =
     useCockpitData();
   const navigate = useNavigate();
   const [automatik, setAutomatik] = useAutomatik();
   const [simulationOpen, setSimulationOpen] = useState(false);
   const employeeName = useEmployeeNames();
+  const caseLabelFromList = useCaseLabels();
   const { capacity, pool, zst } = cockpit;
   const zstPct = zst.totalCases === 0 ? 0 : (zst.completedCases / zst.totalCases) * 100;
   const recalcResult = recalculate.data;
@@ -116,6 +118,32 @@ export function CockpitPage(): JSX.Element {
   const statusText = planCurrent
     ? `● Plan aktuell${recalcResult ? ` · zuletzt verteilt ${recalcResult.assignedCaseCount} Belege` : ''}`
     : `⏳ ${automatik ? 'verteilt …' : 'Vorschlag verfügbar'}: ${freeOpen} ${freeOpen === 1 ? 'freier Beleg' : 'freie Belege'}`;
+
+  // --- Audit: turn raw entity ids into human labels (Beleg-Nr / Mitarbeitername) ---
+  const caseLabel = (id: string): string | undefined => {
+    const fromList = caseLabelFromList(id);
+    if (fromList) return fromList;
+    for (const row of board) {
+      const c = row.cases.find((bc) => bc.caseId === id);
+      if (c) return c.weBelegNo;
+    }
+    return poolCases.find((p) => p.caseId === id)?.weBelegNo;
+  };
+  const bundleEmployee = (id: string): string | undefined =>
+    board.find((r) => r.bundleId === id)?.displayName;
+  const shortId = (id: string): string => (id.length > 8 ? `…${id.slice(-5)}` : id);
+
+  const auditLabel = (eventType: string, entityId: string, caseId?: string): string => {
+    if (eventType.startsWith('employee.')) return employeeName(entityId) ?? shortId(entityId);
+    if (eventType.startsWith('case.')) return caseLabel(entityId) ?? shortId(entityId);
+    if (eventType === 'assignment.overridden') {
+      const beleg = caseId ? (caseLabel(caseId) ?? shortId(caseId)) : undefined;
+      const who = bundleEmployee(entityId);
+      const parts = [beleg, who ? `(${who})` : undefined].filter(Boolean);
+      return parts.length > 0 ? parts.join(' ') : shortId(entityId);
+    }
+    return caseLabel(entityId) ?? shortId(entityId);
+  };
 
   return (
     <Stack spacing={3}>
@@ -289,7 +317,7 @@ export function CockpitPage(): JSX.Element {
               return (
                 <Typography key={e.id} variant="body2">
                   <strong>{formatDateTime(e.timestamp)}</strong> · {payload.action ?? e.eventType} ·{' '}
-                  {employeeName(e.entityId) ?? e.entityId}
+                  {auditLabel(e.eventType, e.entityId, payload.caseId)}
                   {payload.reason ? ` – „${payload.reason}"` : ''}
                 </Typography>
               );
@@ -307,15 +335,18 @@ export function CockpitPage(): JSX.Element {
 interface AuditPayload {
   action?: string;
   reason?: string;
+  caseId?: string;
 }
 
 function readAuditPayload(payload: unknown): AuditPayload {
   if (typeof payload !== 'object' || payload === null) return {};
   const action = 'action' in payload ? payload.action : undefined;
   const reason = 'reason' in payload ? payload.reason : undefined;
+  const caseId = 'caseId' in payload ? payload.caseId : undefined;
   return {
     action: typeof action === 'string' ? action : undefined,
     reason: typeof reason === 'string' ? reason : undefined,
+    caseId: typeof caseId === 'string' ? caseId : undefined,
   };
 }
 
