@@ -105,12 +105,8 @@ export function BelegDetailPage(): JSX.Element {
     );
   }
 
-  // The case detail carries the full issue list, so „Problem freigeben" has a
-  // concrete target: the first still-open issue.
-  const openIssueId = c.issues.find((i) => i.status === 'open')?.id ?? null;
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
-    issueId: openIssueId,
     store: { prioritiseCase, parkCase, releaseCase, cancelCase, resolveIssue },
   };
 

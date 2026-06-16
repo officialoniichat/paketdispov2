@@ -128,15 +128,15 @@ export class TeamleadController {
     return this.teamlead.cancel(principal, caseId, dto);
   }
 
-  @Post('issues/:issueId/resolve')
-  @ApiOperation({ summary: 'Resolve an issue (issue_open → in_progress, issue.resolved)' })
+  @Post('cases/:caseId/resolve-issue')
+  @ApiOperation({ summary: 'Problem freigeben: resolve a case open issue (issue_open -> in_progress)' })
   @ApiOkResponse({ type: TransitionResultDto })
   resolveIssue(
     @CurrentUser() principal: Principal,
-    @Param('issueId') issueId: string,
+    @Param('caseId') caseId: string,
     @Body() dto: ResolveIssueDto,
   ): Promise<TransitionResultDto> {
-    return this.teamlead.resolveIssue(principal, issueId, dto);
+    return this.teamlead.resolveIssue(principal, caseId, dto);
   }
 
   // --- Assignment engine (§8.3) ---------------------------------------------

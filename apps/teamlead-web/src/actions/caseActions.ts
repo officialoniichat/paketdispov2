@@ -9,13 +9,12 @@ import type { CaseStatus } from '@paket/domain-types';
 export interface CaseActionCtx {
   caseId: string;
   bundleId?: string | null;
-  issueId?: string | null;
   store: {
     prioritiseCase(id: string, reason: string): void;
     parkCase(id: string, reason: string): void;
     releaseCase(id: string, reason: string): void; // unpark
     cancelCase(id: string, reason: string): void;
-    resolveIssue(issueId: string, reason: string): void; // issue_open -> in_progress
+    resolveIssue(caseId: string, reason: string): void; // issue_open -> in_progress (case-scoped)
   };
 }
 
@@ -33,7 +32,7 @@ export interface CaseActionDescriptor {
 const REGISTRY: CaseActionDescriptor[] = [
   { id: 'resolve_issue', label: 'Problem freigeben', tone: 'success', primary: true,
     reasonSuggestions: ['Klärung erledigt', 'Daten korrigiert'],
-    run: (c, r) => { if (c.issueId) c.store.resolveIssue(c.issueId, r); } },
+    run: (c, r) => c.store.resolveIssue(c.caseId, r) },
   { id: 'park', label: 'Parken', tone: 'warning', primary: true,
     reasonSuggestions: ['Wartet auf Klärung', 'Unvollständige Ware', 'Rücksprache nötig'],
     run: (c, r) => c.store.parkCase(c.caseId, r) },

@@ -757,12 +757,12 @@
         ]
       }
     },
-    "/api/teamlead/issues/{issueId}/resolve": {
+    "/api/teamlead/cases/{caseId}/resolve-issue": {
       "post": {
         "operationId": "TeamleadController_resolveIssue",
         "parameters": [
           {
-            "name": "issueId",
+            "name": "caseId",
             "required": true,
             "in": "path",
             "schema": {
@@ -797,7 +797,7 @@
             "bearer": []
           }
         ],
-        "summary": "Resolve an issue (issue_open → in_progress, issue.resolved)",
+        "summary": "Problem freigeben: resolve a case open issue (issue_open -> in_progress)",
         "tags": [
           "teamlead"
         ]

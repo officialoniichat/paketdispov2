@@ -166,20 +166,26 @@ export class TeamleadService {
    * Issue `resolved` (with resolution + releasedBy/releasedAt) and transitions the
    * case `issue_open → in_progress` via an `issue.resolved` audit event.
    */
+  /**
+   * „Problem freigeben" — resolve a case's open problem and put it back to work.
+   * Case-scoped (not issue-scoped) so the action works from every surface that
+   * shows the case (Ablagen card, Belege list/detail) without threading an issue id.
+   * A case in `issue_open` has exactly one open issue.
+   */
   async resolveIssue(
     principal: Principal,
-    issueId: string,
+    caseId: string,
     dto: ResolveIssueDto,
   ): Promise<TransitionResultDto> {
-    const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
-      select: { id: true, caseId: true },
+    const issue = await this.prisma.issue.findFirst({
+      where: { caseId, status: 'open' },
+      select: { id: true },
     });
-    if (!issue) throw new NotFoundException(`Issue ${issueId} not found`);
+    if (!issue) throw new NotFoundException(`Case ${caseId} has no open issue`);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.issue.update({
-        where: { id: issueId },
+        where: { id: issue.id },
         data: {
           status: 'resolved',
           resolution: dto.resolution,
@@ -188,11 +194,11 @@ export class TeamleadService {
         },
       });
       const result = await this.workflow.transition({
-        caseId: issue.caseId,
+        caseId,
         toStatus: 'in_progress',
         eventType: 'issue.resolved',
         actor: { actorType: 'teamlead', actorId: principal.sub },
-        payload: { issueId },
+        payload: { issueId: issue.id },
       });
       return this.toResult(result);
     });

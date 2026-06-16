@@ -99,11 +99,9 @@ function LaneCardView({
   store: CaseActionCtx['store'];
   onOpen: (caseId: string) => void;
 }): JSX.Element {
-  // The lane card projection (PoolItemDto) does not carry an issue id, so
-  // „Problem freigeben" has no target here; resolving an issue happens from the
-  // Belegdetail where the issue list is available. The action still surfaces on
-  // status `issue_open` and no-ops without an issueId.
-  const ctx: CaseActionCtx = { caseId: card.caseId, issueId: undefined, store };
+  // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
+  // so the same ctx works from every surface — incl. the Problemfälle lane card.
+  const ctx: CaseActionCtx = { caseId: card.caseId, store };
   return (
     <Card variant="outlined">
       <CardContent sx={{ pb: 0.5 }}>

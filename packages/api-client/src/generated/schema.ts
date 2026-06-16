@@ -337,7 +337,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teamlead/issues/{issueId}/resolve": {
+    "/api/teamlead/cases/{caseId}/resolve-issue": {
         parameters: {
             query?: never;
             header?: never;
@@ -346,7 +346,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve an issue (issue_open → in_progress, issue.resolved) */
+        /** Problem freigeben: resolve a case open issue (issue_open -> in_progress) */
         post: operations["TeamleadController_resolveIssue"];
         delete?: never;
         options?: never;
@@ -1579,7 +1579,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                issueId: string;
+                caseId: string;
             };
             cookie?: never;
         };

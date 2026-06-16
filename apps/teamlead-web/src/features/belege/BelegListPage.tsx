@@ -164,7 +164,7 @@ export function BelegListPage(): JSX.Element {
               variant="row"
               caseStatus={ctx.row.original.status}
               weBelegNo={ctx.row.original.weBelegNo}
-              ctx={{ caseId: ctx.row.original.id, issueId: null, store }}
+              ctx={{ caseId: ctx.row.original.id, store }}
             />
           </Box>
         ),

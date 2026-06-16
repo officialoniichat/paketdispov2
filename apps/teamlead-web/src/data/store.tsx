@@ -135,7 +135,7 @@ export interface CockpitApi {
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
   /** Issue triage: resolve an open issue (issue_open → in_progress). */
-  resolveIssue(issueId: string, reason: string): void;
+  resolveIssue(caseId: string, reason: string): void;
   /** Audited bundle interventions backed by real endpoints (§8.4). */
   withdraw: BundleMutation<WithdrawVars>;
   addToBundle: BundleMutation<AddVars>;
@@ -269,10 +269,10 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const resolveIssueMutation = useMutation<unknown, Error, { issueId: string; reason: string }>({
-    mutationFn: async ({ issueId, reason }) => {
-      const { data, error } = await api.POST('/api/teamlead/issues/{issueId}/resolve', {
-        params: { path: { issueId } },
+  const resolveIssueMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
+    mutationFn: async ({ caseId, reason }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-issue', {
+        params: { path: { caseId } },
         body: { resolution: reason },
       });
       if (error) throw new Error(`resolve failed (${JSON.stringify(error)})`);
@@ -374,7 +374,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
-      resolveIssue: (issueId, reason) => resolveIssueMutation.mutate({ issueId, reason }),
+      resolveIssue: (caseId, reason) => resolveIssueMutation.mutate({ caseId, reason }),
 
       withdraw,
       addToBundle,
