@@ -21,7 +21,9 @@ function list(value: string | undefined): string[] {
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
   host: process.env.API_HOST ?? '0.0.0.0',
-  port: num(process.env.API_PORT, 3000),
+  // Railway (and most PaaS) inject the listen port via PORT; prefer it over the
+  // local API_PORT so the container binds the port the platform routes to.
+  port: num(process.env.PORT ?? process.env.API_PORT, 3000),
   logLevel: process.env.LOG_LEVEL ?? 'info',
   databaseUrl: process.env.DATABASE_URL ?? '',
   otel: {

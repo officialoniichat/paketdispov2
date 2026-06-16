@@ -1,14 +1,26 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "rootDir": "src",
     "outDir": "dist",
     "types": ["node", "reflect-metadata"],
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    // Resolve the workspace libs by their published entrypoints (package.json
+    // "exports" -> dist/*.d.ts). This is type-resolution only and does NOT rewrite
+    // emitted specifiers: the build still emits bare "@paket/*" imports, which Node
+    // resolves at runtime via the pnpm-linked node_modules/@paket/*. The mapping
+    // makes tsc independent of whether those node_modules symlinks are present in a
+    // given checkout (e.g. git worktrees), matching how the Bundler-mode frontends
+    // consume the same packages.
+    "baseUrl": ".",
+    "paths": {
+      "@paket/domain-types": ["../../packages/domain-types"],
+      "@paket/assignment-engine": ["../../packages/assignment-engine"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.e2e.test.ts"]
