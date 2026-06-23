@@ -6,7 +6,7 @@
  * checked off, the Beleg rows are locked. Assignment is system-only — the worker
  * never self-assigns; he works the cart the engine gave him.
  */
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Alert from '@mui/material/Alert';
@@ -22,7 +22,18 @@ import { db } from '../db/db.js';
 import { useBundle } from '../workflow/useBundle.js';
 import { deriveBelegStatus, nextOpenBeleg, orderBelege } from '../workflow/belegList.js';
 import type { BelegStatus, GoodsCategory } from '../db/types.js';
+import { pullNextBundle } from '../db/sync.js';
+import { cycleDemoScenario } from '../db/seed.js';
 import { COLLECT, caseProcessPath } from '../routes/paths.js';
+
+/** German messaging for the backend's "no cart assigned" reasons (§continuation). */
+const PULL_REASON_MSG: Record<string, string> = {
+  pool_empty: 'Aktuell nichts frei zum Holen.',
+  capacity_done: 'Feierabend – Tageskapazität erreicht.',
+  no_shift: 'Heute keine Schicht eingeplant.',
+  active_bundle: 'Es läuft noch ein Bündel.',
+  error: 'Konnte nicht laden – bitte später erneut.',
+};
 
 const STATUS_CHIP: Record<
   BelegStatus,
@@ -46,6 +57,27 @@ export function BundleHomeScreen(): JSX.Element {
   const { loading, bundle, belege, counts, collectComplete } = useBundle();
   const progressRows = useLiveQuery(() => db.progress.toArray(), []);
   const events = useLiveQuery(() => db.events.toArray(), []);
+  const [pulling, setPulling] = useState(false);
+  const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
+
+  // Pull the next cart (backend) or advance the demo Belegset (offline). The live
+  // queries refresh the home automatically once the store is rewritten.
+  const handleNextBundle = async (): Promise<void> => {
+    setPullMsg(undefined);
+    setPulling(true);
+    try {
+      if (isBackendEnabled) {
+        const result = await pullNextBundle();
+        if (!result.assigned) {
+          setPullMsg(PULL_REASON_MSG[result.reason ?? 'error'] ?? PULL_REASON_MSG.error);
+        }
+      } else {
+        await cycleDemoScenario();
+      }
+    } finally {
+      setPulling(false);
+    }
+  };
 
   if (loading || progressRows === undefined) {
     return (
@@ -72,6 +104,8 @@ export function BundleHomeScreen(): JSX.Element {
   const ordered = orderBelege(belege);
   const doneCount = [...statuses.values()].filter((s) => s === 'done').length;
   const allDone = belege.length > 0 && doneCount === belege.length;
+  // Cumulative Belege finished today (local audit log; survives a backend pull).
+  const doneToday = (events ?? []).filter((e) => e.eventType === 'case.completed').length;
   const recommended = collectComplete ? nextOpenBeleg(belege, statuses) : undefined;
 
   const openBeleg = (caseId: string): void => {
@@ -94,6 +128,9 @@ export function BundleHomeScreen(): JSX.Element {
           <Typography>Arbeitsplatz: {bundle?.workstation ?? '—'}</Typography>
           <Typography>
             {doneCount} von {belege.length} fertig · ca. {bundle?.plannedEffortMinutes ?? 0} Min
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Heute erledigt: {doneToday} Belege
           </Typography>
         </Stack>
       </Paper>
@@ -189,7 +226,23 @@ export function BundleHomeScreen(): JSX.Element {
         }}
       >
         {allDone ? (
-          <Alert severity="success">Alle Belege erledigt 🎉</Alert>
+          <Stack spacing={1}>
+            <Alert severity="success" sx={{ py: 0.5 }}>
+              Bündel fertig 🎉 · heute {doneToday} Belege erledigt
+            </Alert>
+            {pullMsg ? (
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                {pullMsg}
+              </Alert>
+            ) : null}
+            <TouchButton
+              emphasis="primary"
+              disabled={pulling}
+              onClick={() => void handleNextBundle()}
+            >
+              {pulling ? 'Lädt…' : 'Nächstes Bündel holen'}
+            </TouchButton>
+          </Stack>
         ) : !collectComplete ? (
           <TouchButton emphasis="primary" onClick={() => navigate(COLLECT)}>
             Sammeln starten

@@ -34,6 +34,11 @@ interface CaseOwnership {
   ownerEmployeeNo: string | null;
 }
 
+/** A case in one of these is "done" for bundle-completion purposes (§ continuation). */
+const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
+/** A bundle in one of these is already closed — don't re-complete it. */
+const TERMINAL_BUNDLE_STATUSES: string[] = ['completed', 'cancelled'];
+
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -196,6 +201,9 @@ export class CasesService {
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
     });
+    // The cart is now in work — mark its bundle active (assigned → active) so the
+    // board / getCurrentBundle reflect the running cart (§ continuation, Frei/Fix).
+    await this.activateBundle(owned.id);
     return this.finish(principal, result);
   }
 
@@ -218,6 +226,8 @@ export class CasesService {
       completedQuantity: caseRow.totalQuantity,
       effortPoints: caseRow.effortPoints,
     });
+    // §continuation: if this was the bundle's last open case, close the bundle.
+    await this.closeBundleIfDone(principal, owned.id);
     return this.finish(principal, result);
   }
 
@@ -246,6 +256,8 @@ export class CasesService {
       completedQuantity,
       effortPoints: proratedEffort(caseRow.totalQuantity, completedQuantity, caseRow.effortPoints),
     });
+    // §continuation: a partial close also frees the bundle once nothing is left open.
+    await this.closeBundleIfDone(principal, owned.id);
     return this.finish(principal, result);
   }
 
@@ -319,6 +331,56 @@ export class CasesService {
       });
     });
     return this.finish(principal, result);
+  }
+
+  /** Mark the case's bundle `active` once work starts (assigned → active). No-op otherwise. */
+  private async activateBundle(caseId: string): Promise<void> {
+    const row = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { assignedBundleId: true },
+    });
+    if (!row?.assignedBundleId) return;
+    await this.prisma.assignmentBundle.updateMany({
+      where: { id: row.assignedBundleId, status: 'assigned' },
+      data: { status: 'active' },
+    });
+  }
+
+  /**
+   * §continuation: when the last open case of a bundle reaches a terminal state,
+   * mark the bundle `completed` + emit `bundle.completed`. That frees the employee
+   * to pull the next cart. Idempotent: already-terminal bundles are skipped.
+   */
+  private async closeBundleIfDone(principal: Principal, caseId: string): Promise<void> {
+    const row = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { assignedBundleId: true },
+    });
+    const bundleId = row?.assignedBundleId;
+    if (!bundleId) return;
+    await this.prisma.$transaction(async (tx) => {
+      const bundle = await tx.assignmentBundle.findUnique({
+        where: { id: bundleId },
+        select: { status: true },
+      });
+      if (!bundle || TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) return;
+      const open = await tx.goodsReceiptCase.count({
+        where: { assignedBundleId: bundleId, status: { notIn: [...TERMINAL_CASE_STATUSES] } },
+      });
+      if (open > 0) return;
+      await tx.assignmentBundle.update({ where: { id: bundleId }, data: { status: 'completed' } });
+      await this.events.append(
+        {
+          eventType: 'bundle.completed',
+          entityType: 'AssignmentBundle',
+          entityId: bundleId,
+          actorType: 'system',
+          actorId: principal.sub,
+          payload: { trigger: 'last_case_done' },
+        },
+        tx,
+      );
+    });
   }
 
   /** Loads a case and enforces §16.1 ownership; foreign cases read as 404. */

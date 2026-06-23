@@ -137,6 +137,59 @@ test('Demo: Belegset wechseln (anderes Szenario)', async ({ page }) => {
   await page.screenshot({ path: `${SHOT_DIR}/10-demo-haengeware.png`, fullPage: true });
 });
 
+test('Continuation: Bündel fertig → Nächstes Bündel holen (Demo cycelt Belegset)', async ({
+  page,
+}) => {
+  // Switch to the small Hängeware Belegset (2 Belege) to finish a whole cart fast.
+  await page.getByLabel('Szenario').click();
+  await page.getByRole('option', { name: /Hängeware/ }).click();
+  await expect(page.getByText(/2 Belege · Hängebahn/)).toBeVisible();
+
+  // Collect both stops → unlock processing.
+  await page.getByRole('button', { name: 'Sammeln starten' }).click();
+  await expectHeading(page, 'Plätze abholen');
+  await page.getByText('HB-3').click();
+  await page.getByText('HB-5').click();
+  await page.getByRole('button', { name: 'Sammeln fertig → Bearbeiten' }).click();
+  await expectHeading(page, /Guten Morgen/);
+
+  // Process both Belege to completion.
+  for (const we of ['3700101', '3700102']) {
+    await page.getByText(`WE ${we}`, { exact: true }).click();
+    await expectHeading(page, 'Beleg bearbeiten');
+    await page.getByRole('button', { name: 'Preisetiketten drucken' }).click();
+    const carton = page.getByRole('button', { name: 'Karton geöffnet' });
+    await expect(carton).toBeEnabled();
+    await carton.click(); // settle the layout before the min-qty clicks (as in the Kernfluss path)
+    await expect(page.getByText('Karton geöffnet ✓')).toBeVisible();
+    // Min-qty check per position. On a short Beleg the buttons sit below the fold;
+    // scroll the target in, click, then wait for it to detach (→ chip) so the next
+    // iteration re-resolves against the settled DOM rather than the re-rendering one.
+    for (let i = 0; i < 5; i += 1) {
+      const next = page.getByRole('button', { name: 'Mindestmenge geprüft' }).first();
+      if (!(await next.isVisible().catch(() => false))) break;
+      await next.scrollIntoViewIfNeeded();
+      await next.click();
+      await next.waitFor({ state: 'detached' });
+    }
+    const erledigt = page.getByRole('button', { name: 'Beleg erledigt' });
+    await expect(erledigt).toBeEnabled();
+    await erledigt.click();
+    await expectHeading(page, /Guten Morgen/);
+  }
+
+  // Continuation panel replaces the dead-end.
+  await expect(page.getByText(/Bündel fertig/)).toBeVisible();
+  const holen = page.getByRole('button', { name: 'Nächstes Bündel holen' });
+  await expect(holen).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/11-continuation.png`, fullPage: true });
+
+  // Pull next → cycles to the next demo Belegset (Großbündel · 4 Belege · Regal).
+  await holen.click();
+  await expect(page.getByText(/4 Belege · Regal/)).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/12-next-bundle.png`, fullPage: true });
+});
+
 test('§G.5 erledigt bleibt gesperrt, solange ein Problem offen ist', async ({ page }) => {
   // Collect everything first.
   await page.getByRole('button', { name: 'Sammeln starten' }).click();

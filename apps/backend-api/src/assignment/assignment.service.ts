@@ -1,10 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assignWork, type EngineInput } from '@paket/assignment-engine';
 import {
+  assignWork,
+  buildPickupSequence,
+  classifyPriority,
+  createBalancedBundles,
+  sortByPriority,
+  DEFAULT_ENGINE_CONFIG,
+  type EngineInput,
+  type EnrichedCase,
+  type PickupCase,
+} from '@paket/assignment-engine';
+import {
+  assignmentBundleSchema,
+  bereichFromLocationKind,
   weeklyPatternSchema,
   type AssignmentBundle,
   type BundlePickupSequence,
+  type GoodsReceiptCase,
+  type LocationMaster,
   type WeeklyPattern,
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,9 +27,11 @@ type PrismaTx = Prisma.TransactionClient;
 import { EventLogService } from '../events/event-log.service.js';
 import type { Principal } from '../auth/rbac.js';
 import { toEmployeeShift, toGoodsReceiptCase, toLocationMaster } from './assignment.mappers.js';
-import type { RecalculateResultDto } from './assignment.dto.js';
+import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto.js';
 
 const POOL_STATUS = 'ready' as const;
+/** A case in one of these no longer counts as "open" within a bundle. */
+const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -107,6 +123,127 @@ export class AssignmentService {
     });
 
     return this.toResultDto(day, plan, assignedCaseCount, durationMs);
+  }
+
+  /**
+   * §continuation (Pull-on-idle): hand the requesting employee ONE next cart-sized
+   * bundle from the current `ready` pool. Reuses the engine primitives (priority +
+   * Bereich-homogeneous balanced bundle + pickup sequence) for a single cart; the
+   * teamlead `recalculate` path is untouched. Never assigns while the employee still
+   * has an open bundle, never breaks the iron reserve for non-override work, and
+   * stops at the shift's net capacity (Feierabend).
+   */
+  async assignNextBundle(principal: Principal, date?: string): Promise<NextBundleResultDto> {
+    const day = date ?? new Date().toISOString().slice(0, 10);
+    const dayStart = new Date(day + 'T00:00:00.000Z');
+    const dayEnd = new Date(day + 'T23:59:59.999Z');
+
+    if (!principal.employeeNo) throw new ForbiddenException('Token has no employee number claim');
+    const employee = await this.prisma.user.findUnique({
+      where: { employeeNo: principal.employeeNo },
+      select: { id: true, active: true, bereiche: true },
+    });
+    if (!employee || !employee.active) {
+      throw new ForbiddenException('Employee not provisioned or inactive');
+    }
+
+    await this.materializeShiftsForDate(day, dayStart);
+    const shift = await this.prisma.shift.findFirst({
+      where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd }, active: true },
+      select: { netCapacityMinutes: true },
+    });
+    if (!shift || shift.netCapacityMinutes <= 0) return { assigned: false, reason: 'no_shift' };
+
+    // Never hand out a new cart while the employee still has an open one (Frei/Fix).
+    const todaysBundles = await this.prisma.assignmentBundle.findMany({
+      where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, plannedEffortMinutes: true },
+    });
+    if (todaysBundles.length > 0) {
+      const open = await this.prisma.goodsReceiptCase.count({
+        where: {
+          assignedBundleId: { in: todaysBundles.map((b) => b.id) },
+          status: { notIn: [...TERMINAL_CASE_STATUSES] },
+        },
+      });
+      if (open > 0) return { assigned: false, reason: 'active_bundle' };
+    }
+
+    // Feierabend: stop once the day's assigned effort reaches the shift capacity.
+    const usedMinutes = todaysBundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
+    const remainingCapacity = shift.netCapacityMinutes - usedMinutes;
+    if (remainingCapacity <= 0) return { assigned: false, reason: 'capacity_done' };
+
+    return this.prisma.$transaction(async (tx) => {
+      const [caseRows, locationRows] = await Promise.all([
+        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: { storageLocation: true } }),
+        tx.location.findMany({ where: { active: true } }),
+      ]);
+      if (caseRows.length === 0) return { assigned: false, reason: 'pool_empty' };
+
+      const locations: LocationMaster[] = locationRows.map(toLocationMaster);
+      const kindByCode = new Map(locations.map((l) => [l.code, l.kind]));
+      const cases: GoodsReceiptCase[] = caseRows.map(toGoodsReceiptCase);
+      const allowedBereiche = new Set(employee.bereiche);
+
+      // Enrich (priority + effort fallback) and keep only this employee's Bereiche.
+      const enriched: EnrichedCase[] = cases
+        .map((c) => {
+          const kind = kindByCode.get(c.storageLocation.code);
+          return {
+            case: c,
+            priority: classifyPriority(c, { today: day }),
+            effortMinutes: c.estimatedMinutes,
+            effortPoints: c.effortPoints,
+            wgrCodes: [],
+            fromPreviousDays: c.bookingDate < day || c.status === 'partially_completed',
+            bereich: kind ? bereichFromLocationKind(kind) : undefined,
+          } satisfies EnrichedCase;
+        })
+        .filter((e) => e.priority.rank > 0)
+        .filter((e) => allowedBereiche.size === 0 || (e.bereich != null && allowedBereiche.has(e.bereich)));
+      if (enriched.length === 0) return { assigned: false, reason: 'pool_empty' };
+
+      const ordered = sortByPriority(enriched);
+      const { bundles } = createBalancedBundles(
+        ordered,
+        remainingCapacity,
+        DEFAULT_ENGINE_CONFIG.assignment,
+      );
+      const cart = bundles[0];
+      if (!cart) return { assigned: false, reason: 'pool_empty' };
+
+      // NB: the iron reserve is a PLANNING-time guardian (teamlead recalculate). An
+      // idle worker pulling mid-shift should get available work rather than stand
+      // idle while ready Belege are held back — so the pull does not re-apply it.
+
+      const caseById = new Map(cases.map((c) => [c.id, c]));
+      const bundleSkeleton: AssignmentBundle = assignmentBundleSchema.parse({
+        id: `bundle-${day}-${employee.id}-${todaysBundles.length}`,
+        employeeId: employee.id,
+        date: day,
+        caseIds: cart.caseIds,
+        plannedEffortMinutes: cart.effortMinutes,
+        effortPoints: cart.effortPoints,
+        route: [],
+        status: 'created',
+        createdBy: 'system',
+      });
+      const pickupCases: PickupCase[] = cart.caseIds.map((id) => ({
+        caseId: id,
+        location: caseById.get(id)!.storageLocation,
+      }));
+      const sequence = buildPickupSequence(
+        bundleSkeleton.id,
+        employee.id,
+        `ws-${employee.id}`,
+        pickupCases,
+        { mode: 'numeric_fallback', locationMaster: new Map(locations.map((l) => [l.code, l])) },
+      );
+
+      await this.persistBundle(tx, bundleSkeleton, sequence, principal);
+      return { assigned: true, caseCount: cart.caseIds.length, bereich: cart.bereich ?? null };
+    });
   }
 
   /**

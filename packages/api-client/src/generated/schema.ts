@@ -86,6 +86,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/next-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_nextBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{caseId}/start-preparation": {
         parameters: {
             query?: never;
@@ -767,6 +783,15 @@ export interface components {
             /** @description Ordered Arbeitsanweisung points (derived from header + positions) */
             instructionPoints: components["schemas"]["WorkInstructionPointDto"][];
         };
+        NextBundleResultDto: {
+            assigned: boolean;
+            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty|reserve_protected */
+            reason?: string;
+            /** @description Belege in the assigned cart */
+            caseCount?: number;
+            /** @description Bereich of the assigned cart */
+            bereich?: string | null;
+        };
         TransitionResultDto: {
             caseId: string;
             status: string;
@@ -1289,6 +1314,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseAggregateDto"];
+                };
+            };
+        };
+    };
+    MeController_nextBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextBundleResultDto"];
                 };
             };
         };

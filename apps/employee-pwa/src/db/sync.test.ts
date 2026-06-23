@@ -115,8 +115,17 @@ const apiGet = vi.fn(async (path: string, opts?: { params?: { path?: { caseId?: 
   return { data: undefined, error: 'unknown path' };
 });
 
+const apiPost = vi.fn(
+  async (
+    _path: string,
+  ): Promise<{ data: { assigned: boolean; reason?: string }; error: undefined }> => ({
+    data: { assigned: false, reason: 'pool_empty' },
+    error: undefined,
+  }),
+);
+
 vi.mock('../data/api.js', () => ({
-  getApiClient: () => ({ GET: apiGet }),
+  getApiClient: () => ({ GET: apiGet, POST: apiPost }),
   isBackendEnabled: true,
 }));
 vi.mock('../data/session.js', () => ({
@@ -124,7 +133,7 @@ vi.mock('../data/session.js', () => ({
 }));
 
 import { PaketDb } from './db.js';
-import { loadAssignedWork } from './sync.js';
+import { loadAssignedWork, pullNextBundle } from './sync.js';
 import {
   getBelege,
   getBundle,
@@ -195,5 +204,23 @@ describe('loadAssignedWork', () => {
     await loadAssignedWork(db);
     const agg = await getAggregate('c1', db);
     expect(agg?.instructionPoints.map((p) => p.key)).toEqual(['price_label_print', 'security']);
+  });
+});
+
+describe('pullNextBundle (continuation)', () => {
+  it('reports the backend reason and does NOT re-sync when nothing is free', async () => {
+    apiPost.mockResolvedValueOnce({ data: { assigned: false, reason: 'pool_empty' }, error: undefined });
+    apiGet.mockClear();
+    const result = await pullNextBundle(db);
+    expect(result).toEqual({ assigned: false, reason: 'pool_empty' });
+    expect(apiGet).not.toHaveBeenCalled();
+  });
+
+  it('re-syncs the freshly assigned bundle when a cart was pulled', async () => {
+    apiPost.mockResolvedValueOnce({ data: { assigned: true }, error: undefined });
+    apiGet.mockClear();
+    const result = await pullNextBundle(db);
+    expect(result.assigned).toBe(true);
+    expect(apiGet).toHaveBeenCalledWith('/api/me/today');
   });
 });

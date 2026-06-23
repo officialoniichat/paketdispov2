@@ -350,3 +350,20 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
 
   return { caseCount: today.cases.length };
 }
+
+export interface PullResult {
+  assigned: boolean;
+  reason?: string;
+}
+
+/**
+ * §continuation (Pull-on-idle): ask the backend for the next cart-sized bundle.
+ * On success the new bundle is mirrored into Dexie (loadAssignedWork) so the live
+ * UI swaps to it. Returns the backend reason when nothing was assigned.
+ */
+export async function pullNextBundle(db: PaketDb = defaultDb): Promise<PullResult> {
+  const { data, error } = await getApiClient().POST('/api/me/next-bundle');
+  if (error || !data) return { assigned: false, reason: 'error' };
+  if (data.assigned) await loadAssignedWork(db);
+  return { assigned: data.assigned, reason: data.reason };
+}

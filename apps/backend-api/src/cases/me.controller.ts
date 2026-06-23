@@ -1,6 +1,8 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
+import { AssignmentService } from '../assignment/assignment.service.js';
+import { NextBundleResultDto } from '../assignment/assignment.dto.js';
 import { CasesService } from './cases.service.js';
 import { CaseAggregateDto, CurrentBundleDto, TodayResponseDto } from './cases.dto.js';
 
@@ -10,7 +12,10 @@ import { CaseAggregateDto, CurrentBundleDto, TodayResponseDto } from './cases.dt
 @Roles(Role.Employee)
 @Controller('api/me')
 export class MeController {
-  constructor(private readonly cases: CasesService) {}
+  constructor(
+    private readonly cases: CasesService,
+    private readonly assignment: AssignmentService,
+  ) {}
 
   @Get('today')
   @ApiOkResponse({ type: TodayResponseDto })
@@ -33,5 +38,15 @@ export class MeController {
     @Param('caseId') caseId: string,
   ): Promise<CaseAggregateDto> {
     return this.cases.getCaseAggregate(principal, caseId);
+  }
+
+  /**
+   * §continuation (Pull-on-idle): the worker requests the next cart-sized bundle.
+   * Returns `{ assigned:true }` after binding a new bundle, or a `reason` why not.
+   */
+  @Post('next-bundle')
+  @ApiOkResponse({ type: NextBundleResultDto })
+  nextBundle(@CurrentUser() principal: Principal): Promise<NextBundleResultDto> {
+    return this.assignment.assignNextBundle(principal);
   }
 }

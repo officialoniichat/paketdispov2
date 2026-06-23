@@ -129,6 +129,32 @@
         ]
       }
     },
+    "/api/me/next-bundle": {
+      "post": {
+        "operationId": "MeController_nextBundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextBundleResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/cases/{caseId}/start-preparation": {
       "post": {
         "operationId": "CasesController_startPreparation",
@@ -2055,6 +2081,30 @@
           "positions",
           "boxTargets",
           "instructionPoints"
+        ]
+      },
+      "NextBundleResultDto": {
+        "type": "object",
+        "properties": {
+          "assigned": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty|reserve_protected"
+          },
+          "caseCount": {
+            "type": "number",
+            "description": "Belege in the assigned cart"
+          },
+          "bereich": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bereich of the assigned cart"
+          }
+        },
+        "required": [
+          "assigned"
         ]
       },
       "TransitionResultDto": {

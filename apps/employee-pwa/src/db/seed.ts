@@ -14,7 +14,7 @@ import {
   putProgress,
   getBundle,
 } from './repository.js';
-import { DEFAULT_SCENARIO_ID, getScenario } from '../demo/scenarios.js';
+import { DEFAULT_SCENARIO_ID, DEMO_SCENARIOS, getScenario } from '../demo/scenarios.js';
 import { initialProgress } from '../workflow/workflowModel.js';
 
 const SCENARIO_KEY = 'paket.demo.scenario';
@@ -59,6 +59,18 @@ export async function seedIfEmpty(db: PaketDb = defaultDb): Promise<void> {
  * Demo control: wipe all local work data and reseed the chosen scenario. Used by
  * the offline DemoControls to switch Belegsets or reset to a clean state.
  */
+/**
+ * Offline continuation: simulate "Nächstes Bündel holen" by advancing to the next
+ * demo Belegset (round-robin) and reseeding it. Returns the new scenario's label.
+ */
+export async function cycleDemoScenario(db: PaketDb = defaultDb): Promise<string> {
+  const ids = DEMO_SCENARIOS.map((s) => s.id);
+  const idx = ids.indexOf(getSelectedScenarioId());
+  const nextId = ids[(idx + 1) % ids.length] ?? DEFAULT_SCENARIO_ID;
+  await resetToScenario(nextId, db);
+  return getScenario(nextId).label;
+}
+
 export async function resetToScenario(
   scenarioId: string,
   db: PaketDb = defaultDb,

@@ -1,6 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, Matches } from 'class-validator';
 
+/**
+ * Result of POST /api/me/next-bundle (§continuation, Pull-on-idle). Either a cart
+ * was assigned, or `reason` says why not (no_shift | active_bundle | capacity_done |
+ * pool_empty).
+ */
+export class NextBundleResultDto {
+  @ApiProperty() assigned!: boolean;
+  @ApiPropertyOptional({
+    description: 'Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty',
+  })
+  reason?: string;
+  @ApiPropertyOptional({ type: Number, description: 'Belege in the assigned cart' })
+  caseCount?: number;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Bereich of the assigned cart' })
+  bereich?: string | null;
+}
+
 /** Body for POST /api/teamlead/assignments/recalculate. */
 export class RecalculateDto {
   @ApiPropertyOptional({
