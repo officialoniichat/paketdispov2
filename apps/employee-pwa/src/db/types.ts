@@ -1,10 +1,12 @@
 /**
- * Offline aggregate model for the Mitarbeiter-App (§12.4).
+ * Offline aggregate model for the Mitarbeiter-App — two-phase bundle flow.
  *
- * The PWA only ever caches *already-assigned* work: the day context, the
- * priority-sorted list of assigned Belege, and the per-case aggregates needed
- * to work each Beleg offline. Assignment is system-only — the worker never
- * self-assigns; he only chooses the order among the assigned Belege.
+ * The PWA caches exactly the engine's assignment for the day: one
+ * Bereich-homogeneous bundle (the {@link BundleContext}), its consolidated
+ * route-ordered pick list ({@link CollectStop}s for the COLLECT phase) and the
+ * per-Beleg aggregates needed to work each Beleg offline (PROCESS phase).
+ * Assignment is system-only — the worker never self-assigns; he collects the
+ * whole cart, then processes each Beleg and sets the per-Beleg ZST.
  */
 import type {
   GoodsReceiptCase,
@@ -13,37 +15,64 @@ import type {
   WorkInstructionHeader,
 } from '@paket/domain-types';
 
-/** Storage/goods category — drives the close path (Hängeware skips boxing). */
+/** Storage/goods category — drives display and the close path (Hängeware has no box). */
 export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
 
-/** Derived list status for a Beleg row (computed from CaseProgress + issues). */
+/** Derived list status for a Beleg row (computed from CaseProgress + open issues). */
 export type BelegStatus = 'open' | 'in_progress' | 'done' | 'issue';
 
-/** Day-level context shown on the hub header. Single row, id = 'today'. */
-export interface DayContext {
+/**
+ * The engine bundle cached for today (one active bundle per employee). Single
+ * row, id = 'today'. `caseIds` is the bundle order; the COLLECT pick list and
+ * the PROCESS Beleg list both derive their order from it.
+ */
+export interface BundleContext {
   id: 'today';
+  bundleId: string;
   employeeName: string;
   workstation: string;
-  /** Planned shift window as 'HH:mm' strings for display only. */
-  plannedStart: string;
-  plannedEnd: string;
-  estimatedMinutes: number;
-  /** Verladetag/Abfahrt as 'HH:mm' or ISO date string, display only. */
-  verladetag?: string;
+  /** ISO date 'YYYY-MM-DD' of the assignment, display only. */
+  date: string;
+  plannedEffortMinutes: number;
+  /** Homogeneous Bereich label (Regal/Palette/Hängebahn), display only. */
+  bereich: string | null;
+  caseIds: string[];
 }
 
-/** One assigned Beleg as shown in the selectable list (no forced order). */
+/**
+ * One stop in the consolidated, route-ordered (§D.3) pick list. The whole
+ * bundle's locations are listed once; `caseIds` are the Belege at this location.
+ * `scanRequired` drives the optional scan affordance — collecting is a check-off,
+ * scanning is never forced (client: today they do not scan).
+ */
+export interface CollectStop {
+  sequence: number;
+  locationCode: string;
+  scanRequired: boolean;
+  caseIds: string[];
+}
+
+/**
+ * Bundle-level COLLECT progress (single row, id = 'today'). `collectedSequences`
+ * are the stops the worker has checked off. The PROCESS phase is hard-gated
+ * until every stop is collected.
+ */
+export interface BundleProgress {
+  id: 'today';
+  collectedSequences: number[];
+  version: number;
+  updatedAt: string;
+}
+
+/** One assigned Beleg as shown in the PROCESS list (ordered by the bundle). */
 export interface BelegListItem {
   caseId: string;
   weBelegNo: string;
-  /** Lower = higher priority. Used only for the recommended sort order. */
-  prioRank: number;
-  section: number | null;
+  /** Position within the bundle (`caseIds` index); drives display order. */
+  order: number;
   storageLocationCode: string;
   goodsType: GoodsCategory;
   totalQuantity: number;
-  /** True when this Beleg carries a same-day priority flag (NOS/Extra). */
-  urgent: boolean;
 }
 
 /** Everything needed to work one Beleg offline (case + instruction + positions + box targets). */
@@ -55,43 +84,32 @@ export interface CaseAggregate {
   boxTargets: TransportBoxTarget[];
 }
 
-/** Linear per-case workflow steps (Progressive Disclosure, §E.3). */
-export type CaseStep = 'pickup' | 'prepare' | 'positions' | 'sort' | 'boxing' | 'complete' | 'done';
-
-export interface BoxProgress {
-  boxNo: number;
-  /** Positions assigned to this box (seeded from the engine's boxTargets). */
-  positionIds: string[];
-  labelPrinted: boolean;
-  sealed: boolean;
-  onConveyor: boolean;
-}
+/** Per-Beleg workflow step — collapsed to a single PROCESS phase then DONE. */
+export type CaseStep = 'process' | 'done';
 
 /**
- * Mutable per-case progress with an optimistic-locking `version`.
- * Reducers in workflowModel return new progress objects (immutable update);
- * the repository owns the version bump on persist.
+ * Mutable per-Beleg progress with an optimistic-locking `version`. Reducers in
+ * workflowModel return new progress objects (immutable update); the repository
+ * owns the version bump on persist.
+ *
+ * The flow is deliberately flat: print price labels (Beleg-level), open the
+ * carton (only after labels — §G.2), confirm the minimum quantity for every
+ * position (always required, even "Prüfung = Nein"), then erledigt → ZST.
+ * Boxing is shown as info only and never gates completion.
  */
 export interface CaseProgress {
   caseId: string;
   step: CaseStep;
-  pickupConfirmed: boolean;
-  /** Vorbereitung: labels are printed BEFORE the carton is opened (§9.5, G.2). */
+  /** Price labels printed for the whole Beleg, BEFORE the carton is opened (§G.2). */
   labelsPrinted: boolean;
-  /** Carton opened (individual step, no longer derived from labelsPrinted). */
+  /** Carton opened — only permitted once labels are printed when required. */
   cartonOpened: boolean;
-  /** Carton opened, filler removed, sorted by article/colour/size. */
-  prepared: boolean;
-  confirmedPositionIds: string[];
   /**
-   * Positions whose minimum quantity control has been done. Tracked even when
-   * goodsReceiptCheckMode maps the work instruction's "Prüfung = Nein"
-   * (§G.1 guardrail: Nein still means quantity_only, never none).
+   * Positions whose minimum quantity control has been done. Required for every
+   * position even when the work instruction maps "Prüfung = Nein" to
+   * quantity_only (§G.1: "Nein" never means none).
    */
   quantityCheckedPositionIds: string[];
-  /** Box-sort step: worker confirmed the engine's position→box mapping. */
-  boxAssignmentConfirmed: boolean;
-  boxes: BoxProgress[];
   zstDone: boolean;
   partial: boolean;
   version: number;

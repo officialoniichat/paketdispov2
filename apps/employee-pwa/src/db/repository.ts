@@ -1,31 +1,91 @@
 /**
  * Read/write access to the local store with optimistic locking.
  *
- * saveProgress enforces the version the caller read against the on-disk value,
- * mirroring the backend's optimistic-locking contract (§12.4) so local writes
- * fail fast on a stale base instead of silently overwriting.
+ * saveProgress / saveBundleProgress enforce the version the caller read against
+ * the on-disk value, mirroring the backend's optimistic-locking contract (§12.4)
+ * so local writes fail fast on a stale base instead of silently overwriting.
  */
 import { db as defaultDb, type PaketDb } from './db.js';
-import type { BelegListItem, CaseAggregate, CaseProgress, DayContext } from './types.js';
+import type {
+  BelegListItem,
+  BundleContext,
+  BundleProgress,
+  CaseAggregate,
+  CaseProgress,
+  CollectStop,
+} from './types.js';
 
 export class OptimisticLockError extends Error {
   constructor(
-    readonly caseId: string,
+    readonly entityId: string,
     readonly expected: number,
     readonly actual: number,
   ) {
-    super(`Versionskonflikt bei ${caseId}: erwartet ${expected}, gefunden ${actual}`);
+    super(`Versionskonflikt bei ${entityId}: erwartet ${expected}, gefunden ${actual}`);
     this.name = 'OptimisticLockError';
   }
 }
 
-export async function getDay(db: PaketDb = defaultDb): Promise<DayContext | undefined> {
-  return db.day.get('today');
+// --- Bundle context -------------------------------------------------------
+
+export async function getBundle(db: PaketDb = defaultDb): Promise<BundleContext | undefined> {
+  return db.bundle.get('today');
 }
 
-export async function putDay(day: DayContext, db: PaketDb = defaultDb): Promise<void> {
-  await db.day.put(day);
+export async function putBundle(bundle: BundleContext, db: PaketDb = defaultDb): Promise<void> {
+  await db.bundle.put(bundle);
 }
+
+// --- Collect stops + collect progress ------------------------------------
+
+export async function getCollectStops(db: PaketDb = defaultDb): Promise<CollectStop[]> {
+  return db.collectStops.orderBy('sequence').toArray();
+}
+
+export async function putCollectStops(stops: CollectStop[], db: PaketDb = defaultDb): Promise<void> {
+  await db.collectStops.bulkPut(stops);
+}
+
+export async function getBundleProgress(
+  db: PaketDb = defaultDb,
+): Promise<BundleProgress | undefined> {
+  return db.bundleProgress.get('today');
+}
+
+export async function putBundleProgress(
+  progress: BundleProgress,
+  db: PaketDb = defaultDb,
+): Promise<void> {
+  await db.bundleProgress.put(progress);
+}
+
+/**
+ * Persist a new collect-progress revision under optimistic locking. Mirrors
+ * saveProgress: the stored row is written at `expectedVersion + 1` and a
+ * concurrent toggle that moved the version is rejected.
+ */
+export async function saveBundleProgress(
+  next: BundleProgress,
+  expectedVersion: number,
+  db: PaketDb = defaultDb,
+): Promise<BundleProgress> {
+  return db.transaction('rw', db.bundleProgress, async () => {
+    const current = await db.bundleProgress.get('today');
+    const actual = current?.version ?? expectedVersion;
+    if (current && actual !== expectedVersion) {
+      throw new OptimisticLockError('today', expectedVersion, actual);
+    }
+    const saved: BundleProgress = {
+      ...next,
+      version: expectedVersion + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    await db.bundleProgress.put(saved);
+    return saved;
+  });
+}
+
+// --- Beleg list -----------------------------------------------------------
 
 export async function getBelege(db: PaketDb = defaultDb): Promise<BelegListItem[]> {
   return db.belege.toArray();
@@ -34,6 +94,8 @@ export async function getBelege(db: PaketDb = defaultDb): Promise<BelegListItem[
 export async function putBelege(items: BelegListItem[], db: PaketDb = defaultDb): Promise<void> {
   await db.belege.bulkPut(items);
 }
+
+// --- Case aggregate + progress -------------------------------------------
 
 export async function getAggregate(
   caseId: string,

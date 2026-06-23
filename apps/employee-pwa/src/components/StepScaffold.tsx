@@ -26,6 +26,10 @@ export interface StepScaffoldProps {
   subtitle?: string;
   children: ReactNode;
   primary?: PrimaryAction;
+  /** Optional secondary action (e.g. Teilabschluss), rendered below the primary. */
+  secondary?: PrimaryAction;
+  /** When set, a back affordance is shown so the worker can revise within the bundle. */
+  onBack?: () => void;
   hideProblem?: boolean;
 }
 
@@ -36,13 +40,25 @@ export function StepScaffold({
   subtitle,
   children,
   primary,
+  secondary,
+  onBack,
   hideProblem,
 }: StepScaffoldProps): JSX.Element {
   const navigate = useNavigate();
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%', pb: 18 }}>
       <Box sx={{ px: 2, pt: 2 }}>
-        <Typography variant="overline" color="text.secondary">
+        {onBack ? (
+          <Button
+            onClick={onBack}
+            size="small"
+            sx={{ ml: -1, mb: 0.5, minWidth: 0 }}
+            aria-label="Zurück"
+          >
+            ‹ Zurück
+          </Button>
+        ) : null}
+        <Typography variant="overline" color="text.secondary" display="block">
           {where}
         </Typography>
         <Typography variant="h1" sx={{ mb: subtitle ? 0.5 : 2 }}>
@@ -71,6 +87,17 @@ export function StepScaffold({
           <TouchButton emphasis="primary" onClick={primary.onClick} disabled={primary.disabled}>
             {primary.label}
           </TouchButton>
+        ) : null}
+        {secondary ? (
+          <Button
+            variant="outlined"
+            size="large"
+            fullWidth
+            onClick={secondary.onClick}
+            disabled={secondary.disabled}
+          >
+            {secondary.label}
+          </Button>
         ) : null}
         {hideProblem ? null : (
           <Button

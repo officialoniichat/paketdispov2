@@ -1,16 +1,26 @@
 /**
  * Dexie/IndexedDB store for the employee app.
  *
- * Holds exactly the already-assigned work: the day context, the assigned Beleg
- * list, case aggregates, per-case progress and a local append-only event log.
- * Assignment is never created here — it requires the server.
+ * Holds exactly the engine's assigned work for the day: the bundle context, its
+ * route-ordered collect stops, the bundle-level collect progress, the assigned
+ * Beleg list, per-case aggregates, per-case progress and a local append-only
+ * event log. Assignment is never created here — it requires the server.
  */
 import Dexie, { type Table } from 'dexie';
-import type { BelegListItem, CaseAggregate, CaseProgress, DayContext } from './types.js';
+import type {
+  BelegListItem,
+  BundleContext,
+  BundleProgress,
+  CaseAggregate,
+  CaseProgress,
+  CollectStop,
+} from './types.js';
 import type { LocalEvent } from '../events/types.js';
 
 export class PaketDb extends Dexie {
-  day!: Table<DayContext, string>;
+  bundle!: Table<BundleContext, string>;
+  collectStops!: Table<CollectStop, number>;
+  bundleProgress!: Table<BundleProgress, string>;
   belege!: Table<BelegListItem, string>;
   aggregates!: Table<CaseAggregate, string>;
   progress!: Table<CaseProgress, string>;
@@ -18,12 +28,15 @@ export class PaketDb extends Dexie {
 
   constructor(name = 'paket-employee') {
     super(name);
-    // v3: dropped the single forced "bundles" table (AssignedBundle/PickupStop)
-    // in favour of a day-context row + a selectable Beleg list. Bump required so
-    // existing clients re-create the store instead of throwing a SchemaError.
-    this.version(3).stores({
-      day: 'id',
-      belege: 'caseId, prioRank',
+    // v4: re-introduces the engine bundle the v3 migration had dropped. The flat
+    // free-pick "day" row is replaced by a bundle context + a route-ordered
+    // collect-stop list + bundle collect progress. Bump required so existing
+    // clients re-create the store instead of throwing a SchemaError.
+    this.version(4).stores({
+      bundle: 'id',
+      collectStops: 'sequence',
+      bundleProgress: 'id',
+      belege: 'caseId, order',
       aggregates: 'caseId',
       progress: 'caseId, step',
       events: 'id, createdAt',

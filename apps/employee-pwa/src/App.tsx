@@ -1,8 +1,9 @@
 /**
  * Mitarbeiter-App router shell. Bootstraps the local store once — from the
  * backend when VITE_API_BASE_URL is set (loadAssignedWork), otherwise from the
- * offline-demo seed — and routes the task-first screens (§9.2–9.9). Navigation
- * is flat (§E.6): bundle → case steps → problem, no deep menus.
+ * offline-demo seed — and routes the two-phase bundle flow: hub → collect →
+ * Beleg → problem. Navigation is flat (§E.6); back-navigation lives in the
+ * screens. The bundle is re-fetched on focus (notification integration point).
  */
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
@@ -10,14 +11,11 @@ import Box from '@mui/material/Box';
 import { seedIfEmpty } from './db/seed.js';
 import { loadAssignedWork } from './db/sync.js';
 import { isBackendEnabled } from './data/api.js';
+import { useFocusRefresh } from './data/useFocusRefresh.js';
 import { BootstrapProvider } from './data/bootstrapContext.js';
-import { BelegListeScreen } from './screens/BelegListeScreen.js';
-import { LagerplatzScanScreen } from './screens/LagerplatzScanScreen.js';
-import { VorbereitungScreen } from './screens/VorbereitungScreen.js';
-import { PositionScreen } from './screens/PositionScreen.js';
-import { BoxenSortierenScreen } from './screens/BoxenSortierenScreen.js';
-import { BoxabschlussScreen } from './screens/BoxabschlussScreen.js';
-import { AbschlussScreen } from './screens/AbschlussScreen.js';
+import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
+import { CollectScreen } from './screens/CollectScreen.js';
+import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
 import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
 
 export function App(): JSX.Element {
@@ -50,18 +48,17 @@ export function App(): JSX.Element {
     };
   }, []);
 
+  // Notification integration point: re-fetch the bundle when the app regains focus.
+  useFocusRefresh();
+
   return (
     <BootstrapProvider value={{ loading, error }}>
       <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
         <Routes>
-        <Route path="/" element={<BelegListeScreen />} />
-        <Route path="/case/:caseId/pickup" element={<LagerplatzScanScreen />} />
-        <Route path="/case/:caseId/prepare" element={<VorbereitungScreen />} />
-        <Route path="/case/:caseId/positions" element={<PositionScreen />} />
-        <Route path="/case/:caseId/sort" element={<BoxenSortierenScreen />} />
-        <Route path="/case/:caseId/boxing" element={<BoxabschlussScreen />} />
-        <Route path="/case/:caseId/complete" element={<AbschlussScreen />} />
-        <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
+          <Route path="/" element={<BundleHomeScreen />} />
+          <Route path="/collect" element={<CollectScreen />} />
+          <Route path="/case/:caseId" element={<BelegProcessScreen />} />
+          <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>

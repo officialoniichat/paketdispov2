@@ -25,7 +25,9 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `pnpm build && pnpm exec vite preview --port ${PORT} --strictPort`,
+    // Force offline-demo mode (ignore any local .env backend URL) so the suite
+    // tests the seeded happy path without a backend, as documented above.
+    command: `VITE_API_BASE_URL= VITE_DEV_TOKEN= pnpm build && pnpm exec vite preview --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: false,
     timeout: 180_000,

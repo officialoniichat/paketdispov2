@@ -1,50 +1,24 @@
 /**
- * Pure per-case workflow model (§9.4–9.9, §E.3).
+ * Pure per-Beleg workflow model — collapsed PROCESS phase.
  *
  * Reducers return new CaseProgress objects (immutable update) and never touch
  * persistence or version numbers — the repository owns the optimistic-locking
- * bump. nextBestAction drives the single big primary button (Next Best Action),
- * canCompleteCase enforces the guardrails before ZST.
+ * bump. The flow is intentionally flat (client: "Der Rest ist unnötig"): the
+ * only gates kept are the print-before-unpack guardrail (§G.2), the minimum
+ * quantity check (always, even "Prüfung = Nein", §G.1) and a clean per-Beleg
+ * erledigt → ZST. Boxing is informational and never gates completion.
  */
-import type { ReceiptPosition, WorkInstructionHeader } from '@paket/domain-types';
-import type { BoxProgress, CaseAggregate, CaseProgress, CaseStep } from '../db/types.js';
+import type { WorkInstructionHeader } from '@paket/domain-types';
+import type { CaseAggregate, CaseProgress } from '../db/types.js';
 
-const STEP_ORDER: readonly CaseStep[] = [
-  'pickup',
-  'prepare',
-  'positions',
-  'sort',
-  'boxing',
-  'complete',
-  'done',
-];
-
-export function nextStep(step: CaseStep): CaseStep {
-  const i = STEP_ORDER.indexOf(step);
-  if (i < 0 || i >= STEP_ORDER.length - 1) return 'done';
-  return STEP_ORDER[i + 1]!;
-}
-
-/** Fresh progress for a case at version 0 (persisted before the first action). */
+/** Fresh progress for a Beleg at version 0 (persisted before the first action). */
 export function initialProgress(aggregate: CaseAggregate, now: string): CaseProgress {
-  const boxes: BoxProgress[] = aggregate.boxTargets.map((t, i) => ({
-    boxNo: i + 1,
-    positionIds: t.positionIds ?? [],
-    labelPrinted: false,
-    sealed: false,
-    onConveyor: false,
-  }));
   return {
     caseId: aggregate.caseId,
-    step: 'pickup',
-    pickupConfirmed: false,
+    step: 'process',
     labelsPrinted: false,
     cartonOpened: false,
-    prepared: false,
-    confirmedPositionIds: [],
     quantityCheckedPositionIds: [],
-    boxAssignmentConfirmed: false,
-    boxes,
     zstDone: false,
     partial: false,
     version: 0,
@@ -52,7 +26,7 @@ export function initialProgress(aggregate: CaseAggregate, now: string): CaseProg
   };
 }
 
-/** True when a scanned code matches the expected storage location (case/space-insensitive). */
+/** True when a scanned code matches the expected location (case/space-insensitive). */
 export function scanMatches(scanned: string, expected: string): boolean {
   return scanned.trim().toUpperCase() === expected.trim().toUpperCase();
 }
@@ -68,14 +42,13 @@ export function requiresQuantityCheck(wi: WorkInstructionHeader): boolean {
   return wi.minimumQuantityCheckAlwaysRequired === true;
 }
 
-export const allPositionsConfirmed = (p: CaseProgress, positions: ReceiptPosition[]): boolean =>
-  positions.every((pos) => p.confirmedPositionIds.includes(pos.id));
+/** §G.2: the carton may only be opened once the price labels are printed. */
+export function canOpenCarton(p: CaseProgress, wi: WorkInstructionHeader): boolean {
+  return wi.priceLabelPrintRequired ? p.labelsPrinted : true;
+}
 
-export const allQuantitiesChecked = (p: CaseProgress, positions: ReceiptPosition[]): boolean =>
-  positions.every((pos) => p.quantityCheckedPositionIds.includes(pos.id));
-
-export const allBoxesSealed = (p: CaseProgress): boolean =>
-  p.boxes.length > 0 && p.boxes.every((b) => b.sealed);
+export const allQuantitiesChecked = (p: CaseProgress, aggregate: CaseAggregate): boolean =>
+  aggregate.positions.every((pos) => p.quantityCheckedPositionIds.includes(pos.id));
 
 export interface CompletionGate {
   ok: boolean;
@@ -83,9 +56,10 @@ export interface CompletionGate {
 }
 
 /**
- * Hard preconditions for closing/ZST a Beleg (§9.9 + guardrails). An open
- * problem blocks the close: the Beleg must first be cleared by the Teamlead
- * (or shipped via Teilabschluss).
+ * Hard preconditions for the per-Beleg erledigt → ZST. Only three gates remain:
+ * the price labels must be printed (when required), every position's minimum
+ * quantity must be checked, and no problem may be open (it must first be cleared
+ * by the Teamlead, or shipped via Teilabschluss).
  */
 export function canCompleteCase(
   p: CaseProgress,
@@ -93,17 +67,11 @@ export function canCompleteCase(
   openIssues: number,
 ): CompletionGate {
   const reasons: string[] = [];
-  if (!allPositionsConfirmed(p, aggregate.positions)) {
-    reasons.push('Nicht alle Positionen geprüft');
+  if (aggregate.workInstruction.priceLabelPrintRequired && !p.labelsPrinted) {
+    reasons.push('Preisetiketten noch nicht gedruckt');
   }
-  if (
-    requiresQuantityCheck(aggregate.workInstruction) &&
-    !allQuantitiesChecked(p, aggregate.positions)
-  ) {
+  if (requiresQuantityCheck(aggregate.workInstruction) && !allQuantitiesChecked(p, aggregate)) {
     reasons.push('Mindest-Stückzahlkontrolle offen');
-  }
-  if (aggregate.workInstruction.boxLabelRequired && !allBoxesSealed(p)) {
-    reasons.push('Nicht alle Boxen verplombt');
   }
   if (openIssues > 0) {
     reasons.push('Offenes Problem – erst klären');
@@ -113,110 +81,28 @@ export function canCompleteCase(
 
 // --- Immutable transitions ------------------------------------------------
 
-export const confirmPickup = (p: CaseProgress): CaseProgress => ({
-  ...p,
-  pickupConfirmed: true,
-  step: 'prepare',
-});
-
+/** Beleg-level price label print — the §G.2 step that must precede opening the carton. */
 export const markLabelsPrinted = (p: CaseProgress): CaseProgress => ({ ...p, labelsPrinted: true });
 
-/** Vorbereitung step: carton opened (only after labels are printed, §G.2). */
+/** Carton opened (callers gate this on {@link canOpenCarton}). */
 export const openCarton = (p: CaseProgress): CaseProgress => ({ ...p, cartonOpened: true });
 
-export const markPrepared = (p: CaseProgress): CaseProgress => ({
-  ...p,
-  prepared: true,
-  step: 'positions',
-});
-
-export function confirmPosition(p: CaseProgress, positionId: string): CaseProgress {
-  if (p.confirmedPositionIds.includes(positionId)) return p;
-  return { ...p, confirmedPositionIds: [...p.confirmedPositionIds, positionId] };
-}
-
+/** Confirm the minimum quantity for one position (idempotent). */
 export function checkQuantity(p: CaseProgress, positionId: string): CaseProgress {
   if (p.quantityCheckedPositionIds.includes(positionId)) return p;
   return { ...p, quantityCheckedPositionIds: [...p.quantityCheckedPositionIds, positionId] };
 }
 
-export const enterSort = (p: CaseProgress): CaseProgress => ({ ...p, step: 'sort' });
-export const enterBoxing = (p: CaseProgress): CaseProgress => ({ ...p, step: 'boxing' });
-export const enterComplete = (p: CaseProgress): CaseProgress => ({ ...p, step: 'complete' });
-
-/** Box-sort step: confirm the engine's position→box mapping, advance to boxing. */
-export const confirmBoxAssignment = (p: CaseProgress): CaseProgress => ({
-  ...p,
-  boxAssignmentConfirmed: true,
-  step: 'boxing',
-});
-
-function mapBox(p: CaseProgress, boxNo: number, fn: (b: BoxProgress) => BoxProgress): CaseProgress {
-  return { ...p, boxes: p.boxes.map((b) => (b.boxNo === boxNo ? fn(b) : b)) };
-}
-
-export const printBoxLabel = (p: CaseProgress, boxNo: number): CaseProgress =>
-  mapBox(p, boxNo, (b) => ({ ...b, labelPrinted: true }));
-export const sealBox = (p: CaseProgress, boxNo: number): CaseProgress =>
-  mapBox(p, boxNo, (b) => ({ ...b, sealed: true }));
-export const putBoxOnConveyor = (p: CaseProgress, boxNo: number): CaseProgress =>
-  mapBox(p, boxNo, (b) => ({ ...b, onConveyor: true }));
-
 export const setZst = (p: CaseProgress): CaseProgress => ({ ...p, zstDone: true });
+
 export const completeCase = (p: CaseProgress): CaseProgress => ({
   ...p,
   step: 'done',
   partial: false,
 });
+
 export const partialComplete = (p: CaseProgress): CaseProgress => ({
   ...p,
   step: 'done',
   partial: true,
 });
-
-// --- Next Best Action -----------------------------------------------------
-
-export interface NextAction {
-  label: string;
-  step: CaseStep;
-}
-
-/** The single primary action for the current case state (§E.3 Next Best Action). */
-export function nextBestAction(p: CaseProgress, aggregate: CaseAggregate): NextAction {
-  switch (p.step) {
-    case 'pickup':
-      return { label: 'Lagerplatz scannen', step: 'pickup' };
-    case 'prepare':
-      if (!p.labelsPrinted) return { label: 'Etiketten drucken', step: 'prepare' };
-      if (!p.cartonOpened) return { label: 'Karton geöffnet', step: 'prepare' };
-      if (!p.prepared) return { label: 'Sortierung fertig', step: 'prepare' };
-      return { label: 'Positionen prüfen', step: 'positions' };
-    case 'positions': {
-      const next = aggregate.positions.find((pos) => !p.confirmedPositionIds.includes(pos.id));
-      if (next) return { label: `Position ${next.positionNo} prüfen`, step: 'positions' };
-      return { label: 'Boxen sortieren', step: 'sort' };
-    }
-    case 'sort':
-      return { label: 'Sortierung übernehmen', step: 'sort' };
-    case 'boxing': {
-      const nextBox = p.boxes.find((b) => !b.sealed);
-      if (nextBox) return { label: `Box ${nextBox.boxNo} abschließen`, step: 'boxing' };
-      return { label: 'Beleg abschließen', step: 'complete' };
-    }
-    case 'complete':
-      return { label: 'ZST setzen und abschließen', step: 'complete' };
-    case 'done':
-      return { label: 'Zurück zur Liste', step: 'done' };
-  }
-}
-
-/** First position not yet confirmed (drives the 9.6 single-position view). */
-export function currentPosition(
-  p: CaseProgress,
-  positions: ReceiptPosition[],
-): ReceiptPosition | undefined {
-  return (
-    positions.find((pos) => !p.confirmedPositionIds.includes(pos.id)) ??
-    positions[positions.length - 1]
-  );
-}

@@ -1,8 +1,12 @@
 /**
- * Binds the pure workflow model to the local store and event log. Each action
- * applies an immutable transition, persists it under optimistic locking and
- * appends an audit event to the local log. Reads are live (Dexie useLiveQuery)
- * so the UI always reflects the latest local state.
+ * Binds the pure per-Beleg workflow to the local store and event log. Each
+ * action applies an immutable transition, persists it under optimistic locking
+ * and appends an audit event to the local log; mutating milestones also POST the
+ * matching backend transition (best-effort, non-fatal). Reads are live (Dexie
+ * useLiveQuery) so the UI always reflects the latest local state.
+ *
+ * The flow is the collapsed PROCESS phase: print labels (§G.2) → open carton →
+ * confirm minimum quantity per position → erledigt (ZST) / Teilabschluss.
  */
 import { useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -24,46 +28,25 @@ import {
   persistStartPreparation,
   type IssueInput,
 } from '../data/persist.js';
-import { buildSkipEvent, type SkipInput } from './skip.js';
 import {
   checkQuantity as checkQuantityTx,
   completeCase as completeCaseTx,
-  confirmBoxAssignment as confirmBoxAssignmentTx,
-  confirmPickup as confirmPickupTx,
-  confirmPosition as confirmPositionTx,
-  enterComplete,
   markLabelsPrinted as markLabelsPrintedTx,
-  markPrepared as markPreparedTx,
-  nextBestAction,
   openCarton as openCartonTx,
   partialComplete as partialCompleteTx,
-  printBoxLabel as printBoxLabelTx,
-  putBoxOnConveyor as putBoxOnConveyorTx,
-  sealBox as sealBoxTx,
   setZst as setZstTx,
-  type NextAction,
 } from './workflowModel.js';
 
 export interface CaseFlow {
   loading: boolean;
   aggregate?: CaseAggregate;
   progress?: CaseProgress;
-  nextAction?: NextAction;
-  confirmPickup: (scannedCode?: string) => Promise<void>;
   printLabels: () => Promise<void>;
   openCarton: () => Promise<void>;
-  markPrepared: () => Promise<void>;
-  confirmPosition: (positionId: string) => Promise<void>;
   checkQuantity: (positionId: string) => Promise<void>;
-  confirmBoxAssignment: () => Promise<void>;
-  printBoxLabel: (boxNo: number) => Promise<void>;
-  sealBox: (boxNo: number) => Promise<void>;
-  putBoxOnConveyor: (boxNo: number) => Promise<void>;
-  setZst: () => Promise<void>;
   complete: () => Promise<void>;
   partialComplete: (reason: string) => Promise<void>;
   reportIssue: (input: IssueInput) => Promise<void>;
-  skip: (input: SkipInput) => Promise<void>;
 }
 
 interface EventMeta {
@@ -82,10 +65,10 @@ export function useCaseFlow(caseId: string): CaseFlow {
       transition: (p: CaseProgress) => CaseProgress,
       meta: EventMeta,
       /**
-       * Optional backend persistence run AFTER the local write succeeds. It
-       * returns the server's authoritative version (or undefined offline) which
-       * is reconciled into the local row. A failing POST is non-fatal: the local
-       * state and event log are kept so the action can be retried.
+       * Optional backend persistence run AFTER the local write succeeds. Returns
+       * the server's authoritative version (or undefined offline), reconciled
+       * into the local row. A failing POST is non-fatal: local state and the
+       * event log are kept so the action can be retried.
        */
       persist?: () => Promise<number | undefined>,
     ): Promise<void> => {
@@ -121,30 +104,19 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [caseId],
   );
 
-  const confirmPickup = useCallback(
-    (scannedCode?: string) =>
-      commit(
-        confirmPickupTx,
-        {
-          eventType: 'pickup.location_scanned',
-          entityType: 'case',
-          entityId: caseId,
-          payload: { scannedCode: scannedCode ?? null },
-        },
-        // Mark the case in-progress on the backend (assigned → in_progress).
-        () => persistStartPreparation(caseId),
-      ),
-    [commit, caseId],
-  );
-
   const printLabels = useCallback(
     () =>
-      commit(markLabelsPrintedTx, {
-        eventType: 'print.job_created',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { jobType: 'price_label' },
-      }),
+      commit(
+        markLabelsPrintedTx,
+        {
+          eventType: 'print.job_created',
+          entityType: 'case',
+          entityId: caseId,
+          payload: { jobType: 'price_label' },
+        },
+        // First PROCESS action → mark the case in_progress on the backend.
+        () => persistStartPreparation(caseId),
+      ),
     [commit, caseId],
   );
 
@@ -159,22 +131,6 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [commit, caseId],
   );
 
-  const markPrepared = useCallback(
-    () =>
-      commit(markPreparedTx, { eventType: 'case.started', entityType: 'case', entityId: caseId }),
-    [commit, caseId],
-  );
-
-  const confirmPosition = useCallback(
-    (positionId: string) =>
-      commit((p) => confirmPositionTx(p, positionId), {
-        eventType: 'position.confirmed',
-        entityType: 'position',
-        entityId: positionId,
-      }),
-    [commit, caseId],
-  );
-
   const checkQuantity = useCallback(
     (positionId: string) =>
       commit((p) => checkQuantityTx(p, positionId), {
@@ -182,53 +138,6 @@ export function useCaseFlow(caseId: string): CaseFlow {
         entityType: 'position',
         entityId: positionId,
       }),
-    [commit, caseId],
-  );
-
-  const confirmBoxAssignment = useCallback(
-    () =>
-      commit(confirmBoxAssignmentTx, {
-        eventType: 'case.started',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { step: 'box_assignment_confirmed' },
-      }),
-    [commit, caseId],
-  );
-
-  const printBoxLabel = useCallback(
-    (boxNo: number) =>
-      commit((p) => printBoxLabelTx(p, boxNo), {
-        eventType: 'box.label_printed',
-        entityType: 'transport_box',
-        entityId: `${caseId}-box-${boxNo}`,
-      }),
-    [commit, caseId],
-  );
-
-  const sealBox = useCallback(
-    (boxNo: number) =>
-      commit((p) => sealBoxTx(p, boxNo), {
-        eventType: 'box.sealed',
-        entityType: 'transport_box',
-        entityId: `${caseId}-box-${boxNo}`,
-      }),
-    [commit, caseId],
-  );
-
-  const putBoxOnConveyor = useCallback(
-    (boxNo: number) =>
-      commit((p) => putBoxOnConveyorTx(p, boxNo), {
-        eventType: 'box.sealed',
-        entityType: 'transport_box',
-        entityId: `${caseId}-box-${boxNo}`,
-        payload: { onConveyor: true },
-      }),
-    [commit, caseId],
-  );
-
-  const setZst = useCallback(
-    () => commit(setZstTx, { eventType: 'zst.created', entityType: 'case', entityId: caseId }),
     [commit, caseId],
   );
 
@@ -245,7 +154,7 @@ export function useCaseFlow(caseId: string): CaseFlow {
   const partialComplete = useCallback(
     (reason: string) =>
       commit(
-        (p) => partialCompleteTx(enterComplete(p)),
+        (p) => partialCompleteTx(setZstTx(p)),
         {
           eventType: 'case.partially_completed',
           entityType: 'case',
@@ -257,53 +166,32 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [commit, caseId],
   );
 
-  const reportIssue = useCallback(
-    async (input: IssueInput): Promise<void> => {
-      // Local audit record first, then best-effort server persist (non-fatal).
-      await append(
-        createEventDraft({
-          eventType: 'issue.created',
-          entityType: 'case',
-          entityId: input.caseId,
-          payload: input,
-        }),
-      );
-      try {
-        await persistIssue(input);
-      } catch {
-        // Non-fatal: the local issue record is kept.
-      }
-    },
-    [],
-  );
-
-  const skip = useCallback(
-    async (input: SkipInput): Promise<void> => {
-      const event = buildSkipEvent(input);
-      await append(event);
-    },
-    [],
-  );
+  const reportIssue = useCallback(async (input: IssueInput): Promise<void> => {
+    // Local audit record first, then best-effort server persist (non-fatal).
+    await append(
+      createEventDraft({
+        eventType: 'issue.created',
+        entityType: 'case',
+        entityId: input.caseId,
+        payload: input,
+      }),
+    );
+    try {
+      await persistIssue(input);
+    } catch {
+      // Non-fatal: the local issue record is kept.
+    }
+  }, []);
 
   return {
     loading: aggregate === undefined || progress === undefined,
     aggregate,
     progress,
-    nextAction: aggregate && progress ? nextBestAction(progress, aggregate) : undefined,
-    confirmPickup,
     printLabels,
     openCarton,
-    markPrepared,
-    confirmPosition,
     checkQuantity,
-    confirmBoxAssignment,
-    printBoxLabel,
-    sealBox,
-    putBoxOnConveyor,
-    setZst,
     complete,
     partialComplete,
     reportIssue,
-    skip,
   };
 }

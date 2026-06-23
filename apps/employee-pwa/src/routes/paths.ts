@@ -1,19 +1,17 @@
-/** Central route helpers so screens and Next-Best-Action share one map. */
-import type { CaseStep } from '../db/types.js';
+/** Central route helpers for the two-phase bundle flow (hub → collect / Beleg). */
 
+/** Home hub: bundle overview + COLLECT summary + PROCESS Beleg list. */
 export const TAGESSTART = '/';
 
-export type WorkStep = Exclude<CaseStep, 'done'>;
+/** Consolidated COLLECT pick list for the whole bundle. */
+export const COLLECT = '/collect';
 
-export function caseStepPath(caseId: string, step: WorkStep): string {
-  return `/case/${caseId}/${step}`;
+/** The single per-Beleg PROCESS screen. */
+export function caseProcessPath(caseId: string): string {
+  return `/case/${caseId}`;
 }
 
+/** Problem reporting for a Beleg (scope: position/sku/box/case). */
 export function problemPath(caseId: string): string {
   return `/case/${caseId}/problem`;
-}
-
-/** Maps a workflow step to its route; 'done' returns to the Beleg list (home). */
-export function routeForStep(caseId: string, step: CaseStep): string {
-  return step === 'done' ? TAGESSTART : caseStepPath(caseId, step);
 }

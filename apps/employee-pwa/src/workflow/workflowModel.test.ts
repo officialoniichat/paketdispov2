@@ -2,103 +2,102 @@ import { describe, expect, it } from 'vitest';
 import { exampleAggregate } from '../domain/exampleAssignment.js';
 import {
   canCompleteCase,
+  canOpenCarton,
   checkQuantity,
-  confirmBoxAssignment,
-  confirmPickup,
-  confirmPosition,
+  completeCase,
   initialProgress,
   markLabelsPrinted,
-  markPrepared,
-  nextBestAction,
   openCarton,
-  printBoxLabel,
+  partialComplete,
   requiresQuantityCheck,
   scanMatches,
-  sealBox,
 } from './workflowModel.js';
 
 const agg = exampleAggregate;
 const p0 = initialProgress(agg, '2026-06-15T00:00:00.000Z');
 
-describe('nextBestAction', () => {
-  it('starts at the pickup scan', () => {
-    expect(nextBestAction(p0, agg).label).toBe('Lagerplatz scannen');
-  });
+/** Confirm the minimum quantity for every position of the example Beleg. */
+function checkAll(p = p0) {
+  return agg.positions.reduce((acc, pos) => checkQuantity(acc, pos.id), p);
+}
 
-  it('forces label printing before opening the carton (§9.5)', () => {
-    const afterPickup = confirmPickup(p0);
-    expect(nextBestAction(afterPickup, agg).label).toBe('Etiketten drucken');
-    const afterLabels = markLabelsPrinted(afterPickup);
-    expect(nextBestAction(afterLabels, agg).label).toBe('Karton geöffnet');
-    const afterCarton = openCarton(afterLabels);
-    expect(nextBestAction(afterCarton, agg).label).toBe('Sortierung fertig');
-  });
-
-  it('routes to Boxen sortieren after all positions confirmed', () => {
-    let p = markPrepared(openCarton(markLabelsPrinted(confirmPickup(p0))));
-    for (const pos of agg.positions) {
-      p = checkQuantity(p, pos.id);
-      p = confirmPosition(p, pos.id);
-    }
-    expect(nextBestAction(p, agg).step).toBe('sort');
+describe('initialProgress', () => {
+  it('starts in the process step, nothing done', () => {
+    expect(p0.step).toBe('process');
+    expect(p0.labelsPrinted).toBe(false);
+    expect(p0.cartonOpened).toBe(false);
+    expect(p0.quantityCheckedPositionIds).toEqual([]);
   });
 });
 
-describe('scanMatches', () => {
-  it('matches ignoring case/whitespace', () => {
-    expect(scanMatches(' reg-07 ', 'REG-07')).toBe(true);
-  });
-  it('rejects a different code', () => {
-    expect(scanMatches('REG-09', 'REG-07')).toBe(false);
-  });
-});
-
-describe('confirmBoxAssignment', () => {
-  it('sets the flag and moves to boxing', () => {
-    const next = confirmBoxAssignment({ ...p0, step: 'sort' });
-    expect(next.boxAssignmentConfirmed).toBe(true);
-    expect(next.step).toBe('boxing');
+describe('§G.2 print-before-unpack guardrail', () => {
+  it('blocks opening the carton until the price labels are printed', () => {
+    expect(agg.workInstruction.priceLabelPrintRequired).toBe(true);
+    expect(canOpenCarton(p0, agg.workInstruction)).toBe(false);
+    expect(canOpenCarton(markLabelsPrinted(p0), agg.workInstruction)).toBe(true);
   });
 });
 
-describe('guardrails', () => {
+describe('checkQuantity', () => {
+  it('adds a position id and is idempotent', () => {
+    const once = checkQuantity(p0, 'pos-3656860-1');
+    const twice = checkQuantity(once, 'pos-3656860-1');
+    expect(twice.quantityCheckedPositionIds).toEqual(['pos-3656860-1']);
+  });
+});
+
+describe('minimum-quantity guardrail', () => {
   it('always requires a quantity check, even for quantity_only ("Prüfung = Nein")', () => {
     expect(agg.workInstruction.goodsReceiptCheckMode).toBe('quantity_only');
     expect(requiresQuantityCheck(agg.workInstruction)).toBe(true);
   });
+});
 
-  it('blocks completion until positions, quantities and boxes are done', () => {
-    let p = markPrepared(openCarton(markLabelsPrinted(confirmPickup(p0))));
-
-    for (const pos of agg.positions) p = confirmPosition(p, pos.id);
-    let gate = canCompleteCase(p, agg, 0);
+describe('canCompleteCase', () => {
+  it('blocks while the price labels are not printed', () => {
+    const gate = canCompleteCase(checkAll(p0), agg, 0);
     expect(gate.ok).toBe(false);
-    expect(gate.reasons.some((r) => r.includes('Stückzahl'))).toBe(true);
-
-    for (const pos of agg.positions) p = checkQuantity(p, pos.id);
-    gate = canCompleteCase(p, agg, 0);
-    expect(gate.ok).toBe(false); // boxes not sealed yet
-
-    agg.boxTargets.forEach((_, i) => {
-      p = printBoxLabel(p, i + 1);
-      p = sealBox(p, i + 1);
-    });
-    gate = canCompleteCase(p, agg, 0);
-    expect(gate.ok).toBe(true);
+    expect(gate.reasons.some((r) => r.includes('Preisetiketten'))).toBe(true);
   });
 
-  it('blocks completion while a problem is open', () => {
-    let p = markPrepared(openCarton(markLabelsPrinted(confirmPickup(p0))));
-    for (const pos of agg.positions) {
-      p = confirmPosition(p, pos.id);
-      p = checkQuantity(p, pos.id);
-    }
-    agg.boxTargets.forEach((_, i) => {
-      p = printBoxLabel(p, i + 1);
-      p = sealBox(p, i + 1);
-    });
-    const gate = canCompleteCase(p, agg, 1);
+  it('blocks while a minimum-quantity check is open', () => {
+    const gate = canCompleteCase(markLabelsPrinted(p0), agg, 0);
+    expect(gate.ok).toBe(false);
+    expect(gate.reasons.some((r) => r.includes('Stückzahl'))).toBe(true);
+  });
+
+  it('blocks while a problem is open', () => {
+    const ready = checkAll(markLabelsPrinted(p0));
+    const gate = canCompleteCase(ready, agg, 1);
     expect(gate.ok).toBe(false);
     expect(gate.reasons).toContain('Offenes Problem – erst klären');
+  });
+
+  it('passes once labels are printed and every quantity is checked (boxing never gates)', () => {
+    const ready = checkAll(openCarton(markLabelsPrinted(p0)));
+    expect(canCompleteCase(ready, agg, 0).ok).toBe(true);
+  });
+});
+
+describe('completion transitions', () => {
+  it('completeCase moves to done, not partial', () => {
+    const done = completeCase(p0);
+    expect(done.step).toBe('done');
+    expect(done.partial).toBe(false);
+  });
+
+  it('partialComplete moves to done and flags partial', () => {
+    const done = partialComplete(p0);
+    expect(done.step).toBe('done');
+    expect(done.partial).toBe(true);
+  });
+});
+
+describe('scanMatches (optional collect scan)', () => {
+  it('matches ignoring case/whitespace', () => {
+    expect(scanMatches(' r27 ', 'R27')).toBe(true);
+  });
+  it('rejects a different code', () => {
+    expect(scanMatches('R28', 'R27')).toBe(false);
   });
 });
