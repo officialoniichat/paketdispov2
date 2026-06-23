@@ -36,6 +36,9 @@ import { DataTable } from '../../components/DataTable.js';
 import { CaseActions } from '../../components/CaseActions.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
+import { fetchEmployees } from '../../data/employees.js';
+import { useSplits } from '../split/SplitProvider.js';
+import { SplitDialog, type SplitDialogBeleg, type SplitDialogEmployee } from '../split/SplitDialog.js';
 
 /** A lifecycle scope = a named set of phases the list can be narrowed to. */
 type Scope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'alle';
@@ -98,6 +101,23 @@ export function BelegListPage(): JSX.Element {
     queryFn: fetchBelegeList,
   });
   const allRows = query.data ?? [];
+
+  // --- Manual Beleg-Split (§8.4): pick the case, open the dialog, record the split ---
+  const { recordSplit } = useSplits();
+  const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
+  const [splitDone, setSplitDone] = useState<string | null>(null);
+  const employeesQuery = useQuery({
+    queryKey: ['admin', 'employees', 'split'],
+    queryFn: () => fetchEmployees(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const splitEmployees = useMemo<SplitDialogEmployee[]>(
+    () =>
+      (employeesQuery.data?.employees ?? [])
+        .filter((e) => e.active && e.netCapacityToday > 0)
+        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+    [employeesQuery.data],
+  );
 
   // §15.1 Tagesabschluss lives where finished work lives: the Abgeschlossen scope.
   // Exports all completed cases (→ zst_done) and downloads the ZST CSV.
@@ -195,6 +215,7 @@ export function BelegListPage(): JSX.Element {
               }}
               weBelegNo={ctx.row.original.weBelegNo}
               ctx={{ caseId: ctx.row.original.id, store }}
+              onSplit={(caseId) => setSplitCaseId(caseId)}
             />
           </Box>
         ),
@@ -203,11 +224,37 @@ export function BelegListPage(): JSX.Element {
     [store],
   );
 
+  const splitBeleg = useMemo<SplitDialogBeleg | null>(() => {
+    const row = allRows.find((r) => r.id === splitCaseId);
+    if (!row) return null;
+    return {
+      caseId: row.id,
+      weBelegNo: row.weBelegNo,
+      totalQuantity: row.quantity,
+      effortPoints: row.effortPoints,
+      estimatedMinutes: row.minutes,
+    };
+  }, [allRows, splitCaseId]);
+
   return (
     <Stack spacing={2}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
         Belege ({rows.length})
       </Typography>
+
+      {splitDone && (
+        <Alert
+          severity="success"
+          onClose={() => setSplitDone(null)}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
+              Zur Leistung
+            </Button>
+          }
+        >
+          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        </Alert>
+      )}
 
       {query.isError && (
         <Alert
@@ -276,6 +323,17 @@ export function BelegListPage(): JSX.Element {
           emptyText="Keine Belege in diesem Scope."
         />
       )}
+
+      <SplitDialog
+        open={splitBeleg !== null}
+        beleg={splitBeleg}
+        employees={splitEmployees}
+        onConfirm={(input) => {
+          recordSplit(input);
+          setSplitDone(input.weBelegNo);
+        }}
+        onClose={() => setSplitCaseId(null)}
+      />
     </Stack>
   );
 }

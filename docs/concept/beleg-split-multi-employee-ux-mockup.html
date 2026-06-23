@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beleg-Split auf mehrere Mitarbeitende — UX-Mockup</title>
+<style>
+  :root{
+    --brand:#0a3d62; --brand2:#0c2f4a; --brand-light:#3c6e8f; --accent:#e58e26;
+    --surface:#f5f7fa; --raised:#ffffff; --text:#1a2430; --text2:#516170;
+    --border:#d6dde5; --danger:#c62828; --warning:#b26a00; --success:#2e7d32; --info:#1565c0;
+    --r:14px; --mono:ui-monospace,Menlo,"SFMono-Regular",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e7ecf1;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45;-webkit-font-smoothing:antialiased}
+  header.page{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:38px 32px 30px}
+  header.page h1{margin:0 0 6px;font-size:29px;letter-spacing:-.3px}
+  header.page p{margin:2px 0;color:#cddcea;max-width:920px}
+  header.page .meta{margin-top:13px;font-size:13px;color:#9fbdd6}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 32px 60px}
+
+  /* flow strip */
+  .flowmap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--r);padding:15px 18px;margin:0 0 6px}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600}
+  .pill.a{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .pill.b{background:#fff;color:var(--brand);border-color:var(--brand)}
+  .pill.warn{background:var(--warning);color:#fff;border-color:var(--warning)}
+  .pill.ok{background:var(--success);color:#fff;border-color:var(--success)}
+  .arrow{color:var(--text2);font-weight:700}
+  .flow-note{font-size:12.5px;color:var(--text2);margin:0 0 26px}
+  .flow-note b{color:var(--danger)}
+
+  h2.sec{font-size:18px;margin:40px 0 4px;padding-bottom:7px;border-bottom:3px solid var(--accent);display:inline-block}
+  .sec-intro{color:var(--text2);margin:8px 0 18px;max-width:900px;font-size:14px}
+
+  /* app shell */
+  .app{background:var(--raised);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(10,30,50,.16)}
+  .appbar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  .appbar .logo{font-weight:800;letter-spacing:.4px}
+  .appbar .crumbs{font-size:13px;color:#bcd3e6}
+  .appbar .who{margin-left:auto;font-size:13px;color:#bcd3e6;display:flex;align-items:center;gap:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#3a2400;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+  .tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 14px}
+  .tab{padding:13px 16px;font-size:14px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;cursor:default}
+  .tab.on{color:var(--brand);border-bottom-color:var(--accent);font-weight:800}
+
+  /* cockpit board */
+  .board{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:0;background:var(--surface)}
+  .lane{padding:18px 18px 24px;border-right:1px solid var(--border);min-height:340px}
+  .lane:last-child{border-right:none}
+  .lane h4{margin:0 0 4px;font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);display:flex;align-items:center;gap:8px}
+  .lane .cnt{background:var(--border);color:var(--text2);border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
+  .lane.flag{background:#fff8ef}
+  .lane.flag h4{color:var(--warning)}
+  .lane.flag .cnt{background:var(--warning);color:#fff}
+  .lane-note{font-size:11.5px;color:var(--text2);margin:0 0 14px}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:11px;box-shadow:0 2px 5px rgba(10,30,50,.05)}
+  .card .id{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--brand)}
+  .card .sub{font-size:12px;color:var(--text2);margin:3px 0 0}
+  .card.flagged{border-left:4px solid var(--warning);border-color:#e9c79a}
+  .tagrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .tag{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+  .tag.big{background:#fdeede;color:#8a4a00;border-color:#f0cfa3}
+  .tag.qty{background:#eef4fb;color:var(--brand);border-color:#c7ddf2}
+
+  /* effort vs capacity bar */
+  .evc{margin:11px 0 2px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+  .evc .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text2);margin-bottom:6px}
+  .evc .lbl b{color:var(--danger)}
+  .bar{height:13px;border-radius:7px;background:#e6ebf1;position:relative;overflow:hidden}
+  .bar .cap{position:absolute;left:0;top:0;bottom:0;width:28%;background:var(--success);opacity:.85}
+  .bar .capline{position:absolute;left:28%;top:-3px;bottom:-3px;width:2px;background:var(--brand)}
+  .bar .need{position:absolute;left:0;top:0;bottom:0;width:100%;background:repeating-linear-gradient(45deg,rgba(198,40,40,.25),rgba(198,40,40,.25) 6px,rgba(198,40,40,.12) 6px,rgba(198,40,40,.12) 12px);border-radius:7px}
+  .evc .cap-cap{font-size:11px;color:var(--text2);margin-top:6px;display:flex;justify-content:space-between}
+  .evc .cap-cap .ok{color:var(--success);font-weight:800}
+
+  .reason{font-size:12px;color:var(--warning);background:#fff3e2;border:1px solid #f0d4a8;border-radius:8px;padding:7px 10px;margin-top:10px;display:flex;gap:7px;align-items:flex-start}
+
+  .btnrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btn{border:none;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:800;cursor:default}
+  .btn.primary{background:var(--accent);color:#3a2400}
+  .btn.brand{background:var(--brand);color:#fff}
+  .btn.ghost{background:#fff;border:1.5px solid var(--border);color:var(--text)}
+  .btn.sm{padding:7px 11px;font-size:12px}
+  .btn.block{display:block;width:100%;text-align:center}
+
+  /* generic mini card list inside lanes */
+  .mini{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:9px;display:flex;align-items:center;gap:10px}
+  .mini .id{font-family:var(--mono);font-size:12.5px;font-weight:700}
+  .mini .who{margin-left:auto;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+  .mini .av{width:22px;height:22px;border-radius:50%;background:var(--brand-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10px}
+
+  /* ===== split dialog ===== */
+  .modalstage{background:#dfe6ee;border:1px solid var(--border);border-radius:18px;padding:34px 26px;display:flex;justify-content:center}
+  .modal{width:760px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(10,30,50,.32);overflow:hidden}
+  .modal .mh{background:var(--brand);color:#fff;padding:16px 22px;display:flex;align-items:center;gap:12px}
+  .modal .mh h3{margin:0;font-size:17px}
+  .modal .mh .mid{font-family:var(--mono);font-size:12px;color:#bcd3e6;margin-left:auto}
+  .modal .mb{padding:20px 22px}
+
+  .seg-wrap{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+  .seg-grp label{display:block;font-size:11.5px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px}
+  .seg span{padding:7px 14px;font-size:13px;font-weight:700;color:var(--text2);border-radius:8px;cursor:default}
+  .seg span.on{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(10,30,50,.18)}
+  .seg.cap span.on{background:var(--accent);color:#3a2400}
+
+  .remain{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:16px}
+  .remain .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}
+  .remain .top b{font-family:var(--mono)}
+  .qbar{height:14px;border-radius:7px;background:#e6ebf1;display:flex;overflow:hidden}
+  .qbar i{display:block;height:100%}
+  .qbar .s1{width:50%;background:var(--brand)}
+  .qbar .s2{width:33.3%;background:var(--brand-light)}
+  .qbar .s3{width:16.7%;background:var(--accent)}
+  .remain .leg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text2);margin-top:8px}
+  .remain .leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .ok-row{font-size:12px;color:var(--success);font-weight:800;margin-top:8px}
+
+  table.shares{width:100%;border-collapse:collapse;font-size:13px}
+  table.shares th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);padding:6px 8px;border-bottom:1px solid var(--border)}
+  table.shares td{padding:9px 8px;border-bottom:1px solid var(--surface);vertical-align:middle}
+  table.shares .emp{display:flex;align-items:center;gap:9px;font-weight:700}
+  table.shares .av{width:26px;height:26px;border-radius:50%;background:var(--brand-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px}
+  .qin{width:84px;background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:7px 9px;font-family:var(--mono);font-size:13px;font-weight:700;text-align:right;color:var(--text)}
+  .fit{font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .fit.ok{background:#e9f6ea;color:#1f5a23}
+  .fit.tight{background:#fdeede;color:#8a4a00}
+  .eff{font-family:var(--mono);font-size:12.5px;color:var(--text2)}
+  .xrow{color:var(--text2);font-weight:800;font-size:15px;text-align:center;cursor:default}
+  .addemp{font-size:12.5px;font-weight:800;color:var(--brand);border:1.5px dashed var(--border);background:#fff;border-radius:9px;padding:8px 12px;margin-top:6px;display:inline-block}
+
+  .field{margin:16px 0 0}
+  .field label{display:block;font-size:11.5px;font-weight:800;color:var(--text2);margin:0 0 6px;text-transform:uppercase;letter-spacing:.4px}
+  .field label .req{color:var(--danger)}
+  .inp{width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;color:var(--text);font-family:inherit}
+  .rsugg{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .rsugg span{font-size:11.5px;font-weight:700;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px 10px}
+  .mf{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;background:var(--surface);border-top:1px solid var(--border)}
+
+  /* ===== completion / leistung ===== */
+  .panelhead{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);border-bottom:none;border-radius:14px 14px 0 0;padding:15px 18px}
+  .panelhead .id{font-family:var(--mono);font-weight:800;color:var(--brand);font-size:15px}
+  .panelhead .st{margin-left:auto;font-size:12px;font-weight:800;border-radius:999px;padding:4px 12px;background:#e9f6ea;color:#1f5a23}
+  table.leistung{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--border);border-radius:0 0 14px 14px;overflow:hidden}
+  table.leistung th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);padding:11px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+  table.leistung td{padding:12px 16px;border-bottom:1px solid var(--surface)}
+  table.leistung td.num,table.leistung th.num{text-align:right;font-family:var(--mono)}
+  table.leistung .emp{display:flex;align-items:center;gap:9px;font-weight:700}
+  table.leistung .av{width:25px;height:25px;border-radius:50%;background:var(--brand-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px}
+  table.leistung tr.sum td{background:#eef4fb;font-weight:800;border-top:2px solid var(--brand);color:var(--brand)}
+  .modepill{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+  .modepill.g{background:#e7f0fb;color:#0d3c70;border-color:#c7ddf2}
+
+  .csvbox{margin-top:18px;background:#0e2233;border-radius:12px;padding:0;overflow:hidden;border:1px solid #0a1a28}
+  .csvbox .ch{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0a1a28;color:#bcd3e6;font-size:12px}
+  .csvbox .ch .fn{font-family:var(--mono);font-weight:700;color:#fff}
+  .csvbox .ch .dl{margin-left:auto;background:var(--accent);color:#3a2400;border-radius:8px;padding:5px 11px;font-size:11.5px;font-weight:800}
+  .csvbox pre{margin:0;padding:14px;color:#d7e6f2;font-family:var(--mono);font-size:12px;line-height:1.7;overflow-x:auto}
+  .csvbox pre .h{color:#7fb2da}
+  .csvbox pre .s{color:#e9b277}
+
+  /* ===== settings ===== */
+  .content{display:grid;grid-template-columns:1.3fr 1fr;gap:0;background:var(--surface)}
+  .col{padding:24px 26px}
+  .col.left{border-right:1px solid var(--border)}
+  .titlerow{display:flex;align-items:center;gap:12px;margin:0 0 4px}
+  .titlerow h3{margin:0;font-size:17px}
+  .desc{font-size:13px;color:var(--text2);margin:2px 0 18px}
+  .setrow{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .setrow .k{font-size:13.5px;font-weight:800;display:flex;align-items:center;gap:9px}
+  .setrow .d{font-size:12px;color:var(--text2);margin:5px 0 10px}
+  .setrow .ctl{display:flex;align-items:center;gap:10px}
+  .num{width:110px;background:#fff;border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;font-family:var(--mono);font-size:13px;font-weight:700;text-align:right}
+  .unit{font-size:12.5px;color:var(--text2)}
+  .sw{width:46px;height:26px;border-radius:999px;background:var(--success);position:relative;flex-shrink:0}
+  .sw.off{background:#c2ccd6}
+  .sw::after{content:"";position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);right:3px}
+  .sw.off::after{right:auto;left:3px}
+  .auto{font-size:11.5px;font-weight:700;color:var(--info);background:#e7f0fb;border:1px solid #c7ddf2;border-radius:999px;padding:3px 9px}
+
+  .alert{border-radius:10px;padding:11px 13px;font-size:12.5px;display:flex;gap:9px;align-items:flex-start;margin-top:14px}
+  .a-ok{background:#e9f6ea;color:#1f5a23}
+  .a-info{background:#e7f0fb;color:#0d3c70}
+  .a-warn{background:#fff3e2;color:#8a4a00}
+
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:22px}
+  .lg{background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .lg b{color:var(--brand);font-size:13.5px} .lg p{margin:5px 0 0;font-size:12.5px;color:var(--text2)}
+  .footnote{margin-top:30px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:14px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Beleg-Split auf mehrere Mitarbeitende — UX-Mockup</h1>
+  <p>Teamlead-Cockpit. Belege, die <b style="color:#fff">rechnerisch in keiner Schicht</b> bearbeitbar sind (oder über dem
+     Mengen-Hardcut liegen), nimmt die Engine aus der Automatik und markiert sie als <b style="color:#fff">manuell zuteilen</b>.
+     Der Teamlead teilt sie gezielt auf N Mitarbeitende auf — Leistung <b style="color:#fff">getrennt</b> oder <b style="color:#fff">anteilig</b>.</p>
+  <div class="meta">Statisches Mockup · begleitet <code>docs/concept/beleg-split-multi-employee-concept.md</code> · 2026-06-24</div>
+</header>
+
+<div class="wrap">
+
+  <!-- flow strip -->
+  <div class="flowmap">
+    <span class="pill a">Beleg = ready</span><span class="arrow">→</span>
+    <span class="pill b">Engine rechnet Aufwand</span><span class="arrow">→</span>
+    <span class="pill warn">Aufwand &gt; größte Schicht</span><span class="arrow">→</span>
+    <span class="pill warn">manuell zuteilen</span><span class="arrow">→</span>
+    <span class="pill b">Teamlead splittet (N Anteile)</span><span class="arrow">→</span>
+    <span class="pill ok">je Anteil 1 ZST-Leistung</span>
+  </div>
+  <p class="flow-note"><b>Die Engine splittet nie selbst.</b> Sie markiert und schlägt einen gleichmäßigen N-Wege-Split vor;
+     bestätigt wird im Cockpit — mit Pflicht-Grund (Audit, gleiche Familie wie Parken/Entziehen).</p>
+
+  <!-- =================== 1. COCKPIT =================== -->
+  <h2 class="sec">1 · Cockpit — markierter Beleg „manuell zuteilen"</h2>
+  <p class="sec-intro">Eine eigene Swimlane sammelt Belege, die die Automatik bewusst ausgelassen hat. Jede Karte nennt den
+     Grund und stellt den <b>gerechneten Aufwand</b> der <b>größten verfügbaren Schicht</b> gegenüber.</p>
+
+  <div class="app">
+    <div class="appbar">
+      <span class="logo">L&amp;T · Dispo</span>
+      <span class="crumbs">Teamlead / Belegverteilung</span>
+      <span class="who"><span>Teamlead</span><span class="avatar">TL</span></span>
+    </div>
+    <div class="tabs">
+      <div class="tab on">Belegverteilung</div>
+      <div class="tab">Mitarbeiter-Last</div>
+      <div class="tab">Historie</div>
+      <div class="tab">Regeln</div>
+    </div>
+
+    <div class="board">
+      <!-- FLAG LANE -->
+      <div class="lane flag">
+        <h4>⚠ Manuell zuteilen <span class="cnt">2</span></h4>
+        <div class="lane-note">Von der Automatik ausgelassen — Teamlead-Entscheid nötig.</div>
+
+        <div class="card flagged">
+          <div class="id">WE-2026-000412</div>
+          <div class="sub">Koffer-Sendung · 10 Positionen · Handling: sperrig</div>
+          <div class="tagrow">
+            <span class="tag qty">3.000 Teile</span>
+            <span class="tag big">≈ 23,0 h Aufwand</span>
+            <span class="tag">Bereich: Fläche</span>
+          </div>
+
+          <div class="evc">
+            <div class="lbl"><span>Aufwand vs. größte Schicht</span><b>1.382 min</b></div>
+            <div class="bar">
+              <div class="need"></div>
+              <div class="cap"></div>
+              <div class="capline"></div>
+            </div>
+            <div class="cap-cap">
+              <span><span style="color:var(--success);font-weight:800">▮</span> Schicht 390 min</span>
+              <span>passt <b style="color:var(--danger)">3,5×</b> nicht</span>
+            </div>
+          </div>
+
+          <div class="reason">
+            <span>⚠</span>
+            <div><b>Grund: rechnerischer Ausschluss.</b> 1.382 min &gt; 390 min (größte aktive Schicht).
+                 Engine-Vorschlag: <b>4 Mitarbeitende</b> (≈ 346 min je Anteil).</div>
+          </div>
+
+          <div class="btnrow">
+            <button class="btn primary block">▦ Aufteilen …</button>
+          </div>
+        </div>
+
+        <div class="card flagged">
+          <div class="id">WE-2026-000418</div>
+          <div class="sub">Flachware · 1 Position · gleiche Größenspanne</div>
+          <div class="tagrow">
+            <span class="tag qty">1.150 Teile</span>
+            <span class="tag big">Mengen-Hardcut</span>
+          </div>
+          <div class="reason">
+            <span>⚠</span>
+            <div><b>Grund: Mengen-Hardcut.</b> 1.150 &gt; 800 Stück (Schwelle). Engine-Vorschlag: <b>2 Mitarbeitende</b>.</div>
+          </div>
+          <div class="btnrow">
+            <button class="btn primary block">▦ Aufteilen …</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTO QUEUE -->
+      <div class="lane">
+        <h4>Automatik-Pool <span class="cnt">14</span></h4>
+        <div class="lane-note">Normale Belege — 1 Beleg → 1 Bundle.</div>
+        <div class="mini"><span class="id">WE-…398</span><span class="who">280 Teile</span></div>
+        <div class="mini"><span class="id">WE-…401</span><span class="who">95 Teile</span></div>
+        <div class="mini"><span class="id">WE-…403</span><span class="who">altf. · Prio</span></div>
+        <div class="mini"><span class="id">WE-…405</span><span class="who">altf.</span></div>
+        <div class="mini"><span class="id">WE-…409</span><span class="who">altf.</span></div>
+      </div>
+
+      <!-- ASSIGNED -->
+      <div class="lane">
+        <h4>Zugeteilt <span class="cnt">9</span></h4>
+        <div class="lane-note">Inkl. bereits gesplitteter Anteile.</div>
+        <div class="mini"><span class="id">WE-…388</span><span class="who"><span class="av">JR</span>J. Reuter</span></div>
+        <div class="mini"><span class="id">WE-…390</span><span class="who"><span class="av">SM</span>S. May</span></div>
+        <div class="mini" style="border-left:3px solid var(--accent)">
+          <span class="id">WE-…412 · A</span><span class="who"><span class="av">AK</span>1.000 Tl.</span>
+        </div>
+        <div class="mini" style="border-left:3px solid var(--accent)">
+          <span class="id">WE-…412 · B</span><span class="who"><span class="av">MB</span>1.000 Tl.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== 2. SPLIT DIALOG =================== -->
+  <h2 class="sec">2 · Aufteilen-Dialog</h2>
+  <p class="sec-intro">Modus wählen, Anteile vergeben, live Restmenge + Pro-Anteil-Aufwand/Passung sehen. Teilaufteilung mit
+     späterem Nachfüllen ist erlaubt; ein Pflicht-Grund schließt den Audit-Eintrag ab.</p>
+
+  <div class="modalstage">
+    <div class="modal">
+      <div class="mh">
+        <span>▦</span><h3>Beleg aufteilen</h3>
+        <span class="mid">WE-2026-000412 · 3.000 Teile · ≈ 23,0 h</span>
+      </div>
+      <div class="mb">
+
+        <div class="seg-wrap">
+          <div class="seg-grp">
+            <label>Aufteilen nach</label>
+            <div class="seg"><span class="on">Menge</span><span>Position</span></div>
+          </div>
+          <div class="seg-grp">
+            <label>Leistung erfassen</label>
+            <div class="seg cap"><span class="on">getrennt</span><span>anteilig</span></div>
+          </div>
+          <div class="seg-grp">
+            <label>Engine-Vorschlag</label>
+            <div class="seg"><span>2</span><span>3</span><span class="on">4</span><span>5</span></div>
+          </div>
+        </div>
+
+        <div class="remain">
+          <div class="top"><span>Verteilt</span><span><b>2.500</b> / 3.000 Teile · Rest <b>500</b></span></div>
+          <div class="qbar"><i class="s1"></i><i class="s2"></i><i class="s3"></i><i style="width:16.7%;background:#e6ebf1"></i></div>
+          <div class="leg">
+            <span><i style="background:var(--brand)"></i>A. Köhler 1.000</span>
+            <span><i style="background:var(--brand-light)"></i>M. Brandt 1.000</span>
+            <span><i style="background:var(--accent)"></i>L. Vogt 500</span>
+            <span><i style="background:#e6ebf1"></i>offen 500</span>
+          </div>
+          <div class="ok-row">✓ Summe ≤ Gesamtmenge — Teilaufteilung erlaubt, Rest bleibt als Teil-Beleg offen.</div>
+        </div>
+
+        <table class="shares">
+          <thead>
+            <tr><th>Mitarbeiter:in</th><th>Menge</th><th>Aufwand</th><th>Passung Schicht</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="emp"><span class="av">AK</span>A. Köhler</div></td>
+              <td><input class="qin" value="1.000"></td>
+              <td class="eff">≈ 461 min</td>
+              <td><span class="fit ok">passt · 390/461 ⚠</span></td>
+              <td class="xrow">✕</td>
+            </tr>
+            <tr>
+              <td><div class="emp"><span class="av">MB</span>M. Brandt</div></td>
+              <td><input class="qin" value="1.000"></td>
+              <td class="eff">≈ 461 min</td>
+              <td><span class="fit tight">eng · 2. Tag</span></td>
+              <td class="xrow">✕</td>
+            </tr>
+            <tr>
+              <td><div class="emp"><span class="av">LV</span>L. Vogt</div></td>
+              <td><input class="qin" value="500"></td>
+              <td class="eff">≈ 234 min</td>
+              <td><span class="fit ok">passt</span></td>
+              <td class="xrow">✕</td>
+            </tr>
+          </tbody>
+        </table>
+        <span class="addemp">+ Mitarbeiter:in hinzufügen</span>
+
+        <div class="field">
+          <label>Grund <span class="req">*</span> <span style="font-weight:600;text-transform:none;letter-spacing:0">(pflicht — Audit)</span></label>
+          <input class="inp" value="Großmenge Koffer — auf Frühschicht-Team verteilt">
+          <div class="rsugg">
+            <span>Mengenvolumen zu groß</span><span>Koffer / sperrig</span><span>Verladetag heute</span><span>Schicht reicht nicht</span>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn ghost">Abbrechen</button>
+        <button class="btn primary">Aufteilen bestätigen · 3 Anteile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== 3. COMPLETION / LEISTUNG =================== -->
+  <h2 class="sec">3 · Abschluss &amp; Leistung</h2>
+  <p class="sec-intro">Nach Bearbeitung: kombinierte Beleg-Leistung plus jede Mitarbeiter-Leistung einzeln. Der ZST-/CSV-Export
+     zeigt <b>eine Zeile je Anteil</b> + eine als Aggregat gekennzeichnete Summenzeile.</p>
+
+  <div class="panelhead">
+    <span class="id">WE-2026-000412</span>
+    <span style="font-size:12.5px;color:var(--text2)">Koffer-Sendung · 3.000 Teile · 3 Anteile · getrennt erfasst</span>
+    <span class="st">✓ abgeschlossen</span>
+  </div>
+  <table class="leistung">
+    <thead>
+      <tr><th>Mitarbeiter:in</th><th>Erfassung</th><th class="num">Menge (ist)</th><th class="num">Anteil</th><th class="num">Aufwandspunkte</th><th class="num">Dauer</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><div class="emp"><span class="av">AK</span>A. Köhler</div></td>
+        <td><span class="modepill g">getrennt</span></td>
+        <td class="num">1.500</td><td class="num">50,0 %</td><td class="num">691,0</td><td class="num">11,5 h</td>
+      </tr>
+      <tr>
+        <td><div class="emp"><span class="av">MB</span>M. Brandt</div></td>
+        <td><span class="modepill g">getrennt</span></td>
+        <td class="num">1.000</td><td class="num">33,3 %</td><td class="num">460,7</td><td class="num">7,7 h</td>
+      </tr>
+      <tr>
+        <td><div class="emp"><span class="av">LV</span>L. Vogt</div></td>
+        <td><span class="modepill g">getrennt</span></td>
+        <td class="num">500</td><td class="num">16,7 %</td><td class="num">230,3</td><td class="num">3,8 h</td>
+      </tr>
+      <tr class="sum">
+        <td>Beleg gesamt (Aggregat)</td>
+        <td></td><td class="num">3.000</td><td class="num">100 %</td><td class="num">1.382,0</td><td class="num">23,0 h</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="csvbox">
+    <div class="ch"><span>⤓</span><span class="fn">zst_WE-2026-000412.csv</span><span class="dl">CSV exportieren</span></div>
+    <pre><span class="h">caseId;weBelegNo;employeeId;captureMode;sharePct;completedQty;effortPoints;completedAt;rowType</span>
+WE-2026-000412;WE-2026-000412;<span class="s">emp-ak</span>;getrennt;50.0;1500;691.0;2026-06-24T14:21Z;share
+WE-2026-000412;WE-2026-000412;<span class="s">emp-mb</span>;getrennt;33.3;1000;460.7;2026-06-24T15:48Z;share
+WE-2026-000412;WE-2026-000412;<span class="s">emp-lv</span>;getrennt;16.7;500;230.3;2026-06-24T13:55Z;share
+WE-2026-000412;WE-2026-000412;<span class="s">—</span>;aggregate;100.0;3000;1382.0;2026-06-24T15:48Z;<span class="s">case_total</span></pre>
+  </div>
+
+  <div class="alert a-info"><span>ⓘ</span>
+    <div><b>getrennt vs. anteilig:</b> hier <b>getrennt</b> — jede Menge ist real gemessen, Aufwand pro Anteil neu gerechnet.
+         Bei <b>anteilig</b> wäre <code>completedQty</code> die geplante Menge und <code>effortPoints</code> der nach Anteil
+         dividierte Gesamtaufwand (1.382). Die <code>case_total</code>-Zeile ist als Aggregat markiert und wird nicht als
+         zusätzliche Leistung gewertet.</div>
+  </div>
+
+  <!-- =================== 4. SETTINGS / HARDCUT =================== -->
+  <h2 class="sec">4 · Einstellung — Schwellen für „manuell zuteilen"</h2>
+  <p class="sec-intro">Tab „Regeln". Beide Regeln münden in dieselbe Markierung. Der rechnerische Ausschluss ist Primär;
+     der Mengen-Hardcut ist der explizite, harte Override.</p>
+
+  <div class="app">
+    <div class="appbar">
+      <span class="logo">L&amp;T · Dispo</span>
+      <span class="crumbs">Admin / Einstellungen / Regeln</span>
+      <span class="who"><span>Teamlead</span><span class="avatar">TL</span></span>
+    </div>
+    <div class="tabs">
+      <div class="tab on">Regeln</div>
+      <div class="tab">Bereiche</div>
+      <div class="tab">Mitarbeiter</div>
+      <div class="tab">Integrationen</div>
+    </div>
+
+    <div class="content">
+      <div class="col left">
+        <div class="titlerow"><h3>Belegverteilung — Hardcut &amp; Ausschluss</h3></div>
+        <div class="desc">Ab wann ein Beleg aus der Automatik genommen und dem Teamlead zur manuellen Aufteilung vorgelegt wird.</div>
+
+        <div class="setrow">
+          <div class="k">Rechnerischer Ausschluss <span class="auto">Primär</span></div>
+          <div class="d">Beleg wird markiert, wenn der gerechnete Aufwand die <b>größte aktive Schicht</b> übersteigt
+              (erfasst auch Handling/Sicherung, nicht nur Stückzahl).</div>
+          <div class="ctl">
+            <span class="sw"></span>
+            <span class="unit">aktiv · Deckel =</span>
+            <input class="num" value="auto">
+            <span class="unit">min &nbsp;<span class="auto">= größte Schicht (390)</span></span>
+          </div>
+        </div>
+
+        <div class="setrow">
+          <div class="k">Mengen-Hardcut <span style="font-size:11px;font-weight:700;color:var(--warning)">Override</span></div>
+          <div class="d">Unabhängig vom Aufwand: ab dieser Stückzahl <b>immer</b> manuell. Harter, vorhersehbarer Riegel.</div>
+          <div class="ctl">
+            <span class="sw"></span>
+            <span class="unit">aktiv ab</span>
+            <input class="num" value="800">
+            <span class="unit">Stück</span>
+          </div>
+        </div>
+
+        <div class="setrow">
+          <div class="k">Engine-Split-Vorschlag</div>
+          <div class="d">Vorgeschlagene Anzahl Mitarbeitende = Aufwand ÷ Schicht-Deckel (aufgerundet). Nur Vorschlag.</div>
+          <div class="ctl">
+            <span class="sw"></span>
+            <span class="unit">Vorschlag anzeigen · niemals automatisch aufteilen</span>
+          </div>
+        </div>
+
+        <div class="btnrow"><button class="btn primary">Speichern</button><button class="btn ghost">Zurücksetzen</button></div>
+      </div>
+
+      <div class="col">
+        <div class="alert a-warn"><span>⚠</span>
+          <div><b>Greift heute:</b> 1 Beleg über Aufwands-Deckel · 1 Beleg über Mengen-Hardcut → beide in „manuell zuteilen".</div>
+        </div>
+        <div class="alert a-info"><span>ⓘ</span>
+          <div>Schwellen liegen in der Engine-Config (gleiche Stelle wie <code>targetBundleMinutes</code>) — Pflege durch
+               Teamlead/Admin, kein Code-Deploy.</div>
+        </div>
+        <div class="alert a-ok"><span>✓</span>
+          <div>Die Automatik bleibt deterministisch (&lt; 5 s). Gesplittet wird ausschließlich manuell, mit Pflicht-Grund im Audit.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- legend -->
+  <h2 class="sec">Lesehilfe</h2>
+  <div class="legend">
+    <div class="lg"><b>CaseShare</b><p>Neue Teil-Einheit unter dem Beleg: caseId + employeeId + Menge/Positionen + Erfassungsmodus. Der Beleg bleibt die Klammer.</p></div>
+    <div class="lg"><b>getrennt</b><p>Jeder Anteil real gemessen → eigener ZstRecord, Aufwand aus echter Teilmenge gerechnet.</p></div>
+    <div class="lg"><b>anteilig</b><p>Gesamtaufwand strikt nach Mengenanteil dividiert. Einfach, summentreu, minimal ungenau beim Fix-Overhead.</p></div>
+    <div class="lg"><b>requires_manual_split</b><p>Neuer Engine-Grund (computed_effort | quantity_hardcut). Eine Swimlane, zwei Auslöser.</p></div>
+  </div>
+
+  <p class="footnote">Statisches Konzept-Mockup. Keine Live-Daten, keine echten Endpunkte. Belegnummern, Namen und Mengen sind synthetisch.
+     Balken-/Prozentwerte illustrativ, gerechnet nach der Aufwandsformel aus <code>effort-score.ts</code> (Beispiel im Konzept §2.3).</p>
+</div>
+</body>
+</html>

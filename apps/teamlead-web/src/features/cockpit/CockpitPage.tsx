@@ -75,7 +75,6 @@ export function CockpitPage(): JSX.Element {
   // unassignable, so don't re-trigger until a new batch grows the pool again).
   useEffect(() => {
     handledRef.current = freeOpen;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recalcResult]);
   useEffect(() => {
     if (!automatik || recalculate.isPending) return;

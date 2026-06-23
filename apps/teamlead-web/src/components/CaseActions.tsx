@@ -31,6 +31,12 @@ export interface CaseActionsProps {
   ctx: CaseActionCtx;
   weBelegNo: string;
   variant?: Variant;
+  /**
+   * Handler for custom actions that open their own dialog instead of the generic
+   * mandatory-reason dialog (currently only `split` → SplitDialog). When absent,
+   * custom actions are not rendered, so surfaces without a split dialog stay clean.
+   */
+  onSplit?: (caseId: string) => void;
 }
 
 /** Map a descriptor tone onto an MUI button/menu color. */
@@ -43,12 +49,20 @@ export function CaseActions({
   ctx,
   weBelegNo,
   variant = 'row',
+  onSplit,
 }: CaseActionsProps): JSX.Element | null {
   const [pending, setPending] = useState<CaseActionDescriptor | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
-  const actions = caseActions(caseLike);
+  // Custom actions (split) only render where a handler is wired; otherwise hide them.
+  const actions = caseActions(caseLike).filter((a) => (a.custom ? onSplit !== undefined : true));
   if (actions.length === 0) return null;
+
+  /** Custom actions open their own dialog; everything else goes through ReasonDialog. */
+  const trigger = (a: CaseActionDescriptor): void => {
+    if (a.custom === 'split') onSplit?.(ctx.caseId);
+    else setPending(a);
+  };
 
   const primary = actions.filter((a) => a.primary);
   const overflow = actions.filter((a) => !a.primary);
@@ -65,7 +79,7 @@ export function CaseActions({
             size={buttonSize}
             variant={buttonVariant}
             color={toneColor(a.tone)}
-            onClick={() => setPending(a)}
+            onClick={() => trigger(a)}
           >
             {a.label}
           </Button>
@@ -89,7 +103,7 @@ export function CaseActions({
             key={a.id}
             onClick={() => {
               setMenuAnchor(null);
-              setPending(a);
+              trigger(a);
             }}
           >
             {a.label}
