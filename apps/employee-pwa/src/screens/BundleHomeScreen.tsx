@@ -16,6 +16,8 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { DemoControls } from '../components/DemoControls.js';
+import { isBackendEnabled } from '../data/api.js';
 import { db } from '../db/db.js';
 import { useBundle } from '../workflow/useBundle.js';
 import { deriveBelegStatus, nextOpenBeleg, orderBelege } from '../workflow/belegList.js';
@@ -79,6 +81,7 @@ export function BundleHomeScreen(): JSX.Element {
 
   return (
     <Box sx={{ p: 2, pb: 18 }}>
+      {isBackendEnabled ? null : <DemoControls />}
       <Typography variant="overline" color="text.secondary">
         Dein Karren · {belege.length} Belege{bundle?.bereich ? ` · ${bundle.bereich}` : ''}
       </Typography>

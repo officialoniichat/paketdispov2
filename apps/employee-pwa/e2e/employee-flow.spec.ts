@@ -89,6 +89,12 @@ test('Kernfluss – COLLECT (Hard-Gate) → PROCESS → DONE', async ({ page }) 
   // All positions visible at a glance.
   await expect(page.getByText('Pos 1 ·')).toBeVisible();
   await expect(page.getByText('Pos 5 ·')).toBeVisible();
+  // Faithful Arbeitsanweisung section + a variant (Rotpreis) render.
+  await expect(page.getByText('Arbeitsanweisung')).toBeVisible();
+  await expect(page.getByText('Rotpreis').first()).toBeVisible();
+  // Visual hint for WHERE to attach the price label (point 8 graphic).
+  await expect(page.getByText('Preisetikett – wo anbringen?')).toBeVisible();
+  await expect(page.getByText('Am Bund / Innenetikett', { exact: true })).toBeVisible();
   // erledigt is gated (labels + min-qty open).
   await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toBeDisabled();
   await page.screenshot({ path: `${SHOT_DIR}/05-process-open.png`, fullPage: true });
@@ -104,9 +110,9 @@ test('Kernfluss – COLLECT (Hard-Gate) → PROCESS → DONE', async ({ page }) 
 
   // Minimum-quantity check for every position (required even "Prüfung = Nein").
   for (let i = 0; i < SEED_POSITIONS; i += 1) {
-    await page.getByRole('button', { name: 'Stückzahl geprüft' }).first().click();
+    await page.getByRole('button', { name: 'Mindestmenge geprüft' }).first().click();
   }
-  await expect(page.getByRole('button', { name: 'Stückzahl geprüft' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mindestmenge geprüft' })).toHaveCount(0);
   await page.screenshot({ path: `${SHOT_DIR}/06-process-ready.png`, fullPage: true });
 
   // --- DONE: per-Beleg erledigt → ZST -----------------------------------
@@ -117,6 +123,18 @@ test('Kernfluss – COLLECT (Hard-Gate) → PROCESS → DONE', async ({ page }) 
   // The Beleg now reads as finished on the hub.
   await expect(page.getByText('1 von 3 fertig').first()).toBeVisible();
   await page.screenshot({ path: `${SHOT_DIR}/07-beleg-done.png`, fullPage: true });
+});
+
+test('Demo: Belegset wechseln (anderes Szenario)', async ({ page }) => {
+  await expect(page.getByText('Demo · Belegset')).toBeVisible();
+  await expect(page.getByText(/3 Belege · Regal/)).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/09-demo-controls.png`, fullPage: true });
+
+  // Switch to the Hängeware Belegset → the cart changes (Bereich + count).
+  await page.getByLabel('Szenario').click();
+  await page.getByRole('option', { name: /Hängeware/ }).click();
+  await expect(page.getByText(/2 Belege · Hängebahn/)).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/10-demo-haengeware.png`, fullPage: true });
 });
 
 test('§G.5 erledigt bleibt gesperrt, solange ein Problem offen ist', async ({ page }) => {
@@ -134,16 +152,16 @@ test('§G.5 erledigt bleibt gesperrt, solange ein Problem offen ist', async ({ p
   // Satisfy labels + min-qty so only the open problem would block.
   await page.getByRole('button', { name: 'Preisetiketten drucken' }).click();
   for (let i = 0; i < SEED_POSITIONS; i += 1) {
-    await page.getByRole('button', { name: 'Stückzahl geprüft' }).first().click();
+    await page.getByRole('button', { name: 'Mindestmenge geprüft' }).first().click();
   }
   await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toBeEnabled();
 
-  // Report a problem (scope + type) → erledigt must lock again.
-  await page.getByRole('button', { name: 'Problem melden', exact: true }).click();
+  // Report a problem FROM a position (per-position scope) → erledigt must lock again.
+  await page.getByRole('button', { name: 'Problem', exact: true }).first().click();
   await expectHeading(page, 'Problem melden');
-  await page.getByLabel('Ebene').click();
-  await page.getByRole('option', { name: 'Position' }).click();
-  await page.getByRole('radio', { name: 'Minderlieferung' }).click();
+  await expect(page.getByText(/Position 1/)).toBeVisible(); // target pre-selected
+  await page.getByLabel('Was ist das Problem?').click();
+  await page.getByRole('option', { name: 'Minderlieferung' }).click();
   await page.getByRole('button', { name: 'An Teamlead senden' }).click();
 
   await expectHeading(page, 'Beleg bearbeiten');

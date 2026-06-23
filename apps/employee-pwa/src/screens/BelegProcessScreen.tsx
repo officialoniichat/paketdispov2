@@ -26,10 +26,23 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
+import { LabelPlacementHint } from '../components/LabelPlacementHint.js';
 import { db } from '../db/db.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase, canOpenCarton } from '../workflow/workflowModel.js';
-import { TAGESSTART } from '../routes/paths.js';
+import { TAGESSTART, problemPath } from '../routes/paths.js';
+
+/**
+ * Arbeitsanweisung points that are already performed via dedicated controls
+ * (print button, placement card, "Beleg erledigt") — hidden from the read-only
+ * Arbeitsanweisung list so it stays informational, not a duplicate to-do.
+ */
+const ACTION_POINT_KEYS = new Set([
+  'price_label_print', // → "Preisetiketten drucken" button
+  'price_label_attach', // → placement card below
+  'zst', // → "Beleg erledigt" sets the ZST
+  'warenbezeichnung', // redundant with the position list
+]);
 
 const FLAG_CHIPS = [
   { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' as const },
@@ -65,15 +78,21 @@ export function BelegProcessScreen(): JSX.Element {
   const { aggregate, progress } = flow;
   const wi = aggregate.workInstruction;
   const cartonAllowed = canOpenCarton(progress, wi);
+  const attachPositions = aggregate.positions.filter((p) => p.instruction.priceLabelAttachRequired);
+  const attachLocations = [
+    ...new Set(
+      attachPositions
+        .map((p) => p.instruction.priceLabelAttachLocation)
+        .filter((loc): loc is string => Boolean(loc)),
+    ),
+  ];
   const gate = canCompleteCase(progress, aggregate, openIssues ?? 0);
   const checked = new Set(progress.quantityCheckedPositionIds);
-
-  const checkModeLabel =
-    wi.goodsReceiptCheckMode === 'full_check'
-      ? 'Vollprüfung'
-      : wi.goodsReceiptCheckMode === 'percentage_check'
-        ? 'Stichprobe'
-        : 'Mindest-Stückzahl';
+  // Read-only Arbeitsanweisung points (action points hidden). The "Prüfung
+  // Wareneingang" depth lives there (point 6); the per-position control below is
+  // the always-on Mindestmengen-count — kept distinct to avoid confusion.
+  const infoPoints = aggregate.instructionPoints.filter((p) => !ACTION_POINT_KEYS.has(p.key));
+  const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
 
   const finish = async (): Promise<void> => {
     await flow.complete();
@@ -91,16 +110,46 @@ export function BelegProcessScreen(): JSX.Element {
       caseId={caseId}
       where={`WE ${aggregate.case.weBelegNo} · ${aggregate.case.storageLocation.code}`}
       title="Beleg bearbeiten"
-      subtitle={`${aggregate.positions.length} Positionen · Prüfung: ${checkModeLabel}`}
+      subtitle={`${aggregate.positions.length} Positionen`}
       onBack={() => navigate(TAGESSTART)}
       primary={{ label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
       secondary={{ label: 'Teilabschluss', onClick: () => setPartialOpen(true) }}
     >
       <Stack spacing={2}>
+        {/* Arbeitsanweisung — faithful ordered points (printed numbers kept),
+            minus the ones already done via buttons (print/attach/ZST). */}
+        {infoPoints.length > 0 ? (
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Arbeitsanweisung
+            </Typography>
+            <Stack spacing={0.75}>
+              {infoPoints.map((point, index) => (
+                <Box key={point.key} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700, minWidth: 22, color: 'text.secondary' }}
+                  >
+                    {index + 1}
+                  </Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {point.label}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {point.value}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Paper>
+        ) : null}
+
         {/* §G.2 guardrail: print labels BEFORE opening the carton (Beleg-level). */}
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            Vorbereitung (§G.2: erst Etiketten, dann Karton)
+            Vorbereitung: erst Etiketten, dann Karton
           </Typography>
           <Stack spacing={1}>
             {progress.labelsPrinted ? (
@@ -126,14 +175,31 @@ export function BelegProcessScreen(): JSX.Element {
           </Stack>
         </Paper>
 
+        {/* §G.1 Punkt 8: visual hint WHERE to attach the price label. */}
+        {attachPositions.length > 0 ? <LabelPlacementHint locations={attachLocations} /> : null}
+
         {/* Full position list at a glance with flags + Soll/Ist + min-qty check. */}
         <Typography variant="subtitle2">Positionen</Typography>
+        {wi.goodsReceiptCheckMode === 'quantity_only' ? (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+            Mindestmenge immer zählen – auch bei Prüfung Wareneingang = „Nein“.
+          </Typography>
+        ) : null}
         {aggregate.positions.map((pos) => {
           const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
           const isChecked = checked.has(pos.id);
           const flags = FLAG_CHIPS.filter(
             (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
           );
+          const i = pos.instruction;
+          const instructionLines = [
+            i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
+            i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
+            i.onlineHandlingRequired && i.onlineHandlingLocation
+              ? `Online: ${i.onlineHandlingLocation}`
+              : null,
+            i.notes ? `Hinweis: ${i.notes}` : null,
+          ].filter((line): line is string => line !== null);
           return (
             <Paper key={pos.id} variant="outlined" sx={{ p: 1.5 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -156,6 +222,16 @@ export function BelegProcessScreen(): JSX.Element {
                 </Stack>
               ) : null}
 
+              {instructionLines.length > 0 ? (
+                <Stack spacing={0.25} sx={{ mt: 1 }}>
+                  {instructionLines.map((line) => (
+                    <Typography key={line} variant="body2" color="text.secondary">
+                      {line}
+                    </Typography>
+                  ))}
+                </Stack>
+              ) : null}
+
               {pos.skuLines.length > 1 ? (
                 <Stack spacing={0.25} sx={{ mt: 1 }}>
                   {pos.skuLines.map((s) => (
@@ -166,33 +242,73 @@ export function BelegProcessScreen(): JSX.Element {
                 </Stack>
               ) : null}
 
-              <Box sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                 {isChecked ? (
-                  <Chip color="success" size="small" label="Stückzahl geprüft ✓" />
+                  <Chip color="success" size="small" label="Mindestmenge geprüft ✓" />
                 ) : (
                   <Button
                     variant="contained"
                     size="small"
                     onClick={() => void flow.checkQuantity(pos.id)}
                   >
-                    Stückzahl geprüft
+                    Mindestmenge geprüft
                   </Button>
                 )}
-              </Box>
+                <Box sx={{ flex: 1 }} />
+                <Button
+                  color="error"
+                  variant="text"
+                  size="small"
+                  onClick={() =>
+                    navigate(problemPath(caseId, { scope: 'position', scopeId: pos.id }))
+                  }
+                >
+                  Problem
+                </Button>
+              </Stack>
             </Paper>
           );
         })}
 
-        {/* Box targets — info only, never a gate. */}
+        {/* Boxzettel (§G.1 Punkt 9) — what goes on each box label. Info only, no gate. */}
         {aggregate.boxTargets.length > 0 ? (
           <>
             <Divider />
-            <Typography variant="subtitle2">Boxen (Info)</Typography>
-            {aggregate.boxTargets.map((t, i) => (
-              <Typography key={t.id} variant="body2" color="text.secondary">
-                Box {i + 1} → Shopbereich {t.shopAreaNo} · {t.plannedQuantity} Teile
-              </Typography>
-            ))}
+            <Typography variant="subtitle2">Boxzettel</Typography>
+            {aggregate.boxTargets.map((t, i) => {
+              const posNos = t.positionIds
+                .map((id) => positionsById.get(id)?.positionNo)
+                .filter((n): n is number => typeof n === 'number')
+                .sort((a, b) => a - b);
+              const shopLine = [
+                `Shopbereich ${t.shopAreaNo}`,
+                t.shopNo ? `Shop ${t.shopNo}` : null,
+                t.floor ? `Etage ${t.floor}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+                    <Typography sx={{ fontWeight: 700 }}>Box {i + 1}</Typography>
+                    <Chip size="small" label={`${t.plannedQuantity} Teile`} />
+                  </Stack>
+                  <Stack spacing={0.25} sx={{ mt: 0.5 }}>
+                    <Typography variant="body2">{shopLine}</Typography>
+                    {t.goodsType ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Warenart: {t.goodsType}
+                      </Typography>
+                    ) : null}
+                    {posNos.length > 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Positionen: {posNos.join(', ')}
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </Paper>
+              );
+            })}
           </>
         ) : null}
 

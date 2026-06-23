@@ -8,14 +8,17 @@
  * In offline-demo mode (no backend) they are no-ops returning undefined.
  */
 import type { components } from '@paket/api-client';
+import type { IssueScope, IssueType } from '@paket/domain-types';
 import { getApiClient, isBackendEnabled } from './api.js';
 
 type TransitionResultDto = components['schemas']['TransitionResultDto'];
 
 export interface IssueInput {
   caseId: string;
-  scope: string;
-  issueType: string;
+  /** What the problem is reported against (case/position/sku_line/transport_box). */
+  scope: IssueScope;
+  issueType: IssueType;
+  /** Id of the scoped entity (position/sku/box); omitted for case-level. */
   scopeId?: string;
   description?: string;
   photoKeys?: string[];

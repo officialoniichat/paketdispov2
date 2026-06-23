@@ -68,6 +68,45 @@ export class WorkInstructionHeaderDto {
   @ApiProperty() zstRequired!: boolean;
 }
 
+/** One EAN/size line under a position (Anhang A ReceiptSkuLine). */
+export class SkuLineDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() ean!: string;
+  @ApiProperty() size!: string;
+  @ApiProperty() expectedQuantity!: number;
+  @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
+  @ApiProperty({ description: 'SkuLineStatus: open|confirmed|deviation' }) status!: string;
+}
+
+/** Per-position Arbeitsanweisung instruction flags (Anhang A PositionInstruction, §G.1). */
+export class PositionInstructionDto {
+  @ApiProperty() priceLabelRequired!: boolean;
+  @ApiProperty() priceLabelAttachRequired!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true }) priceLabelAttachLocation!: string | null;
+  @ApiProperty() securityRequired!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true }) securityLocation!: string | null;
+  @ApiProperty() onlineHandlingRequired!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true }) onlineHandlingLocation!: string | null;
+  @ApiPropertyOptional({ type: Boolean, nullable: true }) redPriceRequired!: boolean | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) notes!: string | null;
+}
+
+/** One ordered point of the printed Arbeitsanweisung (derived projection, §G.1). */
+export class WorkInstructionPointDto {
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Printed point number (1,4,5,6,8,9,10,11); null for variants',
+  })
+  pointNo!: number | null;
+  @ApiProperty({ description: 'Stable key: price_label_print|sort|goods_receipt_check|security|…' })
+  key!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty() value!: string;
+  @ApiProperty({ description: "Scope: 'header' | 'position'" }) scope!: string;
+  @ApiPropertyOptional({ type: [Number] }) positionNos?: number[];
+}
+
 export class ReceiptPositionDto {
   @ApiProperty() id!: string;
   @ApiProperty() positionNo!: number;
@@ -80,6 +119,9 @@ export class ReceiptPositionDto {
   @ApiPropertyOptional({ nullable: true }) floor!: string | null;
   @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
   status!: string;
+  @ApiPropertyOptional({ type: PositionInstructionDto, nullable: true })
+  instruction!: PositionInstructionDto | null;
+  @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
 }
 
 /** Mirrors the persisted TransportBox row (Anhang A) — the box target per case. */
@@ -106,6 +148,11 @@ export class CaseAggregateDto {
   workInstruction!: WorkInstructionHeaderDto | null;
   @ApiProperty({ type: [ReceiptPositionDto] }) positions!: ReceiptPositionDto[];
   @ApiProperty({ type: [TransportBoxTargetDto] }) boxTargets!: TransportBoxTargetDto[];
+  @ApiProperty({
+    type: [WorkInstructionPointDto],
+    description: 'Ordered Arbeitsanweisung points (derived from header + positions)',
+  })
+  instructionPoints!: WorkInstructionPointDto[];
 }
 
 export class PoolItemDto extends CaseSummaryDto {
@@ -202,16 +249,6 @@ export class AuditEventDto {
 }
 
 // --- Belegdetails (§10.4 teamlead case detail) ------------------------------
-
-/** One EAN/size line under a position (Anhang A ReceiptSkuLine). */
-export class SkuLineDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() ean!: string;
-  @ApiProperty() size!: string;
-  @ApiProperty() expectedQuantity!: number;
-  @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
-  @ApiProperty({ description: 'SkuLineStatus: open|confirmed|deviation' }) status!: string;
-}
 
 /**
  * A receipt position enriched with its §13 instruction flags and SKU lines —

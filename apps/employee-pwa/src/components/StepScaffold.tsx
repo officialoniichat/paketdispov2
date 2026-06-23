@@ -78,7 +78,7 @@ export function StepScaffold({
           left: 0,
           right: 0,
           bottom: 0,
-          p: 2,
+          p: 1.5,
           bgcolor: 'background.paper',
           boxShadow: 8,
         }}
@@ -88,28 +88,33 @@ export function StepScaffold({
             {primary.label}
           </TouchButton>
         ) : null}
-        {secondary ? (
-          <Button
-            variant="outlined"
-            size="large"
-            fullWidth
-            onClick={secondary.onClick}
-            disabled={secondary.disabled}
-          >
-            {secondary.label}
-          </Button>
+        {/* Secondary + Problem share one compact row so the footer doesn't eat the screen. */}
+        {secondary || !hideProblem ? (
+          <Stack direction="row" spacing={1}>
+            {secondary ? (
+              <Button
+                variant="outlined"
+                size="small"
+                fullWidth
+                onClick={secondary.onClick}
+                disabled={secondary.disabled}
+              >
+                {secondary.label}
+              </Button>
+            ) : null}
+            {hideProblem ? null : (
+              <Button
+                color="error"
+                variant="outlined"
+                size="small"
+                fullWidth
+                onClick={() => navigate(problemPath(caseId))}
+              >
+                Problem melden
+              </Button>
+            )}
+          </Stack>
         ) : null}
-        {hideProblem ? null : (
-          <Button
-            color="error"
-            variant="outlined"
-            size="large"
-            fullWidth
-            onClick={() => navigate(problemPath(caseId))}
-          >
-            Problem melden
-          </Button>
-        )}
       </Stack>
     </Box>
   );

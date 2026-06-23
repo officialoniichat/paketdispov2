@@ -13,6 +13,7 @@ import type {
   ReceiptPosition,
   TransportBoxTarget,
   WorkInstructionHeader,
+  WorkInstructionPoint,
 } from '@paket/domain-types';
 
 /** Storage/goods category — drives display and the close path (Hängeware has no box). */
@@ -82,6 +83,8 @@ export interface CaseAggregate {
   workInstruction: WorkInstructionHeader;
   positions: ReceiptPosition[];
   boxTargets: TransportBoxTarget[];
+  /** Ordered Arbeitsanweisung points (derived projection from the engine/backend). */
+  instructionPoints: WorkInstructionPoint[];
 }
 
 /** Per-Beleg workflow step — collapsed to a single PROCESS phase then DONE. */

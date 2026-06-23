@@ -696,6 +696,26 @@ export interface components {
             boxLabelRequired: boolean;
             zstRequired: boolean;
         };
+        PositionInstructionDto: {
+            priceLabelRequired: boolean;
+            priceLabelAttachRequired: boolean;
+            priceLabelAttachLocation?: string | null;
+            securityRequired: boolean;
+            securityLocation?: string | null;
+            onlineHandlingRequired: boolean;
+            onlineHandlingLocation?: string | null;
+            redPriceRequired?: boolean | null;
+            notes?: string | null;
+        };
+        SkuLineDto: {
+            id: string;
+            ean: string;
+            size: string;
+            expectedQuantity: number;
+            confirmedQuantity?: number | null;
+            /** @description SkuLineStatus: open|confirmed|deviation */
+            status: string;
+        };
         ReceiptPositionDto: {
             id: string;
             positionNo: number;
@@ -709,6 +729,8 @@ export interface components {
             floor?: Record<string, never> | null;
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
+            instruction?: components["schemas"]["PositionInstructionDto"] | null;
+            skuLines: components["schemas"]["SkuLineDto"][];
         };
         TransportBoxTargetDto: {
             id: string;
@@ -726,11 +748,24 @@ export interface components {
             labelStatus: string;
             sealed: boolean;
         };
+        WorkInstructionPointDto: {
+            /** @description Printed point number (1,4,5,6,8,9,10,11); null for variants */
+            pointNo?: number | null;
+            /** @description Stable key: price_label_print|sort|goods_receipt_check|security|… */
+            key: string;
+            label: string;
+            value: string;
+            /** @description Scope: 'header' | 'position' */
+            scope: string;
+            positionNos?: number[];
+        };
         CaseAggregateDto: {
             case: components["schemas"]["CaseSummaryDto"];
             workInstruction?: components["schemas"]["WorkInstructionHeaderDto"] | null;
             positions: components["schemas"]["ReceiptPositionDto"][];
             boxTargets: components["schemas"]["TransportBoxTargetDto"][];
+            /** @description Ordered Arbeitsanweisung points (derived from header + positions) */
+            instructionPoints: components["schemas"]["WorkInstructionPointDto"][];
         };
         TransitionResultDto: {
             caseId: string;
@@ -855,15 +890,6 @@ export interface components {
             total: number;
             page: number;
             limit: number;
-        };
-        SkuLineDto: {
-            id: string;
-            ean: string;
-            size: string;
-            expectedQuantity: number;
-            confirmedQuantity?: number | null;
-            /** @description SkuLineStatus: open|confirmed|deviation */
-            status: string;
         };
         PositionDetailDto: {
             id: string;

@@ -6,7 +6,12 @@
  * onto the same response DTOs. These are the single source of those two shared
  * projections so the two services don't carry byte-identical private copies.
  */
-import type { TransportBoxTargetDto, WorkInstructionHeaderDto } from './cases.dto.js';
+import type {
+  PositionInstructionDto,
+  SkuLineDto,
+  TransportBoxTargetDto,
+  WorkInstructionHeaderDto,
+} from './cases.dto.js';
 
 /** Persistence shape of a work-instruction header (the fields both views expose). */
 export interface WorkInstructionRow {
@@ -63,5 +68,55 @@ export function mapBoxTarget(b: TransportBoxRow): TransportBoxTargetDto {
     quantity: b.quantity,
     labelStatus: b.labelStatus,
     sealed: b.sealed,
+  };
+}
+
+/** Persistence shape of a SKU line (the fields both views expose). */
+export interface SkuLineRow {
+  id: string;
+  ean: string;
+  size: string;
+  expectedQuantity: number;
+  confirmedQuantity: number | null;
+  status: string;
+}
+
+/** Project a SKU-line row onto its response DTO. */
+export function mapSkuLine(s: SkuLineRow): SkuLineDto {
+  return {
+    id: s.id,
+    ean: s.ean,
+    size: s.size,
+    expectedQuantity: s.expectedQuantity,
+    confirmedQuantity: s.confirmedQuantity,
+    status: s.status,
+  };
+}
+
+/** Persistence shape of a per-position instruction (Anhang A PositionInstruction). */
+export interface PositionInstructionRow {
+  priceLabelRequired: boolean;
+  priceLabelAttachRequired: boolean;
+  priceLabelAttachLocation: string | null;
+  securityRequired: boolean;
+  securityLocation: string | null;
+  onlineHandlingRequired: boolean;
+  onlineHandlingLocation: string | null;
+  redPriceRequired: boolean | null;
+  notes: string | null;
+}
+
+/** Project a per-position instruction row onto its response DTO. */
+export function mapPositionInstruction(i: PositionInstructionRow): PositionInstructionDto {
+  return {
+    priceLabelRequired: i.priceLabelRequired,
+    priceLabelAttachRequired: i.priceLabelAttachRequired,
+    priceLabelAttachLocation: i.priceLabelAttachLocation,
+    securityRequired: i.securityRequired,
+    securityLocation: i.securityLocation,
+    onlineHandlingRequired: i.onlineHandlingRequired,
+    onlineHandlingLocation: i.onlineHandlingLocation,
+    redPriceRequired: i.redPriceRequired,
+    notes: i.notes,
   };
 }

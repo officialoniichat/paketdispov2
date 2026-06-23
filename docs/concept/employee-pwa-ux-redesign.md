@@ -212,3 +212,47 @@ Offline-Demo-Modus ein No-op.
   Karton → 5× Stückzahl) → DONE; Problem blockiert erledigt. Screenshots je Phase
   unter `apps/employee-pwa/e2e/screenshots/`.
 - Build grün, typecheck + lint sauber, keine verwaisten Routen/Toten Code.
+
+## 9. Arbeitsanweisung-Treue (Punkte 1–11 + Varianten)
+
+**Referenz-PDF:** `docs/reference/arbeitsanweisung-lt-example-we-3656860.pdf` (L&T Wareneingang
+V28.038). Das Formular ist ein festes **11-Punkte-Template**; das Beispiel rendert die Punkte
+**1, 4, 5, 6, 8, 9, 10, 11** — die Punkte **2, 3, 7** und Varianten (Prüfung %, „Sichern Ja“,
+Online, Rotpreis, Platzierungsgrafik) sind bedingt und im Beispiel nicht enthalten.
+
+**Modell (Single Source):** `deriveWorkInstructionPoints(header, positions)` in
+`@paket/domain-types` projiziert die gespeicherten Felder auf eine **geordnete Liste von
+`WorkInstructionPoint`** (`pointNo?`, `key`, `label`, `value`, `scope`, `positionNos?`,
+`assetRef?`). Bestätigte Punkte tragen ihre gedruckte Nummer (1,4,5,6,8,9,10,11); Varianten
+(`red_price`, `online_handling`) erscheinen per Key **ohne erfundene Nummer**, bis eine
+Varianten-AW die Nummerierung von 2/3/7 belegt. Das Backend berechnet die Liste einmal
+(`CaseAggregateDto.instructionPoints`) — die PWA zeigt sie nur an.
+
+**Datenfluss (keine Migration):** Die DB speichert bereits alles
+(`PositionInstruction` inkl. `…Location`/`redPrice`/`notes`, `WorkInstructionHeader.checkPercentage`,
+`ReceiptSkuLine`). Der Mitarbeiter-Aggregat-Endpoint (`/api/me/cases/:id/aggregate`) projiziert
+jetzt `instruction` + `skuLines` je Position **und** `instructionPoints` (vorher fehlten sie —
+nur die Teamlead-Sicht hatte sie). OpenAPI wird DB-los neu generiert → `@paket/api-client`.
+
+**Anzeige (BelegProcessScreen):** Eigener „Arbeitsanweisung“-Block mit der geordneten Punktliste.
+Die gedruckten Punktnummern bleiben **formtreu** (Lücken wie 2/3/7 wie auf dem Papier; Varianten
+gebulletet) — aber **bereits per Button erledigte Punkte werden in der Liste ausgeblendet**:
+Preisetikettendruck (1, „drucken“-Button), Preisetiketten anbringen (8, Platzierungs-Karte),
+ZST stempeln (11, „Beleg erledigt“) und die redundante Warenbezeichnung (4). Es bleiben die
+Info-Punkte (Sortieren 5, Prüfung 6, Boxzettel 9, Sicherung 10, Rotpreis/Online). Daneben:
+je Position die Flags (Preisetikett/Sicherung/Online/Rotpreis) + Detailzeilen
+(Anbring-Ort, Sicherungs-Ort, Online-Ort, Hinweis); Prüfmodus inkl. **%**; sowie eine
+**Platzierungs-Visualisierung** „Preisetikett – wo anbringen?“ (`LabelPlacementHint`:
+illustratives SVG + Ort-Texte, mit Slot für ein echtes Asset-Bild via `assetRef`).
+
+**Offen (bewusst):** Die echte Nummerierung/Beschriftung der Punkte 2/3/7 ist erst mit einer
+Varianten-Arbeitsanweisung belegbar; bis dahin Varianten ohne Nummer. Echte
+Platzierungs-Grafiken kommen später aus ProHandel/AW (heute illustratives Default-SVG).
+
+## 10. Demo-Szenarien (Offline)
+
+Im Offline-Modus zeigt die Home eine `DemoControls`-Leiste (nur ohne Backend): ein
+**Belegset-Auswahlfeld** + **„Zurücksetzen“**. Der Katalog (`src/demo/scenarios.ts`) bietet
+mehrere Bündel (Standard Regal · 3 Belege; Hängeware · Hängebahn · 2 Belege; Großbündel · Regal ·
+4 Belege mit Stichprobe %/Sicherung/Online/Rotpreis). `resetToScenario(id)` leert alle
+Dexie-Tabellen und seedet das gewählte Szenario; die Auswahl wird in `localStorage` gemerkt.

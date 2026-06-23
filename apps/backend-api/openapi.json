@@ -1779,6 +1779,81 @@
           "zstRequired"
         ]
       },
+      "PositionInstructionDto": {
+        "type": "object",
+        "properties": {
+          "priceLabelRequired": {
+            "type": "boolean"
+          },
+          "priceLabelAttachRequired": {
+            "type": "boolean"
+          },
+          "priceLabelAttachLocation": {
+            "type": "string",
+            "nullable": true
+          },
+          "securityRequired": {
+            "type": "boolean"
+          },
+          "securityLocation": {
+            "type": "string",
+            "nullable": true
+          },
+          "onlineHandlingRequired": {
+            "type": "boolean"
+          },
+          "onlineHandlingLocation": {
+            "type": "string",
+            "nullable": true
+          },
+          "redPriceRequired": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "priceLabelRequired",
+          "priceLabelAttachRequired",
+          "securityRequired",
+          "onlineHandlingRequired"
+        ]
+      },
+      "SkuLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ean": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string"
+          },
+          "expectedQuantity": {
+            "type": "number"
+          },
+          "confirmedQuantity": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "SkuLineStatus: open|confirmed|deviation"
+          }
+        },
+        "required": [
+          "id",
+          "ean",
+          "size",
+          "expectedQuantity",
+          "status"
+        ]
+      },
       "ReceiptPositionDto": {
         "type": "object",
         "properties": {
@@ -1815,6 +1890,21 @@
           "status": {
             "type": "string",
             "description": "PositionStatus: open|confirmed|issue_open|completed"
+          },
+          "instruction": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PositionInstructionDto"
+              }
+            ]
+          },
+          "skuLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkuLineDto"
+            }
           }
         },
         "required": [
@@ -1825,7 +1915,8 @@
           "supplierColor",
           "branchNo",
           "shopNo",
-          "status"
+          "status",
+          "skuLines"
         ]
       },
       "TransportBoxTargetDto": {
@@ -1888,6 +1979,42 @@
           "sealed"
         ]
       },
+      "WorkInstructionPointDto": {
+        "type": "object",
+        "properties": {
+          "pointNo": {
+            "type": "number",
+            "nullable": true,
+            "description": "Printed point number (1,4,5,6,8,9,10,11); null for variants"
+          },
+          "key": {
+            "type": "string",
+            "description": "Stable key: price_label_print|sort|goods_receipt_check|security|…"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Scope: 'header' | 'position'"
+          },
+          "positionNos": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "value",
+          "scope"
+        ]
+      },
       "CaseAggregateDto": {
         "type": "object",
         "properties": {
@@ -1914,12 +2041,20 @@
             "items": {
               "$ref": "#/components/schemas/TransportBoxTargetDto"
             }
+          },
+          "instructionPoints": {
+            "description": "Ordered Arbeitsanweisung points (derived from header + positions)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkInstructionPointDto"
+            }
           }
         },
         "required": [
           "case",
           "positions",
-          "boxTargets"
+          "boxTargets",
+          "instructionPoints"
         ]
       },
       "TransitionResultDto": {
@@ -2355,38 +2490,6 @@
           "total",
           "page",
           "limit"
-        ]
-      },
-      "SkuLineDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "ean": {
-            "type": "string"
-          },
-          "size": {
-            "type": "string"
-          },
-          "expectedQuantity": {
-            "type": "number"
-          },
-          "confirmedQuantity": {
-            "type": "number",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "description": "SkuLineStatus: open|confirmed|deviation"
-          }
-        },
-        "required": [
-          "id",
-          "ean",
-          "size",
-          "expectedQuantity",
-          "status"
         ]
       },
       "PositionDetailDto": {

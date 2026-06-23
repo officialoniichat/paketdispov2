@@ -80,27 +80,45 @@ async function seed(): Promise<{ caseId: string }> {
       zstRequired: true,
     },
   });
-  await prisma.receiptPosition.createMany({
-    data: [
-      {
-        caseId: c.id,
-        positionNo: 1,
-        wgr: '4711',
-        supplierArticleNo: 'ART-001',
-        supplierColor: 'schwarz',
-        branchNo: '1',
-        shopNo: '21',
+  // Position 1 carries a per-position instruction (Sicherung + Ort) and SKU lines
+  // so the aggregate's instruction/skuLines/instructionPoints projection is covered.
+  await prisma.receiptPosition.create({
+    data: {
+      caseId: c.id,
+      positionNo: 1,
+      wgr: '4711',
+      supplierArticleNo: 'ART-001',
+      supplierColor: 'schwarz',
+      branchNo: '1',
+      shopNo: '21',
+      instruction: {
+        create: {
+          priceLabelRequired: true,
+          priceLabelAttachRequired: true,
+          securityRequired: true,
+          securityLocation: 'Naht innen',
+          onlineHandlingRequired: false,
+          redPriceRequired: false,
+        },
       },
-      {
-        caseId: c.id,
-        positionNo: 2,
-        wgr: '4712',
-        supplierArticleNo: 'ART-002',
-        supplierColor: 'blau',
-        branchNo: '1',
-        shopNo: '21',
+      skuLines: {
+        create: [
+          { ean: 'E1', size: 'M', expectedQuantity: 18 },
+          { ean: 'E2', size: 'L', expectedQuantity: 12 },
+        ],
       },
-    ],
+    },
+  });
+  await prisma.receiptPosition.create({
+    data: {
+      caseId: c.id,
+      positionNo: 2,
+      wgr: '4712',
+      supplierArticleNo: 'ART-002',
+      supplierColor: 'blau',
+      branchNo: '1',
+      shopNo: '21',
+    },
   });
   await prisma.transportBox.create({
     data: {
@@ -163,6 +181,21 @@ describe('GET /api/me/cases/:id/aggregate (§14.2 + §16.1)', () => {
     expect(aggregate.positions).toHaveLength(2);
     expect(aggregate.positions.map((p) => p.positionNo)).toEqual([1, 2]);
     expect(aggregate.positions[0]?.supplierArticleNo).toBe('ART-001');
+
+    // Per-position Arbeitsanweisung instruction + SKU lines are now projected.
+    expect(aggregate.positions[0]?.instruction).toMatchObject({
+      securityRequired: true,
+      securityLocation: 'Naht innen',
+    });
+    expect(aggregate.positions[0]?.skuLines.map((s) => s.expectedQuantity)).toEqual([18, 12]);
+
+    // Ordered Arbeitsanweisung points incl. the Stichprobe % and the security point.
+    const pointKeys = aggregate.instructionPoints.map((p) => p.key);
+    expect(pointKeys).toContain('price_label_print');
+    expect(pointKeys).toContain('security');
+    expect(
+      aggregate.instructionPoints.find((p) => p.key === 'goods_receipt_check')?.value,
+    ).toBe('20 %');
 
     expect(aggregate.boxTargets).toHaveLength(1);
     expect(aggregate.boxTargets[0]?.boxNo).toBe(1);

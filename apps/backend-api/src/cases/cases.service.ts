@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { CaseStatus } from '@paket/domain-types';
-import { caseStatusSchema } from '@paket/domain-types';
+import { caseStatusSchema, deriveWorkInstructionPoints } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -18,7 +18,14 @@ import {
   type TodayResponseDto,
   type TransitionResultDto,
 } from './cases.dto.js';
-import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
+import {
+  mapBoxTarget,
+  mapPositionInstruction,
+  mapSkuLine,
+  mapWorkInstruction,
+  type PositionInstructionRow,
+  type SkuLineRow,
+} from './mappers.js';
 
 interface CaseOwnership {
   id: string;
@@ -112,7 +119,10 @@ export class CasesService {
       include: {
         storageLocation: true,
         workInstruction: true,
-        positions: { orderBy: { positionNo: 'asc' } },
+        positions: {
+          include: { instruction: true, skuLines: { orderBy: { ean: 'asc' } } },
+          orderBy: { positionNo: 'asc' },
+        },
         transportBoxes: { orderBy: { boxNo: 'asc' } },
         assignedBundle: {
           select: { employee: { select: { employeeNo: true, displayName: true } } },
@@ -126,11 +136,24 @@ export class CasesService {
     if (!canAccessCase(principal, ownerEmployeeNo)) {
       throw new ForbiddenException(`Access to case ${caseId} denied`);
     }
+    // Faithful ordered Arbeitsanweisung projection — single source in domain-types
+    // (engine/data decides, UI displays). Empty when no work instruction exists.
+    const instructionPoints = found.workInstruction
+      ? deriveWorkInstructionPoints(found.workInstruction, found.positions).map((point) => ({
+          pointNo: point.pointNo ?? null,
+          key: point.key,
+          label: point.label,
+          value: point.value,
+          scope: point.scope,
+          positionNos: point.positionNos,
+        }))
+      : [];
     return {
       case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null),
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPosition(p)),
       boxTargets: found.transportBoxes.map((b) => mapBoxTarget(b)),
+      instructionPoints,
     };
   }
 
@@ -145,6 +168,8 @@ export class CasesService {
     shopNo: string;
     floor: string | null;
     status: string;
+    instruction: PositionInstructionRow | null;
+    skuLines: SkuLineRow[];
   }): ReceiptPositionDto {
     return {
       id: p.id,
@@ -157,6 +182,8 @@ export class CasesService {
       shopNo: p.shopNo,
       floor: p.floor,
       status: p.status,
+      instruction: p.instruction ? mapPositionInstruction(p.instruction) : null,
+      skuLines: p.skuLines.map(mapSkuLine),
     };
   }
 

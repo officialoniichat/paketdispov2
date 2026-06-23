@@ -10,34 +10,52 @@
  * cannot drift from the domain contract. Field mapping follows §G.1/§G.4.
  */
 import {
+  deriveWorkInstructionPoints,
   goodsReceiptCaseSchema,
   receiptPositionSchema,
   transportBoxTargetSchema,
   workInstructionHeaderSchema,
   type GoodsReceiptCase,
   type ReceiptPosition,
+  type StorageLocation,
   type TransportBoxTarget,
   type WorkInstructionHeader,
 } from '@paket/domain-types';
-import type { BelegListItem, BundleContext, CaseAggregate, CollectStop } from '../db/types.js';
+import type {
+  BelegListItem,
+  BundleContext,
+  CaseAggregate,
+  CollectStop,
+  GoodsCategory,
+} from '../db/types.js';
+import { buildCollectStops } from '../db/collectStops.js';
 
 export const EXAMPLE_CASE_ID = 'case-we-3656860';
 const CASE_2_ID = 'case-we-3656861';
 const CASE_3_ID = 'case-we-3656862';
 export const EXAMPLE_DATE = '2026-06-15';
 
-interface PositionSpec {
+export interface PositionSpec {
   positionNo: number;
   supplierArticleNo: string;
   supplierColor: string;
   wgr: string;
+  priceLabelAttachLocation?: string;
   securityRequired?: boolean;
+  securityLocation?: string;
   onlineHandlingRequired?: boolean;
+  onlineHandlingLocation?: string;
   redPriceRequired?: boolean;
+  notes?: string;
   skus: Array<{ ean: string; size: string; quantity: number }>;
 }
 
-function buildWorkInstruction(caseId: string): WorkInstructionHeader {
+export interface WorkInstructionOverride {
+  goodsReceiptCheckMode?: WorkInstructionHeader['goodsReceiptCheckMode'];
+  goodsReceiptCheckPercentage?: number;
+}
+
+function buildWorkInstruction(caseId: string, over: WorkInstructionOverride = {}): WorkInstructionHeader {
   return workInstructionHeaderSchema.parse({
     caseId,
     priceLabelPrintRequired: true,
@@ -46,6 +64,7 @@ function buildWorkInstruction(caseId: string): WorkInstructionHeader {
     minimumQuantityCheckAlwaysRequired: true,
     boxLabelRequired: true,
     zstRequired: true,
+    ...over,
   });
 }
 
@@ -68,9 +87,13 @@ function buildPositions(caseId: string, weShort: string, specs: PositionSpec[]):
       instruction: {
         priceLabelRequired: true,
         priceLabelAttachRequired: true, // §G.1 Punkt 8
+        priceLabelAttachLocation: spec.priceLabelAttachLocation,
         securityRequired: spec.securityRequired ?? false, // §G.1 Punkt 10
+        securityLocation: spec.securityLocation,
         onlineHandlingRequired: spec.onlineHandlingRequired ?? false,
+        onlineHandlingLocation: spec.onlineHandlingLocation,
         redPriceRequired: spec.redPriceRequired ?? false,
+        notes: spec.notes,
       },
       skuLines: spec.skus.map((sku, i) => ({
         id: `sku-${weShort}-${spec.positionNo}-${i + 1}`,
@@ -90,6 +113,7 @@ function buildCase(
   weBelegNo: string,
   locationCode: string,
   totalQuantity: number,
+  locationType: StorageLocation['type'] = 'regal',
 ): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
     id,
@@ -103,7 +127,7 @@ function buildCase(
     primaryFloor: 'EG',
     storageLocation: {
       id: `loc-${locationCode}`,
-      type: 'regal',
+      type: locationType,
       code: locationCode,
       zone: 'Shopbereich 21',
       barcode: locationCode,
@@ -148,6 +172,7 @@ const case1Positions = buildPositions(EXAMPLE_CASE_ID, '3656860', [
     supplierArticleNo: '411005-CAMAL-Z bike glove man',
     supplierColor: '12183-black.white fog',
     wgr: '218110',
+    priceLabelAttachLocation: 'Am Bund / Innenetikett',
     skus: [{ ean: '4068657016108', size: '8', quantity: 1 }],
   },
   {
@@ -185,12 +210,14 @@ const case1Positions = buildPositions(EXAMPLE_CASE_ID, '3656860', [
   },
 ]);
 
+const case1Wi = buildWorkInstruction(EXAMPLE_CASE_ID);
 const case1: CaseAggregate = {
   caseId: EXAMPLE_CASE_ID,
   case: buildCase(EXAMPLE_CASE_ID, '3656860', 'R27', 9),
-  workInstruction: buildWorkInstruction(EXAMPLE_CASE_ID),
+  workInstruction: case1Wi,
   positions: case1Positions,
   boxTargets: [buildBox(EXAMPLE_CASE_ID, '3656860', case1Positions.map((p) => p.id), 9)],
+  instructionPoints: deriveWorkInstructionPoints(case1Wi, case1Positions),
 };
 
 // --- Case 2: a small single-position Beleg, also at R27 ----------------------
@@ -201,16 +228,20 @@ const case2Positions = buildPositions(CASE_2_ID, '3656861', [
     supplierColor: '00010-black',
     wgr: '219050',
     securityRequired: true, // Sicherung badge
+    securityLocation: 'Sicherungsnaht innen',
+    notes: 'Empfindlich – vorsichtig auspacken',
     skus: [{ ean: '4068657020101', size: '39-42', quantity: 4 }],
   },
 ]);
 
+const case2Wi = buildWorkInstruction(CASE_2_ID);
 const case2: CaseAggregate = {
   caseId: CASE_2_ID,
   case: buildCase(CASE_2_ID, '3656861', 'R27', 4),
-  workInstruction: buildWorkInstruction(CASE_2_ID),
+  workInstruction: case2Wi,
   positions: case2Positions,
   boxTargets: [buildBox(CASE_2_ID, '3656861', case2Positions.map((p) => p.id), 4)],
+  instructionPoints: deriveWorkInstructionPoints(case2Wi, case2Positions),
 };
 
 // --- Case 3: two positions at A-4, with online handling ----------------------
@@ -221,6 +252,7 @@ const case3Positions = buildPositions(CASE_3_ID, '3656862', [
     supplierColor: '40520-deep navy',
     wgr: '210300',
     onlineHandlingRequired: true, // Online badge (wiring is a sibling task)
+    onlineHandlingLocation: 'Online-Tisch B',
     skus: [{ ean: '4068657030045', size: 'M', quantity: 2 }],
   },
   {
@@ -232,12 +264,18 @@ const case3Positions = buildPositions(CASE_3_ID, '3656862', [
   },
 ]);
 
+// Case 3 demonstrates the Prüfung-Stichprobe (%) header variant.
+const case3Wi = buildWorkInstruction(CASE_3_ID, {
+  goodsReceiptCheckMode: 'percentage_check',
+  goodsReceiptCheckPercentage: 20,
+});
 const case3: CaseAggregate = {
   caseId: CASE_3_ID,
   case: buildCase(CASE_3_ID, '3656862', 'A-4', 4),
-  workInstruction: buildWorkInstruction(CASE_3_ID),
+  workInstruction: case3Wi,
   positions: case3Positions,
   boxTargets: [buildBox(CASE_3_ID, '3656862', case3Positions.map((p) => p.id), 4)],
+  instructionPoints: deriveWorkInstructionPoints(case3Wi, case3Positions),
 };
 
 /** All Beleg aggregates of the demo bundle, in bundle order. */
@@ -271,3 +309,91 @@ export const exampleCollectStops: CollectStop[] = [
   { sequence: 0, locationCode: 'R27', scanRequired: false, caseIds: [EXAMPLE_CASE_ID, CASE_2_ID] },
   { sequence: 1, locationCode: 'A-4', scanRequired: false, caseIds: [CASE_3_ID] },
 ];
+
+// --- Reusable scenario builder (powers the demo-scenario catalog) ------------
+
+export interface DemoCaseSpec {
+  id: string;
+  weBelegNo: string;
+  /** Short id used to namespace position/SKU/box ids. */
+  weShort: string;
+  locationCode: string;
+  locationType?: StorageLocation['type'];
+  goodsType: GoodsCategory;
+  totalQuantity: number;
+  wi?: WorkInstructionOverride;
+  positions: PositionSpec[];
+}
+
+/** Build one full Beleg aggregate (case + WI + positions + box + derived AW points). */
+export function buildCaseAggregate(spec: DemoCaseSpec): CaseAggregate {
+  const positions = buildPositions(spec.id, spec.weShort, spec.positions);
+  const wi = buildWorkInstruction(spec.id, spec.wi ?? {});
+  return {
+    caseId: spec.id,
+    case: buildCase(
+      spec.id,
+      spec.weBelegNo,
+      spec.locationCode,
+      spec.totalQuantity,
+      spec.locationType ?? 'regal',
+    ),
+    workInstruction: wi,
+    positions,
+    boxTargets: [
+      buildBox(
+        spec.id,
+        spec.weShort,
+        positions.map((p) => p.id),
+        spec.totalQuantity,
+      ),
+    ],
+    instructionPoints: deriveWorkInstructionPoints(wi, positions),
+  };
+}
+
+export interface AssembledScenario {
+  bundle: BundleContext;
+  collectStops: CollectStop[];
+  belege: BelegListItem[];
+  aggregates: CaseAggregate[];
+}
+
+export interface ScenarioInput {
+  bundleId: string;
+  employeeName: string;
+  workstation: string;
+  bereich: string;
+  cases: DemoCaseSpec[];
+}
+
+/** Assemble a full offline scenario (bundle + route-ordered stops + belege + aggregates). */
+export function assembleScenario(input: ScenarioInput): AssembledScenario {
+  const aggregates = input.cases.map((c) => buildCaseAggregate(c));
+  const belege: BelegListItem[] = aggregates.map((a, order) => ({
+    caseId: a.caseId,
+    weBelegNo: a.case.weBelegNo,
+    order,
+    storageLocationCode: a.case.storageLocation.code,
+    goodsType: input.cases[order]?.goodsType ?? 'regal',
+    totalQuantity: a.case.totalQuantity,
+  }));
+  const collectStops = buildCollectStops(
+    [],
+    aggregates.map((a) => ({
+      caseId: a.caseId,
+      storageLocationCode: a.case.storageLocation.code,
+    })),
+  );
+  const bundle: BundleContext = {
+    id: 'today',
+    bundleId: input.bundleId,
+    employeeName: input.employeeName,
+    workstation: input.workstation,
+    date: EXAMPLE_DATE,
+    plannedEffortMinutes: aggregates.reduce((sum, a) => sum + a.case.estimatedMinutes, 0),
+    bereich: input.bereich,
+    caseIds: aggregates.map((a) => a.caseId),
+  };
+  return { bundle, collectStops, belege, aggregates };
+}

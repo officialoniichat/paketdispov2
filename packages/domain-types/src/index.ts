@@ -7,6 +7,7 @@ export * from './primitives.js';
 export * from './enums.js';
 export * from './documents.js';
 export * from './cases.js';
+export * from './work-instruction.js';
 export * from './workforce.js';
 export * from './location.js';
 export * from './admin-config.js';

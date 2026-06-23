@@ -62,13 +62,49 @@ const aggregateFor = (id: string) => ({
       shopNo: '2143',
       floor: 'EG',
       status: 'open',
+      instruction: {
+        priceLabelRequired: true,
+        priceLabelAttachRequired: true,
+        priceLabelAttachLocation: null,
+        securityRequired: true,
+        securityLocation: 'Naht innen',
+        onlineHandlingRequired: false,
+        onlineHandlingLocation: null,
+        redPriceRequired: false,
+        notes: 'Vorsicht',
+      },
       skuLines: [
-        { id: `${id}-p1-s1`, ean: '111', size: 'M', expectedQuantity: 2 },
-        { id: `${id}-p1-s2`, ean: '222', size: 'L', expectedQuantity: 1 },
+        {
+          id: `${id}-p1-s1`,
+          ean: '111',
+          size: 'M',
+          expectedQuantity: 2,
+          confirmedQuantity: null,
+          status: 'open',
+        },
+        {
+          id: `${id}-p1-s2`,
+          ean: '222',
+          size: 'L',
+          expectedQuantity: 1,
+          confirmedQuantity: null,
+          status: 'open',
+        },
       ],
     },
   ],
   boxTargets: [],
+  instructionPoints: [
+    { pointNo: 1, key: 'price_label_print', label: 'Preisetikettendruck', value: 'Ja', scope: 'header' },
+    {
+      pointNo: 10,
+      key: 'security',
+      label: 'Sicherungsetikett',
+      value: 'Sichern für die Position(en): 1',
+      scope: 'position',
+      positionNos: [1],
+    },
+  ],
 });
 
 const apiGet = vi.fn(async (path: string, opts?: { params?: { path?: { caseId?: string } } }) => {
@@ -143,5 +179,21 @@ describe('loadAssignedWork', () => {
     await loadAssignedWork(db);
     const agg = await getAggregate('c1', db);
     expect(agg?.positions[0]?.skuLines.map((s) => s.expectedQuantity)).toEqual([2, 1]);
+  });
+
+  it('maps the real per-position Arbeitsanweisung instruction (no placeholders)', async () => {
+    await loadAssignedWork(db);
+    const agg = await getAggregate('c1', db);
+    expect(agg?.positions[0]?.instruction).toMatchObject({
+      securityRequired: true,
+      securityLocation: 'Naht innen',
+      notes: 'Vorsicht',
+    });
+  });
+
+  it('carries the ordered Arbeitsanweisung points', async () => {
+    await loadAssignedWork(db);
+    const agg = await getAggregate('c1', db);
+    expect(agg?.instructionPoints.map((p) => p.key)).toEqual(['price_label_print', 'security']);
   });
 });

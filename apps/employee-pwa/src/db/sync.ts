@@ -13,15 +13,19 @@ import type { components } from '@paket/api-client';
 import type {
   GoodsReceiptCase,
   ReceiptPosition,
+  ReceiptSkuLine,
   TransportBoxTarget,
   WorkInstructionHeader,
+  WorkInstructionPoint,
 } from '@paket/domain-types';
 import {
   caseStatusSchema,
   priorityFlagSchema,
   receiptPositionSchema,
+  receiptSkuLineSchema,
   sectionCodeSchema,
   transportBoxTargetSchema,
+  workInstructionPointSchema,
 } from '@paket/domain-types';
 import { db as defaultDb, type PaketDb } from './db.js';
 import {
@@ -131,45 +135,81 @@ function toWorkInstruction(
   };
 }
 
+/** Narrow a DTO SKU-line status onto the domain union, defaulting to `open`. */
+function skuStatus(value: unknown): ReceiptSkuLine['status'] {
+  const parsed = receiptSkuLineSchema.shape.status.safeParse(value);
+  return parsed.success ? parsed.data : 'open';
+}
+
+/** Map the per-position Arbeitsanweisung instruction (null → all-false defaults). */
+function toInstruction(
+  dto: ReceiptPositionDto['instruction'],
+): ReceiptPosition['instruction'] {
+  if (!dto) {
+    return {
+      priceLabelRequired: false,
+      priceLabelAttachRequired: false,
+      securityRequired: false,
+      onlineHandlingRequired: false,
+    };
+  }
+  return {
+    priceLabelRequired: dto.priceLabelRequired,
+    priceLabelAttachRequired: dto.priceLabelAttachRequired,
+    priceLabelAttachLocation: dto.priceLabelAttachLocation ?? undefined,
+    securityRequired: dto.securityRequired,
+    securityLocation: dto.securityLocation ?? undefined,
+    onlineHandlingRequired: dto.onlineHandlingRequired,
+    onlineHandlingLocation: dto.onlineHandlingLocation ?? undefined,
+    redPriceRequired: dto.redPriceRequired ?? undefined,
+    notes: dto.notes ?? undefined,
+  };
+}
+
 /**
- * Build domain positions from the DTO, mapping the real SKU lines (EAN/size/
- * quantity) it carries. Multiple positions and multiple SKU lines per position
- * are handled dynamically; a position without SKU lines maps to an empty list.
+ * Build domain positions from the DTO, mapping the real per-position
+ * Arbeitsanweisung instruction + SKU lines (EAN/size/Soll/Ist) it now carries.
+ * Multiple positions and multiple SKU lines per position are handled dynamically.
  */
 function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPosition[] {
-  return dtos.map((dto) => {
-    const skuDtos =
-      (
-        dto as {
-          skuLines?: Array<{ id?: string; ean?: string; size?: string; expectedQuantity?: number }>;
-        }
-      ).skuLines ?? [];
-    return {
-      id: dto.id,
-      caseId,
-      positionNo: dto.positionNo,
-      wgr: dto.wgr,
-      supplierArticleNo: dto.supplierArticleNo,
-      supplierColor: dto.supplierColor,
-      branchNo: dto.branchNo,
-      shopNo: dto.shopNo,
-      floor: str(dto.floor),
-      instruction: {
-        priceLabelRequired: true,
-        priceLabelAttachRequired: true,
-        securityRequired: false,
-        onlineHandlingRequired: false,
-      },
-      skuLines: skuDtos.map((s, i) => ({
-        id: s.id ?? `${dto.id}-sku-${i + 1}`,
-        receiptPositionId: dto.id,
-        ean: s.ean ?? '',
-        size: s.size ?? '',
-        expectedQuantity: s.expectedQuantity ?? 0,
-        status: 'open' as const,
-      })),
-      status: positionStatus(dto.status),
-    };
+  return dtos.map((dto) => ({
+    id: dto.id,
+    caseId,
+    positionNo: dto.positionNo,
+    wgr: dto.wgr,
+    supplierArticleNo: dto.supplierArticleNo,
+    supplierColor: dto.supplierColor,
+    branchNo: dto.branchNo,
+    shopNo: dto.shopNo,
+    floor: str(dto.floor),
+    instruction: toInstruction(dto.instruction),
+    skuLines: dto.skuLines.map((s) => ({
+      id: s.id,
+      receiptPositionId: dto.id,
+      ean: s.ean,
+      size: s.size,
+      expectedQuantity: s.expectedQuantity,
+      confirmedQuantity: s.confirmedQuantity ?? undefined,
+      status: skuStatus(s.status),
+    })),
+    status: positionStatus(dto.status),
+  }));
+}
+
+/** Validate the derived Arbeitsanweisung points from the DTO, dropping any bad row. */
+function toInstructionPoints(
+  dtos: ReadonlyArray<components['schemas']['WorkInstructionPointDto']>,
+): WorkInstructionPoint[] {
+  return dtos.flatMap((d) => {
+    const parsed = workInstructionPointSchema.safeParse({
+      pointNo: d.pointNo ?? undefined,
+      key: d.key,
+      label: d.label,
+      value: d.value,
+      scope: d.scope,
+      positionNos: d.positionNos,
+    });
+    return parsed.success ? [parsed.data] : [];
   });
 }
 
@@ -236,6 +276,7 @@ function toCaseAggregate(dto: CaseAggregateDto): CaseAggregate {
     workInstruction: toWorkInstruction(caseId, dto.workInstruction),
     positions: toPositions(caseId, dto.positions),
     boxTargets: toBoxTargets(caseId, dto.boxTargets),
+    instructionPoints: toInstructionPoints(dto.instructionPoints ?? []),
   };
 }
 
