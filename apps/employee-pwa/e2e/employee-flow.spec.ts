@@ -86,9 +86,14 @@ test('Kernfluss – COLLECT (Hard-Gate) → PROCESS → DONE', async ({ page }) 
   // --- Phase 2: PROCESS --------------------------------------------------
   await page.getByText('WE 3656860', { exact: true }).click();
   await expectHeading(page, 'Beleg bearbeiten');
+  // Beleg-Kopf (work-relevant subset): Abschnitt · Warenart · Beleg-Menge.
+  await expect(page.getByText('Abschnitt 1 · Vororder · 9 Teile')).toBeVisible();
   // All positions visible at a glance.
   await expect(page.getByText('Pos 1 ·')).toBeVisible();
   await expect(page.getByText('Pos 5 ·')).toBeVisible();
+  // Warenbezeichnung = article identity (WGR + Saison) + NOS badge on position 1.
+  await expect(page.getByText('WGR 218110 · Saison NOS')).toBeVisible();
+  await expect(page.getByText('♻️ NOS')).toBeVisible();
   // Faithful Arbeitsanweisung section + a variant (Rotpreis) render.
   await expect(page.getByText('Arbeitsanweisung')).toBeVisible();
   await expect(page.getByText('Rotpreis').first()).toBeVisible();

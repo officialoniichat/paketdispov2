@@ -169,6 +169,7 @@ export class CasesService {
     supplierArticleNo: string;
     supplierColor: string;
     season: string | null;
+    nosFlag: boolean | null;
     branchNo: string;
     shopNo: string;
     floor: string | null;
@@ -183,6 +184,7 @@ export class CasesService {
       supplierArticleNo: p.supplierArticleNo,
       supplierColor: p.supplierColor,
       season: p.season,
+      nosFlag: p.nosFlag,
       branchNo: p.branchNo,
       shopNo: p.shopNo,
       floor: p.floor,

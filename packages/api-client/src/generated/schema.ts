@@ -739,10 +739,12 @@ export interface components {
             wgr: string;
             supplierArticleNo: string;
             supplierColor: string;
-            season?: Record<string, never> | null;
+            season?: string | null;
+            /** @description NOS (Never Out of Stock) article flag */
+            nosFlag?: boolean | null;
             branchNo: string;
             shopNo: string;
-            floor?: Record<string, never> | null;
+            floor?: string | null;
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
             instruction?: components["schemas"]["PositionInstructionDto"] | null;
@@ -785,7 +787,7 @@ export interface components {
         };
         NextBundleResultDto: {
             assigned: boolean;
-            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty|reserve_protected */
+            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty */
             reason?: string;
             /** @description Belege in the assigned cart */
             caseCount?: number;

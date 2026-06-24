@@ -20,6 +20,7 @@ import type {
 } from '@paket/domain-types';
 import {
   caseStatusSchema,
+  goodsTypeTextSchema,
   priorityFlagSchema,
   receiptPositionSchema,
   receiptSkuLineSchema,
@@ -93,6 +94,12 @@ function casePriorityFlags(values: readonly string[]): GoodsReceiptCase['priorit
   );
 }
 
+/** Map the DTO's Warenart (GoodsTypeText) onto the domain enum, dropping unknowns. */
+function caseGoodsType(value: unknown): GoodsReceiptCase['goodsTypeText'] {
+  const parsed = goodsTypeTextSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** CaseSummaryDto + section→domain case (synthesising fields the DTO omits). */
 function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
   return {
@@ -110,6 +117,7 @@ function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
       active: true,
     },
     section: caseSection(summary.section),
+    goodsTypeText: caseGoodsType(summary.goodsType),
     priorityFlags: casePriorityFlags(summary.priorityFlags),
     totalQuantity: summary.totalQuantity,
     status: caseStatus(summary.status),
@@ -179,6 +187,8 @@ function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPositio
     wgr: dto.wgr,
     supplierArticleNo: dto.supplierArticleNo,
     supplierColor: dto.supplierColor,
+    season: str(dto.season),
+    nosFlag: dto.nosFlag ?? undefined,
     branchNo: dto.branchNo,
     shopNo: dto.shopNo,
     floor: str(dto.floor),

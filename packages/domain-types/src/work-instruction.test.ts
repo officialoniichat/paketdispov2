@@ -49,7 +49,7 @@ function byKey(points: ReturnType<typeof deriveWorkInstructionPoints>, key: stri
   return points.find((p) => p.key === key);
 }
 
-describe('deriveWorkInstructionPoints — example Beleg (1,4,5,6,8,9,10,11)', () => {
+describe('deriveWorkInstructionPoints — example Beleg (1,5,6,8,9,10,11)', () => {
   const points = deriveWorkInstructionPoints(header(), examplePositions);
 
   it('emits the confirmed points with their printed numbers', () => {
@@ -57,6 +57,11 @@ describe('deriveWorkInstructionPoints — example Beleg (1,4,5,6,8,9,10,11)', ()
     expect(byKey(points, 'sort')).toMatchObject({ pointNo: 5, value: 'Ja' });
     expect(byKey(points, 'box_label')).toMatchObject({ pointNo: 9, value: 'Ja' });
     expect(byKey(points, 'zst')).toMatchObject({ pointNo: 11, value: 'Ja' });
+  });
+
+  it('does NOT emit a Warenbezeichnung point (point 4 is the position list, not a derived line)', () => {
+    expect(byKey(points, 'warenbezeichnung')).toBeUndefined();
+    expect(points.some((p) => p.pointNo === 4)).toBe(false);
   });
 
   it('shows "Nein" for Prüfung Wareneingang when quantity_only', () => {

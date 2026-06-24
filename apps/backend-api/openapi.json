@@ -1900,8 +1900,13 @@
             "type": "string"
           },
           "season": {
-            "type": "object",
+            "type": "string",
             "nullable": true
+          },
+          "nosFlag": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "NOS (Never Out of Stock) article flag"
           },
           "branchNo": {
             "type": "string"
@@ -1910,7 +1915,7 @@
             "type": "string"
           },
           "floor": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -2091,7 +2096,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty|reserve_protected"
+            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty"
           },
           "caseCount": {
             "type": "number",

@@ -29,8 +29,9 @@ export interface WorkInstructionPointPositionInput {
 /**
  * Faithful, ordered projection of the printed Arbeitsanweisung (L&T Wareneingang
  * V28.x), derived from the stored work-instruction header + position
- * instructions. The paper form is a fixed point template; the example renders
- * points 1, 4, 5, 6, 8, 9, 10, 11 (see `docs/reference/arbeitsanweisung-lt-…pdf`).
+ * instructions. The paper form is a fixed point template; the derived action
+ * points are 1, 5, 6, 8, 9, 10, 11 (point 4 "Warenbezeichnung" is the position
+ * identity + Beleg-Kopf, not a derived line — see the concept doc).
  * Conditional points (Prüfung %, "Sichern Ja", Rotpreis, Online) appear only
  * when the data is present.
  *
@@ -42,7 +43,6 @@ export interface WorkInstructionPointPositionInput {
 /** Stable point key (drives icons/logic; survives label/number changes). */
 export const workInstructionPointKeySchema = z.enum([
   'price_label_print', // 1
-  'warenbezeichnung', // 4
   'sort', // 5
   'goods_receipt_check', // 6
   'price_label_attach', // 8
@@ -101,17 +101,11 @@ export function deriveWorkInstructionPoints(
     scope: 'header',
   });
 
-  // 4. Warenbezeichnung (position roll-up)
-  if (allNos.length > 0) {
-    points.push({
-      pointNo: 4,
-      key: 'warenbezeichnung',
-      label: 'Warenbezeichnung',
-      value: `Positionen ${allNos.join(', ')}`,
-      scope: 'position',
-      positionNos: allNos,
-    });
-  }
+  // 4. Warenbezeichnung is NOT a derived AW line: on the L&T form it is the
+  // per-position article identity (WGR + Artikel + Farbe + Saison) echoed with
+  // the Beleg-Kopf attributes (Filiale/Abschnitt/Etage). Those are header/position
+  // data, shown by the position list + Beleg-Kopf — not a checklist point. See
+  // docs/concept/warenbezeichnung-position-data-model-concept.md.
 
   // 5. Nach Artikel, Farbe, Größe sortieren
   points.push({

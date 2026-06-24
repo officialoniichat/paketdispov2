@@ -41,7 +41,6 @@ const ACTION_POINT_KEYS = new Set([
   'price_label_print', // → "Preisetiketten drucken" button
   'price_label_attach', // → placement card below
   'zst', // → "Beleg erledigt" sets the ZST
-  'warenbezeichnung', // redundant with the position list
 ]);
 
 const FLAG_CHIPS = [
@@ -93,6 +92,17 @@ export function BelegProcessScreen(): JSX.Element {
   // the always-on Mindestmengen-count — kept distinct to avoid confusion.
   const infoPoints = aggregate.instructionPoints.filter((p) => !ACTION_POINT_KEYS.has(p.key));
   const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
+  // Beleg-Kopf, work-relevant subset (§Warenbezeichnung-Konzept): Abschnitt ·
+  // Warenart · Beleg-Menge. Filiale/Lieferschein/Shopbereich are header data that
+  // matter at boxing/ZST, not here.
+  const c = aggregate.case;
+  const kopf = [
+    c.section != null ? `Abschnitt ${c.section}` : null,
+    c.goodsTypeText ?? null,
+    `${c.totalQuantity} Teile`,
+  ]
+    .filter((x): x is string => x !== null)
+    .join(' · ');
 
   const finish = async (): Promise<void> => {
     await flow.complete();
@@ -116,6 +126,11 @@ export function BelegProcessScreen(): JSX.Element {
       secondary={{ label: 'Teilabschluss', onClick: () => setPartialOpen(true) }}
     >
       <Stack spacing={2}>
+        {/* Beleg-Kopf (Abschnitt · Warenart · Beleg-Menge) — work-relevant subset. */}
+        <Typography variant="body2" color="text.secondary">
+          {kopf}
+        </Typography>
+
         {/* Arbeitsanweisung — faithful ordered points (printed numbers kept),
             minus the ones already done via buttons (print/attach/ZST). */}
         {infoPoints.length > 0 ? (
@@ -210,12 +225,18 @@ export function BelegProcessScreen(): JSX.Element {
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {pos.supplierColor}
                   </Typography>
+                  {/* Warenbezeichnung = Artikel-Identität: WGR (+ Saison). */}
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    WGR {pos.wgr}
+                    {pos.season ? ` · Saison ${pos.season}` : ''}
+                  </Typography>
                 </Box>
                 <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Soll {soll}</Typography>
               </Stack>
 
-              {flags.length > 0 ? (
+              {flags.length > 0 || pos.nosFlag ? (
                 <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
+                  {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
                   {flags.map((f) => (
                     <Chip key={f.key} size="small" color={f.color} label={f.label} />
                   ))}

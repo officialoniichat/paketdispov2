@@ -16,6 +16,7 @@ import {
   transportBoxTargetSchema,
   workInstructionHeaderSchema,
   type GoodsReceiptCase,
+  type GoodsTypeText,
   type ReceiptPosition,
   type StorageLocation,
   type TransportBoxTarget,
@@ -40,6 +41,10 @@ export interface PositionSpec {
   supplierArticleNo: string;
   supplierColor: string;
   wgr: string;
+  /** NOS (Never Out of Stock) article — shown as a per-position badge. */
+  nosFlag?: boolean;
+  /** Saison code (part of the article identity / Warenbezeichnung). */
+  season?: string;
   priceLabelAttachLocation?: string;
   securityRequired?: boolean;
   securityLocation?: string;
@@ -78,7 +83,8 @@ function buildPositions(caseId: string, weShort: string, specs: PositionSpec[]):
       wgr: spec.wgr,
       supplierArticleNo: spec.supplierArticleNo,
       supplierColor: spec.supplierColor,
-      nosFlag: false,
+      season: spec.season,
+      nosFlag: spec.nosFlag ?? false,
       branchNo: '1',
       shopNo: '2143',
       hShopNo: '210',
@@ -114,6 +120,8 @@ function buildCase(
   locationCode: string,
   totalQuantity: number,
   locationType: StorageLocation['type'] = 'regal',
+  section: GoodsReceiptCase['section'] = null,
+  goodsTypeText: GoodsTypeText = 'Vororder',
 ): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
     id,
@@ -133,8 +141,8 @@ function buildCase(
       barcode: locationCode,
       active: true,
     },
-    section: null,
-    goodsTypeText: 'Vororder',
+    section,
+    goodsTypeText,
     priorityFlags: [],
     totalQuantity,
     status: 'assigned',
@@ -172,6 +180,8 @@ const case1Positions = buildPositions(EXAMPLE_CASE_ID, '3656860', [
     supplierArticleNo: '411005-CAMAL-Z bike glove man',
     supplierColor: '12183-black.white fog',
     wgr: '218110',
+    nosFlag: true, // NOS-Artikel
+    season: 'NOS',
     priceLabelAttachLocation: 'Am Bund / Innenetikett',
     skus: [{ ean: '4068657016108', size: '8', quantity: 1 }],
   },
@@ -213,7 +223,7 @@ const case1Positions = buildPositions(EXAMPLE_CASE_ID, '3656860', [
 const case1Wi = buildWorkInstruction(EXAMPLE_CASE_ID);
 const case1: CaseAggregate = {
   caseId: EXAMPLE_CASE_ID,
-  case: buildCase(EXAMPLE_CASE_ID, '3656860', 'R27', 9),
+  case: buildCase(EXAMPLE_CASE_ID, '3656860', 'R27', 9, 'regal', 1),
   workInstruction: case1Wi,
   positions: case1Positions,
   boxTargets: [buildBox(EXAMPLE_CASE_ID, '3656860', case1Positions.map((p) => p.id), 9)],
@@ -321,6 +331,10 @@ export interface DemoCaseSpec {
   locationType?: StorageLocation['type'];
   goodsType: GoodsCategory;
   totalQuantity: number;
+  /** Verladesektion (Abschnitt 1/2/3/4/7/8), null = nur Prio/keine. */
+  section?: GoodsReceiptCase['section'];
+  /** Warenart (GoodsTypeText) — Beleg-Kopf-Order-Typ. */
+  goodsTypeText?: GoodsTypeText;
   wi?: WorkInstructionOverride;
   positions: PositionSpec[];
 }
@@ -337,6 +351,8 @@ export function buildCaseAggregate(spec: DemoCaseSpec): CaseAggregate {
       spec.locationCode,
       spec.totalQuantity,
       spec.locationType ?? 'regal',
+      spec.section ?? null,
+      spec.goodsTypeText ?? 'Vororder',
     ),
     workInstruction: wi,
     positions,

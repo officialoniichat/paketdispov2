@@ -24,7 +24,7 @@ const todayResponse = {
       estimatedMinutes: 14,
       storageLocationCode: 'R27',
       bookingDate: '2026-06-15',
-      goodsType: null,
+      goodsType: 'Vororder',
     },
     {
       id: 'c2',
@@ -58,6 +58,8 @@ const aggregateFor = (id: string) => ({
       wgr: '218110',
       supplierArticleNo: 'ART-1',
       supplierColor: 'black',
+      season: 'HW25',
+      nosFlag: true,
       branchNo: '1',
       shopNo: '2143',
       floor: 'EG',
@@ -204,6 +206,18 @@ describe('loadAssignedWork', () => {
     await loadAssignedWork(db);
     const agg = await getAggregate('c1', db);
     expect(agg?.instructionPoints.map((p) => p.key)).toEqual(['price_label_print', 'security']);
+  });
+
+  it('maps the per-position NOS flag and Saison (Warenbezeichnung identity)', async () => {
+    await loadAssignedWork(db);
+    const agg = await getAggregate('c1', db);
+    expect(agg?.positions[0]).toMatchObject({ nosFlag: true, season: 'HW25' });
+  });
+
+  it('maps the Beleg-Kopf Warenart (goodsTypeText) from the case summary', async () => {
+    await loadAssignedWork(db);
+    const agg = await getAggregate('c1', db);
+    expect(agg?.case.goodsTypeText).toBe('Vororder');
   });
 });
 

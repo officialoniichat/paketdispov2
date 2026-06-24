@@ -113,10 +113,16 @@ export class ReceiptPositionDto {
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
   @ApiProperty() supplierArticleNo!: string;
   @ApiProperty() supplierColor!: string;
-  @ApiPropertyOptional({ nullable: true }) season!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) season!: string | null;
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'NOS (Never Out of Stock) article flag',
+  })
+  nosFlag!: boolean | null;
   @ApiProperty() branchNo!: string;
   @ApiProperty() shopNo!: string;
-  @ApiPropertyOptional({ nullable: true }) floor!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) floor!: string | null;
   @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
   status!: string;
   @ApiPropertyOptional({ type: PositionInstructionDto, nullable: true })
