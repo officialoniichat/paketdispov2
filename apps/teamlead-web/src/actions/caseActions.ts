@@ -35,6 +35,7 @@ export type CaseActionId =
   | 'unpark'
   | 'reactivate'
   | 'resolve_issue'
+  | 'split'
   | 'cancel';
 
 export interface CaseActionDescriptor {
@@ -43,6 +44,12 @@ export interface CaseActionDescriptor {
   tone: ActionTone;
   primary: boolean;
   reasonSuggestions: string[];
+  /**
+   * Custom actions are not confirmed through the generic mandatory-reason dialog;
+   * they open their own dialog (which still captures a reason). `run` is a no-op
+   * for them — the surface handles the interaction (see {@link CaseActions} onSplit).
+   */
+  custom?: 'split';
   run(ctx: CaseActionCtx, reason: string): void;
 }
 
@@ -93,6 +100,18 @@ const REGISTRY: CaseActionDescriptor[] = [
     run: (c, r) => c.store.releaseCase(c.caseId, r),
   },
   {
+    id: 'split',
+    label: 'Aufteilen …',
+    tone: 'primary',
+    primary: true,
+    // Driven by the SplitDialog, not the ReasonDialog (the dialog captures the reason).
+    custom: 'split',
+    reasonSuggestions: [],
+    run: () => {
+      /* custom: handled by the split dialog */
+    },
+  },
+  {
     id: 'prioritise',
     label: 'Priorisieren',
     tone: 'default',
@@ -127,10 +146,10 @@ export function caseActions(c: CaseLike): CaseActionDescriptor[] {
       ids.push('approve', 'park', 'cancel');
       break;
     case 'ready':
-      ids.push('park', 'cancel');
+      ids.push('split', 'park', 'cancel');
       break;
     case 'parked':
-      ids.push('unpark', 'cancel');
+      ids.push('unpark', 'split', 'cancel');
       break;
     case 'assigned':
       ids.push('cancel');

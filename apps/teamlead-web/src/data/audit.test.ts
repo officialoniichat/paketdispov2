@@ -50,6 +50,16 @@ describe('createOverrideEvent (§8.4 audit)', () => {
     expect(event.payload.previousBundleId).toBe('bnd-anna');
   });
 
+  it('records a Beleg-Split (aufteilen) as an audited override with a reason', () => {
+    const split = createOverrideEvent(
+      { action: 'aufteilen', entityId: 'case-9', reason: 'Großmenge Koffer — auf 3 MA verteilt', actorId: 'tl-1' },
+      NOW,
+    );
+    expect(split.eventType).toBe('assignment.overridden');
+    expect(split.payload.action).toBe('aufteilen');
+    expect(formatAuditAction(split.eventType, 'aufteilen')).toBe('Beleg aufteilen');
+  });
+
   it('maps park/prioritise to their own event types', () => {
     const park = createOverrideEvent(
       { action: 'parken', entityId: 'case-2', reason: 'Klärung', actorId: 'tl-1' },

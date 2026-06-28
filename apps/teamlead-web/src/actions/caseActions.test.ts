@@ -36,6 +36,13 @@ describe('caseActions registry', () => {
     expect(got).not.toContain('park');
   });
 
+  it('offers split (Aufteilen) on poolable states, not after assignment', () => {
+    expect(ids({ status: 'ready', priorityFlags: [] })).toContain('split');
+    expect(ids({ status: 'parked', priorityFlags: [] })).toContain('split');
+    expect(ids({ status: 'assigned', priorityFlags: [] })).not.toContain('split');
+    expect(ids({ status: 'needs_review', priorityFlags: [] })).not.toContain('split');
+  });
+
   it('assigned offers only cancel (out of pool, no prioritise)', () => {
     expect(ids({ status: 'assigned', priorityFlags: [] })).toEqual(['cancel']);
   });

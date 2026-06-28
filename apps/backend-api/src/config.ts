@@ -21,7 +21,9 @@ function list(value: string | undefined): string[] {
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
   host: process.env.API_HOST ?? '0.0.0.0',
-  port: num(process.env.API_PORT, 3000),
+  // Railway (and most PaaS) inject the listen port via PORT; prefer it over the
+  // local API_PORT so the container binds the port the platform routes to.
+  port: num(process.env.PORT ?? process.env.API_PORT, 3000),
   logLevel: process.env.LOG_LEVEL ?? 'info',
   databaseUrl: process.env.DATABASE_URL ?? '',
   otel: {
@@ -44,7 +46,9 @@ export const config = {
       : ['realm_access.roles', 'roles', 'groups'],
     employeeNoClaim: process.env.OIDC_EMPLOYEE_NO_CLAIM ?? 'employee_no',
     // Dev/CI only: PEM-encoded RS256 public key to verify locally-issued tokens.
-    devPublicKeyPem: process.env.AUTH_DEV_PUBLIC_KEY ?? '',
+    // Accept both a real multi-line PEM and one pasted with literal "\n" escapes
+    // (a common dashboard paste form), so the verifier configures reliably.
+    devPublicKeyPem: (process.env.AUTH_DEV_PUBLIC_KEY ?? '').replace(/\\n/g, '\n'),
   },
   swagger: {
     enabled: bool(process.env.SWAGGER_ENABLED, true),

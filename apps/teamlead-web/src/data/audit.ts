@@ -15,6 +15,7 @@ export type OverrideAction =
   | 'entziehen'
   | 'hinzufuegen'
   | 'neuverteilen'
+  | 'aufteilen'
   | 'freigeben'
   | 'priorisieren'
   | 'reihenfolge'
@@ -27,6 +28,7 @@ export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
   entziehen: 'Paket entziehen',
   hinzufuegen: 'Paket hinzufügen',
   neuverteilen: 'Neu verteilen',
+  aufteilen: 'Beleg aufteilen',
   freigeben: 'Freigeben',
   priorisieren: 'Priorisieren',
   reihenfolge: 'Reihenfolge ändern',
@@ -47,6 +49,7 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.cancelled': 'Storniert',
   'bundle.created': 'Paket gebildet',
   'bundle.assigned': 'Paket zugeteilt',
+  'bundle.completed': 'Paket abgeschlossen',
   'pickup.location_scanned': 'Lagerplatz gescannt',
   'case.started': 'Bearbeitung gestartet',
   'position.confirmed': 'Position bestätigt',
@@ -138,6 +141,7 @@ const ACTION_EVENT_TYPE: Record<OverrideAction, WorkflowEventType> = {
   entziehen: 'assignment.overridden',
   hinzufuegen: 'assignment.overridden',
   neuverteilen: 'assignment.overridden',
+  aufteilen: 'assignment.overridden',
   freigeben: 'case.ready',
   priorisieren: 'case.prioritized',
   reihenfolge: 'assignment.overridden',

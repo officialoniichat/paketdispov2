@@ -52,3 +52,6 @@ prisma/*.db
 
 # Scratch / extraction workspace
 /temp/
+
+# Railway variable JSONs (contain dev tokens) - never commit
+infra/railway/

@@ -46,6 +46,42 @@ pnpm typecheck
 pnpm test
 ```
 
+## Deployment (Railway)
+
+Three services deploy from this monorepo via config-as-code (`apps/<svc>/railway.json`):
+`backend-api`, `teamlead-web`, `employee-pwa`. The frontends are served with
+`vite preview` and resolve their URLs at **runtime** from `/env.js` (`window.__ENV__`),
+so the variables below are read on container start — **no rebuild needed** when a URL
+changes. Set them in the Railway dashboard (Service → Variables), then **Restart**.
+
+**backend-api**
+
+| Variable | Example | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | `postgresql://…` | Prisma (link a Railway Postgres) |
+| `CORS_ORIGINS` | `https://teamlead-web-….up.railway.app,https://employee-pwa-….up.railway.app` | Allow the two frontends (comma-separated; `*` = any, demo only) |
+| `NODE_ENV` | `production` | Enables prod mode |
+
+**teamlead-web**
+
+| Variable | Example | Purpose |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `https://backend-api-….up.railway.app` | Backend the cockpit fetches (fixes "Failed to fetch") |
+| `VITE_EMPLOYEE_APP_URL` | `https://employee-pwa-….up.railway.app` | "Zur Mitarbeiter-App" button target (fixes localhost:5175) |
+| `VITE_DEV_TOKEN` | `<rs256-jwt>` | Dev bearer token (until OIDC) |
+
+**employee-pwa**
+
+| Variable | Example | Purpose |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `https://backend-api-….up.railway.app` | Backend the app fetches (unset ⇒ offline demo) |
+| `VITE_TEAMLEAD_APP_URL` | `https://teamlead-web-….up.railway.app` | "Zur Teamlead-App" button target |
+| `VITE_DEV_TOKEN` | `<rs256-jwt>` | Dev bearer token (until OIDC) |
+
+Railway injects `PORT` for the backend automatically — do **not** set it. Make the
+backend's `CORS_ORIGINS` match the frontend origins exactly (scheme + host, no trailing
+slash). Full runbook and troubleshooting: [`docs/deploy/railway.md`](docs/deploy/railway.md).
+
 ## Definition of Done (EPIC 1)
 
 - `pnpm --filter @paket/domain-types build` – green

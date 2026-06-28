@@ -6,8 +6,9 @@
   "description": "Teamlead/Admin Dashboard – Operatives Cockpit & Konfiguration (§10/§11)",
   "scripts": {
     "dev": "vite --port 5174",
-    "build": "vite build",
+    "build": "pnpm --filter \"@paket/teamlead-web^...\" build && vite build",
     "preview": "vite preview --port 5174",
+    "start:prod": "node scripts/write-runtime-env.mjs && vite preview --port 5174",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
     "test": "vitest run --passWithNoTests",

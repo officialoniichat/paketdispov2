@@ -25,9 +25,19 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // /env.js carries runtime config regenerated on each deploy. Never precache it
+        // (Workbox would serve the stale build-time placeholder) or let the SPA
+        // navigation fallback swallow it — keep it a plain network fetch.
+        globIgnores: ['**/env.js'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/env\.js$/],
       },
       devOptions: { enabled: false },
     }),
   ],
+  // Serve on 0.0.0.0 and accept the reverse-proxy host (e.g. *.up.railway.app) so
+  // the deployed app responds. Port comes from the dev/preview scripts (5175),
+  // which matches the platform's routed target port.
+  server: { host: true, allowedHosts: true },
+  preview: { host: true, allowedHosts: true },
 });

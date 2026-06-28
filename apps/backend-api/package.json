@@ -9,7 +9,7 @@
     "seed": "node --import @swc-node/register/esm-register prisma/seed.ts"
   },
   "scripts": {
-    "build": "prisma generate && tsc -p tsconfig.json",
+    "build": "pnpm --filter \"@paket/backend-api^...\" build && prisma generate && tsc -p tsconfig.json",
     "dev": "node --import @swc-node/register/esm-register --watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
