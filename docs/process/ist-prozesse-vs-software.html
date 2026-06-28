@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IST-Prozesse L&amp;T vs. Software — kritische Automatisierungs-Analyse</title>
+<style>
+  :root{
+    --ink:#1a1f24; --ink-soft:#43505c; --ink-faint:#6b7884;
+    --paper:#f6f4ef; --card:#ffffff; --line:#dcd6cb; --line-soft:#e9e4da;
+    --voll:#1b7f4b; --voll-bg:#e6f4ec; --voll-line:#bfe2cd;
+    --teil:#b06d00; --teil-bg:#fbf0d9; --teil-line:#ecd6a6;
+    --man:#3f5a73;  --man-bg:#e8eef3;  --man-line:#cad9e4;
+    --fehlt:#b3261e; --fehlt-bg:#fbe6e3; --fehlt-line:#f0c4bf;
+    --accent:#1f3a5f; --accent-2:#9a4a2f;
+    --crit:#8b1a14; --high:#c0541f; --med:#9a7400; --low:#5f6b76;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    font-size:15.5px; line-height:1.5;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:0 28px 80px;}
+  /* ---------- Masthead ---------- */
+  .masthead{
+    border-bottom:3px solid var(--ink); margin-top:34px; padding-bottom:18px;
+  }
+  .kicker{
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--accent-2); font-weight:700; margin-bottom:10px;
+  }
+  h1{
+    font-size:40px; line-height:1.05; margin:0 0 12px; letter-spacing:-.01em; font-weight:700;
+  }
+  .dek{font-size:18px; color:var(--ink-soft); max-width:760px; margin:0; font-style:italic;}
+  .meta-row{
+    display:flex; flex-wrap:wrap; gap:6px 26px; margin-top:18px;
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5px; color:var(--ink-faint);
+    letter-spacing:.02em;
+  }
+  .meta-row b{color:var(--ink); font-weight:600;}
+  /* ---------- Section headings ---------- */
+  h2{
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:13px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--accent); font-weight:700;
+    margin:48px 0 4px; padding-bottom:7px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; gap:12px;
+  }
+  h2 .num{font-size:22px; color:var(--accent-2); letter-spacing:0; font-family:Georgia,serif;}
+  .sec-sub{font-family:"Helvetica Neue",Arial,sans-serif; font-size:12.5px; color:var(--ink-faint); margin:8px 0 22px; letter-spacing:.01em;}
+  h3{font-size:20px; margin:34px 0 6px; letter-spacing:-.005em;}
+  h3 .phase-tag{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; letter-spacing:.1em; color:var(--ink-faint); text-transform:uppercase; display:block; margin-bottom:2px;}
+  p{margin:0 0 12px;}
+  code{font-family:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace; font-size:12px; background:#efece4; border:1px solid var(--line-soft); border-radius:4px; padding:1px 5px; color:#34404b; white-space:nowrap;}
+  /* ---------- Legend ---------- */
+  .legend{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:6px 0 4px;
+  }
+  .lg{border:1px solid var(--line); border-radius:10px; padding:13px 14px; background:var(--card);}
+  .lg .pill{margin-bottom:8px;}
+  .lg p{font-size:12.5px; color:var(--ink-soft); margin:0; line-height:1.4;}
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-family:"Helvetica Neue",Arial,sans-serif;
+    font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    padding:4px 9px; border-radius:100px; border:1px solid;
+  }
+  .pill::before{content:""; width:8px; height:8px; border-radius:50%; background:currentColor; opacity:.85;}
+  .p-voll{color:var(--voll); background:var(--voll-bg); border-color:var(--voll-line);}
+  .p-teil{color:var(--teil); background:var(--teil-bg); border-color:var(--teil-line);}
+  .p-man{color:var(--man); background:var(--man-bg); border-color:var(--man-line);}
+  .p-fehlt{color:var(--fehlt); background:var(--fehlt-bg); border-color:var(--fehlt-line);}
+  /* ---------- Summary stat band ---------- */
+  .band{display:grid; grid-template-columns:repeat(4,1fr); gap:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--card); margin:4px 0 8px;}
+  .band .cell{padding:18px 18px; border-right:1px solid var(--line-soft);}
+  .band .cell:last-child{border-right:none;}
+  .band .big{font-size:34px; font-weight:700; line-height:1; letter-spacing:-.02em; font-family:Georgia,serif;}
+  .band .lbl{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; letter-spacing:.04em; color:var(--ink-faint); text-transform:uppercase; margin-top:7px;}
+  .band .cell.c-fehlt .big{color:var(--fehlt);}
+  .band .cell.c-teil .big{color:var(--teil);}
+  .band .cell.c-voll .big{color:var(--voll);}
+  /* ---------- Flow diagram ---------- */
+  .flow{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:8px 0 2px;}
+  .flow .phase{border:1px solid var(--line); border-radius:12px; background:var(--card); overflow:hidden; display:flex; flex-direction:column;}
+  .flow .phead{padding:11px 13px; border-bottom:1px solid var(--line-soft); background:#fbfaf7;}
+  .flow .phead .pn{font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-2); font-weight:700;}
+  .flow .phead .pt{font-size:15px; font-weight:700; margin-top:2px; line-height:1.15;}
+  .flow .psteps{padding:9px; display:flex; flex-direction:column; gap:6px; flex:1;}
+  .step{border-radius:7px; padding:7px 9px; font-size:11.8px; line-height:1.3; border:1px solid; position:relative;}
+  .step b{display:block; font-weight:700; font-size:11.8px; margin-bottom:1px;}
+  .step.s-voll{background:var(--voll-bg); border-color:var(--voll-line); color:#15532f;}
+  .step.s-teil{background:var(--teil-bg); border-color:var(--teil-line); color:#6e4400;}
+  .step.s-man{background:var(--man-bg); border-color:var(--man-line); color:#2c4357;}
+  .step.s-fehlt{background:var(--fehlt-bg); border-color:var(--fehlt-line); color:#7d1812;}
+  .flow-note{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--ink-faint); margin-top:12px; text-align:center; letter-spacing:.02em;}
+  /* ---------- Tables ---------- */
+  .tbl-wrap{border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:14px 0 6px; background:var(--card);}
+  table{width:100%; border-collapse:collapse; font-size:13.2px;}
+  thead th{
+    background:#f1ede5; text-align:left; font-family:"Helvetica Neue",Arial,sans-serif;
+    font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-soft);
+    font-weight:700; padding:10px 13px; border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:11px 13px; border-bottom:1px solid var(--line-soft); vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:nth-child(even){background:#faf8f4;}
+  td .ist{font-weight:700; display:block; margin-bottom:2px;}
+  td .src{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:11px; color:var(--accent); display:block; margin-top:3px; word-break:break-word; white-space:normal; line-height:1.35;}
+  td .crit-note{color:var(--ink-soft); font-size:12.5px;}
+  .sev{font-family:"Helvetica Neue",Arial,sans-serif; font-size:9.5px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:4px; color:#fff; display:inline-block; white-space:nowrap;}
+  .sev-crit{background:var(--crit);} .sev-high{background:var(--high);} .sev-med{background:var(--med);} .sev-low{background:var(--low);}
+  .col-st{width:118px;} .col-sev{width:78px;}
+  /* ---------- Gap cards ---------- */
+  .gaps{display:flex; flex-direction:column; gap:11px; margin-top:6px;}
+  .gap{display:grid; grid-template-columns:34px 1fr; gap:14px; border:1px solid var(--line); border-left-width:5px; border-radius:10px; padding:14px 16px; background:var(--card);}
+  .gap.g-crit{border-left-color:var(--crit);} .gap.g-high{border-left-color:var(--high);} .gap.g-med{border-left-color:var(--med);}
+  .gap .rank{font-family:Georgia,serif; font-size:24px; font-weight:700; color:var(--ink-faint); line-height:1;}
+  .gap h4{margin:0 0 4px; font-size:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .gap p{margin:0; font-size:13px; color:var(--ink-soft); line-height:1.45;}
+  .gap .src{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:11px; color:var(--accent); margin-top:5px; display:block;}
+  /* ---------- Glossary ---------- */
+  .gloss{columns:2; column-gap:34px; margin-top:6px;}
+  .gl{break-inside:avoid; margin:0 0 13px; padding-bottom:12px; border-bottom:1px solid var(--line-soft);}
+  .gl dt{font-weight:700; font-size:14.5px; margin-bottom:2px;}
+  .gl dt .abbr{font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; letter-spacing:.05em; color:var(--accent-2); text-transform:uppercase; margin-left:7px; font-weight:700;}
+  .gl dd{margin:0; font-size:12.8px; color:var(--ink-soft); line-height:1.45;}
+  .gl dd .sw{font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; margin-top:3px; display:block;}
+  .sw .ok{color:var(--voll); font-weight:700;} .sw .no{color:var(--fehlt); font-weight:700;} .sw .pt{color:var(--teil); font-weight:700;}
+  /* ---------- Callout ---------- */
+  .callout{border:1px solid var(--line); border-left:5px solid var(--accent-2); border-radius:10px; background:#fbf6ee; padding:16px 20px; margin:18px 0;}
+  .callout h4{margin:0 0 8px; font-size:16px;}
+  .callout p:last-child{margin-bottom:0;}
+  /* ---------- Fazit ---------- */
+  .fazit{background:var(--ink); color:#f2efe8; border-radius:14px; padding:26px 30px; margin-top:20px;}
+  .fazit h3{color:#fff; margin-top:0;}
+  .fazit p{color:#d4cfc4;}
+  .fazit strong{color:#fff;}
+  .fazit .src{font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:11px; color:#9fb4cf;}
+  footer{margin-top:46px; padding-top:16px; border-top:1px solid var(--line); font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--ink-faint); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+  /* ---------- Print ---------- */
+  @media print{
+    body{background:#fff; font-size:10.5px;}
+    .wrap{max-width:none; padding:0 6mm;}
+    h2{break-after:avoid; margin-top:18px;}
+    h3{break-after:avoid;}
+    .tbl-wrap,.gap,.flow,.band,.legend,.callout,.fazit,.gl{break-inside:avoid;}
+    tbody tr{break-inside:avoid;}
+    .flow{grid-template-columns:repeat(4,1fr);}
+    .fazit{background:#fff; color:var(--ink); border:2px solid var(--ink);}
+    .fazit h3,.fazit strong{color:var(--ink);} .fazit p{color:var(--ink-soft);} .fazit .src{color:var(--accent);}
+    a{color:inherit; text-decoration:none;}
+    @page{size:A4; margin:13mm 10mm;}
+    .pagebreak{break-before:page;}
+  }
+  @media (max-width:860px){
+    .legend,.band,.flow{grid-template-columns:1fr 1fr;}
+    .gloss{columns:1;}
+    h1{font-size:30px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="masthead">
+    <div class="kicker">Prozess-Audit · Paketlager-Dispo</div>
+    <h1>IST-Prozesse L&amp;T vs. implementierte Software</h1>
+    <p class="dek">Eine kritische Schritt-für-Schritt-Gegenüberstellung: Was läuft heute automatisiert, was bleibt manuell, und wo ist die Software half-baked, inkonsistent oder schlicht nicht vorhanden.</p>
+    <div class="meta-row">
+      <span><b>Quelle IST:</b> „IST-Prozesse LT (2).docx“ — vollständig ausgelesen</span>
+      <span><b>Software-Stand:</b> HEAD <code>f3fd09f</code></span>
+      <span><b>Repo:</b> paketlagerdispov2</span>
+      <span><b>Erstellt:</b> 2026-06-16</span>
+      <span><b>Charakter:</b> Analyse, keine Code-Änderung</span>
+    </div>
+  </header>
+
+  <!-- ============ 1. LEGENDE ============ -->
+  <h2><span class="num">1</span> Legende — Statusfarben</h2>
+  <p class="sec-sub">Jeder IST-Schritt wird einem von vier Automatisierungs-Zuständen zugeordnet. Fundstellen sind als <code>pfad:zeile</code> belegt.</p>
+  <div class="legend">
+    <div class="lg">
+      <span class="pill p-voll">Voll-automatisiert</span>
+      <p>Die Software führt den Schritt deterministisch aus; ein Mensch löst höchstens aus. Belegt durch laufenden Code.</p>
+    </div>
+    <div class="lg">
+      <span class="pill p-teil">Teil-automatisiert</span>
+      <p>Logik existiert, ist aber unvollständig, nur kosmetisch erzwungen, nicht verdrahtet oder auf Seed-Daten statt echten Input angewiesen.</p>
+    </div>
+    <div class="lg">
+      <span class="pill p-man">Manuell</span>
+      <p>Bewusst beim Menschen / im ERP / physisch belassen. Kein Software-Anspruch — innerhalb des Tool-Scopes vertretbar.</p>
+    </div>
+    <div class="lg">
+      <span class="pill p-fehlt">Fehlt / Kaputt</span>
+      <p>Der IST-Schritt hat kein funktionierendes Software-Pendant, obwohl Konzept/Datenmodell es vorsehen. Echte Lücke.</p>
+    </div>
+  </div>
+
+  <!-- ============ 2. EXECUTIVE SUMMARY ============ -->
+  <h2><span class="num">2</span> Gesamtbild — Automatisierungsgrad</h2>
+  <p class="sec-sub">Vier IST-Phasen vom Auftrag bis zur Auszeichnung. Die Software ist am <em>Ende</em> der Kette stark (Auszeichnung), am <em>Anfang</em> (Auftrag, Wareneingang) praktisch nicht vorhanden.</p>
+  <div class="band">
+    <div class="cell c-fehlt"><div class="big">~5 %</div><div class="lbl">Phase 1 · Auftragsprozess</div></div>
+    <div class="cell c-fehlt"><div class="big">~5 %</div><div class="lbl">Phase 2 · Wareneingang</div></div>
+    <div class="cell c-teil"><div class="big">~30 %</div><div class="lbl">Phase 3 · Lieferschein-Buchung</div></div>
+    <div class="cell c-voll"><div class="big">~75 %</div><div class="lbl">Phase 4 · Auszeichnung</div></div>
+  </div>
+  <div class="callout">
+    <h4>Der entscheidende Vorbehalt: die Automatik läuft auf Seed-Daten</h4>
+    <p>Phase 4 (Dispo &amp; Auszeichnung) ist real und end-to-end verdrahtet — <em>aber</em> sie wird heute mit künstlich eingespielten Fällen (<code>packages/test-fixtures</code>, Dev-Seed) gefüttert. Die Brücke aus der realen Welt (Dokument-Ingestion, digitale Lagerplatz-Erfassung) <b>fehlt</b>. Damit ist der „hohe Automatisierungsgrad“ am Ende der Kette ohne die fehlenden ~5 %-Brücken am Anfang nicht produktiv nutzbar. Der Parser ist eine funktionierende, aber <b>unangeschlossene Insel</b>.</p>
+  </div>
+
+  <!-- ============ 3. END-TO-END FLOW ============ -->
+  <h2><span class="num">3</span> End-to-End-Flow — visuell</h2>
+  <p class="sec-sub">Swimlane über die vier IST-Phasen. Farbe = Automatisierungs-Status des jeweiligen Schritts.</p>
+  <div class="flow">
+    <!-- Phase 1 -->
+    <div class="phase">
+      <div class="phead"><div class="pn">Phase 1</div><div class="pt">Auftragsprozess</div></div>
+      <div class="psteps">
+        <div class="step s-man"><b>Buyer ordert Ware</b>über B2B/Messen/Showrooms</div>
+        <div class="step s-man"><b>Lieferant → AB (PDF/Excel/Papier)</b>Mail oder Post, ggf. eingescannt</div>
+        <div class="step s-fehlt"><b>JobRouter-Upload</b>Storagerobot überwacht Ordner — kein Software-Pendant</div>
+        <div class="step s-fehlt"><b>Auftragserfassung Positionsebene</b>L&amp;T-Attribute (Abschnitt, CatMan, Filiale…) — Datenmodell da, kein Datenfluss</div>
+        <div class="step s-fehlt"><b>EDI / ORDRSP</b>kein Code</div>
+        <div class="step s-teil"><b>Größenverteilung (SKU)</b>nur aus WE-Beleg, nicht aus Auftrag</div>
+      </div>
+    </div>
+    <!-- Phase 2 -->
+    <div class="phase">
+      <div class="phead"><div class="pn">Phase 2</div><div class="pt">Paketannahme / Wareneingang</div></div>
+      <div class="psteps">
+        <div class="step s-man"><b>Physische Anlieferung</b>DPD/GLS/DHL/Hängeware — Sichtprüfung</div>
+        <div class="step s-fehlt"><b>Lagerplatz-Vergabe</b>Paletten/Hängebahn/Regal — heute handschriftlich; Einlagerungs-Station nicht gebaut</div>
+        <div class="step s-man"><b>Lieferschein entnehmen + abkleben</b>Barcode-Beleg, Lagerplatz per Hand</div>
+        <div class="step s-fehlt"><b>Lieferschein digital erfassen</b>Lieferschein wird nicht geparst (Archiv-only)</div>
+      </div>
+    </div>
+    <!-- Phase 3 -->
+    <div class="phase">
+      <div class="phead"><div class="pn">Phase 3</div><div class="pt">Warenwirtschaft: LS-Buchung</div></div>
+      <div class="psteps">
+        <div class="step s-man"><b>Buchung in ERP „Prohandel“</b>LS gegen Auftrag, bestandswirksam — extern</div>
+        <div class="step s-man"><b>WE-Beleg + Arbeitsanweisung erzeugt</b>vom ERP, nicht von der Software</div>
+        <div class="step s-teil"><b>Parser-Extraktion</b>AW Punkte 1–11 + WE-Positionen — solide, aber Insel; Golden-Master synthetisch</div>
+        <div class="step s-fehlt"><b>Docuware-Archivierung</b>keine Integration</div>
+        <div class="step s-teil"><b>Druck in der Logistik</b>Print-Job-Modul da; reale Druckeranbindung vage</div>
+      </div>
+    </div>
+    <!-- Phase 4 -->
+    <div class="phase">
+      <div class="phead"><div class="pn">Phase 4</div><div class="pt">Auszeichnung</div></div>
+      <div class="psteps">
+        <div class="step s-voll"><b>Priorisierung n. Abschnitt</b>NOS/Extra (7/4/8) vorrangig, CatMan-Deadline</div>
+        <div class="step s-teil"><b>Verladekonzept (Verladetag/Filiale)</b>nutzt loadPlanDate, leitet ihn aber nicht ab</div>
+        <div class="step s-voll"><b>Zuteilung an Mitarbeitende</b>Kapazität, Reserve, Lastbalance, Starterpaket</div>
+        <div class="step s-voll"><b>Abholreihenfolge + Lagerplatz</b>Pickup-Leitplanke, Scan</div>
+        <div class="step s-teil"><b>Etikett→Auspacken→Prüfen→Box</b>Guardrails da, teils kosmetisch; kein echter Zählwert</div>
+        <div class="step s-voll"><b>Problem → Teamlead</b>offline-fähig, auditiert</div>
+        <div class="step s-voll"><b>ZST + Teilabschluss</b>Gate erzwungen; Produktivität nicht kalibriert</div>
+      </div>
+    </div>
+  </div>
+  <p class="flow-note">Lesefluss links → rechts. Physische Schritte (Anlieferung, Verplomben, Transport zur Filiale) liegen bewusst außerhalb des Software-Scopes.</p>
+
+  <!-- ============ 4. DETAIL PHASE 1 ============ -->
+  <h2 class="pagebreak"><span class="num">4</span> Detailanalyse je IST-Schritt</h2>
+  <p class="sec-sub">Spalten: IST-Schritt · Status · zuständige Komponente mit Fundstelle · was manuell bleibt · kritische Bewertung samt Severity.</p>
+
+  <h3><span class="phase-tag">Phase 1</span>Auftragsprozess</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>IST-Schritt</th><th class="col-st">Status</th><th>Komponente / Fundstelle · was bleibt manuell</th><th>Kritische Bewertung</th><th class="col-sev">Severity</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="ist">Buyer ordert über diverse Kanäle</span>B2B, Messen, Showrooms</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Kein Software-Anspruch. <span class="src">— außerhalb Scope —</span></td>
+        <td class="crit-note">Korrekt nicht abgebildet; Beschaffung gehört nicht in die Lager-Dispo.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lieferant schickt Auftragsbestätigung</span>PDF/Excel/Papier per Mail/Post</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Buyer scannt Papier, legt Anhang in PC-Ordner. <span class="src">— kein Software-Eingriff —</span></td>
+        <td class="crit-note">Eingangskanal bleibt menschlich; akzeptabel, solange danach digitalisiert wird (passiert nicht, s. nächste Zeile).</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">JobRouter-Upload via Storagerobot</span>Ordner-Überwachung lädt Dateien in Workflow-Plattform</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td>Enum <code>DocumentSource</code> (pdf_folder, prohandel_api…) existiert. <span class="src">apps/backend-api/prisma/schema.prisma:55–61</span> Aber: kein Folder-Watcher, kein Ingestion-Endpoint.</td>
+        <td class="crit-note"><b>Kein einziger TS-Codepfad</b> erzeugt eine DocumentSource. Die geplante „Document Service“-Stufe (§4.2) ist nicht gebaut. <span class="src">docs/analysis/parser-analysis.md:16–22</span></td>
+        <td><span class="sev sev-crit">CRITICAL</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Auftragserfassung auf Positionsebene</span>mit L&amp;T-Attributen: Abschnitt, Filiale, CatMan-Datum, WGR, Label-Nr, Shop/Fläche, Nachhaltigkeit, Online, Etikettentyp, EK/VK</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td>Datenmodell vorhanden (<code>GoodsReceiptCase</code>, <code>ReceiptPosition</code>). <span class="src">prisma/schema.prisma:369–440</span> Erfassung selbst: keine UI, kein Ingestion-Flow → heute via Dev-Seed.</td>
+        <td class="crit-note">Felder existieren, werden aber nie befüllt: <code>catManDate</code>, <code>sustainabilityFlag</code>, <code>onlineRelevant</code>, <code>labelType</code>, Preise. <b>Abschnitt</b> wird vom Parser als Text gemappt, nicht als Code 1–8. <b>Label-Nr fehlt ganz im Modell.</b> Etikettentyp soll aus WGR <em>abgeleitet</em> werden — keine Ableitungslogik existiert.</td>
+        <td><span class="sev sev-crit">CRITICAL</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">EDI- vs. Nicht-EDI-Lieferant / ORDRSP</span>Stammdaten via EDI oder manuelle Ergänzung</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td>Keine Implementierung. <span class="src">grep „EDI/ORDRSP/supplier“ → 0 Treffer</span> Kein Lieferanten-Stammbezug am Modell.</td>
+        <td class="crit-note">Die im IST <em>elementare</em> Verzweigung EDI/Nicht-EDI existiert nirgends. Konzept listet „supplier (+ EDI flag)“ als NEU/offen. <span class="src">docs/concept/ingestion-fields-ux-concept.md:12–19</span></td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Mengen auf Größen verteilen</span>Größenverteilung je Position</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Parser gruppiert EAN/Größe/Menge unter Position. <span class="src">apps/parser-worker/.../mapping/we_beleg.py:69–76</span></td>
+        <td class="crit-note">Funktioniert — aber als Extraktion aus dem WE-Beleg, nicht als Auftragserfassung. Ohne angeschlossenen Service landet das Ergebnis nirgends.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3><span class="phase-tag">Phase 2</span>Paketannahme / Wareneingang</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>IST-Schritt</th><th class="col-st">Status</th><th>Komponente / Fundstelle · was bleibt manuell</th><th>Kritische Bewertung</th><th class="col-sev">Severity</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="ist">Physische Anlieferung + Sichtprüfung</span>DPD/GLS/DHL/UPS/TNT, Hängeware ERS/LMO</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Physischer Vorgang. <span class="src">— außerhalb Scope —</span></td>
+        <td class="crit-note">Korrekt manuell. Schadenserfassung wird aber nirgends digital festgehalten (kein Foto/Flag im System).</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lagerplatz-Zuweisung</span>Palettenplatz / Hängebahn (1–7/xxx) / Regalplatz, je nach Sendungsgröße</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td><code>Location</code>-Master + <code>LocationKind</code>-Enum (regal/palette_a–e/haengebahn/lagerplatz_d) vorhanden, Admin-CRUD da. <span class="src">prisma/schema.prisma:82–94, 304–320</span> Vergabe selbst: heute handschriftlich auf dem Beleg.</td>
+        <td class="crit-note"><b>Die im Konzept höchstpriorisierte „Wareneingang-Einlagerung-Station“ (§5.1) ist nicht gebaut.</b> Ohne sie kennt die Software den Lagerplatz nicht → die Abholreihenfolge in Phase 4 läuft auf geschätzten/geseedeten Plätzen. <span class="src">docs/concept/ingestion-fields-ux-concept.md:125,189–196</span></td>
+        <td><span class="sev sev-crit">CRITICAL</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lieferschein entnehmen + Buchungsbeleg abkleben</span>Barcode + Lagerplatz per Hand vermerkt</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Kein Barcode-Feld im Buchungsfluss modelliert; <code>scanCode</code> am Lagerplatz ungenutzt. <span class="src">prisma/schema.prisma:311</span></td>
+        <td class="crit-note">Barcode-Korrelation zwischen Buchungsbeleg und Case existiert nicht — der spätere Scan kann nichts „wiederfinden“.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lieferschein digital erfassen</span>als Datenquelle für Abgleich</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td>Lieferschein wird explizit <em>nicht</em> geparst, nur als Datei-Archiv geführt. <span class="src">apps/parser-worker/src/parser_worker/pipeline.py:43</span></td>
+        <td class="crit-note">Der spätere Soll/Ist-Abgleich „Paketinhalt vs. gebucht“ kann ohne Lieferschein-Daten nicht automatisiert werden.</td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 class="pagebreak"><span class="phase-tag">Phase 3</span>Warenwirtschaft — Buchung des Lieferscheins</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>IST-Schritt</th><th class="col-st">Status</th><th>Komponente / Fundstelle · was bleibt manuell</th><th>Kritische Bewertung</th><th class="col-sev">Severity</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="ist">Buchung im ERP „Prohandel“</span>LS gegen Auftrag, Positionsabgleich, Rückstandsbuchung</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Im ERP, extern. <span class="src">— keine Integration —</span></td>
+        <td class="crit-note">Bewusst extern (Tool ≠ ERP). Aber: ohne Prohandel-Anbindung kommt <b>kein</b> realer Auftrag/Case ins System — die zentrale Datenquelle ist nicht angezapft.</td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Erzeugung WE-Beleg + Arbeitsanweisung</span>2 Belege je Lieferschein</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>Vom ERP erzeugt; die Software <em>liest</em> sie (Parser-Input), <em>erzeugt</em> sie nicht. <span class="src">apps/parser-worker/src/parser_worker/pipeline.py</span></td>
+        <td class="crit-note">Konsistent mit IST. WE-Beleg/AW sind Eingangsdokumente — die Software steht logisch <em>dahinter</em>.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Parser: Extraktion AW (Punkte 1–11) + WE-Positionen</span>Etikett, Sortierung, Prüfmodus, Sicherung, Boxzettel, ZST, WGR, SKU, Shop</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Pipeline + Mapping solide; Leitplanken erzwungen (Prüfung Nein→<code>quantity_only</code>; Prio≠Abschnitt). <span class="src">parser_worker/mapping/work_instruction.py:78–157 · we_beleg.py:40–86</span></td>
+        <td class="crit-note">Extraktionskern ist gut — aber: <b>(a)</b> keine TS-Anbindung (Insel), <b>(b)</b> Golden-Master synthetisch &amp; zirkulär (14 selbst erzeugte Text-PDFs, exakt an die eigene Regex angepasst), <b>(c)</b> Regex setzt einzeilige Tokens voraus; echte WE-Belege sind <em>Tabellen</em>. <span class="src">docs/analysis/parser-analysis.md:23–24, 69–71</span></td>
+        <td><span class="sev sev-crit">CRITICAL</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">AW↔WE-Verknüpfung (per Position)</span>Etikett/Sicherung-Flag an die Artikelposition</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td><code>PositionInstruction</code> im Schema designed, wird nie befüllt. <span class="src">prisma/schema.prisma:452–467</span></td>
+        <td class="crit-note">Parser liefert zwei getrennte Bäume; ohne Join landen AW-Flags nie an der WE-Position → Aufwandsberechnung (§8.2) bekommt unvollständigen Input.</td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">§14.3-Validierung</span>Belegnr-Match, Mengen, Lagerplatz vs. Master, Duplikatprüfung</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Belegnr-Match + Mengen-Plausibilität vorhanden; Lagerplatz-gegen-Master &amp; Belegnr-Duplikat (beide DB-Kontext) fehlen. <span class="src">docs/analysis/parser-analysis.md:21,61–66</span></td>
+        <td class="crit-note">Die DB-abhängigen Checks fehlen genau dort, wo Doppelbuchungen/falsche Plätze entstehen — also an der riskantesten Stelle.</td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Archivierung in „Docuware“</span>LS + AW + WE-Beleg ins Archiv</td>
+        <td><span class="pill p-fehlt">Fehlt</span></td>
+        <td>Keine Integration, kein Export-Endpoint. <span class="src">— nicht implementiert —</span></td>
+        <td class="crit-note">IST verlangt Druck <em>und</em> Archiv. Software hat Druck, kein Archiv → Revisionssicherheit der Originalbelege nicht abgedeckt.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Druckauslösung in der Logistik</span>3 Belege getackert, ~20–30 LS gesammelt</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Print-Job-Modul: Status <code>queued→sent→succeeded→failed</code>, Events auditiert. <span class="src">apps/backend-api/src/modules/print/print-jobs.ts:80–175</span></td>
+        <td class="crit-note">Job-Erzeugung &amp; -Logging da, aber die <b>reale Ausgabe</b> (PDF-Rendering, Spooler, Druckeranbindung) ist nicht sichtbar implementiert — „fire-and-forget“ über <code>payloadRef</code>.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 class="pagebreak"><span class="phase-tag">Phase 4 — Kern der Software</span>Auszeichnung</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>IST-Schritt</th><th class="col-st">Status</th><th>Komponente / Fundstelle · was bleibt manuell</th><th>Kritische Bewertung</th><th class="col-sev">Severity</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="ist">Verteilung n. Abschnitt-Priorität</span>NOS(4)/NOS-Nachorder(8)/Extra(7) vorrangig, gleicher Tag</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Prioritäts-Engine: <code>EVERY_DAY_SECTIONS=[7,4,8]</code>, CatMan-Deadline, Rang 0–6. <span class="src">packages/assignment-engine/src/priority/priority-engine.ts:11–77</span></td>
+        <td class="crit-note">Sauber modelliert und getestet. Bildet die IST-Logik (Same-Day vs. Verladeplan-abhängig) korrekt ab. Stärkster Teil des Systems.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Verladekonzept</span>Filiale/Shopbereich nur am Verladetag bearbeiten; puffern bis Verladetag; ggf. übergehbar</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Engine nutzt <code>loadPlanDate≤heute</code> für Rang 5. <span class="src">priority-engine.ts:66–77</span> Aber: <code>primaryShopAreaNo</code> wird nie genutzt; keine Verladeplan-Ableitung.</td>
+        <td class="crit-note"><b>Die Engine leitet <code>loadPlanDate</code> nicht ab</b> (Shopbereich + Verladeplan-Kalender). Verladeplan ist „Bild/Beispiel, kein gepflegter Stammdatensatz“. Fällt <code>loadPlanDate</code> leer aus → FIFO statt Verladetag-Logik. Die IST-Kernregel „Transporter füllen“ ist nur halb da. <span class="src">docs/discovery/05-verladeplan.md</span></td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Starterpaket (Frühschicht 9 Uhr)</span>Belege der Vortage, MA muss sich nichts selbst nehmen</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Morgens-Kapazitätsanteil, Vortags-Fälle zuerst gebündelt. <span class="src">packages/assignment-engine/src/assignment/plan.ts:104–124</span></td>
+        <td class="crit-note">Konzept „Starterpaket“ ist abgebildet. Das IST-„Selbst-aus-der-Schütte-nehmen nach eigenem Ermessen“ wird bewusst durch <em>Push</em>-Zuteilung ersetzt — Modellwechsel, kein Defekt.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Zuteilung an Mitarbeitende</span>nach schaffbarer Menge, IST-Zeit, Lastbalance, Anti-Cherry-Picking, eiserne Reserve</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>LPT-Verteilung, Netto-Kapazität, Spezialisten-Malus, Reserve-Schutz, deterministisch &lt;5s. <span class="src">assignment/distribute.ts:64–174 · capacity/net-capacity.ts:37–45 · assignment/reserve.ts:17–33</span></td>
+        <td class="crit-note">Regel-vollständig (§8.1–8.4, B.2/B.3, D.3). <b>Aber:</b> der <code>productivityFactor</code> ist ungeprüft (Default 1.0), kein Rückkopplungs-Loop aus echten ZST-Zeiten. „600 Teile/8h = 75/h“ ist nicht kalibriert.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">⚠ Admin-Regeln steuern die Engine</span>Teamlead/Admin justiert Prio/Reserve/Bündel/Aufwand per UI</td>
+        <td><span class="pill p-fehlt">Kaputt</span></td>
+        <td>UI persistiert <code>RuleConfig</code> in die DB. <span class="src">apps/backend-api/src/admin/admin.service.ts</span> Aber: <code>assignWork(input)</code> wird <b>ohne</b> EngineConfig aufgerufen. <span class="src">apps/backend-api/src/assignment/assignment.service.ts:88,193</span></td>
+        <td class="crit-note"><b>Die Engine läuft auf hartkodierten <code>DEFAULT_ENGINE_CONFIG</code>.</b> <span class="src">packages/assignment-engine/src/config.ts:129</span> Jede Admin-Einstellung (inkl. der frisch ergänzten Erklärtexte) ist <b>kosmetisch</b> — das Speichern ändert nichts am tatsächlichen Plan. Half-baked im Wortsinn.</td>
+        <td><span class="sev sev-crit">CRITICAL</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lagerplätze abfahren, Pakete holen</span>Lagerplatz aus AW-Kopf, Rollwagen</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Abholreihenfolge-Screen + Pickup-Leitplanke (Gruppierung n. Ort, kein Routing). <span class="src">apps/employee-pwa/src/screens/PaketReihenfolgeScreen.tsx:18–76 · packages/assignment-engine/src/pickup/pickup-order.ts:101–148</span></td>
+        <td class="crit-note">Bindende Reihenfolge „ohne Nachdenken“ — gut. Reihenfolge ist unveränderlich; kein Replanning durch den MA möglich (gewollt).</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Lagerplatz-Scan</span>Bestätigung des richtigen Platzes</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Keyboard-Wedge-Scan + Fallback. <span class="src">apps/employee-pwa/src/screens/LagerplatzScanScreen.tsx:20–66</span></td>
+        <td class="crit-note">Scan wird nur <em>geloggt</em>, <b>nicht gegen den erwarteten Lagerplatz validiert</b>. Ein falscher Scan wird blind akzeptiert → Guardrail kosmetisch.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Etiketten drucken (vor dem Auspacken)</span>erkennbar an AW, an Druckstation</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>UI erzwingt „erst drucken, dann Karton öffnen“. <span class="src">apps/employee-pwa/src/screens/VorbereitungScreen.tsx:25–102 · workflow/workflowModel.ts:107</span></td>
+        <td class="crit-note">Reihenfolge-Guardrail sauber erzwungen. <b>Aber</b> <code>printLabels()</code> hängt nur ein Event an — kein realer Drucker-Call, keine Erfolgsprüfung. Der MA kann den Druck nicht verifizieren.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Auspacken + Füllmaterial entfernen</span>Seidenpapier, Polybags</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Checkliste in Vorbereitung. <span class="src">apps/employee-pwa/src/screens/VorbereitungScreen.tsx:76–98</span></td>
+        <td class="crit-note">Rein informativ — „Sortierung fertig“ setzt nur ein Flag. Keine Verifikation, dass ausgepackt/sortiert wurde. Kosmetische Checkliste.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Sichern (Punkt 10)</span>wo &amp; ob gesichert wird, lt. AW</td>
+        <td><span class="pill p-man">Manuell</span></td>
+        <td>PositionScreen zeigt <code>securityRequired</code>-Indikator. <span class="src">apps/employee-pwa/src/screens/PositionScreen.tsx:83–90</span></td>
+        <td class="crit-note">Nur Anzeige, kein Checkpoint. Ausführung &amp; Sicherungsort komplett manuell — keine Bestätigung erzwungen.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Prüfung (Punkt 6) + Mindest-Stückzahlkontrolle</span>auch bei „Prüfung = Nein“ mind. Stückzahl, um Mehr-/Mindermengen zu erkennen</td>
+        <td><span class="pill p-teil">Teil-auto</span></td>
+        <td>Guardrail erzwingt Stückzahl-Check in allen Modi. <span class="src">apps/employee-pwa/src/screens/PositionScreen.tsx:42–56 · workflow/workflowModel.ts:56–65</span></td>
+        <td class="crit-note"><b>Kein echter Zählwert wird eingegeben</b> — der MA bestätigt nur „geprüft“. Damit kann die Mehr-/Mindermenge an genau diesem Gate <em>nicht</em> erkannt werden, obwohl genau das der IST-Zweck ist. Guardrail erzwingt eine Geste, nicht eine Zahl.</td>
+        <td><span class="sev sev-high">HIGH</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Sortieren in Transportkisten (Punkt 5)</span>n. Artikel/Farbe/Größe; Kiste beschriften (Shopbereich/Shop/Etage/Warenart)</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Box-Ziele aus Aggregat; Boxabschluss-Screen mit Zielangaben. <span class="src">apps/employee-pwa/src/screens/BoxabschlussScreen.tsx:17–102</span></td>
+        <td class="crit-note">Box-Ziele vorberechnet &amp; angezeigt. Aber: <b>kein Scan je Position</b> in die Box → korrekte Zuordnung ist visuell/Vertrauenssache.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">Problem → Teamlead</span>Mehr-/Mindermenge, falscher Artikel/Farbe/Größe → Prüfung &amp; Korrektur beim TL</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Problem-Screen (Scope: Position/SKU/Box/Case), offline-first, Event + POST. <span class="src">apps/employee-pwa/src/screens/ProblemMeldenScreen.tsx:39–122</span> · TL-Resolve/Release <span class="src">apps/backend-api/src/cases/teamlead.service.ts:112–169</span></td>
+        <td class="crit-note">Meldeweg robust &amp; offline-sicher. <b>Aber</b> TL-Seite ist dünn: nur generischer Issue-Status, keine Kategorisierung (Mehr/Minder/falsch) im Modell; Box-Splitting nicht in der PWA. Foto nur Text-Platzhalter.</td>
+        <td><span class="sev sev-med">MEDIUM</span></td>
+      </tr>
+      <tr>
+        <td><span class="ist">ZST setzen + Teilabschluss</span>Zeitstempel, Teile/IST-Zeit; Rest am Folgetag</td>
+        <td><span class="pill p-voll">Voll-auto</span></td>
+        <td>Abschluss-Gate (alle Positionen/Mengen/Boxen), Voll- vs. Teilabschluss (Grund-gated). <span class="src">apps/employee-pwa/src/screens/AbschlussScreen.tsx:23–123 · workflow/workflowModel.ts:76–96</span></td>
+        <td class="crit-note">Gate sauber erzwungen, Teilabschluss korrekt. Abweichungen vom IST: ZST-Zeitstempel ist <em>lokal</em> (kein zentraler PC), und wie im IST fehlt jede <b>Qualitäts</b>-Gewichtung — nur die Stückzahl zählt.</td>
+        <td><span class="sev sev-low">LOW</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Cross-cutting -->
+  <h3>Querschnitt — Backbone &amp; Betrieb</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Konzern-Fähigkeit</th><th class="col-st">Status</th><th>Fundstelle</th><th>Bewertung</th><th class="col-sev">Severity</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ist">State Machine §7.1</span>23 Case-Zustände + Übergänge</td><td><span class="pill p-voll">Voll-auto</span></td><td><span class="src">apps/backend-api/src/workflow/case-status.ts:19–43</span></td><td class="crit-note">Illegale Übergänge werfen Fehler; TL-only-Pfade bewacht. Solide.</td><td><span class="sev sev-low">LOW</span></td></tr>
+      <tr><td><span class="ist">Hash-Chain-Audit §7.2</span>manipulationssicheres Eventlog</td><td><span class="pill p-voll">Voll-auto</span></td><td><span class="src">apps/backend-api/src/events/event-log.service.ts:48–109 · event-hash.ts:43–95</span></td><td class="crit-note">SHA-256-Kette, Advisory-Lock, Tamper-Detection, Idempotenz. Stark.</td><td><span class="sev sev-low">LOW</span></td></tr>
+      <tr><td><span class="ist">Override mit Grund §8.4</span>Entziehen/Hinzufügen/Reihenfolge/Pause</td><td><span class="pill p-voll">Voll-auto</span></td><td><span class="src">apps/teamlead-web/src/components/ReasonDialog.tsx · teamlead.service.ts:171–316</span></td><td class="crit-note">Grundpflicht erzwungen, optimistic UI, auditiert. Gut.</td><td><span class="sev sev-low">LOW</span></td></tr>
+      <tr><td><span class="ist">Recalculate-Endpoint</span>Schicht-Materialisierung, idempotent, atomar</td><td><span class="pill p-voll">Voll-auto</span></td><td><span class="src">apps/backend-api/src/assignment/assignment.service.ts:43–154</span></td><td class="crit-note">Transaktional, materialisiert Schichten aus Wochenmustern, &lt;5s. Aber: ignoriert Admin-Config (s. Phase 4).</td><td><span class="sev sev-med">MEDIUM</span></td></tr>
+      <tr><td><span class="ist">Teamlead-Cockpit / Board</span>KPIs, Pool, ZST-Fortschritt, Audit</td><td><span class="pill p-teil">Teil-auto</span></td><td><span class="src">apps/teamlead-web/src/features/cockpit/CockpitPage.tsx:1–50</span></td><td class="crit-note">Live verdrahtet (kein Mock). Aber: kein SSE-Push (nur Poll-on-load), keine 600/8h-SLA-Abweichung, keine Pro-MA-ZST-Aufschlüsselung, „Export“ ist toter Button.</td><td><span class="sev sev-med">MEDIUM</span></td></tr>
+      <tr><td><span class="ist">Offline / Sync (PWA)</span>Dexie, optimistic lock</td><td><span class="pill p-teil">Teil-auto</span></td><td><span class="src">apps/employee-pwa/src/db/repository.ts:1–96 · events/eventLog.ts</span></td><td class="crit-note">Offline-Reads &amp; optimistic lock da; aber keine echte Outbox/Queue, Netzfehler verschwinden still, Eventlog wächst unbegrenzt (IndexedDB-Quota-Risiko). Bewusst Pilot-zweitrangig.</td><td><span class="sev sev-med">MEDIUM</span></td></tr>
+      <tr><td><span class="ist">Auth / RBAC</span>OIDC prod, Dev-Token</td><td><span class="pill p-man">Manuell</span></td><td><span class="src">apps/backend-api/src/auth/token-verifier.ts:53–75 · teamlead-web/src/data/session.ts:18–40</span></td><td class="crit-note">OIDC-Guard vorhanden, aber lokal nicht getestet; Dev-Token dekodiert ohne Signaturprüfung. Bewusst Pilot-zweitrangig.</td><td><span class="sev sev-low">LOW</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- ============ 5. TOP-LÜCKEN ============ -->
+  <h2 class="pagebreak"><span class="num">5</span> Top-Lücken &amp; Probleme — priorisiert</h2>
+  <p class="sec-sub">Die größten verbleibenden manuellen Bruchstellen und half-baked Stellen, nach Wirkung sortiert.</p>
+  <div class="gaps">
+    <div class="gap g-crit">
+      <div class="rank">1</div>
+      <div>
+        <h4>Document Service fehlt — der Parser ist eine Insel <span class="sev sev-crit">CRITICAL</span></h4>
+        <p>Kein TS-Code nimmt Dokumente entgegen, klassifiziert/gruppiert sie, ruft den Parser, validiert (§14.3) und persistiert Cases. Das gesamte System wird via Dev-Seed gefüttert; der reale Ingestion-Pfad (Phase 1–3 → Phase 4) existiert nicht. <b>Ohne diese Brücke ist die hochwertige Phase-4-Automatik nicht produktiv nutzbar.</b></p>
+        <span class="src">docs/analysis/parser-analysis.md:16–22 · apps/parser-worker/* (isoliert)</span>
+      </div>
+    </div>
+    <div class="gap g-crit">
+      <div class="rank">2</div>
+      <div>
+        <h4>Admin-Regeln erreichen die Engine nicht — Einstellungen sind kosmetisch <span class="sev sev-crit">CRITICAL</span></h4>
+        <p>Die Admin/Regeln-UI (Priorität, Reserve, Bündel, Aufwand — inkl. der neu ergänzten Erklärtexte) speichert in die DB, aber <code>assignWork(input)</code> wird ohne EngineConfig aufgerufen. Die Engine nutzt hartkodierte Defaults. <b>Jede Regeländerung im UI bleibt wirkungslos.</b> Ein Config-Mapping-Adapter war auf einem verworfenen Branch — auf HEAD <code>f3fd09f</code> ist er nicht vorhanden.</p>
+        <span class="src">assignment.service.ts:88,193 → assignWork(input) ohne config · config.ts:129 DEFAULT_ENGINE_CONFIG</span>
+      </div>
+    </div>
+    <div class="gap g-crit">
+      <div class="rank">3</div>
+      <div>
+        <h4>Digitale Lagerplatz-Erfassung (Einlagerungs-Station) nicht gebaut <span class="sev sev-crit">CRITICAL</span></h4>
+        <p>Der Lagerplatz wird heute handschriftlich vermerkt. Die im Konzept höchstpriorisierte §5.1-Station (Buchungsbeleg scannen → Klasse wählen → Lagerplatz scannen → <code>awaiting_storage→ready</code>) existiert nur als Konzept. Damit kennt die Software den realen Lagerplatz nicht — die Abholreihenfolge in Phase 4 fußt auf geseedeten Plätzen.</p>
+        <span class="src">docs/concept/ingestion-fields-ux-concept.md:125,189–196 · Location-Master vorhanden, Capture-Flow fehlt</span>
+      </div>
+    </div>
+    <div class="gap g-crit">
+      <div class="rank">4</div>
+      <div>
+        <h4>Parser nie gegen echte Belege validiert — Golden-Master synthetisch &amp; zirkulär <span class="sev sev-crit">CRITICAL</span></h4>
+        <p>Alle 14 Test-PDFs sind selbst erzeugt und exakt an die Regex-Annahmen des Parsers angepasst → das Golden-Gate testet den Parser gegen seine eigene Annahme. Echte WE-Belege sind <em>Tabellen</em>; die einzeilige Regex bricht daran. H.5 verbietet eine Parser-Freigabe vor dem Test gegen echte Varianten. 50–100 reale, anonymisierte Belegsätze sind Go-Live-Abhängigkeit.</p>
+        <span class="src">docs/analysis/parser-analysis.md:23–24, 69–75</span>
+      </div>
+    </div>
+    <div class="gap g-high">
+      <div class="rank">5</div>
+      <div>
+        <h4>Prüfung erfasst keinen Zählwert — Mehr-/Mindermenge nicht erkennbar <span class="sev sev-high">HIGH</span></h4>
+        <p>Der IST-Sinn der Stückzahlkontrolle (auch bei „Prüfung = Nein“) ist das Erkennen von Mehr-/Mindermengen. Die App erzwingt zwar einen „geprüft“-Tap, nimmt aber <b>keine tatsächliche Zahl</b> entgegen. Damit ist der Kontrollzweck nicht erfüllt — die Geste ist da, die Aussage fehlt.</p>
+        <span class="src">apps/employee-pwa/src/screens/PositionScreen.tsx:42–56</span>
+      </div>
+    </div>
+    <div class="gap g-high">
+      <div class="rank">6</div>
+      <div>
+        <h4>Verladekonzept nur halb modelliert <span class="sev sev-high">HIGH</span></h4>
+        <p>Die Engine nutzt <code>loadPlanDate</code>, leitet ihn aber nicht aus Shopbereich + Verladeplan-Kalender ab; <code>primaryShopAreaNo</code> wird nie verwendet. Der Verladeplan existiert nur als Bild, nicht als gepflegter Stammdatensatz. Die IST-Kernregel „Transporter je Verladetag/Filiale füllen“ ist damit unvollständig.</p>
+        <span class="src">priority-engine.ts:66–77 · docs/discovery/05-verladeplan.md</span>
+      </div>
+    </div>
+    <div class="gap g-high">
+      <div class="rank">7</div>
+      <div>
+        <h4>EDI/Prohandel-Anbindung &amp; AW↔WE-Join fehlen <span class="sev sev-high">HIGH</span></h4>
+        <p>Die im IST elementare EDI-/Nicht-EDI-Verzweigung existiert nicht; kein Prohandel-Zugang → keine realen Aufträge. Zusätzlich verschmilzt der Parser AW- und WE-Positionen nicht (<code>PositionInstruction</code> nie befüllt), wodurch Etikett-/Sicherungs-Flags nie an der Artikelposition ankommen und die Aufwandsformel (§8.2) unvollständigen Input bekommt.</p>
+        <span class="src">grep EDI→0 · prisma/schema.prisma:452–467 · docs/analysis/parser-analysis.md:19–20</span>
+      </div>
+    </div>
+    <div class="gap g-med">
+      <div class="rank">8</div>
+      <div>
+        <h4>Sammlung kleinerer Half-baked-Stellen <span class="sev sev-med">MEDIUM</span></h4>
+        <p>Lagerplatz-Scan ohne Soll/Ist-Abgleich · Etikettendruck als Mock ohne Erfolgsprüfung · Box-Sortierung ohne Scan je Position · ZST-Produktivität (<code>productivityFactor</code>=1.0) nicht kalibriert · keine Pro-MA-ZST-Auswertung · kein SSE-Push im Cockpit · Docuware-Archiv fehlt · Export-Button tot · Foto-Upload nur Platzhalter · Eventlog wächst unbegrenzt.</p>
+        <span class="src">siehe Detailtabellen Phase 2–4 &amp; Querschnitt</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 6. GLOSSAR ============ -->
+  <h2 class="pagebreak"><span class="num">6</span> Glossar — Fachbegriffe</h2>
+  <p class="sec-sub">L&amp;T- und ERP-Begriffe aus dem IST-Prozess, jeweils mit kurzem Software-Bezug (<span class="sw"><span class="ok">grün</span>=abgebildet, <span class="pt">amber</span>=teilweise, <span class="no">rot</span>=fehlt</span>).</p>
+  <dl class="gloss">
+    <div class="gl"><dt>Abschnitt <span class="abbr">Section 1–8</span></dt><dd>Auftragsklassifikation, die als Indikator in Priorisierung &amp; Logistik wirkt: 1=Vororder, 2=Nachorder, 3=Sonderposten, 4=NOS, 7=Extrabestellung, 8=NOS-Nachorder. 7/4/8 werden bevorzugt (gleicher Tag).<span class="sw"><span class="ok">In Engine als Prioritäts-Tiers abgebildet</span>; <span class="no">aber Parser mappt Text statt Code 1–8</span></span></dd></div>
+    <div class="gl"><dt>CatMan-Datum <span class="abbr">Category Mgmt</span></dt><dd>„Catmandatum“ = Termin, bis zu dem die Ware auf der Verkaufsfläche sein muss. Harter Deadline-Indikator für die Logistik-Bearbeitung.<span class="sw"><span class="pt">Als Deadline in der Engine genutzt (catManDue)</span>, <span class="no">aber nie aus Belegen extrahiert</span></span></dd></div>
+    <div class="gl"><dt>NOS <span class="abbr">Never Out of Stock</span></dt><dd>Dauersortiment, das nie ausverkauft sein darf (Abschnitt 4, Nachorder 8). Wird vorrangig &amp; am Buchungstag bearbeitet.<span class="sw"><span class="ok">Vorrangregel implementiert</span></span></dd></div>
+    <div class="gl"><dt>Verladekonzept / Verladetag</dt><dd>Jeder Shopbereich/Filiale wird nur an seinem Verladetag fokussiert bearbeitet; Belege werden bis dahin gepuffert, um den Abend-Transporter auszulasten. Bei wenig Last übergehbar.<span class="sw"><span class="pt">Rang nutzt loadPlanDate</span>, <span class="no">Ableitung aus Kalender/Shopbereich fehlt</span></span></dd></div>
+    <div class="gl"><dt>Verladeplan</dt><dd>Stammdaten-Mapping Shopbereich → Wochentag → Verladetag. Im Projekt nur als Bild/Beispiel vorhanden, nicht als gepflegter Datensatz.<span class="sw"><span class="no">Kein editierbarer Stammdatensatz</span></span></dd></div>
+    <div class="gl"><dt>ZST <span class="abbr">Zeitstempel</span></dt><dd>Setzt fest, wie viele Teile in der IST-Zeit eines MA abgearbeitet wurden (z.B. 600 Teile / 8h = 75/h). Grundlage von MA-Bewertungen — ohne Qualitätsgewichtung, nur Stückzahl.<span class="sw"><span class="ok">Abschluss-Gate &amp; Erfassung da</span>, <span class="pt">lokal statt zentraler PC, nicht kalibriert</span></span></dd></div>
+    <div class="gl"><dt>Arbeitsanweisung <span class="abbr">AW</span></dt><dd>Beleg, der je Lieferschein die Bearbeitung steuert (Punkte 1–11: Etikettendruck, Abschnitt, Sortierung, Prüfmodus, Etikettenort, Sicherung, Boxzettel, ZST). Im Kopf steht der Lagerplatz.<span class="sw"><span class="pt">Parser extrahiert Punkte 1–11</span>, <span class="no">nicht an WE-Positionen gejoint</span></span></dd></div>
+    <div class="gl"><dt>WE-Beleg <span class="abbr">Wareneingangsbeleg</span></dt><dd>Übersicht aller Buchungen zu einem Lieferschein auf SKU-Ebene; dient der Korrektheitskontrolle (Paketinhalt vs. gebucht).<span class="sw"><span class="pt">Positionen/SKU geparst</span>, <span class="no">Preise/Online/Nachhaltigkeit nicht</span></span></dd></div>
+    <div class="gl"><dt>Lieferschein <span class="abbr">LS</span></dt><dd>Vom Lieferanten beigelegtes Dokument; wird abgeklebt (Buchungsbeleg + Barcode) und im ERP bestandswirksam gegen den Auftrag gebucht.<span class="sw"><span class="no">Wird nicht geparst (nur archiviert)</span></span></dd></div>
+    <div class="gl"><dt>Buchungsbeleg / Barcode</dt><dd>Interner Aufkleber auf dem Lieferschein mit Barcode + Nr., über den der LS im ERP gebucht und ins Archiv geschickt wird; trägt den handschriftlichen Lagerplatz.<span class="sw"><span class="no">Keine Barcode-Korrelation im Modell</span></span></dd></div>
+    <div class="gl"><dt>JobRouter</dt><dd>Workflow-Plattform, in die ein „Storagerobot“ die aus Mail-Ordnern eingesammelten AB-Dateien hochlädt.<span class="sw"><span class="no">Kein Software-Pendant (DocumentSource-Enum ungenutzt)</span></span></dd></div>
+    <div class="gl"><dt>Prohandel</dt><dd>Das ERP/Warenwirtschaftssystem von L&amp;T, in dem Aufträge erfasst und Lieferscheine bestandswirksam gebucht werden.<span class="sw"><span class="no">Keine Integration/Sync</span></span></dd></div>
+    <div class="gl"><dt>Docuware</dt><dd>Archivierungstool, in das LS, AW und WE-Beleg per Scanner zur revisionssicheren Ablage geschickt werden.<span class="sw"><span class="no">Keine Integration</span></span></dd></div>
+    <div class="gl"><dt>EDI / ORDRSP</dt><dd>EDI = elektronischer Stammdaten-/Belegaustausch mit Lieferanten. ORDRSP = elektronische Auftragsbestätigung direkt ins ERP. Bei Nicht-EDI ergänzt L&amp;T alle Angaben manuell.<span class="sw"><span class="no">Verzweigung nicht implementiert</span></span></dd></div>
+    <div class="gl"><dt>BTE-WGR-Schlüssel <span class="abbr">Warengruppe</span></dt><dd>Branchen-Warengruppenschlüssel (z.B. 111130 = H-T-Shirt), bestimmt u.a. den abgeleiteten Etikettentyp und Aufwandsfaktoren.<span class="sw"><span class="ok">WGR geparst &amp; als Aufwandsfaktor genutzt</span></span></dd></div>
+    <div class="gl"><dt>Etikettentyp</dt><dd>Wird automatisiert aus der Warengruppe abgeleitet (T-Shirt → Hänger-Etikett, Schuh → Karton-Kleber).<span class="sw"><span class="no">Feld da, keine Ableitungslogik</span></span></dd></div>
+    <div class="gl"><dt>Label-Nr.</dt><dd>Marke, die der Kunde kennt — oft ≠ Lieferantenname (z.B. Lieferant „Bestseller“, Label „Jack &amp; Jones“).<span class="sw"><span class="no">Nicht im Datenmodell</span></span></dd></div>
+    <div class="gl"><dt>Nachhaltigkeitskennzeichen <span class="abbr">Funktion</span></dt><dd>ERP-Feld „Funktion“ — kennzeichnet z.B. Zertifizierung eines Artikels.<span class="sw"><span class="no">Feld da, nie befüllt</span></span></dd></div>
+    <div class="gl"><dt>Onlinekennzeichen <span class="abbr">Dessin</span></dt><dd>ERP-Feld „Dessin“ — kennzeichnet Relevanz für den L&amp;T-Onlineshop; fließt in den Aufwand ein.<span class="sw"><span class="no">Feld da, nie befüllt → Aufwand unvollständig</span></span></dd></div>
+    <div class="gl"><dt>Shop/Flächen-Nr.</dt><dd>Zielort innerhalb der Filiale, wohin das Produkt gebracht wird (Shopbereich/Etage).<span class="sw"><span class="ok">shopNo/hShopNo/floor geparst</span></span></dd></div>
+    <div class="gl"><dt>Eiserne Reserve</dt><dd>Kapazitätspuffer, den die Engine bewusst nicht verplant; reicht die Kapazität nicht, bleiben niedrigpriorisierte Belege offen statt die Reserve anzugreifen.<span class="sw"><span class="ok">Reserve-Schutz implementiert (B.2)</span></span></dd></div>
+    <div class="gl"><dt>Starterpaket</dt><dd>Belegpaket der Vortage, das Frühschicht-MA morgens erhalten, damit sie sich nichts selbst nehmen müssen (Anlieferer oft noch nicht da).<span class="sw"><span class="ok">Morgens-Kapazitätsanteil im Plan</span></span></dd></div>
+    <div class="gl"><dt>Schütte / Ablagekästen</dt><dd>Physische Vorsortierung der Belege durch die Teamleitung; MA nehmen X Belege nach eigenem Ermessen von oben.<span class="sw"><span class="pt">Ersetzt durch Push-Zuteilung (Modellwechsel)</span></span></dd></div>
+    <div class="gl"><dt>Hängebahn / Palettenplatz / Regalplatz</dt><dd>Lagerplatz-Typen je Sendungsgröße: Hängeware (7 Bahnen, z.B. 5/234), große/sperrige Sendungen (Paletten A–E), kleine Einzelsendungen (Regal 1–40, D unterm Förderband).<span class="sw"><span class="pt">LocationKind-Enum &amp; Master da</span>, <span class="no">keine Erfassung</span></span></dd></div>
+    <div class="gl"><dt>Teilabschluss</dt><dd>Wird ein Beleg an einem Tag nicht fertig, geht die fertige Teilware in die Filiale, der Rest folgt am Folgetag.<span class="sw"><span class="ok">Grund-gated implementiert</span></span></dd></div>
+    <div class="gl"><dt>PEP-Planung <span class="abbr">SEAK/PEP</span></dt><dd>Personaleinsatzplanung; liefert per CSV-Export die Soll-Schichten/IST-Zeiten als Kapazitätsbasis.<span class="sw"><span class="ok">SEAK/PEP-Import implementiert (§13.2)</span></span></dd></div>
+    <div class="gl"><dt>Sichern (Punkt 10)</dt><dd>Warensicherung (z.B. Etiketten/Tags gegen Diebstahl) gemäß Arbeitsanweisung an definiertem Ort.<span class="sw"><span class="pt">Nur Indikator, kein Checkpoint</span></span></dd></div>
+  </dl>
+
+  <!-- ============ 7. FAZIT ============ -->
+  <h2><span class="num">7</span> Fazit</h2>
+  <div class="fazit">
+    <h3>Eine starke zweite Hälfte ohne erste Hälfte</h3>
+    <p>Die Software ist genau dort exzellent, wo der IST-Prozess am komplexesten ist: in der <strong>Auszeichnung</strong> (Phase 4). Priorisierung nach Abschnitt, kapazitätsbasierte Zuteilung mit eiserner Reserve, Pickup-Reihenfolge, task-first Mitarbeiter-PWA, Teilabschluss, manipulationssicheres Audit und Override-mit-Grund sind real, deterministisch (&lt;5s) und end-to-end verdrahtet.</p>
+    <p>Der Haken: <strong>Phase 1–3 (Auftrag, Wareneingang, Buchung) sind softwareseitig nahezu leer.</strong> Es gibt kein Document Service, keine digitale Lagerplatz-Erfassung, keine Prohandel-/EDI-Anbindung, kein Docuware-Archiv. Der Parser funktioniert, ist aber eine unangeschlossene Insel, die nur gegen selbst erzeugte PDFs getestet wurde. Folglich läuft die brillante Phase-4-Automatik heute auf <strong>Seed-Daten</strong>, nicht auf echten Belegen.</p>
+    <p>Die größten verbleibenden <strong>manuellen Bruchstellen</strong>: die handschriftliche Lagerplatz-Vergabe und die fehlende Dokument-Ingestion — beide CRITICAL, beide blockieren den produktiven Betrieb. Die gravierendste <strong>half-baked</strong> Stelle: die Admin-Regeln, die in die DB gespeichert werden, aber die Engine nie erreichen — Einstellungen ohne Wirkung. Dazu die Prüfung ohne echten Zählwert, die den eigentlichen Kontrollzweck verfehlt.</p>
+    <p><strong>Gesamtbild:</strong> realer Automatisierungsgrad <strong>~30 %</strong> über die ganze Kette, gewichtet stark am Ende. Für einen Piloten muss zuerst die Brücke aus der realen Welt gebaut werden (Ingestion + Lagerplatz-Erfassung + echte Belege), und die Admin-Engine-Verdrahtung muss real werden — sonst bleibt ein hervorragender Motor ohne Treibstoffzufuhr. <span class="src">Stand HEAD f3fd09f · Belege siehe Detailtabellen</span></p>
+  </div>
+
+  <footer>
+    <span>IST-Prozesse L&amp;T vs. Software · Prozess-Audit · paketlagerdispov2</span>
+    <span>Quelle: „IST-Prozesse LT (2).docx“ · Software-Stand f3fd09f · 2026-06-16</span>
+  </footer>
+
+</div>
+</body>
+</html>
