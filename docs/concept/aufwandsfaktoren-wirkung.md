@@ -123,16 +123,30 @@ Oder „Etiketten anbringen“ 0,45 → 0,90 min/Pos.: `12 × 0,45 = +5,40 min` 
 | Editierbare Parameter im Cockpit (Tab „Aufwand“) + Persistenz (`RuleConfig.effort`) | **aktiv** |
 | Live-Vorschau (dieser Tab) | **aktiv** — rechnet mit `previewEffort` über die echte Formel |
 | Parameter erreichen die Engine (`engineConfigFromRuleConfig.effort`) | **aktiv** (durchgereicht) |
-| Per-Beleg-Neuberechnung im **Live-Lauf** aus Positionsdaten | **noch nicht** — benötigt `effortVectors` |
+| Per-Beleg-Neuberechnung im **Live-Lauf** aus Positionsdaten | **aktiv** — `effortVectors` aus Arbeitsanweisung + Positions-Anweisungen |
 
-Die Konfiguration wird jetzt **bis in die Engine durchgereicht**
-(`engineConfigFromRuleConfig`, `apps/backend-api/src/assignment/load-plan.ts`). Die
-**per-Beleg**-Neuberechnung über `computeEffort` greift im Live-Lauf aber erst, wenn je
-Beleg ein `EffortInputVector` (Positionsdaten: #Etiketten, #Sicherung, Prüfmodus …)
-bereitsteht. Bis die ProHandel-Ingestion diese Vektoren liefert, nutzt die Verteilung den
-vorab gespeicherten `estimatedMinutes` je Beleg, und die Parameter wirken **in der
-Vorschau** (nicht in der Live-Verteilung). Sobald `EngineInput.effortVectors` befüllt ist,
-wirken exakt diese editierten Parameter auch live — ohne weitere Code-Änderung.
+Die editierten Parameter wirken jetzt **in der Live-Verteilung**. Bei jedem
+`recalculate` / `preview` und beim Mitarbeiter-Pull (`assignNextBundle`) baut der Backend
+für jeden Beleg **mit Arbeitsanweisung** einen `EffortInputVector` aus den persistierten
+Daten (`apps/backend-api/src/assignment/effort-vector.ts`):
+
+- Mengen/WGR ← `GoodsReceiptCase.totalQuantity` + `ReceiptPosition.wgr`
+- Druck/Prüfmodus ← `WorkInstructionHeader`
+- Etikettieren/Sicherung/Online/Rotpreis ← `PositionInstruction` (Anzahl je Treiber)
+- Handling-Klasse ← `storageLocation.kind` (`handlingClassFromLocationKind`)
+
+Die Engine rechnet daraus `computeEffort(vector, engineConfig.effort)` — also mit den
+**aktuell konfigurierten Minuten**. Bündelgröße, `plannedEffortMinutes` und Lastverteilung
+spiegeln damit live die Cockpit-Einstellungen.
+
+**Bewusste Grenze (kein Workaround):** Ein Beleg **ohne** Arbeitsanweisung hat noch keine
+bekannten Aufwandstreiber — für ihn fällt die Engine deterministisch auf den vorab
+gespeicherten `estimatedMinutes` zurück (statt zu raten). Der für Tafel/Pool **angezeigte**
+`estimatedMinutes` ist der Schätzwert aus der Ingestion/Arbeitsanweisungs-Erzeugung; ihn
+bei jedem `recalculate` zu überschreiben wäre ein Seiteneffekt am falschen Ort. Die
+saubere Stelle, `case.estimatedMinutes`/`effortPoints` persistent neu zu berechnen, ist die
+Arbeitsanweisungs-Erzeugung/ProHandel-Ingestion (separater, dokumentierter Schritt) — die
+**Verteilung** selbst nutzt bereits durchgängig die echten, konfigurierten Werte.
 
 ---
 
@@ -149,5 +163,13 @@ wirken exakt diese editierten Parameter auch live — ohne weitere Code-Änderun
   `effort-factors.test.ts` prüft die Zahlen dieses Dokuments.
 - `apps/backend-api/src/assignment/load-plan.ts` — `engineConfigFromRuleConfig` reicht
   `effort` an die Engine durch.
+- `apps/backend-api/src/assignment/effort-vector.ts` — `buildEffortVector` /
+  `buildEffortVectors`: baut den `EffortInputVector` je Beleg aus Arbeitsanweisung +
+  Positions-Anweisungen + Lagerklasse. Test `effort-vector.test.ts`.
+- `apps/backend-api/src/assignment/assignment.service.ts` — `recalculate` / `preview` /
+  `assignNextBundle` befüllen `EngineInput.effortVectors` und rechnen so live mit den
+  konfigurierten Parametern.
+- `packages/domain-types/src/location.ts` — `handlingClassFromLocationKind` (Lagerklasse →
+  Handling-Klasse), analog zu `bereichFromLocationKind`.
 - `apps/teamlead-web/src/features/admin/AdminPage.tsx` + `EffortPreview.tsx` — editierbare
   Parameter + Live-Vorschau im Tab „Aufwand“.

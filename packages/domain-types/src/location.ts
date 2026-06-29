@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema } from './primitives.js';
 import { locationKindSchema, pickupSequenceModeSchema, type LocationKind } from './enums.js';
+import type { HandlingClass } from './effort.js';
 
 /**
  * Simple location master (Anhang D). MVP does not model a routing graph or meters.
@@ -40,6 +41,27 @@ export function bereichFromLocationKind(kind: LocationKind): Bereich | undefined
       return 'Regal';
     default:
       return undefined; // workstation/printer/conveyor: not a pickup storage class
+  }
+}
+
+/**
+ * Map a Lagerplatz's storage class to its §8.2 Füllmaterial/Handling class, which drives
+ * the effort handling-multiplier. Like {@link bereichFromLocationKind}, the handling class
+ * is FIXED by where the goods are stored (no free-text). `small_parts`/`unknown` are not
+ * derivable from the storage class alone, so storage kinds map to `normal` unless they are
+ * inherently hanging (`haengebahn`) or bulky (`palette_*`).
+ */
+export function handlingClassFromLocationKind(kind: LocationKind): HandlingClass {
+  switch (kind) {
+    case 'haengebahn':
+      return 'hanging_goods';
+    case 'palette_a':
+    case 'palette_b':
+    case 'palette_c':
+    case 'palette_e':
+      return 'bulky';
+    default:
+      return 'normal'; // regal / lagerplatz_d / non-storage kinds
   }
 }
 

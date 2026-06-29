@@ -4,10 +4,10 @@ import {
   assignWork,
   buildPickupSequence,
   classifyPriority,
+  computeEffort,
   createBalancedBundles,
   finishableBudgetMinutes,
   sortByPriority,
-  DEFAULT_ENGINE_CONFIG,
   type EngineInput,
   type EnrichedCase,
   type PickupCase,
@@ -27,6 +27,7 @@ import {
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
+import { buildEffortVectors } from './effort-vector.js';
 
 type PrismaTx = Prisma.TransactionClient;
 import { EventLogService } from '../events/event-log.service.js';
@@ -37,6 +38,20 @@ import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto
 const POOL_STATUS = 'ready' as const;
 /** A case in one of these no longer counts as "open" within a bundle. */
 const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
+
+/**
+ * Prisma include that loads everything {@link buildEffortVector} needs to recompute a
+ * case's effort live from the cockpit-edited parameters (§8.2 wiring): the storage class
+ * (handling class), the work-instruction header (print + check mode) and each position's
+ * instruction (label/security/online/red-price counts) + WGR.
+ */
+const EFFORT_CASE_INCLUDE = {
+  storageLocation: true,
+  workInstruction: true,
+  // Explicit positionNo ordering keeps the derived vector (e.g. wgrCodes order) stable
+  // across runs — the plan stays deterministic regardless of DB row order.
+  positions: { include: { instruction: true }, orderBy: { positionNo: 'asc' } },
+} satisfies Prisma.GoodsReceiptCaseInclude;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -114,7 +129,7 @@ export class AssignmentService {
       //    are back in the pool, in-flight cases are excluded by their status).
       const casesRows = await tx.goodsReceiptCase.findMany({
         where: { status: POOL_STATUS },
-        include: { storageLocation: true },
+        include: EFFORT_CASE_INCLUDE,
       });
 
       const input: EngineInput = {
@@ -128,6 +143,10 @@ export class AssignmentService {
         ),
         shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
         locations: locationRows.map(toLocationMaster),
+        // §8.2 LIVE wiring: for every case that has a work instruction, recompute its
+        // effort from the cockpit-edited parameters (engineConfig.effort) via the pure
+        // computeEffort. Cases without one keep their precomputed estimatedMinutes.
+        effortVectors: buildEffortVectors(casesRows),
       };
 
       const t0 = performance.now();
@@ -218,16 +237,20 @@ export class AssignmentService {
     if (finishableBudget <= 0) return { assigned: false, reason: 'shift_ending' };
 
     const ruleConfig = await this.readRuleConfig();
+    const engineConfig = engineConfigFromRuleConfig(ruleConfig);
 
     return this.prisma.$transaction(async (tx) => {
       const [caseRows, locationRows] = await Promise.all([
-        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: { storageLocation: true } }),
+        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: EFFORT_CASE_INCLUDE }),
         tx.location.findMany({ where: { active: true } }),
       ]);
       if (caseRows.length === 0) return { assigned: false, reason: 'pool_empty' };
 
       const locations: LocationMaster[] = locationRows.map(toLocationMaster);
       const kindByCode = new Map(locations.map((l) => [l.code, l.kind]));
+      // §8.2 LIVE wiring: recompute effort from the cockpit-edited parameters for cases
+      // that carry a work instruction; the rest fall back to their estimatedMinutes.
+      const effortVectors = buildEffortVectors(caseRows);
       // Same Verladetag-relative priority as recalculate: resolve the loading day from
       // the live calendar, then classify with the configured Vorlauf (Teamlead-Punkt 4).
       const cases: GoodsReceiptCase[] = applyResolvedLoadPlanDates(
@@ -241,6 +264,10 @@ export class AssignmentService {
       const enriched: EnrichedCase[] = cases
         .map((c) => {
           const kind = kindByCode.get(c.storageLocation.code);
+          const vector = effortVectors.get(c.id);
+          const effort = vector
+            ? computeEffort(vector, engineConfig.effort)
+            : { minutes: c.estimatedMinutes, points: c.effortPoints };
           return {
             case: c,
             priority: classifyPriority(c, {
@@ -248,9 +275,9 @@ export class AssignmentService {
               overdueLeadDays: ruleConfig.priority.overdueLeadDays,
               overdueLeadDaysOverrides: ruleConfig.priority.overdueLeadDaysOverrides,
             }),
-            effortMinutes: c.estimatedMinutes,
-            effortPoints: c.effortPoints,
-            wgrCodes: [],
+            effortMinutes: effort.minutes,
+            effortPoints: effort.points,
+            wgrCodes: vector ? vector.wgrCodes : [],
             fromPreviousDays: c.bookingDate < day || c.status === 'partially_completed',
             bereich: kind ? bereichFromLocationKind(kind) : undefined,
           } satisfies EnrichedCase;
@@ -263,7 +290,7 @@ export class AssignmentService {
       const { bundles } = createBalancedBundles(
         ordered,
         finishableBudget,
-        DEFAULT_ENGINE_CONFIG.assignment,
+        engineConfig.assignment,
       );
       const cart = bundles[0];
       if (!cart) return { assigned: false, reason: 'pool_empty' };
@@ -370,7 +397,7 @@ export class AssignmentService {
       this.prisma.location.findMany({ where: { active: true } }),
       this.prisma.goodsReceiptCase.findMany({
         where: { status: { in: [...PREVIEW_POOL_STATUSES] } },
-        include: { storageLocation: true },
+        include: EFFORT_CASE_INCLUDE,
       }),
       this.readRuleConfig(),
     ]);
@@ -388,6 +415,8 @@ export class AssignmentService {
       cases: applyResolvedLoadPlanDates(normalizedCases, ruleConfig.loadPlan, day),
       shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
       locations: locationRows.map(toLocationMaster),
+      // §8.2 LIVE wiring: same effort recomputation as recalculate (see there).
+      effortVectors: buildEffortVectors(casesRows),
     };
 
     const t0 = performance.now();
