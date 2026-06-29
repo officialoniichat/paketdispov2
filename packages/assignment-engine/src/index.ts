@@ -72,6 +72,16 @@ export {
 
 // (3) Effort score (§8.2).
 export { computeEffort, type EffortResult } from './effort/effort-score.js';
+// (3a) Aufwandsfaktoren — Wirkungsmodell + Vorschau (§8.2 / Anhang B.3, D).
+export {
+  applyEffortFactors,
+  previewEffortWithFactors,
+  previewEffortBreakdown,
+  NEUTRAL_EFFORT_FACTORS,
+  EXAMPLE_EFFORT_VECTOR,
+  type EffortFactorContribution,
+  type EffortPreviewBreakdown,
+} from './effort/effort-factors.js';
 
 // (4) Assignment (§8.3/§8.4).
 export { computeIronReserve, canConsumeReserve, type ReserveInput } from './assignment/reserve.js';

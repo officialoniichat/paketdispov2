@@ -20,6 +20,7 @@
     "@mui/icons-material": "^6.4.0",
     "@mui/material": "^6.4.0",
     "@paket/api-client": "workspace:*",
+    "@paket/assignment-engine": "workspace:*",
     "@paket/domain-types": "workspace:*",
     "@paket/test-fixtures": "workspace:*",
     "@paket/ui": "workspace:*",

@@ -26,6 +26,7 @@ import Typography from '@mui/material/Typography';
 import type { RuleConfig } from '@paket/domain-types';
 import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
 import { LocationMasterEditor } from './LocationMasterEditor.js';
+import { EffortPreview } from './EffortPreview.js';
 import { EmployeeSettings } from './EmployeeSettings.js';
 import { SchichtplanTab } from './SchichtplanTab.js';
 import { IntegrationenTab } from './IntegrationenTab.js';
@@ -209,44 +210,56 @@ export function AdminPage(): JSX.Element {
               )}
 
               {tab === 3 && (
-                <Grid>
-                  <Num
-                    label="Faktor Etikettendruck"
-                    value={draft.effort.priceLabelPrintFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, priceLabelPrintFactor: v })}
-                    hint="Aufwand-Multiplikator für das Drucken von Preisetiketten."
-                  />
-                  <Num
-                    label="Faktor Sicherung"
-                    value={draft.effort.securingFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
-                    hint="Aufwand-Multiplikator für Warensicherung (Sicherungsetiketten/-tags)."
-                  />
-                  <Num
-                    label="Faktor Online"
-                    value={draft.effort.onlineFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
-                    hint="Aufwand-Multiplikator für online-relevante Artikel (zusätzliche Behandlung)."
-                  />
-                  <Num
-                    label="Faktor Rotpreis"
-                    value={draft.effort.redPriceFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
-                    hint="Aufwand-Multiplikator für Rotpreis-/reduzierte Artikel."
-                  />
-                  <Num
-                    label="Faktor Prüfanteil"
-                    value={draft.effort.checkShareFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
-                    hint="Aufwand-Multiplikator für den Prüfaufwand (Mengen-/Stichproben-/Vollkontrolle)."
-                  />
-                  <Num
-                    label="Faktor Box-Splitting"
-                    value={draft.effort.boxSplittingFactor}
-                    onChange={(v) => patch('effort', { ...draft.effort, boxSplittingFactor: v })}
-                    hint="Aufwand-Multiplikator je zusätzlicher Transportbox beim Aufteilen."
-                  />
-                </Grid>
+                <Stack spacing={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Faktoren sind <strong>Multiplikatoren</strong> (1,0 = neutral). Sie skalieren
+                    den jeweiligen Aufwandsanteil und damit die geschätzte Bearbeitungszeit &amp;
+                    Aufwandspunkte eines Belegs — die Vorschau unten rechnet live mit.
+                  </Typography>
+                  <Grid>
+                    <Num
+                      label="Faktor Etikettendruck"
+                      value={draft.effort.priceLabelPrintFactor}
+                      onChange={(v) =>
+                        patch('effort', { ...draft.effort, priceLabelPrintFactor: v })
+                      }
+                      hint="Multiplikator für Drucken + Anbringen von Preisetiketten. 1,2 → 2,0 verdoppelt nahezu den Etikettier-Anteil (siehe Live-Vorschau)."
+                    />
+                    <Num
+                      label="Faktor Sicherung"
+                      value={draft.effort.securingFactor}
+                      onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
+                      hint="Multiplikator für Warensicherung (Sicherungsetiketten/-tags) je Position."
+                    />
+                    <Num
+                      label="Faktor Online"
+                      value={draft.effort.onlineFactor}
+                      onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
+                      hint="Multiplikator für die zusätzliche Behandlung online-relevanter Positionen."
+                    />
+                    <Num
+                      label="Faktor Rotpreis"
+                      value={draft.effort.redPriceFactor}
+                      onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
+                      hint="Multiplikator für die Auszeichnung von Rotpreis-/reduzierten Artikeln."
+                    />
+                    <Num
+                      label="Faktor Prüfanteil"
+                      value={draft.effort.checkShareFactor}
+                      onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
+                      hint="Multiplikator auf den Prüf-Mehraufwand (Mengen-/Stichproben-/Vollkontrolle). Wirkt auf den Anteil über der reinen Mengenerfassung."
+                    />
+                    <Num
+                      label="Faktor Box-Splitting"
+                      value={draft.effort.boxSplittingFactor}
+                      onChange={(v) =>
+                        patch('effort', { ...draft.effort, boxSplittingFactor: v })
+                      }
+                      hint="Multiplikator je zusätzlicher Transportbox. Greift erst beim Aufteilen eines Belegs in mehrere Boxen — daher ohne Wirkung auf den Einzelbeleg in der Vorschau."
+                    />
+                  </Grid>
+                  <EffortPreview factors={draft.effort} />
+                </Stack>
               )}
 
               {tab === 4 && (
