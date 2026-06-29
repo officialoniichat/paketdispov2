@@ -211,7 +211,7 @@ export function BelegDetailPage(): JSX.Element {
                   Aufwandsaufschlüsselung (Minuten)
                 </Typography>
                 <FieldGrid
-                  rows={EFFORT_COMPONENT_ORDER.filter((k) => effortComponents[k] > 0).map((k) => [
+                  rows={EFFORT_COMPONENT_ORDER.map((k) => [
                     EFFORT_COMPONENT_LABEL[k],
                     formatMinutes(effortComponents[k]),
                   ])}
