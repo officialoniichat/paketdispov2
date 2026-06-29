@@ -1,6 +1,7 @@
 %% C4 Level 3 — Components: @paket/assignment-engine (pure, deterministic)
-%% Verified against packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
-%% priority/, effort/, assignment/{reserve,bundling,distribute}.ts, capacity/, pickup/, config.ts, types.ts).
+%% Verified against committed main: packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
+%% priority/, effort/{effort-score,effort-factors}.ts, assignment/{reserve,bundling,distribute}.ts,
+%% capacity/{net-capacity,shift-import,shift-end}.ts, grouping/delivery-group.ts, pickup/, config.ts, types.ts).
 flowchart TB
     classDef orch fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef mod fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
@@ -14,41 +15,50 @@ flowchart TB
         plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>orchestrator → AssignmentPlan</i>"]:::orch
 
         subgraph prio["priority/"]
-            priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6) · sortByPriority · comparePriority</i>"]:::mod
+            priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6) · sortByPriority · comparePriority<br/>(rank-3 = overdue; CatMan display-only)</i>"]:::mod
         end
         subgraph eff["effort/"]
             effSc["effort-score.ts<br/><i>computeEffort → minutes + fairness points (B.3)</i>"]:::mod
+            effFac["effort-factors.ts<br/><i>applyEffortFactors · previewEffortBreakdown (Pkt 2 transparency)</i>"]:::mod
         end
         subgraph cap["capacity/"]
             netCap["net-capacity.ts<br/><i>computeNetCapacityMinutes · teamCapacityMinutes</i>"]:::mod
             shImp["shift-import.ts<br/><i>parseShiftImportCsv (SEAK/PEP)</i>"]:::mod
+            shEnd["shift-end.ts<br/><i>autoAssignableCapacityMinutes · finishableBudgetMinutes (Pkt 5/6)</i>"]:::mod
         end
         subgraph asg["assignment/"]
-            reserve["reserve.ts<br/><i>computeIronReserve (B.2) · canConsumeReserve</i>"]:::mod
+            reserve["reserve.ts<br/><i>computeIronReserve (B.2) · canConsumeReserve (Prio/overdue/TL)</i>"]:::mod
             bundling["bundling.ts<br/><i>createBalancedBundles (~55min, ≤6 cases, Bereich-homogen)</i>"]:::mod
-            distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad (LPT, §8.3/8.4)</i>"]:::mod
+            distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad (LPT + delivery affinity, §8.3/8.4)</i>"]:::mod
+        end
+        subgraph grp["grouping/"]
+            delivery["delivery-group.ts<br/><i>detectDeliveryGroups · indexDeliveryGroups (Pkt 1)</i>"]:::mod
         end
         subgraph pck["pickup/"]
             pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, type→number, never feeds back)</i>"]:::mod
         end
-        config["config.ts + types.ts<br/><i>EngineConfig / EngineInput / AssignmentPlan (Zod defaults)</i>"]:::cfg
+        config["config.ts + types.ts<br/><i>EngineConfig (effort/reserve/bundle/grouping/shiftEnd) / EngineInput / AssignmentPlan</i>"]:::cfg
     end
 
     types["@paket/domain-types<br/><i>schemas · enums · bereichFromLocationKind()</i>"]:::io
 
     caller -->|"assignWork()"| plan
+    plan --> shEnd
     plan --> priEng
     plan --> effSc
     plan --> netCap
     plan --> reserve
     plan --> bundling
+    plan --> delivery
     plan --> distribute
     plan --> pickup
     bundling --> priEng
     distribute --> netCap
+    distribute --> delivery
     plan -. "reads defaults" .-> config
     priEng --> types
     effSc --> types
+    effFac --> effSc
     pickup --> types
     config --> types
     plan -->|"AssignmentPlan"| caller

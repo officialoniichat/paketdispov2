@@ -1,6 +1,7 @@
 %% C4 Level 4 — Code / data flow: assignWork() pipeline
-%% Verified against packages/assignment-engine/src/assignment/plan.ts (step ordering lines ~86–226)
-%% and the called modules (priority-engine, effort-score, net-capacity, reserve, bundling, distribute, pickup-order).
+%% Verified against packages/assignment-engine/src/assignment/plan.ts (committed main)
+%% and the called modules (shift-end, priority-engine, effort-score, net-capacity, reserve,
+%% bundling, delivery-group, distribute, pickup-order).
 flowchart TB
     classDef step fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
     classDef io fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
@@ -9,27 +10,30 @@ flowchart TB
 
     input["EngineInput<br/><i>cases · shifts · locations · pickupProfiles · effortVectors · nextMorningCapacityMinutes</i>"]:::io
 
+    cutoff["0 · SHIFT-END CUTOFF — autoAssignableCapacityMinutes()<br/><i>map shifts → cutoff-effective copies (Pkt 5, config.shiftEnd)</i>"]:::step
     enrich["1 · ENRICH — enrichCase()<br/>classifyPriority() → rank 0–6<br/>computeEffort() → minutes + points"]:::step
     exclude{"2 · EXCLUDE<br/>rank === 0 ?"}:::branch
     excluded["unassigned[]<br/><i>reason = excluded</i>"]:::out
 
-    capacity["3 · CAPACITY — teamCapacityMinutes(shifts)"]:::step
+    capacity["3 · CAPACITY — teamCapacityMinutes(effectiveShifts)"]:::step
     reserve["4 · RESERVE — computeIronReserve()<br/><i>max(% next-morning, min/employee) — B.2</i>"]:::step
 
     subgraph bundles["5 · BUNDLES — createBalancedBundles() (3 passes)"]
         direction TB
         starter["Pass 1 · starter (fromPreviousDays)"]:::step
-        override["Pass 2 · override (canConsumeReserve: Prio/CatMan/overdue/TL)"]:::step
+        override["Pass 2 · override (canConsumeReserve: Prio / overdue / Teamlead)"]:::step
         normal["Pass 3 · normal (respects reserve)<br/><i>cap = total − starter − override − reserve</i>"]:::step
     end
 
-    distribute["6 · DISTRIBUTE — distributeBundlesByWeightedLoad()<br/><i>LPT; score = load_ratio + specialist + heavy + bereich</i><br/>merge protos → one AssignmentBundle / employee"]:::step
-    pickup["7 · PICKUP — buildPickupSequence()<br/><i>per bundle: type→number order (§D.3), never feeds back</i>"]:::step
+    grouping["6 · DELIVERY GROUPS — detectDeliveryGroups() → indexDeliveryGroups()<br/><i>same Lieferschein / consecutive WE-Beleg run → groupIdByCaseId (Pkt 1)</i>"]:::step
+    distribute["7 · DISTRIBUTE — distributeBundlesByWeightedLoad()<br/><i>LPT over effective shifts; score = load_ratio + specialist + heavy + bereich;<br/>soft delivery-group affinity</i><br/>merge protos → one AssignmentBundle / employee"]:::step
+    pickup["8 · PICKUP — resolvePickup() → buildPickupSequence()<br/><i>per bundle: type→number order (§D.3), never feeds back</i>"]:::step
 
     plan["AssignmentPlan<br/><i>bundles · pickupSequences · reserve · unassigned · loads · diagnostics</i>"]:::out
 
-    input --> enrich --> exclude
+    input --> cutoff --> enrich --> exclude
     exclude -->|"yes"| excluded
     exclude -->|"no (eligible)"| capacity --> reserve --> starter
-    starter --> override --> normal --> distribute --> pickup --> plan
+    starter --> override --> normal --> grouping --> distribute --> pickup --> plan
+    grouping -. "groupIdByCaseId" .-> distribute
     distribute -. "overflow / no_capacity" .-> excluded

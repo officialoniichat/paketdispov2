@@ -69,10 +69,10 @@ regenerated SVG.
 | `c1-system-context.mmd` | **C4 L1 — Context** | The system, its three human roles, and the external systems (ProHandel ERP, OIDC provider). |
 | `c2-container.mmd` | **C4 L2 — Container** | Deploy/runtime units: employee-pwa, teamlead-web, backend-api, PostgreSQL, and the shared library packages; protocols (REST + SSE, SQL, in-process). |
 | `c3-backend-components.mmd` | **C4 L3 — Component** | NestJS modules inside backend-api: Cases (Me/Cases/Teamlead), Assignment, Employees, Admin, and the cross-cutting Auth/Prisma/Events/Workflow/Live globals. |
-| `c3-engine-components.mmd` | **C4 L3 — Component** | The pure `@paket/assignment-engine`: `assignWork()` orchestrator + priority/effort/capacity/reserve/bundling/distribute/pickup modules. |
+| `c3-engine-components.mmd` | **C4 L3 — Component** | The pure `@paket/assignment-engine`: `assignWork()` orchestrator + priority/effort (incl. effort-factors)/capacity (incl. shift-end)/reserve/bundling/grouping/distribute/pickup modules. |
 | `c3-employee-pwa-components.mmd` | **C4 L3 — Component** | employee-pwa: COLLECT→PROCESS→DONE screens, workflow hooks/guards, Dexie offline DB + optimistic-lock sync. |
 | `c3-teamlead-components.mmd` | **C4 L3 — Component** | teamlead-web: cockpit/ablagen/board/belege/split/admin features, the `useCockpitData()` store, data layer, and the `caseActions` registry. |
-| `c4-engine-pipeline.mmd` | **C4 L4 — Code** | The data flow inside `assignWork()`: enrich → exclude → capacity → reserve → bundles → distribute → pickup. |
+| `c4-engine-pipeline.mmd` | **C4 L4 — Code** | The data flow inside `assignWork()`: shift-end cutoff → enrich → exclude → capacity → reserve → bundles → delivery-groups → distribute → pickup. |
 | `domain-model.mmd` | **Domain / ER** | Prisma entities, relations and cardinalities; the Beleg-Kopf vs. Position (Warenbezeichnung/ASN-DESADV) split; config tables and the immutable WorkflowEvent log. |
 | `type-pipeline.mmd` | **Types** | The type-generation chain: domain-types (Zod) ↔ Prisma ↔ OpenAPI → api-client (generated). |
 

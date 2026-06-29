@@ -20,6 +20,11 @@ steers their lifecycle to Tagesabschluss (ZST). pnpm + Turborepo monorepo.
 - **Warenbezeichnung model (ASN/DESADV):** Beleg-Kopf fields (Filiale, Lieferschein, Abschnitt,
   Warenart) live on `GoodsReceiptCase`; article identity / NOS / Saison live on `ReceiptPosition`.
 - **Quality gate:** keep `pnpm typecheck` green (13/13). Conventional Commits.
+- **Keep the C4 model current (REQUIRED).** The C4 architecture model in `docs/architecture/` is a
+  living artifact — it must always match the real code. Any change to containers, modules/components,
+  the assignment-engine pipeline, the Prisma schema, or the type/codegen chain **must** update the
+  matching `.mmd` source and re-rendered SVG in the *same* change set. Never let the diagrams describe
+  code that no longer exists. Details + trigger list below.
 
 ## Architecture docs — keep them up to date
 
