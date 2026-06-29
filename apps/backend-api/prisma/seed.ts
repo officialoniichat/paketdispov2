@@ -1,7 +1,13 @@
 // Prisma dev seed (§14.1). Idempotent fixture so the assignment engine has a
-// realistic ready-pool + day shifts + location master to bundle. Re-running is
+// REALISTIC ready-pool + day shifts + location master to bundle. Re-running is
 // safe: every row is upserted by its natural key (employeeNo, role name,
 // location code, case weBelegNo, shift [employeeId,date]).
+//
+// The ready-pool volume is generated from the customer's real historical profile
+// (docs/data/belege-history-per-day.csv): a typical day ≈ 171 Belege, a peak day
+// ≈ 315. Pick the scenario with SEED_SCENARIO=typical|peak (default typical). The
+// generator (prisma/seed-data.ts) is fully deterministic — a reseed reproduces the
+// exact same pool.
 //
 // Consumers of this data:
 //   - AssignmentService.recalculate (src/assignment/assignment.service.ts):
@@ -12,7 +18,8 @@
 //
 // Run from apps/backend-api so prisma.config.ts loads DATABASE_URL:
 //   pnpm --filter @paket/backend-api exec prisma db seed
-import { PrismaClient, type LocationKind, type PriorityFlag, type Prisma } from '@prisma/client';
+//   SEED_SCENARIO=peak pnpm --filter @paket/backend-api exec prisma db seed
+import { PrismaClient, type PriorityFlag, type Prisma } from '@prisma/client';
 import {
   DEFAULT_INSPECTION_LEVELS,
   DEFAULT_RULE_CONFIG,
@@ -21,8 +28,19 @@ import {
 } from '@paket/domain-types';
 import { generateBelege } from '../src/prohandel/beleg-generator.js';
 import { persistGeneratedBeleg } from '../src/prohandel/beleg-persist.js';
+import {
+  LOCATIONS,
+  SCENARIO_TARGET,
+  USERS,
+  generateReadyCases,
+  resolveScenario,
+  type GeneratedCase,
+  type ShiftModel,
+} from './seed-data.js';
 
 const prisma = new PrismaClient();
+
+const SCENARIO = resolveScenario(process.env.SEED_SCENARIO);
 
 // Dates are YYYY-MM-DD. Seed targets "today" so the cockpit/board (which query the
 // current day) always have data after a reseed — no stale fixed demo date.
@@ -38,6 +56,13 @@ function asTime(day: string, hhmm: string): Date {
   return new Date(`${day}T${hhmm}:00.000Z`);
 }
 
+/** SEED_DATE shifted by `offset` calendar days, as a @db.Date UTC midnight. */
+function offsetDate(offset: number): Date {
+  const d = asDate(SEED_DATE);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d;
+}
+
 /** Look up a previously-seeded id, failing loudly if a referenced key is missing. */
 function requireId(map: Record<string, string>, key: string, kind: string): string {
   const id = map[key];
@@ -48,6 +73,25 @@ function requireId(map: Record<string, string>, key: string, kind: string): stri
 }
 
 // --- Roles (RBAC) ----------------------------------------------------------
+
+// --- Deterministic reset of the case graph --------------------------------
+// The ready pool is GENERATED, so its shape (count, weBelegNo set) changes when
+// the scenario or generator changes. To stay deterministic — exactly N ready
+// cases per scenario, no orphans from a previous seed shape — wipe the seed-owned
+// transactional graph up front, then rebuild. Master data the seed only upserts
+// (roles, users, locations, rule config) is left intact. ZstRecord has no cascade
+// on case and a case points at its bundle, so the order below clears those refs
+// before deleting the cases (whose other dependents cascade).
+
+async function resetCaseGraph(): Promise<void> {
+  await prisma.zstRecord.deleteMany({});
+  await prisma.assignmentItem.deleteMany({});
+  await prisma.goodsReceiptCase.updateMany({ data: { assignedBundleId: null } });
+  await prisma.assignmentBundle.deleteMany({});
+  // Cascades remove workInstruction, positions (+ sku lines), transport boxes and
+  // issues for each removed case.
+  await prisma.goodsReceiptCase.deleteMany({});
+}
 
 async function seedRoles(): Promise<Record<string, string>> {
   const names = ['teamlead', 'employee'] as const;
@@ -65,44 +109,9 @@ async function seedRoles(): Promise<Record<string, string>> {
 
 // --- Users (match the dev tokens) ------------------------------------------
 
-/** A shift model used Mo–Fr in an employee's weekly pattern (weekend = frei). */
-interface ShiftModel {
-  model: string;
-  start: string;
-  end: string;
-  breakMinutes: number;
-}
-
-type SeedSkillTier = 'profi' | 'fortgeschritten' | 'basis' | 'starter' | 'dummy';
-
-interface SeedUser {
-  employeeNo: string;
-  displayName: string;
-  email: string;
-  role: 'teamlead' | 'employee';
-  /** Skill-Stufe (A10): starter/dummy = nur manuelle Zuteilung. */
-  skillTier?: SeedSkillTier;
-  /** Arbeitsplatz/Tisch (Workstation-Code, A10). */
-  workstationCode?: string;
-  /** Mitarbeiter-Einstellungen demo fields (concept employee-settings-ux). */
-  bereiche?: string[];
-  productivityFactor?: number;
-  /** Mo–Fr shift model; capacity is derived from this (Wochenplan drives capacity). */
-  pattern?: ShiftModel;
-}
-
-const FRUEH: ShiftModel = { model: 'Frühschicht', start: '06:00', end: '14:00', breakMinutes: 30 };
-const SPAET: ShiftModel = { model: 'Spätschicht', start: '10:00', end: '18:00', breakMinutes: 30 };
-
-const USERS: SeedUser[] = [
-  { employeeNo: 'tl-001', displayName: 'TL Logistik', email: 'tl-001@dev.local', role: 'teamlead' },
-  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', bereiche: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH, skillTier: 'profi', workstationCode: 'T1' },
-  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', bereiche: ['Palette'], productivityFactor: 0.9, pattern: SPAET, skillTier: 'fortgeschritten', workstationCode: 'T2' },
-  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', productivityFactor: 1.0, pattern: FRUEH, skillTier: 'basis', workstationCode: 'T3' },
-  // Starter/Dummy (A10): sichtbar auf dem Board, aber NIE auto-beplant — nur manuell.
-  { employeeNo: 'ma-104', displayName: 'Deniz (Starter)', email: 'ma-104@dev.local', role: 'employee', productivityFactor: 0.8, pattern: FRUEH, skillTier: 'starter', workstationCode: 'T4' },
-  { employeeNo: 'tmp-201', displayName: 'Aushilfe Timo', email: 'tmp-201@dev.local', role: 'employee', productivityFactor: 0.7, pattern: SPAET, skillTier: 'dummy' },
-];
+// The team itself (identities, Bereiche, skill tiers, workstation assignments,
+// shift patterns) lives in prisma/seed-data.ts (USERS) so scenarios and team
+// stay in one deterministic place.
 
 // --- Workstations (Tische, A10) ---------------------------------------------
 
@@ -111,6 +120,10 @@ const WORKSTATIONS = [
   { code: 'T2', name: 'Tisch 2' },
   { code: 'T3', name: 'Tisch 3' },
   { code: 'T4', name: 'Tisch 4' },
+  { code: 'T5', name: 'Tisch 5' },
+  { code: 'T6', name: 'Tisch 6' },
+  { code: 'T7', name: 'Tisch 7' },
+  { code: 'T8', name: 'Tisch 8' },
 ];
 
 async function seedWorkstations(): Promise<Record<string, string>> {
@@ -142,6 +155,7 @@ async function seedUsers(
   for (const u of USERS) {
     const weeklyPattern = buildWeeklyPattern(u.pattern);
     const profile = {
+      measured: u.measured ?? true,
       bereiche: u.bereiche ?? [],
       productivityFactor: u.productivityFactor ?? 1,
       skillTier: u.skillTier ?? ('profi' as const),
@@ -178,6 +192,10 @@ function minutes(hhmm: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 async function seedShifts(userIds: Record<string, string>): Promise<void> {
   const date = asDate(SEED_DATE);
   for (const u of USERS) {
@@ -204,30 +222,9 @@ async function seedShifts(userIds: Record<string, string>): Promise<void> {
   }
 }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
 // --- Locations (storage master referenced by cases) ------------------------
-
-interface SeedLocation {
-  code: string;
-  displayName: string;
-  kind: LocationKind;
-  zone: string;
-  sequenceIndex: number;
-}
-
 // A Lagerplatz's Bereich is derived from its `kind` (regal/lagerplatz_d → Regal,
 // palette_* → Palette, haengebahn → Hängebahn), so it is not stored per location.
-const LOCATIONS: SeedLocation[] = [
-  { code: 'R7', displayName: 'Regal 7', kind: 'regal', zone: 'Zone A', sequenceIndex: 7 },
-  { code: 'R18', displayName: 'Regal 18', kind: 'regal', zone: 'Zone A', sequenceIndex: 18 },
-  { code: 'R27', displayName: 'Regal 27', kind: 'regal', zone: 'Zone B', sequenceIndex: 27 },
-  { code: 'B-4', displayName: 'Palette B/4', kind: 'palette_b', zone: 'Zone C', sequenceIndex: 54 },
-  { code: 'HB-5/234', displayName: 'Haengebahn 5/234', kind: 'haengebahn', zone: 'Zone D', sequenceIndex: 70 },
-  { code: 'D-3', displayName: 'Lagerplatz D-3', kind: 'lagerplatz_d', zone: 'Zone D', sequenceIndex: 83 },
-];
 
 async function seedLocations(): Promise<Record<string, string>> {
   const idByCode: Record<string, string> = {};
@@ -239,71 +236,40 @@ async function seedLocations(): Promise<Record<string, string>> {
     });
     idByCode[l.code] = loc.id;
   }
+  // Deactivate any location left over from a previous seed shape so the storage
+  // master matches the current set exactly (no legacy ghost Lagerplätze).
+  await prisma.location.updateMany({
+    where: { code: { notIn: LOCATIONS.map((l) => l.code) } },
+    data: { active: false },
+  });
   return idByCode;
 }
 
 // --- Goods receipt cases (the ready pool the engine bundles) ---------------
+// Generated from the real historical volume profile for the chosen scenario.
+// Cases arrive in delivery runs (shared deliveryNoteNo + consecutive weBelegNo)
+// so the Pkt.1 delivery-grouping fires and the board shows "Lieferung ×n" clusters.
 
-interface SeedCase {
-  weBelegNo: string;
-  storageCode: string;
-  section: number | null;
-  goodsTypeText:
-    | 'Vororder'
-    | 'Nachorder'
-    | 'Sonderposten'
-    | 'NOS'
-    | 'NOOS'
-    | 'Extrabestellung'
-    | 'NOS_Nachorder'
-    | 'Prio'
-    | null;
-  priorityFlags: PriorityFlag[];
-  totalQuantity: number;
-  effortPoints: number;
-  estimatedMinutes: number;
-  bookingDate: string;
-}
-
-// 14 ready cases spread across the storage master. Effort sums to ~330 min,
-// comfortably below the ~1200 min net capacity, so the engine forms multiple
-// bundles across the three shifts. A mix of prio/overdue/catman_due exercises
-// the priority ordering paths.
-const CASES: SeedCase[] = [
-  { weBelegNo: 'WE-2026-000123', storageCode: 'R27', section: null, goodsTypeText: 'Prio', priorityFlags: ['prio'], totalQuantity: 84, effortPoints: 18.5, estimatedMinutes: 42, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000124', storageCode: 'R7', section: null, goodsTypeText: 'Prio', priorityFlags: ['prio'], totalQuantity: 31, effortPoints: 9, estimatedMinutes: 26, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000125', storageCode: 'R18', section: 7, goodsTypeText: 'NOS', priorityFlags: ['overdue'], totalQuantity: 56, effortPoints: 12, estimatedMinutes: 30, bookingDate: '2026-06-12' },
-  { weBelegNo: 'WE-2026-000126', storageCode: 'B-4', section: 4, goodsTypeText: 'Nachorder', priorityFlags: ['catman_due'], totalQuantity: 22, effortPoints: 6.5, estimatedMinutes: 18, bookingDate: '2026-06-14' },
-  { weBelegNo: 'WE-2026-000127', storageCode: 'D-3', section: 8, goodsTypeText: 'NOS_Nachorder', priorityFlags: [], totalQuantity: 40, effortPoints: 10, estimatedMinutes: 24, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000128', storageCode: 'HB-5/234', section: 1, goodsTypeText: 'Vororder', priorityFlags: [], totalQuantity: 64, effortPoints: 14, estimatedMinutes: 28, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000129', storageCode: 'R7', section: 2, goodsTypeText: 'NOS', priorityFlags: [], totalQuantity: 18, effortPoints: 5, estimatedMinutes: 14, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000130', storageCode: 'R18', section: 3, goodsTypeText: 'Sonderposten', priorityFlags: [], totalQuantity: 27, effortPoints: 7, estimatedMinutes: 16, bookingDate: '2026-06-13' },
-  { weBelegNo: 'WE-2026-000131', storageCode: 'R27', section: 7, goodsTypeText: 'Nachorder', priorityFlags: [], totalQuantity: 35, effortPoints: 8, estimatedMinutes: 20, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000132', storageCode: 'B-4', section: 8, goodsTypeText: 'NOS', priorityFlags: [], totalQuantity: 12, effortPoints: 4, estimatedMinutes: 12, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000133', storageCode: 'D-3', section: 4, goodsTypeText: 'Extrabestellung', priorityFlags: [], totalQuantity: 48, effortPoints: 11, estimatedMinutes: 26, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000134', storageCode: 'HB-5/234', section: 1, goodsTypeText: 'Vororder', priorityFlags: [], totalQuantity: 73, effortPoints: 15, estimatedMinutes: 32, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000135', storageCode: 'R7', section: 2, goodsTypeText: 'NOOS', priorityFlags: [], totalQuantity: 21, effortPoints: 6, estimatedMinutes: 15, bookingDate: '2026-06-15' },
-  { weBelegNo: 'WE-2026-000136', storageCode: 'R18', section: 3, goodsTypeText: 'Nachorder', priorityFlags: [], totalQuantity: 29, effortPoints: 7.5, estimatedMinutes: 19, bookingDate: '2026-06-14' },
-];
-
-async function seedCases(locationIds: Record<string, string>): Promise<void> {
-  for (const c of CASES) {
+async function seedCases(locationIds: Record<string, string>, cases: GeneratedCase[]): Promise<void> {
+  for (const c of cases) {
     const storageLocationId = requireId(locationIds, c.storageCode, 'location');
+    const bookingDate = offsetDate(-c.bookingOffsetDays);
     const caseData = {
-      source: 'manual' as const,
+      source: 'prohandel_api' as const,
       externalRef: `dev-seed:${c.weBelegNo}`,
-      deliveryNoteNo: c.weBelegNo.replace('WE', 'LS'),
-      bookingDate: asDate(c.bookingDate),
-      weDate: asDate(c.bookingDate),
-      branchNo: '001',
-      primaryShopAreaNo: '21',
-      primaryShopNo: '21',
-      primaryFloor: 'EG',
+      deliveryNoteNo: c.deliveryNoteNo,
+      bookingDate,
+      weDate: bookingDate,
+      branchNo: c.branchNo,
+      primaryShopAreaNo: c.shopAreaNo,
+      primaryShopNo: c.shopAreaNo,
+      primaryFloor: c.floor,
       storageLocationId,
       section: c.section,
       goodsTypeText: c.goodsTypeText,
       priorityFlags: c.priorityFlags,
-      catManDate: c.priorityFlags.includes('catman_due') ? asDate(SEED_DATE) : null,
+      catManDate: c.catManDue ? asDate(SEED_DATE) : null,
+      loadPlanDate: c.loadPlanOffsetDays === null ? null : offsetDate(c.loadPlanOffsetDays),
       totalQuantity: c.totalQuantity,
       // A6: Kartonanzahl der Anlieferung (~25 Teile je Karton).
       inboundCartonCount: Math.max(1, Math.ceil(c.totalQuantity / 25)),
@@ -325,12 +291,12 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
 // --- Case details (header + positions + box targets for the PWA aggregate) -
 // The /api/me/cases/:id/aggregate endpoint (§14.2) needs a non-empty aggregate,
 // and a FULL ZST-Teilabschluss requires every box verplombt / position confirmed,
-// which is impossible with zero boxes/positions. So EVERY ready case gets a
-// work-instruction header, 1-2 receipt positions and 1-2 transport boxes whose
-// planned quantities sum to the case totalQuantity (so the full-ZST gate can be
-// satisfied in the UI). Idempotent via natural keys: WorkInstructionHeader
+// which is impossible with zero boxes/positions. So EVERY case gets a work-
+// instruction header, 1+ receipt positions and 1+ transport boxes whose planned
+// quantities sum to totalQuantity. Idempotent via natural keys: WorkInstructionHeader
 // (PK caseId), ReceiptPosition (@@unique [caseId, positionNo]), TransportBox
-// (@@unique [caseId, boxNo]).
+// (@@unique [caseId, boxNo]). Detail params (check mode, position count) come from
+// the generated case spec; lifecycle cases without a spec fall back to defaults.
 
 /** Split a total into 1-2 positive box quantities (deterministic from total). */
 function splitQuantity(total: number): number[] {
@@ -355,7 +321,32 @@ function boxGoodsTypeFromCase(
   }
 }
 
-async function seedCaseDetails(): Promise<void> {
+interface DetailParams {
+  checkMode: 'quantity_only' | 'percentage_check' | 'full_check';
+  checkPercentage: number | null;
+  positionCount: number;
+}
+
+function detailParamsFor(spec: GeneratedCase | undefined, totalQuantity: number): DetailParams {
+  if (spec) {
+    return { checkMode: spec.checkMode, checkPercentage: spec.checkPercentage, positionCount: spec.positionCount };
+  }
+  // Lifecycle/fallback default: 2 positions for larger cases, percentage check.
+  return {
+    checkMode: 'percentage_check',
+    checkPercentage: 20,
+    positionCount: totalQuantity >= 24 ? 2 : 1,
+  };
+}
+
+/** A5: Prüfstufe aus dem Katalog, abgeleitet aus dem Prüfmodus des Belegs. */
+function inspectionLevelFor(params: DetailParams): 'none' | 'p10' | 'p20' | 'full' {
+  if (params.checkMode === 'quantity_only') return 'none';
+  if (params.checkMode === 'full_check') return 'full';
+  return params.checkPercentage === 10 ? 'p10' : 'p20';
+}
+
+async function seedCaseDetails(specByWeBelegNo: Map<string, GeneratedCase>): Promise<void> {
   // Cover every case that benefits from a detail aggregate: the ready pool (so any
   // engine-assigned case is completable in the PWA) AND the terminal/issue
   // lifecycle cases (so their Belegdetail Positionen/Boxen tabs are populated, not
@@ -382,12 +373,13 @@ async function seedCaseDetails(): Promise<void> {
   });
 
   for (const c of cases) {
+    const params = detailParamsFor(specByWeBelegNo.get(c.weBelegNo), c.totalQuantity);
     const headerData = {
       priceLabelPrintRequired: true,
-      goodsReceiptCheckMode: 'percentage_check' as const,
-      goodsReceiptCheckPercentage: 20,
-      // A5: Prüfstufe aus dem Katalog; 20 % entspricht dem bisherigen Demo-Verhalten.
-      inspectionLevelCode: 'p20' as const,
+      goodsReceiptCheckMode: params.checkMode,
+      goodsReceiptCheckPercentage: params.checkPercentage,
+      // A5: Prüfstufe aus dem Katalog, konsistent zum Prüfmodus des Belegs.
+      inspectionLevelCode: inspectionLevelFor(params),
       boxLabelRequired: true,
       zstRequired: true,
     };
@@ -397,25 +389,26 @@ async function seedCaseDetails(): Promise<void> {
       create: { caseId: c.id, ...headerData },
     });
 
-    // Positions carry a destination: Filiale 1 / Shopbereich 21 / Etage. Most Belege
-    // ship to ONE Etage (like the Arbeitsanweisung example: 5 Positionen, alle EG)
-    // → one Transportbox. A deterministic subset puts a second position on another
-    // Etage to demo the real split (one box per Shopbereich/Shop/Etage) → two boxes.
-    const positionCount = c.totalQuantity >= 24 ? 2 : 1;
-    const splitAcrossEtagen = positionCount === 2 && c.totalQuantity % 2 === 0;
+    // Positions carry a destination: Filiale / Shopbereich / Etage. Most Belege ship
+    // to ONE Etage → one Transportbox. A deterministic subset puts a second position
+    // on another Etage to demo the real split (one box per Shopbereich/Shop/Etage).
+    const positionCount = Math.min(params.positionCount, Math.max(1, Math.floor(c.totalQuantity / 4) || 1));
+    const splitAcrossEtagen = positionCount >= 2 && c.totalQuantity % 2 === 0;
     const secondQty = Math.floor(c.totalQuantity / positionCount);
-    const posMeta = [
-      {
-        positionNo: 1, wgr: '218110', supplierArticleNo: 'ART-001', supplierColor: 'schwarz',
-        floor: 'EG', qty: c.totalQuantity - secondQty * (positionCount - 1),
-        catMan: true, securityTypeCode: 'hard-tag',
-      },
-      {
-        positionNo: 2, wgr: '111130', supplierArticleNo: 'ART-002', supplierColor: 'blau',
-        floor: splitAcrossEtagen ? '1.OG' : 'EG', qty: secondQty,
-        catMan: false, securityTypeCode: null,
-      },
-    ].slice(0, positionCount);
+    // WGRs kommen aus dem gesäten WGR-Katalog (A2), damit Katalog-Beschreibung und
+    // A8-Größen-Präferenzen auf echten Positionen greifen.
+    const POSITION_WGRS = ['218110', '111130', '214520', '312400', '415210'] as const;
+    const posMeta = Array.from({ length: positionCount }, (_, idx) => ({
+      positionNo: idx + 1,
+      wgr: POSITION_WGRS[idx] ?? '218110',
+      supplierArticleNo: `ART-${String(idx + 1).padStart(3, '0')}`,
+      supplierColor: ['schwarz', 'blau', 'rot', 'grün', 'weiß'][idx] ?? 'schwarz',
+      floor: idx === 0 ? c.primaryFloor ?? 'EG' : splitAcrossEtagen ? '1.OG' : c.primaryFloor ?? 'EG',
+      qty: idx === 0 ? c.totalQuantity - secondQty * (positionCount - 1) : secondQty,
+      // A4: Position 1 trägt CatMan + Sicherungstyp-Piktogramm, Folgepositionen nicht.
+      catMan: idx === 0,
+      securityTypeCode: idx === 0 ? 'hard-tag' : null,
+    }));
 
     // Ältere Seed-Generationen hinterlassen überzählige Positionen (upsert löscht nie)
     // — wegräumen, damit Beleg, Boxen und Warenart konsistent sind.
@@ -436,8 +429,8 @@ async function seedCaseDetails(): Promise<void> {
           wgr: p.wgr,
           supplierArticleNo: p.supplierArticleNo,
           supplierColor: p.supplierColor,
-          branchNo: '001',
-          shopNo: '21',
+          branchNo: c.branchNo,
+          shopNo: c.primaryShopAreaNo ?? '21',
           floor: p.floor,
           catMan: p.catMan,
         },
@@ -466,7 +459,8 @@ async function seedCaseDetails(): Promise<void> {
       const sizes = ['38', '40'];
       for (const [skuIndex, expectedQuantity] of skuQuantities.entries()) {
         const size = sizes[skuIndex] ?? String(40 + skuIndex * 2);
-        const ean = `40123${p.positionNo}${skuIndex}${c.weBelegNo.slice(-5)}`;
+        // Beleg-Nummern sind gepunktet („3.540.001") — nur Ziffern in die EAN.
+        const ean = `40123${p.positionNo}${skuIndex}${c.weBelegNo.replace(/\D/g, '').slice(-5)}`;
         // A1: EK/VK/VK-Etikett je EAN/Größen-Zeile — wie auf dem WE-Beleg-Papier.
         const ekPrice = 12.5 + p.positionNo * 2;
         const vkPrice = round2(ekPrice * 2.4);
@@ -495,9 +489,9 @@ async function seedCaseDetails(): Promise<void> {
         data: {
           caseId: c.id,
           boxNo,
-          branchNo: '001',
-          shopAreaNo: '21',
-          shopNo: '21',
+          branchNo: c.branchNo,
+          shopAreaNo: c.primaryShopAreaNo ?? '21',
+          shopNo: c.primaryShopAreaNo ?? '21',
           floor,
           plannedQuantity,
           // Boxzettel vollständig: Positionen der Box + Warenart des Belegs (nie
@@ -512,11 +506,9 @@ async function seedCaseDetails(): Promise<void> {
 }
 
 // --- Lifecycle cases (populate the Belege scopes Abgeschlossen / Archiv) ----
-// The 14 ready cases above feed the engine. These extra cases sit in terminal /
-// completion / issue states so the §10.4 Belege view's scope switcher (Aktiv /
-// Abgeschlossen heute / Archiv) and the Problemfälle lane are non-empty in dev.
-// They are NOT status='ready', so the assignment engine ignores them.
-// See docs/concept/beleg-lifecycle-completion-concept.md.
+// A handful of cases in terminal / completion / issue states so the §10.4 Belege
+// view's scope switcher (Aktiv / Abgeschlossen heute / Archiv) and the Problemfälle
+// lane are non-empty in dev. They are NOT status='ready', so the engine ignores them.
 
 type LifecycleStatus =
   | 'needs_review'
@@ -538,13 +530,9 @@ interface SeedLifecycleCase {
   estimatedMinutes: number;
   status: LifecycleStatus;
   employeeNo: 'ma-101' | 'ma-102' | 'ma-103';
-  /** Confirmed quantity booked into a ZstRecord (omit for cancelled/issue_open). */
   completedQuantity?: number;
-  /** HH:mm the ZST/abschluss happened (UTC, on the seed day). */
   completedAt?: string;
-  /** Set for zst_done: the day the ZST batch was exported to the legacy system. */
   exportedAt?: string;
-  /** issue_open only: the open problem reported against the case. */
   issue?: { issueType: 'wrong_color' | 'damaged_goods' | 'missing_quantity'; description: string };
   /** A7 TL-Topf: „Besondere Aufmerksamkeit"-Flag mit Notiz (Bucherinnen-Inlet mock). */
   attentionNote?: string;
@@ -569,7 +557,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     employeeNo: 'ma-101', completedQuantity: 60, completedAt: '14:32',
   },
   {
-    weBelegNo: 'WE-2026-000202', storageCode: 'R18', section: 3, goodsTypeText: 'Nachorder',
+    weBelegNo: 'WE-2026-000202', storageCode: 'R19', section: 3, goodsTypeText: 'Nachorder',
     totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'partially_completed',
     employeeNo: 'ma-102', completedQuantity: 40, completedAt: '14:05',
   },
@@ -579,7 +567,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     employeeNo: 'ma-101', completedQuantity: 45, completedAt: '13:40', exportedAt: '17:00',
   },
   {
-    weBelegNo: 'WE-2026-000204', storageCode: 'B-4', section: 4, goodsTypeText: 'Sonderposten',
+    weBelegNo: 'WE-2026-000204', storageCode: 'PB-4', section: 4, goodsTypeText: 'Sonderposten',
     totalQuantity: 18, effortPoints: 5, estimatedMinutes: 12, status: 'cancelled',
     employeeNo: 'ma-103',
   },
@@ -596,7 +584,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     attentionNote: 'Bucherin: Preisangaben unklar — bitte vor Freigabe prüfen.',
   },
   {
-    weBelegNo: 'WE-2026-000207', storageCode: 'R18', section: 4, goodsTypeText: 'Nachorder',
+    weBelegNo: 'WE-2026-000207', storageCode: 'R19', section: 4, goodsTypeText: 'Nachorder',
     totalQuantity: 52, effortPoints: 12, estimatedMinutes: 26, status: 'parked',
     employeeNo: 'ma-102',
     attentionNote: 'Bucherin: Lieferant hat Nachlieferung angekündigt.',
@@ -609,7 +597,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
   // C5 Digitale Ablage: ein weitergeleiteter Beleg (parked, damit die Engine ihn
   // ignoriert) — landet in der „weitergeleitet"-Lane, gruppiert nach Empfänger.
   {
-    weBelegNo: 'WE-2026-000209', storageCode: 'B-4', section: 3, goodsTypeText: 'Nachorder',
+    weBelegNo: 'WE-2026-000209', storageCode: 'PB-4', section: 3, goodsTypeText: 'Nachorder',
     totalQuantity: 22, effortPoints: 6, estimatedMinutes: 14, status: 'parked',
     employeeNo: 'ma-102',
     forwardedTo: 'retourenabteilung',
@@ -838,7 +826,7 @@ async function seedIntakeGateFixtures(locationIds: Record<string, string>): Prom
         deliverySourceGroupSize: 3,
         ...base,
         totalQuantity: 24 + i * 6,
-        storageLocationId: requireId(locationIds, 'R18', 'location'),
+        storageLocationId: requireId(locationIds, 'R19', 'location'),
         status: 'ready',
       },
     });
@@ -867,30 +855,37 @@ async function seedReadyAttentionFlag(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const readyCases = generateReadyCases(SCENARIO);
+  const specByWeBelegNo = new Map(readyCases.map((c) => [c.weBelegNo, c]));
+
+  await resetCaseGraph();
   const roleIds = await seedRoles();
   const workstationIds = await seedWorkstations();
   const userIds = await seedUsers(roleIds, workstationIds);
   await seedShifts(userIds);
   const locationIds = await seedLocations();
   await seedCatalogs();
-  await seedCases(locationIds);
+  await seedCases(locationIds, readyCases);
   await seedLifecycleCases(locationIds, userIds);
   // After both case sets exist, attach detail (positions/boxes/SKU) to every case
-  // that should show it — ready pool + lifecycle cases.
-  await seedCaseDetails();
-  // Generated mock-ProHandel batch ON TOP of the handcrafted fixtures (runs after
+  // that should show it — generated ready pool + lifecycle cases.
+  await seedCaseDetails(specByWeBelegNo);
+  // Generated mock-ProHandel batch ON TOP of the generated pool (runs after
   // seedCaseDetails so its richer positions/boxes are not overwritten).
   await seedGeneratedBelege(locationIds);
   await seedIntakeGateFixtures(locationIds);
   await seedReadyAttentionFlag();
   await seedRuleConfig();
 
-  const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =
+  const [users, shifts, locations, readyCount, deliveryGroups, positions, boxes, lifecycleCases, zstRecords] =
     await Promise.all([
       prisma.user.count(),
       prisma.shift.count({ where: { date: asDate(SEED_DATE), active: true } }),
       prisma.location.count({ where: { active: true } }),
       prisma.goodsReceiptCase.count({ where: { status: 'ready' } }),
+      prisma.goodsReceiptCase
+        .findMany({ where: { status: 'ready' }, select: { deliveryNoteNo: true } })
+        .then((rows) => new Set(rows.map((r) => r.deliveryNoteNo)).size),
       prisma.receiptPosition.count(),
       prisma.transportBox.count(),
       prisma.goodsReceiptCase.count({
@@ -898,9 +893,11 @@ async function main(): Promise<void> {
       }),
       prisma.zstRecord.count(),
     ]);
-  // eslint-disable-next-line no-console
   console.log(
-    `[seed] users=${users} shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCases} positions=${positions} boxes=${boxes} lifecycleCases=${lifecycleCases} zstRecords=${zstRecords}`,
+    `[seed] scenario=${SCENARIO} (target=${SCENARIO_TARGET[SCENARIO]}) users=${users} ` +
+      `shifts(${SEED_DATE})=${shifts} activeLocations=${locations} readyCases=${readyCount} ` +
+      `deliveryGroups=${deliveryGroups} positions=${positions} boxes=${boxes} ` +
+      `lifecycleCases=${lifecycleCases} zstRecords=${zstRecords}`,
   );
 }
 
@@ -909,7 +906,6 @@ main()
     await prisma.$disconnect();
   })
   .catch(async (err) => {
-    // eslint-disable-next-line no-console
     console.error('[seed] failed', err);
     await prisma.$disconnect();
     process.exitCode = 1;

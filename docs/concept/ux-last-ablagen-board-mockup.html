@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UX-Last · Digitale Ablagen bei realistischer Menge — Soll-Mockup</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161a22;
+        --panel-2: #1d222c;
+        --ink: #eef1f6;
+        --muted: #98a2b3;
+        --line: #2a313d;
+        --radius: 14px;
+        --teamlead: #8b7cf6;
+        --employee: #2dd4a7;
+        --beleg: #f5b955;
+        --group: #c084fc;
+        --prio: #ff6b6b;
+        --overdue: #ff8a4c;
+        --ok: #3fd07f;
+        --bad: #ff6b6b;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        background: radial-gradient(1200px 700px at 80% -10%, #1b2030 0%, var(--bg) 55%);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1240px; margin: 0 auto; padding: 36px 24px 80px; }
+      header.hero { margin-bottom: 28px; }
+      header.hero h1 { font-size: 26px; margin: 0 0 6px; }
+      header.hero p { color: var(--muted); margin: 0; max-width: 80ch; line-height: 1.5; }
+      .tag {
+        display: inline-block; font-size: 12px; color: var(--muted);
+        border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin-right: 6px;
+      }
+      section { margin-top: 34px; }
+      h2 { font-size: 18px; border-left: 3px solid var(--teamlead); padding-left: 10px; margin: 0 0 4px; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; padding-left: 13px; }
+      .callout {
+        border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius);
+        padding: 14px 16px; margin: 12px 0; font-size: 13.5px; line-height: 1.55;
+      }
+      .callout.bad { border-color: #5a2b2b; background: #1f1416; }
+      .callout.good { border-color: #234a35; background: #11201a; }
+      .callout b { color: var(--ink); }
+
+      /* ---- toolbar ---- */
+      .toolbar {
+        display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+        padding: 10px 12px; margin-bottom: 14px;
+      }
+      .search {
+        flex: 1 1 220px; min-width: 180px; background: var(--bg); border: 1px solid var(--line);
+        border-radius: 8px; padding: 7px 10px; color: var(--ink); font-size: 13px;
+      }
+      .chip {
+        font-size: 12px; border: 1px solid var(--line); border-radius: 999px;
+        padding: 5px 11px; color: var(--muted); cursor: default; background: var(--bg);
+      }
+      .chip.on { color: var(--ink); border-color: var(--teamlead); background: #211c33; }
+      .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .seg span { font-size: 12px; padding: 6px 11px; color: var(--muted); background: var(--bg); }
+      .seg span.on { color: var(--ink); background: #211c33; }
+
+      /* ---- board ---- */
+      .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .lane {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+        padding: 10px; display: flex; flex-direction: column; min-height: 260px;
+      }
+      .lane h3 {
+        font-size: 13px; margin: 0 0 8px; display: flex; justify-content: space-between;
+        align-items: center; color: var(--ink);
+      }
+      .lane h3 .count {
+        font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+        border-radius: 999px; padding: 1px 8px;
+      }
+      .lane.prio h3 { color: var(--prio); }
+      .lane.over h3 { color: var(--overdue); }
+
+      .card {
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+        padding: 8px 9px; margin-bottom: 7px; font-size: 12.5px;
+      }
+      .card .l1 { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+      .card .we { color: var(--beleg); font-variant-numeric: tabular-nums; font-weight: 600; }
+      .card .meta { color: var(--muted); font-size: 11px; margin-top: 3px; }
+      .badge {
+        font-size: 10.5px; border-radius: 999px; padding: 1px 7px; border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .badge.group { color: var(--group); border-color: #4a3a63; background: #1b1626; }
+      .badge.prio { color: var(--prio); border-color: #5a2b2b; }
+      .badge.over { color: var(--overdue); border-color: #5a3a24; }
+
+      /* group (cluster) card */
+      .card.group-card { border-color: #4a3a63; background: #181426; }
+      .card.group-card .l1 .we { color: var(--group); }
+      .card.group-card .members {
+        margin-top: 7px; border-top: 1px dashed var(--line); padding-top: 6px;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px;
+        font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+      }
+      .card.group-card .expander {
+        margin-top: 6px; font-size: 11px; color: var(--teamlead);
+      }
+      .dense .card { padding: 4px 8px; margin-bottom: 4px; }
+      .dense .card .meta { display: none; }
+      .more { text-align: center; font-size: 11px; color: var(--muted); padding: 6px; }
+      .legend { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
+      .legend b { color: var(--ink); }
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+        background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
+      }
+      table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+      table.cmp th, table.cmp td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+      table.cmp th { background: var(--panel-2); color: var(--muted); font-weight: 600; }
+      .y { color: var(--ok); } .n { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <h1>Digitale Ablagen — Soll-Variante bei realistischer Belegmenge</h1>
+        <p>
+          <span class="tag">Teamlead-Web</span><span class="tag">Peak-Tag = 315 Belege</span>
+          <span class="tag">Quelle: belege-history-per-day.csv</span>
+          Heutiges Board rendert jede Karte ins DOM, nutzt die bereits vorhandene
+          Lieferschein-Gruppierung (Pkt.1) nicht und kappt den Pool still bei 200.
+          Diese Soll-Variante zeigt die drei Hebel: <b>Lieferschein-Cluster</b>,
+          <b>Virtualisierung/Dichte</b> und <b>Filter + Overflow-Hinweis</b>.
+        </p>
+      </header>
+
+      <!-- ===================== A ===================== -->
+      <section>
+        <h2>A · Board mit Lieferschein-Clustern, Filter &amp; Dichte-Modus</h2>
+        <p class="sub">
+          315 Belege → ~95 Liefer-Cluster. Eine Lieferung = <b>eine</b> aufklappbare Karte
+          „Lieferung ×n", statt n Einzelkarten. Lanes virtualisiert (nur sichtbare Karten im DOM).
+        </p>
+
+        <div class="callout bad">
+          <b>Vorher (IST):</b> <code>lanes.map → lane.cards.map</code> rendert alle Karten
+          (~3 150 DOM-Knoten bei 171, spürbarer Jank bei 315). Cluster-Felder
+          (<code>deliveryGroupId/Size</code>) existieren, werden aber nicht angezeigt.
+          Fetch-Limit <code>200</code> kappt 115 Belege still.
+        </div>
+
+        <div class="toolbar">
+          <input class="search" placeholder="🔍 WE-Beleg, Lieferschein, Lagerplatz …" />
+          <span class="chip on">Alle Bereiche</span>
+          <span class="chip">Regal</span>
+          <span class="chip">Palette</span>
+          <span class="chip">Hängebahn</span>
+          <span class="chip">Section 1–3</span>
+          <span class="chip">Section 4/7/8</span>
+          <span style="flex:1"></span>
+          <span style="font-size:12px;color:var(--muted)">Dichte</span>
+          <span class="seg"><span>Komfort</span><span class="on">Kompakt</span></span>
+        </div>
+
+        <div class="board dense">
+          <!-- Lane: Prio -->
+          <div class="lane prio">
+            <h3>Prio <span class="count">31</span></h3>
+            <div class="card">
+              <div class="l1"><span class="we">3.540.118</span><span class="badge prio">PRIO</span></div>
+            </div>
+            <div class="card">
+              <div class="l1"><span class="we">3.540.205</span><span class="badge prio">PRIO</span></div>
+            </div>
+            <div class="card group-card">
+              <div class="l1"><span class="we">Lieferung LS-25-142</span><span class="badge group">×4</span></div>
+              <div class="expander">▸ 4 Belege · Regal · 1 Person aufklappen</div>
+            </div>
+            <div class="more">… virtualisiert · 27 weitere</div>
+          </div>
+
+          <!-- Lane: Überfällig -->
+          <div class="lane over">
+            <h3>Überfällig <span class="count">62</span></h3>
+            <div class="card group-card">
+              <div class="l1"><span class="we">Lieferung LS-25-108</span><span class="badge group">×11</span></div>
+              <div class="members">
+                <span>3.540.074</span><span>3.540.075</span>
+                <span>3.540.076</span><span>3.540.077</span>
+                <span>+ 7 weitere …</span><span></span>
+              </div>
+              <div class="expander">Bereich Palette · Verladetag morgen</div>
+            </div>
+            <div class="card">
+              <div class="l1"><span class="we">3.540.301</span><span class="badge over">ÜBERFÄLLIG</span></div>
+            </div>
+            <div class="more">… virtualisiert · 49 weitere</div>
+          </div>
+
+          <!-- Lane: Jeden Tag -->
+          <div class="lane">
+            <h3>Jeden Tag (4/7/8) <span class="count">170</span></h3>
+            <div class="card group-card">
+              <div class="l1"><span class="we">Lieferung LS-25-160</span><span class="badge group">×24</span></div>
+              <div class="expander">▸ 24 Belege · Regal · größter Lauf des Tages</div>
+            </div>
+            <div class="card group-card">
+              <div class="l1"><span class="we">Lieferung LS-25-133</span><span class="badge group">×6</span></div>
+              <div class="expander">▸ 6 Belege · Hängebahn</div>
+            </div>
+            <div class="card">
+              <div class="l1"><span class="we">3.540.412</span><span class="badge">Einzel</span></div>
+            </div>
+            <div class="more">… virtualisiert · ~60 Cluster</div>
+          </div>
+
+          <!-- Lane: Verladeplan -->
+          <div class="lane">
+            <h3>Verladeplan (1/2/3) <span class="count">52</span></h3>
+            <div class="card group-card">
+              <div class="l1"><span class="we">Lieferung LS-25-151</span><span class="badge group">×9</span></div>
+              <div class="expander">▸ 9 Belege · Palette · Verladetag +2</div>
+            </div>
+            <div class="card">
+              <div class="l1"><span class="we">3.540.520</span><span class="badge">Einzel</span></div>
+            </div>
+            <div class="more">… virtualisiert · 21 weitere</div>
+          </div>
+        </div>
+
+        <div class="callout good">
+          <b>Nachher (SOLL):</b> sichtbare Einheiten am Peak-Tag von 315 → ~95;
+          DOM-Knoten konstant (Lane-Virtualisierung); eine Lieferung bleibt visuell beieinander
+          (stützt die soft-Bereich-Affinität aus Pkt.1: ganze Lieferung an eine Person);
+          Filter/Suche reduziert den Rest gezielt.
+        </div>
+
+        <div class="legend">
+          <b>Karten-Legende:</b>
+          <span class="badge group">×n</span> Lieferschein-Cluster (aufklappbar) ·
+          <span class="badge prio">PRIO</span> Prio-Beleg ·
+          <span class="badge over">ÜBERFÄLLIG</span> Verladetag-relativ ·
+          <span class="badge">Einzel</span> Beleg ohne Lauf.
+          Umschalten Dichte: <span class="kbd">Komfort</span> / <span class="kbd">Kompakt</span>.
+        </div>
+      </section>
+
+      <!-- ===================== B ===================== -->
+      <section>
+        <h2>B · Belege-Liste — Overflow-Hinweis statt stiller Trunkierung</h2>
+        <p class="sub">
+          Tabellenkörper ist bereits virtualisiert ✅. Einziges Last-Problem: <code>limit:200</code>
+          kappt am Peak-Tag (315) 115 Belege ohne Hinweis.
+        </p>
+        <div class="callout bad" style="display:flex;justify-content:space-between;align-items:center;gap:14px">
+          <span>⚠️ <b>315 Belege vorhanden — 200 geladen.</b> Suche, Sortierung und
+            Scope-Verteilung gelten nur für die ersten 200.</span>
+          <span class="chip on" style="white-space:nowrap">Alle 315 laden ▸</span>
+        </div>
+        <div class="callout good">
+          <b>Fix:</b> <code>useInfiniteQuery</code> mit
+          <code>getNextPageParam: total &gt; items.length ? page+1 : undefined</code>, Seiten vor
+          der Virtualisierung flachklopfen. Sofort-Sicherung: obiges Banner, sobald
+          <code>total &gt; items.length</code>.
+        </div>
+      </section>
+
+      <!-- ===================== Summary ===================== -->
+      <section>
+        <h2>Verdikt je Fläche</h2>
+        <table class="cmp">
+          <tr><th>Fläche</th><th>171</th><th>315</th><th>Fix</th></tr>
+          <tr><td>Engine (Recalculate)</td><td class="y">✅ ≪30ms</td><td class="y">✅ ≪30ms</td><td>—</td></tr>
+          <tr><td>Cockpit (KPIs)</td><td class="y">✅</td><td class="y">✅</td><td>—</td></tr>
+          <tr><td>Belege-Liste</td><td class="y">✅ virtualisiert</td><td class="n">⚠️ 200-Cap</td><td>Infinite-Query + Banner (B)</td></tr>
+          <tr><td><b>Digitale Ablagen</b></td><td class="n">⚠️</td><td class="n">⚠️</td><td><b>Cluster + Virtualisierung (A)</b></td></tr>
+          <tr><td>Mitarbeiter-Board / Aufteilungen</td><td class="y">✅</td><td class="y">✅</td><td>—</td></tr>
+          <tr><td>Employee-PWA (alle)</td><td class="y">✅ Bündel ≤6</td><td class="y">✅ Bündel ≤6</td><td>—</td></tr>
+        </table>
+        <p class="legend">
+          Vollständiger Bericht: <span class="kbd">docs/review/ux-last-bei-realistischer-menge.md</span> ·
+          Datenherkunft: <span class="kbd">docs/data/belege-history-per-day.csv</span> ·
+          Seed: <span class="kbd">SEED_SCENARIO=peak pnpm --filter @paket/backend-api exec prisma db seed</span>
+        </p>
+      </section>
+    </div>
+  </body>
+</html>
