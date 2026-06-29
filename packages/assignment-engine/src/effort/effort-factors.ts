@@ -1,6 +1,11 @@
 import type { EffortRuleConfig, EffortInputVector } from '@paket/domain-types';
 import { DEFAULT_EFFORT_CONFIG, type EffortConfig } from '../config.js';
-import { computeEffort, type EffortResult } from './effort-score.js';
+import {
+  computeEffort,
+  computeEffortBreakdown,
+  type EffortComponents,
+  type EffortResult,
+} from './effort-score.js';
 
 /**
  * Aufwandsfaktoren — Wirkungsmodell (§8.2 / Anhang B.3, D).
@@ -93,6 +98,13 @@ export function previewEffortWithFactors(
   return computeEffort(vector, applyEffortFactors(base, factors));
 }
 
+/** One line of the base (neutral) effort formula — "where the minutes come from". */
+export interface EffortBaseComponent {
+  key: keyof EffortComponents;
+  /** Minutes this term contributes to the neutral baseline (factors at `1.0`). */
+  minutes: number;
+}
+
 /** Per-factor marginal effect: minutes this factor adds vs. the same beleg at `1.0`. */
 export interface EffortFactorContribution {
   key: keyof EffortRuleConfig;
@@ -110,8 +122,23 @@ export interface EffortPreviewBreakdown {
   totalPoints: number;
   /** Minutes added over baseline by the configured factors (`totalMinutes − baseline`). */
   factorMinutes: number;
+  /** Base formula terms (neutral) — the origin of {@link baselineMinutes}. */
+  baseComponents: readonly EffortBaseComponent[];
   contributions: readonly EffortFactorContribution[];
 }
+
+/** Order in which base components are surfaced to the UI / docs. */
+const COMPONENT_KEYS: readonly (keyof EffortComponents)[] = [
+  'base',
+  'quantity',
+  'priceLabelPrint',
+  'labelAttach',
+  'security',
+  'online',
+  'redPrice',
+  'check',
+  'handling',
+];
 
 const FACTOR_KEYS: readonly (keyof EffortRuleConfig)[] = [
   'priceLabelPrintFactor',
@@ -132,8 +159,13 @@ export function previewEffortBreakdown(
   vector: EffortInputVector = EXAMPLE_EFFORT_VECTOR,
   base: EffortConfig = DEFAULT_EFFORT_CONFIG,
 ): EffortPreviewBreakdown {
-  const baseline = computeEffort(vector, applyEffortFactors(base, NEUTRAL_EFFORT_FACTORS));
+  const neutral = computeEffortBreakdown(vector, applyEffortFactors(base, NEUTRAL_EFFORT_FACTORS));
+  const baseline = { minutes: neutral.minutes, points: neutral.points };
   const full = computeEffort(vector, applyEffortFactors(base, factors));
+  const baseComponents = COMPONENT_KEYS.map((key) => ({
+    key,
+    minutes: round2(neutral.components[key]),
+  }));
   const contributions = FACTOR_KEYS.map((key) => {
     const isolated = computeEffort(
       vector,
@@ -146,6 +178,7 @@ export function previewEffortBreakdown(
     totalMinutes: full.minutes,
     totalPoints: full.points,
     factorMinutes: round2(full.minutes - baseline.minutes),
+    baseComponents,
     contributions,
   };
 }

@@ -75,6 +75,23 @@ describe('previewEffortWithFactors (uses the real computeEffort)', () => {
 });
 
 describe('previewEffortBreakdown', () => {
+  it('exposes the base (neutral) components — where the baseline minutes come from', () => {
+    const b = previewEffortBreakdown(DEFAULT_FACTORS);
+    const byKey = Object.fromEntries(b.baseComponents.map((c) => [c.key, c.minutes]));
+    expect(byKey.base).toBeCloseTo(3, 2); // baseMinutesPerCase
+    expect(byKey.quantity).toBeCloseTo(21, 2); // 60 × 0,35 × 1,0
+    expect(byKey.priceLabelPrint).toBeCloseTo(2, 2);
+    expect(byKey.labelAttach).toBeCloseTo(5.4, 2); // 12 × 0,45
+    expect(byKey.security).toBeCloseTo(3, 2); // 4 × 0,75
+    expect(byKey.online).toBeCloseTo(3.6, 2); // 6 × 0,6
+    expect(byKey.redPrice).toBeCloseTo(0.5, 2);
+    expect(byKey.check).toBeCloseTo(2.63, 2); // 21 × (1,125 − 1)
+    expect(byKey.handling).toBe(0); // handlingClass 'normal'
+    // The base components sum to the neutral baseline.
+    const sum = b.baseComponents.reduce((s, c) => s + c.minutes, 0);
+    expect(sum).toBeCloseTo(b.baselineMinutes, 1);
+  });
+
   it('isolates each factor and leaves box-splitting at 0 for a single beleg', () => {
     const b = previewEffortBreakdown(DEFAULT_FACTORS);
     expect(b.baselineMinutes).toBeCloseTo(41.13, 2);

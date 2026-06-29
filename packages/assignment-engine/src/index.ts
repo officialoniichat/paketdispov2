@@ -79,7 +79,13 @@ export {
 } from './priority/priority-engine.js';
 
 // (3) Effort score (§8.2).
-export { computeEffort, type EffortResult } from './effort/effort-score.js';
+export {
+  computeEffort,
+  computeEffortBreakdown,
+  type EffortResult,
+  type EffortBreakdown,
+  type EffortComponents,
+} from './effort/effort-score.js';
 // (3a) Aufwandsfaktoren — Wirkungsmodell + Vorschau (§8.2 / Anhang B.3, D).
 export {
   applyEffortFactors,
@@ -87,6 +93,7 @@ export {
   previewEffortBreakdown,
   NEUTRAL_EFFORT_FACTORS,
   EXAMPLE_EFFORT_VECTOR,
+  type EffortBaseComponent,
   type EffortFactorContribution,
   type EffortPreviewBreakdown,
 } from './effort/effort-factors.js';
