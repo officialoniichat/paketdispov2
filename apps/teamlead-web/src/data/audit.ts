@@ -47,6 +47,8 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.prioritized': 'Priorisiert',
   'case.deprioritized': 'Priorität entfernt',
   'case.cancelled': 'Storniert',
+  'case.delivery_group_merged': 'Lieferung zusammengeführt',
+  'case.delivery_group_split': 'Lieferung getrennt',
   'bundle.created': 'Paket gebildet',
   'bundle.assigned': 'Paket zugeteilt',
   'bundle.completed': 'Paket abgeschlossen',
