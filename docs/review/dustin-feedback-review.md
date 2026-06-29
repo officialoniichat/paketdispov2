@@ -207,16 +207,12 @@ Doppelzählen, keine konkurrierenden Pfade.
 
 ### C4-Architekturmodell — war **FAIL**, jetzt **PASS** (in dieser Integration behoben)
 
-Die committeten C4-Diagramme waren älter als die integrierten Engine-Module und zeigten
-Drift (verifiziert gegen Code). In dieser Integration korrigiert + neu gerendert
-(`docs/architecture/`, Commit `7039925`):
-- `domain-model.mmd`: `USER.measured` (Pkt.3) ergänzt.
-- `c3-engine-components.mmd`: `grouping/delivery-group` (Pkt.1), `effort/effort-factors`
-  (Pkt.2), `capacity/shift-end` (Pkt.5+6) ergänzt.
-- `c4-engine-pipeline.mmd`: Grouping-Schritt zwischen Bundling und Distribute + Shift-Cutoff
-  an der Kapazität.
-- `./render.sh` lief fehlerfrei (9 SVGs). Genau **ein** C4-Set; `docs/c4-architecture`-Branch
-  (byte-identisch) entfernt.
+Die committeten C4-Diagramme zeigten Drift gegen die integrierten Engine-Module
+(verifiziert gegen Code). `main` selbst hat parallel `c3-engine-components.mmd` +
+`c4-engine-pipeline.mmd` auf Pkt.1/2/5+6 synchronisiert (Commit `9fbef3f`); diese
+Integration ergänzt nur die verbleibende Lücke **`USER.measured`** (Pkt.3) in
+`domain-model.mmd` + Re-Render (`./render.sh` fehlerfrei). Genau **ein** C4-Set;
+der byte-identische `docs/c4-architecture`-Branch wurde entfernt.
 
 ---
 
