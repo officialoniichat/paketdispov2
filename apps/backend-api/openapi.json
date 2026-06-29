@@ -3220,35 +3220,84 @@
           "maxHeavyCases"
         ]
       },
-      "EffortRuleConfigDto": {
+      "CheckModeFactorsDto": {
         "type": "object",
         "properties": {
-          "priceLabelPrintFactor": {
+          "quantity_only": {
             "type": "number"
           },
-          "securingFactor": {
+          "percentage_check": {
             "type": "number"
           },
-          "onlineFactor": {
-            "type": "number"
-          },
-          "redPriceFactor": {
-            "type": "number"
-          },
-          "checkShareFactor": {
-            "type": "number"
-          },
-          "boxSplittingFactor": {
+          "full_check": {
             "type": "number"
           }
         },
         "required": [
-          "priceLabelPrintFactor",
-          "securingFactor",
-          "onlineFactor",
-          "redPriceFactor",
-          "checkShareFactor",
-          "boxSplittingFactor"
+          "quantity_only",
+          "percentage_check",
+          "full_check"
+        ]
+      },
+      "EffortRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "baseMinutesPerCase": {
+            "type": "number"
+          },
+          "quantityBaseMinutes": {
+            "type": "number"
+          },
+          "priceLabelPrintMinutes": {
+            "type": "number"
+          },
+          "labelAttachMinutesPerPosition": {
+            "type": "number"
+          },
+          "securityMinutesPerPosition": {
+            "type": "number"
+          },
+          "onlineHandlingMinutesPerPosition": {
+            "type": "number"
+          },
+          "redPriceMinutesPerPosition": {
+            "type": "number"
+          },
+          "boxSplitMinutesPerBox": {
+            "type": "number"
+          },
+          "checkModeFactors": {
+            "$ref": "#/components/schemas/CheckModeFactorsDto"
+          },
+          "handlingClassFactors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "wgrFactors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "pointsPerMinute": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "baseMinutesPerCase",
+          "quantityBaseMinutes",
+          "priceLabelPrintMinutes",
+          "labelAttachMinutesPerPosition",
+          "securityMinutesPerPosition",
+          "onlineHandlingMinutesPerPosition",
+          "redPriceMinutesPerPosition",
+          "boxSplitMinutesPerBox",
+          "checkModeFactors",
+          "handlingClassFactors",
+          "wgrFactors",
+          "pointsPerMinute"
         ]
       },
       "GroupingRuleConfigDto": {

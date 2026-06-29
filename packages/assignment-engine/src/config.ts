@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { priorityFlagSchema } from '@paket/domain-types';
+import {
+  priorityFlagSchema,
+  effortRuleConfigSchema,
+  DEFAULT_EFFORT_RULE_CONFIG,
+  type EffortRuleConfig,
+} from '@paket/domain-types';
 import { DEFAULT_GROUPING_CONFIG, type GroupingConfig } from './grouping/delivery-group.js';
 
 /**
@@ -9,60 +14,15 @@ import { DEFAULT_GROUPING_CONFIG, type GroupingConfig } from './grouping/deliver
  * the concept examples B.2 / B.3.
  */
 
-/** Aufwandskonfiguration (Anhang B.3). Drives the §8.2 effort formula. */
-export const effortConfigSchema = z.object({
-  baseMinutesPerCase: z.number().nonnegative(),
-  quantityBaseMinutes: z.number().nonnegative(),
-  /** Warengruppen-Faktor lookup; `default` applies when a WGR code is unknown. */
-  wgrFactors: z.record(z.string(), z.number().nonnegative()),
-  priceLabelPrintMinutes: z.number().nonnegative(),
-  labelAttachMinutesPerPosition: z.number().nonnegative(),
-  securityMinutesPerPosition: z.number().nonnegative(),
-  onlineHandlingMinutesPerPosition: z.number().nonnegative(),
-  redPriceMinutesPerPosition: z.number().nonnegative(),
-  boxSplitMinutesPerBox: z.number().nonnegative(),
-  /** Multiplier on the quantity-derived checking effort per check mode. */
-  checkModeFactors: z.object({
-    quantity_only: z.number().nonnegative(),
-    percentage_check: z.number().nonnegative(),
-    full_check: z.number().nonnegative(),
-  }),
-  /** Füllmaterial/Handling factor per handling class (Anhang B.3 "Füllmaterial/Handling"). */
-  handlingClassFactors: z.record(z.string(), z.number().nonnegative()),
-  /** Conversion of effort-minutes into fairness points (default 1 point per minute). */
-  pointsPerMinute: z.number().positive(),
-});
-export type EffortConfig = z.infer<typeof effortConfigSchema>;
-
-/** Verbatim from Anhang B.3 (plus engine-only handling/points extensions). */
-export const DEFAULT_EFFORT_CONFIG: EffortConfig = {
-  baseMinutesPerCase: 3,
-  quantityBaseMinutes: 0.35,
-  wgrFactors: {
-    '218110': 1.15,
-    '111130': 1.0,
-    default: 1.0,
-  },
-  priceLabelPrintMinutes: 2,
-  labelAttachMinutesPerPosition: 0.45,
-  securityMinutesPerPosition: 0.75,
-  onlineHandlingMinutesPerPosition: 0.6,
-  redPriceMinutesPerPosition: 0.5,
-  boxSplitMinutesPerBox: 1.25,
-  checkModeFactors: {
-    quantity_only: 1.0,
-    percentage_check: 1.25,
-    full_check: 1.6,
-  },
-  handlingClassFactors: {
-    normal: 1.0,
-    small_parts: 1.1,
-    hanging_goods: 1.2,
-    bulky: 1.3,
-    unknown: 1.0,
-  },
-  pointsPerMinute: 1,
-};
+/**
+ * Aufwandskonfiguration (Anhang B.3) — the §8.2 effort formula parameters. The SHAPE
+ * and defaults live in `@paket/domain-types` (single source of truth) because the
+ * teamlead cockpit edits them as `RuleConfig.effort`; the engine re-exports them under
+ * its historical names so internal call sites stay unchanged.
+ */
+export const effortConfigSchema = effortRuleConfigSchema;
+export type EffortConfig = EffortRuleConfig;
+export const DEFAULT_EFFORT_CONFIG: EffortConfig = DEFAULT_EFFORT_RULE_CONFIG;
 
 /** Reserve-Regel (Anhang B.2). The eiserne Reserve held back for the next morning. */
 export const reserveConfigSchema = z.object({

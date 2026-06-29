@@ -114,13 +114,36 @@ export class BundleRuleConfigDto {
   @ApiProperty() @IsInt() @Min(0) maxHeavyCases!: number;
 }
 
+/** Prüf-Multiplikator je Prüfmodus (§8.2). */
+export class CheckModeFactorsDto {
+  @ApiProperty() @IsNumber() @Min(0) quantity_only!: number;
+  @ApiProperty() @IsNumber() @Min(0) percentage_check!: number;
+  @ApiProperty() @IsNumber() @Min(0) full_check!: number;
+}
+
+/**
+ * Aufwandsparameter (§8.2 / Anhang B.3) — the real engine effort minutes the cockpit
+ * edits. Identical shape to `EngineConfig.effort`; the service threads it straight into
+ * the engine. (Records are emitted as free-form number maps for the generated client.)
+ */
 export class EffortRuleConfigDto {
-  @ApiProperty() @IsNumber() @Min(0) priceLabelPrintFactor!: number;
-  @ApiProperty() @IsNumber() @Min(0) securingFactor!: number;
-  @ApiProperty() @IsNumber() @Min(0) onlineFactor!: number;
-  @ApiProperty() @IsNumber() @Min(0) redPriceFactor!: number;
-  @ApiProperty() @IsNumber() @Min(0) checkShareFactor!: number;
-  @ApiProperty() @IsNumber() @Min(0) boxSplittingFactor!: number;
+  @ApiProperty() @IsNumber() @Min(0) baseMinutesPerCase!: number;
+  @ApiProperty() @IsNumber() @Min(0) quantityBaseMinutes!: number;
+  @ApiProperty() @IsNumber() @Min(0) priceLabelPrintMinutes!: number;
+  @ApiProperty() @IsNumber() @Min(0) labelAttachMinutesPerPosition!: number;
+  @ApiProperty() @IsNumber() @Min(0) securityMinutesPerPosition!: number;
+  @ApiProperty() @IsNumber() @Min(0) onlineHandlingMinutesPerPosition!: number;
+  @ApiProperty() @IsNumber() @Min(0) redPriceMinutesPerPosition!: number;
+  @ApiProperty() @IsNumber() @Min(0) boxSplitMinutesPerBox!: number;
+  @ApiProperty({ type: CheckModeFactorsDto })
+  @ValidateNested()
+  @Type(() => CheckModeFactorsDto)
+  checkModeFactors!: CheckModeFactorsDto;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  handlingClassFactors!: Record<string, number>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  wgrFactors!: Record<string, number>;
+  @ApiProperty() @IsNumber() @Min(0) pointsPerMinute!: number;
 }
 
 /** Delivery-Group detection (Teamlead-Anforderung Punkt 1). */

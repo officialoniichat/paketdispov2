@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { goodsReceiptCaseSchema, type GoodsReceiptCase, type LoadPlanRow } from '@paket/domain-types';
+import {
+  goodsReceiptCaseSchema,
+  DEFAULT_EFFORT_RULE_CONFIG,
+  type GoodsReceiptCase,
+  type LoadPlanRow,
+} from '@paket/domain-types';
 import {
   applyResolvedLoadPlanDates,
   engineConfigFromRuleConfig,
@@ -106,19 +111,14 @@ describe('engineConfigFromRuleConfig', () => {
       },
       reserve: { nextShiftCapacityPct: 20, minMinutesPerEmployee: 30 },
       bundle: { minMinutes: 20, maxMinutes: 90, maxCases: 8, maxHeavyCases: 2 },
-      effort: {
-        priceLabelPrintFactor: 1.2,
-        securingFactor: 1.3,
-        onlineFactor: 1.15,
-        redPriceFactor: 1.1,
-        checkShareFactor: 1.25,
-        boxSplittingFactor: 1.4,
-      },
+      effort: { ...DEFAULT_EFFORT_RULE_CONFIG, baseMinutesPerCase: 7 },
       grouping: { enabled: true, maxWeBelegGap: 1 },
       shiftEnd: { autoCutoffMinutes: 120 },
       loadPlan: [],
     });
     expect(config.priority.overdueLeadDays).toBe(3);
     expect(config.priority.overdueLeadDaysOverrides).toEqual([{ shopAreaNo: '21', leadDays: 5 }]);
+    // The cockpit-edited effort parameters are threaded through to the engine config.
+    expect(config.effort.baseMinutesPerCase).toBe(7);
   });
 });

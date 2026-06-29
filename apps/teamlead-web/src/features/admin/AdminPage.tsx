@@ -60,6 +60,15 @@ const INTEGRATIONS_TAB = 9;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
+/** Handling-Klassen (festes Vokabular) für die Aufwand-Multiplikatoren. */
+const HANDLING_CLASSES: readonly { key: string; label: string }[] = [
+  { key: 'normal', label: 'Normal' },
+  { key: 'small_parts', label: 'Kleinteile' },
+  { key: 'hanging_goods', label: 'Hängeware' },
+  { key: 'bulky', label: 'Sperrig' },
+  { key: 'unknown', label: 'Unbekannt' },
+];
+
 export function AdminPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
@@ -215,53 +224,153 @@ export function AdminPage(): JSX.Element {
               {tab === 3 && (
                 <Stack spacing={1.5}>
                   <Typography variant="body2" color="text.secondary">
-                    Faktoren sind <strong>Multiplikatoren</strong> (1,0 = neutral). Sie skalieren
-                    den jeweiligen Aufwandsanteil und damit die geschätzte Bearbeitungszeit &amp;
-                    Aufwandspunkte eines Belegs — die Vorschau unten rechnet live mit.
+                    Das sind die <strong>echten Aufwandsparameter</strong> der Engine — die
+                    tatsächlichen Minuten je Tätigkeit. Sie bestimmen die geschätzte
+                    Bearbeitungszeit &amp; Aufwandspunkte eines Belegs; die Vorschau unten rechnet
+                    jede Änderung live mit derselben Engine-Formel.
+                  </Typography>
+
+                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                    Grundzeiten (Minuten)
                   </Typography>
                   <Grid>
                     <Num
-                      label="Faktor Etikettendruck"
-                      value={draft.effort.priceLabelPrintFactor}
+                      label="Grundzeit je Beleg"
+                      value={draft.effort.baseMinutesPerCase}
+                      onChange={(v) => patch('effort', { ...draft.effort, baseMinutesPerCase: v })}
+                      hint="Fixe Rüstzeit je Beleg, unabhängig von der Menge."
+                    />
+                    <Num
+                      label="Minuten je Teil"
+                      value={draft.effort.quantityBaseMinutes}
+                      onChange={(v) => patch('effort', { ...draft.effort, quantityBaseMinutes: v })}
+                      hint="Mengenerfassung: Minuten pro Teil (× Warengruppen-Faktor)."
+                    />
+                    <Num
+                      label="Etiketten drucken (je Beleg)"
+                      value={draft.effort.priceLabelPrintMinutes}
                       onChange={(v) =>
-                        patch('effort', { ...draft.effort, priceLabelPrintFactor: v })
+                        patch('effort', { ...draft.effort, priceLabelPrintMinutes: v })
                       }
-                      hint="Multiplikator für Drucken + Anbringen von Preisetiketten. 1,2 → 2,0 verdoppelt nahezu den Etikettier-Anteil (siehe Live-Vorschau)."
+                      hint="Minuten für das Drucken der Preisetiketten, einmal je Beleg."
                     />
                     <Num
-                      label="Faktor Sicherung"
-                      value={draft.effort.securingFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, securingFactor: v })}
-                      hint="Multiplikator für Warensicherung (Sicherungsetiketten/-tags) je Position."
-                    />
-                    <Num
-                      label="Faktor Online"
-                      value={draft.effort.onlineFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, onlineFactor: v })}
-                      hint="Multiplikator für die zusätzliche Behandlung online-relevanter Positionen."
-                    />
-                    <Num
-                      label="Faktor Rotpreis"
-                      value={draft.effort.redPriceFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, redPriceFactor: v })}
-                      hint="Multiplikator für die Auszeichnung von Rotpreis-/reduzierten Artikeln."
-                    />
-                    <Num
-                      label="Faktor Prüfanteil"
-                      value={draft.effort.checkShareFactor}
-                      onChange={(v) => patch('effort', { ...draft.effort, checkShareFactor: v })}
-                      hint="Multiplikator auf den Prüf-Mehraufwand (Mengen-/Stichproben-/Vollkontrolle). Wirkt auf den Anteil über der reinen Mengenerfassung."
-                    />
-                    <Num
-                      label="Faktor Box-Splitting"
-                      value={draft.effort.boxSplittingFactor}
+                      label="Etiketten anbringen (je Pos.)"
+                      value={draft.effort.labelAttachMinutesPerPosition}
                       onChange={(v) =>
-                        patch('effort', { ...draft.effort, boxSplittingFactor: v })
+                        patch('effort', { ...draft.effort, labelAttachMinutesPerPosition: v })
                       }
-                      hint="Multiplikator je zusätzlicher Transportbox. Greift erst beim Aufteilen eines Belegs in mehrere Boxen — daher ohne Wirkung auf den Einzelbeleg in der Vorschau."
+                      hint="Minuten je Position für das Anbringen der Preisetiketten."
+                    />
+                    <Num
+                      label="Warensicherung (je Pos.)"
+                      value={draft.effort.securityMinutesPerPosition}
+                      onChange={(v) =>
+                        patch('effort', { ...draft.effort, securityMinutesPerPosition: v })
+                      }
+                      hint="Minuten je Position für die Warensicherung."
+                    />
+                    <Num
+                      label="Online-Behandlung (je Pos.)"
+                      value={draft.effort.onlineHandlingMinutesPerPosition}
+                      onChange={(v) =>
+                        patch('effort', {
+                          ...draft.effort,
+                          onlineHandlingMinutesPerPosition: v,
+                        })
+                      }
+                      hint="Minuten je Position für die zusätzliche Behandlung online-relevanter Artikel."
+                    />
+                    <Num
+                      label="Rotpreis (je Beleg)"
+                      value={draft.effort.redPriceMinutesPerPosition}
+                      onChange={(v) =>
+                        patch('effort', { ...draft.effort, redPriceMinutesPerPosition: v })
+                      }
+                      hint="Minuten für die Rotpreis-Auszeichnung, einmal je Beleg."
+                    />
+                    <Num
+                      label="Box-Splitting (je Box)"
+                      value={draft.effort.boxSplitMinutesPerBox}
+                      onChange={(v) =>
+                        patch('effort', { ...draft.effort, boxSplitMinutesPerBox: v })
+                      }
+                      hint="Minuten je zusätzlicher Transportbox. Greift erst beim Aufteilen eines Belegs in mehrere Boxen — daher ohne Wirkung auf den ungeteilten Einzelbeleg in der Vorschau."
+                    />
+                    <Num
+                      label="Punkte je Minute"
+                      value={draft.effort.pointsPerMinute}
+                      onChange={(v) => patch('effort', { ...draft.effort, pointsPerMinute: v })}
+                      hint="Umrechnung Minuten → Aufwandspunkte (Last/Fairness). Standard 1."
                     />
                   </Grid>
-                  <EffortPreview factors={draft.effort} />
+
+                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                    Prüf-Multiplikatoren (auf den Mengenaufwand)
+                  </Typography>
+                  <Grid>
+                    <Num
+                      label="Mengenkontrolle"
+                      value={draft.effort.checkModeFactors.quantity_only}
+                      onChange={(v) =>
+                        patch('effort', {
+                          ...draft.effort,
+                          checkModeFactors: { ...draft.effort.checkModeFactors, quantity_only: v },
+                        })
+                      }
+                      hint="Multiplikator auf den Mengenaufwand bei reiner Mengenkontrolle (1,0 = kein Mehraufwand)."
+                    />
+                    <Num
+                      label="Stichprobe (100 %)"
+                      value={draft.effort.checkModeFactors.percentage_check}
+                      onChange={(v) =>
+                        patch('effort', {
+                          ...draft.effort,
+                          checkModeFactors: {
+                            ...draft.effort.checkModeFactors,
+                            percentage_check: v,
+                          },
+                        })
+                      }
+                      hint="Multiplikator bei voller Stichprobe; bei < 100 % wird anteilig interpoliert."
+                    />
+                    <Num
+                      label="Vollkontrolle"
+                      value={draft.effort.checkModeFactors.full_check}
+                      onChange={(v) =>
+                        patch('effort', {
+                          ...draft.effort,
+                          checkModeFactors: { ...draft.effort.checkModeFactors, full_check: v },
+                        })
+                      }
+                      hint="Multiplikator auf den Mengenaufwand bei vollständiger Kontrolle."
+                    />
+                  </Grid>
+
+                  <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                    Handling-Multiplikatoren (je Handling-Klasse)
+                  </Typography>
+                  <Grid>
+                    {HANDLING_CLASSES.map(({ key, label }) => (
+                      <Num
+                        key={key}
+                        label={label}
+                        value={draft.effort.handlingClassFactors[key] ?? 1}
+                        onChange={(v) =>
+                          patch('effort', {
+                            ...draft.effort,
+                            handlingClassFactors: {
+                              ...draft.effort.handlingClassFactors,
+                              [key]: v,
+                            },
+                          })
+                        }
+                        hint="Multiplikator auf den Mengenaufwand für diese Handling-Klasse (1,0 = kein Mehraufwand)."
+                      />
+                    ))}
+                  </Grid>
+
+                  <EffortPreview config={draft.effort} />
                 </Stack>
               )}
 

@@ -101,6 +101,12 @@ export function applyResolvedLoadPlanDates(
 export function engineConfigFromRuleConfig(config: RuleConfig): EngineConfig {
   return {
     ...DEFAULT_ENGINE_CONFIG,
+    // Aufwandsparameter (Teamlead-Punkt 2): the cockpit-edited effort config IS the
+    // engine effort config (identical shape), so it is passed through verbatim. NB the
+    // per-case effort only recomputes once position-level `effortVectors` are provided
+    // to `assignWork`; until ProHandel ingestion delivers them the live run falls back
+    // to each case's precomputed `estimatedMinutes` (see docs/concept/aufwandsfaktoren-wirkung.md).
+    effort: config.effort,
     priority: {
       overdueLeadDays: config.priority.overdueLeadDays,
       overdueLeadDaysOverrides: config.priority.overdueLeadDaysOverrides,

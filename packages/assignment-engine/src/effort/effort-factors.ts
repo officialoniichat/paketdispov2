@@ -1,51 +1,25 @@
-import type { EffortRuleConfig, EffortInputVector } from '@paket/domain-types';
+import type { EffortInputVector } from '@paket/domain-types';
 import { DEFAULT_EFFORT_CONFIG, type EffortConfig } from '../config.js';
-import {
-  computeEffort,
-  computeEffortBreakdown,
-  type EffortComponents,
-  type EffortResult,
-} from './effort-score.js';
+import { computeEffortBreakdown, type EffortComponents } from './effort-score.js';
 
 /**
- * Aufwandsfaktoren — Wirkungsmodell (§8.2 / Anhang B.3, D).
+ * Aufwands-Vorschau (§8.2 / Anhang B.3).
  *
- * The teamlead cockpit edits six {@link EffortRuleConfig} factors (multipliers,
- * `1.0` = neutral). They never re-implement the effort formula: they only TUNE the
- * inputs of the single source of truth, {@link computeEffort}. This module projects
- * the factors onto the engine's {@link EffortConfig} and then calls the real
- * `computeEffort`, so docs, UI preview and engine all agree by construction.
+ * The teamlead cockpit edits the REAL effort parameters — the actual minutes per
+ * activity (`EffortConfig` = `RuleConfig.effort`), not abstract multiplier factors.
+ * This helper runs the SINGLE source-of-truth formula {@link computeEffortBreakdown}
+ * over a representative example beleg so the cockpit can show, live, how the configured
+ * minutes produce a beleg's processing time and Aufwandspunkte. There is no second
+ * formula and no hidden defaults: every number shown is a configured parameter.
  *
- * Each factor scales exactly the minute/term it governs:
- *  - `priceLabelPrintFactor` → `priceLabelPrintMinutes` + `labelAttachMinutesPerPosition`
- *    (Etikettendruck + -anbringung)
- *  - `securingFactor`        → `securityMinutesPerPosition` (Warensicherung)
- *  - `onlineFactor`          → `onlineHandlingMinutesPerPosition` (Online-Behandlung)
- *  - `redPriceFactor`        → `redPriceMinutesPerPosition` (Rotpreis)
- *  - `boxSplittingFactor`    → `boxSplitMinutesPerBox` (Karton-Splitting, greift erst
- *    downstream bei Aufteilung in mehrere Transportboxen — daher ohne Wirkung auf den
- *    Einzelbeleg-Aufwand von `computeEffort`)
- *  - `checkShareFactor`      → skaliert den Überschuss jedes Prüf-Multiplikators über 1:
- *    `checkModeFactors[m] → 1 + (base[m] − 1) × checkShareFactor`
- *
- * Wirkung: Aufwand bestimmt Bearbeitungszeit (Minuten) und Aufwandspunkte (Last/
- * Fairness) und damit indirekt Bündelgröße und Lastverteilung — er beeinflusst NICHT
- * den Prioritäts-Rang (der ergibt sich aus Prio-Flags/Terminen in der priority-engine).
+ * Aufwand bestimmt Bearbeitungszeit (Minuten) und Aufwandspunkte (Last/Fairness) und
+ * damit indirekt Bündelgröße und Lastverteilung — er beeinflusst NICHT den Prioritäts-
+ * Rang (der ergibt sich aus Prio-Flags/Terminen in der priority-engine).
  */
-
-/** Neutral factor set (all `1.0`): applying it leaves the base config unchanged. */
-export const NEUTRAL_EFFORT_FACTORS: EffortRuleConfig = {
-  priceLabelPrintFactor: 1,
-  securingFactor: 1,
-  onlineFactor: 1,
-  redPriceFactor: 1,
-  checkShareFactor: 1,
-  boxSplittingFactor: 1,
-};
 
 /**
  * Representative "Beispiel-Beleg" for the Aufwand-preview: a mid-size mixed case that
- * touches every per-beleg driver, so moving any factor visibly changes the estimate.
+ * touches every per-beleg driver, so changing any parameter visibly moves the estimate.
  */
 export const EXAMPLE_EFFORT_VECTOR: EffortInputVector = {
   caseId: 'beispiel-beleg',
@@ -65,69 +39,23 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/**
- * Project the six Aufwandsfaktoren onto the engine's {@link EffortConfig} by scaling
- * the term each factor governs. Pure — returns a new config, never mutates `base`.
- */
-export function applyEffortFactors(base: EffortConfig, factors: EffortRuleConfig): EffortConfig {
-  const scaleCheck = (f: number): number => 1 + (f - 1) * factors.checkShareFactor;
-  return {
-    ...base,
-    priceLabelPrintMinutes: base.priceLabelPrintMinutes * factors.priceLabelPrintFactor,
-    labelAttachMinutesPerPosition:
-      base.labelAttachMinutesPerPosition * factors.priceLabelPrintFactor,
-    securityMinutesPerPosition: base.securityMinutesPerPosition * factors.securingFactor,
-    onlineHandlingMinutesPerPosition:
-      base.onlineHandlingMinutesPerPosition * factors.onlineFactor,
-    redPriceMinutesPerPosition: base.redPriceMinutesPerPosition * factors.redPriceFactor,
-    boxSplitMinutesPerBox: base.boxSplitMinutesPerBox * factors.boxSplittingFactor,
-    checkModeFactors: {
-      quantity_only: scaleCheck(base.checkModeFactors.quantity_only),
-      percentage_check: scaleCheck(base.checkModeFactors.percentage_check),
-      full_check: scaleCheck(base.checkModeFactors.full_check),
-    },
-  };
-}
-
-/** Run the REAL {@link computeEffort} for `vector` under the given factors. */
-export function previewEffortWithFactors(
-  factors: EffortRuleConfig,
-  vector: EffortInputVector = EXAMPLE_EFFORT_VECTOR,
-  base: EffortConfig = DEFAULT_EFFORT_CONFIG,
-): EffortResult {
-  return computeEffort(vector, applyEffortFactors(base, factors));
-}
-
-/** One line of the base (neutral) effort formula — "where the minutes come from". */
-export interface EffortBaseComponent {
+/** One line of the effort formula for the example beleg, in minutes. */
+export interface EffortPreviewComponent {
   key: keyof EffortComponents;
-  /** Minutes this term contributes to the neutral baseline (factors at `1.0`). */
   minutes: number;
 }
 
-/** Per-factor marginal effect: minutes this factor adds vs. the same beleg at `1.0`. */
-export interface EffortFactorContribution {
-  key: keyof EffortRuleConfig;
-  /** Minutes this factor currently adds over the neutral baseline (may be 0). */
-  deltaMinutes: number;
-}
-
-/** Live-preview breakdown for the Admin "Aufwand"-Tab. */
-export interface EffortPreviewBreakdown {
-  /** Beleg minutes with all factors neutral (`1.0`). */
-  baselineMinutes: number;
-  /** Beleg minutes with the factors at their configured values. */
+/** Live-preview result for the Admin "Aufwand"-Tab, all via the real formula. */
+export interface EffortPreviewResult {
+  /** Total processing time of the example beleg under the configured parameters. */
   totalMinutes: number;
-  /** Aufwandspunkte for the configured factors (`points = minutes × pointsPerMinute`). */
+  /** Aufwandspunkte (`minutes × pointsPerMinute`). */
   totalPoints: number;
-  /** Minutes added over baseline by the configured factors (`totalMinutes − baseline`). */
-  factorMinutes: number;
-  /** Base formula terms (neutral) — the origin of {@link baselineMinutes}. */
-  baseComponents: readonly EffortBaseComponent[];
-  contributions: readonly EffortFactorContribution[];
+  /** The additive formula terms that sum to {@link totalMinutes}. */
+  components: readonly EffortPreviewComponent[];
 }
 
-/** Order in which base components are surfaced to the UI / docs. */
+/** Order in which the formula terms are surfaced to the UI / docs. */
 const COMPONENT_KEYS: readonly (keyof EffortComponents)[] = [
   'base',
   'quantity',
@@ -140,45 +68,19 @@ const COMPONENT_KEYS: readonly (keyof EffortComponents)[] = [
   'handling',
 ];
 
-const FACTOR_KEYS: readonly (keyof EffortRuleConfig)[] = [
-  'priceLabelPrintFactor',
-  'securingFactor',
-  'onlineFactor',
-  'redPriceFactor',
-  'checkShareFactor',
-  'boxSplittingFactor',
-];
-
 /**
- * Decompose the preview into per-factor contributions, all via the real
- * {@link computeEffort}: each contribution isolates one factor at its set value with
- * the rest neutral, so the teamlead sees exactly which driver a factor moves.
+ * Compute the example beleg's effort under the given (cockpit-edited) {@link EffortConfig}
+ * using the real {@link computeEffortBreakdown}. The returned components are exactly the
+ * formula's additive terms, so the cockpit can show where each minute comes from.
  */
-export function previewEffortBreakdown(
-  factors: EffortRuleConfig,
+export function previewEffort(
+  config: EffortConfig = DEFAULT_EFFORT_CONFIG,
   vector: EffortInputVector = EXAMPLE_EFFORT_VECTOR,
-  base: EffortConfig = DEFAULT_EFFORT_CONFIG,
-): EffortPreviewBreakdown {
-  const neutral = computeEffortBreakdown(vector, applyEffortFactors(base, NEUTRAL_EFFORT_FACTORS));
-  const baseline = { minutes: neutral.minutes, points: neutral.points };
-  const full = computeEffort(vector, applyEffortFactors(base, factors));
-  const baseComponents = COMPONENT_KEYS.map((key) => ({
-    key,
-    minutes: round2(neutral.components[key]),
-  }));
-  const contributions = FACTOR_KEYS.map((key) => {
-    const isolated = computeEffort(
-      vector,
-      applyEffortFactors(base, { ...NEUTRAL_EFFORT_FACTORS, [key]: factors[key] }),
-    );
-    return { key, deltaMinutes: round2(isolated.minutes - baseline.minutes) };
-  });
+): EffortPreviewResult {
+  const result = computeEffortBreakdown(vector, config);
   return {
-    baselineMinutes: baseline.minutes,
-    totalMinutes: full.minutes,
-    totalPoints: full.points,
-    factorMinutes: round2(full.minutes - baseline.minutes),
-    baseComponents,
-    contributions,
+    totalMinutes: result.minutes,
+    totalPoints: result.points,
+    components: COMPONENT_KEYS.map((key) => ({ key, minutes: round2(result.components[key]) })),
   };
 }

@@ -79,16 +79,77 @@ export const shiftEndRuleConfigSchema = z.object({
 });
 export type ShiftEndRuleConfig = z.infer<typeof shiftEndRuleConfigSchema>;
 
-/** Effort-point driver factors (Anhang D / B.3). */
+/**
+ * Aufwands-Konfiguration (§8.2 / Anhang B.3) — die ECHTEN Engine-Parameter, die der
+ * Teamlead im Cockpit editiert. Diese Form ist IDENTISCH zur `EngineConfig.effort`, sodass
+ * sie 1:1 in die Engine durchgereicht wird (single source of truth: dieselbe Formel
+ * `computeEffort` rechnet damit). Es gibt KEINE abstrakten Multiplikator-Faktoren mehr —
+ * der Teamlead stellt die tatsächlichen Minuten je Tätigkeit ein.
+ *
+ * Minutenwerte sind ZUSATZ-MINUTEN je Tätigkeit; Prüf- und Handling-Anteile sind
+ * Multiplikatoren auf den mengenabhängigen Aufwand (1,0 = kein Mehraufwand).
+ */
 export const effortRuleConfigSchema = z.object({
-  priceLabelPrintFactor: z.number().nonnegative(),
-  securingFactor: z.number().nonnegative(),
-  onlineFactor: z.number().nonnegative(),
-  redPriceFactor: z.number().nonnegative(),
-  checkShareFactor: z.number().nonnegative(),
-  boxSplittingFactor: z.number().nonnegative(),
+  /** Grundzeit je Beleg (fixe Rüstzeit, mengenunabhängig). */
+  baseMinutesPerCase: z.number().nonnegative(),
+  /** Minuten je Teil für die Mengenerfassung (× Warengruppen-Faktor). */
+  quantityBaseMinutes: z.number().nonnegative(),
+  /** Minuten für das Drucken von Preisetiketten (einmal je Beleg). */
+  priceLabelPrintMinutes: z.number().nonnegative(),
+  /** Minuten je Position für das Anbringen von Preisetiketten. */
+  labelAttachMinutesPerPosition: z.number().nonnegative(),
+  /** Minuten je Position für die Warensicherung. */
+  securityMinutesPerPosition: z.number().nonnegative(),
+  /** Minuten je Position für die Online-Behandlung. */
+  onlineHandlingMinutesPerPosition: z.number().nonnegative(),
+  /** Minuten für die Rotpreis-Auszeichnung (einmal je Beleg). */
+  redPriceMinutesPerPosition: z.number().nonnegative(),
+  /** Minuten je zusätzlicher Transportbox (greift nachgelagert beim Aufteilen). */
+  boxSplitMinutesPerBox: z.number().nonnegative(),
+  /** Prüf-Multiplikator je Prüfmodus auf den mengenabhängigen Aufwand (1,0 = keiner). */
+  checkModeFactors: z.object({
+    quantity_only: z.number().nonnegative(),
+    percentage_check: z.number().nonnegative(),
+    full_check: z.number().nonnegative(),
+  }),
+  /** Handling-Multiplikator je Handling-Klasse auf den mengenabhängigen Aufwand. */
+  handlingClassFactors: z.record(z.string(), z.number().nonnegative()),
+  /** Warengruppen-Faktor-Tabelle (Stammdaten); `default` greift bei unbekannter WGR. */
+  wgrFactors: z.record(z.string(), z.number().nonnegative()),
+  /** Umrechnung Minuten → Aufwandspunkte (Last/Fairness); Standard 1 Punkt/Minute. */
+  pointsPerMinute: z.number().positive(),
 });
 export type EffortRuleConfig = z.infer<typeof effortRuleConfigSchema>;
+
+/** Default-Aufwandsparameter (Anhang B.3). Single source für Engine + Cockpit-Seed. */
+export const DEFAULT_EFFORT_RULE_CONFIG: EffortRuleConfig = {
+  baseMinutesPerCase: 3,
+  quantityBaseMinutes: 0.35,
+  priceLabelPrintMinutes: 2,
+  labelAttachMinutesPerPosition: 0.45,
+  securityMinutesPerPosition: 0.75,
+  onlineHandlingMinutesPerPosition: 0.6,
+  redPriceMinutesPerPosition: 0.5,
+  boxSplitMinutesPerBox: 1.25,
+  checkModeFactors: {
+    quantity_only: 1.0,
+    percentage_check: 1.25,
+    full_check: 1.6,
+  },
+  handlingClassFactors: {
+    normal: 1.0,
+    small_parts: 1.1,
+    hanging_goods: 1.2,
+    bulky: 1.3,
+    unknown: 1.0,
+  },
+  wgrFactors: {
+    '218110': 1.15,
+    '111130': 1.0,
+    default: 1.0,
+  },
+  pointsPerMinute: 1,
+};
 
 /** One Verladeplan row (read-only in the cockpit). */
 export const loadPlanRowSchema = z.object({
@@ -139,14 +200,7 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     maxCases: 8,
     maxHeavyCases: 2,
   },
-  effort: {
-    priceLabelPrintFactor: 1.2,
-    securingFactor: 1.3,
-    onlineFactor: 1.15,
-    redPriceFactor: 1.1,
-    checkShareFactor: 1.25,
-    boxSplittingFactor: 1.4,
-  },
+  effort: DEFAULT_EFFORT_RULE_CONFIG,
   grouping: {
     enabled: true,
     maxWeBelegGap: 1,

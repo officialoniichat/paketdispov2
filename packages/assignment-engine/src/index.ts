@@ -86,16 +86,12 @@ export {
   type EffortBreakdown,
   type EffortComponents,
 } from './effort/effort-score.js';
-// (3a) Aufwandsfaktoren — Wirkungsmodell + Vorschau (§8.2 / Anhang B.3, D).
+// (3a) Aufwands-Vorschau über die echten Parameter (§8.2 / Anhang B.3).
 export {
-  applyEffortFactors,
-  previewEffortWithFactors,
-  previewEffortBreakdown,
-  NEUTRAL_EFFORT_FACTORS,
+  previewEffort,
   EXAMPLE_EFFORT_VECTOR,
-  type EffortBaseComponent,
-  type EffortFactorContribution,
-  type EffortPreviewBreakdown,
+  type EffortPreviewComponent,
+  type EffortPreviewResult,
 } from './effort/effort-factors.js';
 
 // (4) Assignment (§8.3/§8.4).

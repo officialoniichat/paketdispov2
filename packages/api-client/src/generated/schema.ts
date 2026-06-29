@@ -1121,13 +1121,28 @@ export interface components {
             maxCases: number;
             maxHeavyCases: number;
         };
+        CheckModeFactorsDto: {
+            quantity_only: number;
+            percentage_check: number;
+            full_check: number;
+        };
         EffortRuleConfigDto: {
-            priceLabelPrintFactor: number;
-            securingFactor: number;
-            onlineFactor: number;
-            redPriceFactor: number;
-            checkShareFactor: number;
-            boxSplittingFactor: number;
+            baseMinutesPerCase: number;
+            quantityBaseMinutes: number;
+            priceLabelPrintMinutes: number;
+            labelAttachMinutesPerPosition: number;
+            securityMinutesPerPosition: number;
+            onlineHandlingMinutesPerPosition: number;
+            redPriceMinutesPerPosition: number;
+            boxSplitMinutesPerBox: number;
+            checkModeFactors: components["schemas"]["CheckModeFactorsDto"];
+            handlingClassFactors: {
+                [key: string]: number;
+            };
+            wgrFactors: {
+                [key: string]: number;
+            };
+            pointsPerMinute: number;
         };
         GroupingRuleConfigDto: {
             enabled: boolean;
