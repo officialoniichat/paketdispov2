@@ -127,7 +127,7 @@ function mapCapacity(dto: CapacityDto): CapacitySummary {
     plannedEmployees: dto.plannedEmployees,
     netCapacityMinutes: dto.netCapacityMinutes,
     plannedMinutes: dto.plannedMinutes,
-    reserveMinutes: dto.reserveMinutes,
+    freeCapacityMinutes: dto.freeCapacityMinutes,
     utilisationPct: dto.utilisationPct,
   };
 }
@@ -212,9 +212,9 @@ const LANE_META: Record<LaneId, { title: string; description: string }> = {
   },
   verladeplan_morgen: {
     title: 'Verladeplan morgen',
-    description: 'Vorausschau für Starterpakete/Reserve',
+    description: 'Vorausschau für Starterpakete',
   },
-  reserve: { title: 'Reserve', description: 'Eiserne Reserve schützen' },
+  sonstige: { title: 'Sonstige', description: 'Übrige Ware ohne festen Verladetag' },
   geparkt: { title: 'Geparkt', description: 'Aus Automatik ausgeschlossen' },
   probleme: { title: 'Problemfälle', description: 'Offene Issues' },
 };
@@ -226,7 +226,7 @@ const LANE_ORDER: LaneId[] = [
   'verladeplan_heute',
   'verladeplan_morgen',
   'jeden_tag',
-  'reserve',
+  'sonstige',
 ];
 
 const VERLADEPLAN_SECTIONS = new Set([1, 2, 3]);
@@ -245,7 +245,7 @@ function laneForPoolItem(item: PoolItemDto): LaneId {
   const section = typeof item.section === 'number' ? item.section : null;
   if (section !== null && VERLADEPLAN_SECTIONS.has(section)) return 'verladeplan_heute';
   if (section !== null && JEDEN_TAG_SECTIONS.has(section)) return 'jeden_tag';
-  return 'reserve';
+  return 'sonstige';
 }
 
 /**

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  priorityFlagSchema,
   effortRuleConfigSchema,
   DEFAULT_EFFORT_RULE_CONFIG,
   type EffortRuleConfig,
@@ -23,26 +22,6 @@ import { DEFAULT_GROUPING_CONFIG, type GroupingConfig } from './grouping/deliver
 export const effortConfigSchema = effortRuleConfigSchema;
 export type EffortConfig = EffortRuleConfig;
 export const DEFAULT_EFFORT_CONFIG: EffortConfig = DEFAULT_EFFORT_RULE_CONFIG;
-
-/** Reserve-Regel (Anhang B.2). The eiserne Reserve held back for the next morning. */
-export const reserveConfigSchema = z.object({
-  enabled: z.boolean(),
-  mode: z.literal('max_of_percentage_and_minutes_per_employee'),
-  percentageOfNextMorningCapacity: z.number().min(0).max(1),
-  minimumMinutesPerPlannedEmployee: z.number().nonnegative(),
-  /** Priority flags that may consume the reserve (Prio/overdue/Teamlead). */
-  overrideAllowedFor: z.array(priorityFlagSchema),
-});
-export type ReserveConfig = z.infer<typeof reserveConfigSchema>;
-
-/** Verbatim from Anhang B.2. */
-export const DEFAULT_RESERVE_CONFIG: ReserveConfig = {
-  enabled: true,
-  mode: 'max_of_percentage_and_minutes_per_employee',
-  percentageOfNextMorningCapacity: 0.2,
-  minimumMinutesPerPlannedEmployee: 60,
-  overrideAllowedFor: ['prio', 'overdue', 'manual_teamlead_priority'],
-};
 
 /** Capacity derivation parameters (§4.3 / §13.2 import). */
 export const capacityConfigSchema = z.object({
@@ -125,7 +104,6 @@ export const DEFAULT_SHIFT_END_CONFIG: ShiftEndConfig = {
 /** Aggregated engine configuration. */
 export interface EngineConfig {
   effort: EffortConfig;
-  reserve: ReserveConfig;
   capacity: CapacityConfig;
   assignment: AssignmentConfig;
   priority: PriorityConfig;
@@ -136,7 +114,6 @@ export interface EngineConfig {
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   effort: DEFAULT_EFFORT_CONFIG,
-  reserve: DEFAULT_RESERVE_CONFIG,
   capacity: DEFAULT_CAPACITY_CONFIG,
   assignment: DEFAULT_ASSIGNMENT_CONFIG,
   priority: DEFAULT_PRIORITY_CONFIG,

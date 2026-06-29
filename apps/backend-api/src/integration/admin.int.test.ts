@@ -134,7 +134,7 @@ describe('admin rule config (§11)', () => {
   it('rejects an invalid config (Zod boundary)', async () => {
     const bad = {
       ...DEFAULT_RULE_CONFIG,
-      reserve: { ...DEFAULT_RULE_CONFIG.reserve, nextShiftCapacityPct: 250 },
+      priority: { ...DEFAULT_RULE_CONFIG.priority, overdueLeadDays: -5 },
     };
     await expect(admin.replaceRuleConfig(bad as never)).rejects.toThrow();
   });

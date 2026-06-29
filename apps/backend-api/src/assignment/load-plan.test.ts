@@ -109,7 +109,6 @@ describe('engineConfigFromRuleConfig', () => {
         fifoEnabled: true,
         manualPriorityWins: true,
       },
-      reserve: { nextShiftCapacityPct: 20, minMinutesPerEmployee: 30 },
       bundle: { minMinutes: 20, maxMinutes: 90, maxCases: 8, maxHeavyCases: 2 },
       effort: { ...DEFAULT_EFFORT_RULE_CONFIG, baseMinutesPerCase: 7 },
       grouping: { enabled: true, maxWeBelegGap: 1 },

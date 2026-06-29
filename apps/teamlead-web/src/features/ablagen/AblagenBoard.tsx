@@ -1,7 +1,7 @@
 /**
  * Digitale Ablagen (§10.2 / Anhang E.4 "Kanban/Queue-Lanes passend zur heutigen
  * Ablagekästen-Logik"). One column per lane (Prio, Jeden-Tag, Verladeplan
- * heute/morgen, Reserve, Geparkt, Prüfen, Problemfälle). Each card's teamlead
+ * heute/morgen, Sonstige, Geparkt, Prüfen, Problemfälle). Each card's teamlead
  * actions come from the single-source {@link CaseActions} registry, which derives
  * the allowed buttons from the case's §7.1 status — so a parked card offers
  * Entparken, a Problemfall offers „Problem freigeben", etc., with no per-lane

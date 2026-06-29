@@ -5,7 +5,6 @@ import {
   type EmployeeShift,
   type GoodsReceiptCase,
 } from '@paket/domain-types';
-import { canConsumeReserve, computeIronReserve } from './reserve.js';
 import { createBalancedBundles } from './bundling.js';
 import { distributeBundlesByWeightedLoad } from './distribute.js';
 import type { EnrichedCase } from '../types.js';
@@ -54,44 +53,6 @@ function shift(employeeId: string, capacity: number): EmployeeShift {
     active: true,
   });
 }
-
-describe('computeIronReserve (Anhang B.2)', () => {
-  it('takes the percentage when it dominates', () => {
-    const r = computeIronReserve({ plannedEmployeeCount: 5, nextMorningCapacityMinutes: 2400 });
-    expect(r.byPercentage).toBe(480); // 0.20 * 2400
-    expect(r.byMinimumPerEmployee).toBe(300); // 60 * 5
-    expect(r.minutes).toBe(480);
-  });
-
-  it('takes the per-employee minimum when it dominates', () => {
-    const r = computeIronReserve({ plannedEmployeeCount: 10, nextMorningCapacityMinutes: 1000 });
-    expect(r.minutes).toBe(600); // max(200, 600)
-  });
-
-  it('returns zero when disabled', () => {
-    const r = computeIronReserve({
-      plannedEmployeeCount: 5,
-      nextMorningCapacityMinutes: 2400,
-      config: {
-        enabled: false,
-        mode: 'max_of_percentage_and_minutes_per_employee',
-        percentageOfNextMorningCapacity: 0.2,
-        minimumMinutesPerPlannedEmployee: 60,
-        overrideAllowedFor: [],
-      },
-    });
-    expect(r.minutes).toBe(0);
-  });
-
-  it('lets Prio/overdue override the reserve but not CatMan or plain FIFO', () => {
-    expect(canConsumeReserve(['prio'])).toBe(true);
-    expect(canConsumeReserve(['overdue'])).toBe(true);
-    // CatMan is informational only — it must NOT break the iron reserve.
-    expect(canConsumeReserve(['catman_due'])).toBe(false);
-    expect(canConsumeReserve(['same_day_required'])).toBe(false);
-    expect(canConsumeReserve([])).toBe(false);
-  });
-});
 
 describe('createBalancedBundles (§8.3)', () => {
   it('packs cases up to the target minutes, preserving order', () => {

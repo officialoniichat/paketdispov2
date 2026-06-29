@@ -185,7 +185,8 @@ export class TeamleadReadService {
    * the teamlead always sees idle/free heads, not just the ones the engine loaded.
    * Assigned bundles + cases + route stops are folded onto those rows; an employee
    * who somehow holds a bundle without an active shift still gets a row so no work
-   * is ever hidden. reserveMinutes = Σ capacity − Σ planned across the rows.
+   * is ever hidden. freeCapacityMinutes = Σ capacity − Σ planned across the rows
+   * (negative = overbooked).
    */
   async board(date: string): Promise<BoardDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
@@ -353,12 +354,13 @@ export class TeamleadReadService {
 
     const totalCapacity = rows.reduce((sum, r) => sum + r.capacityMinutes, 0);
     const totalPlanned = rows.reduce((sum, r) => sum + r.plannedEffortMinutes, 0);
-    return { date, rows, reserveMinutes: totalCapacity - totalPlanned };
+    return { date, rows, freeCapacityMinutes: totalCapacity - totalPlanned };
   }
 
   /**
    * §10.1 Tagescockpit capacity tile. net = Σ active shift net minutes; planned =
-   * Σ planned effort of non-cancelled/non-completed bundles; reserve = net − planned.
+   * Σ planned effort of non-cancelled/non-completed bundles; free = net − planned
+   * (negative = overbooked).
    */
   async capacity(date: string): Promise<CapacityDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
@@ -372,7 +374,7 @@ export class TeamleadReadService {
 
     const netCapacityMinutes = shifts.reduce((sum, s) => sum + s.netCapacityMinutes, 0);
     const plannedMinutes = bundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
-    const reserveMinutes = netCapacityMinutes - plannedMinutes;
+    const freeCapacityMinutes = netCapacityMinutes - plannedMinutes;
     const utilisationPct =
       netCapacityMinutes === 0 ? 0 : round1((plannedMinutes / netCapacityMinutes) * 100);
 
@@ -381,7 +383,7 @@ export class TeamleadReadService {
       plannedEmployees: shifts.length,
       netCapacityMinutes,
       plannedMinutes,
-      reserveMinutes,
+      freeCapacityMinutes,
       utilisationPct,
     };
   }

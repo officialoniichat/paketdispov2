@@ -273,7 +273,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
                 requestReason({
                   title: `${c.weBelegNo} zu ${row.displayName} hinzufügen`,
                   description: 'Manuelle Zuweisung an dieses Paket.',
-                  suggestions: ['Reserve nutzen', 'Kapazität frei', 'Prio-Beleg'],
+                  suggestions: ['Kapazität frei', 'Prio-Beleg'],
                   run: (reason) => {
                     addToBundle.mutate({ caseId: c.caseId, bundleId, reason });
                     setAddId('');

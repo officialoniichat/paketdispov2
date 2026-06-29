@@ -46,7 +46,6 @@ export class RecalculateResultDto {
   @ApiProperty() bundleCount!: number;
   @ApiProperty() assignedCaseCount!: number;
   @ApiProperty() unassignedCaseCount!: number;
-  @ApiProperty() reserveMinutes!: number;
   @ApiProperty({ description: 'Wall-clock of the engine run (Anhang E.5 budget < 5000ms).' })
   durationMs!: number;
   @ApiProperty({ type: [EmployeeLoadDto] }) loads!: EmployeeLoadDto[];

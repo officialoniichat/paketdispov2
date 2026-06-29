@@ -150,7 +150,6 @@ function toPreviewResult(dto: RecalculateResultDto): PreviewResult {
     bundleCount: dto.bundleCount,
     assignedCaseCount: dto.assignedCaseCount,
     unassignedCaseCount: dto.unassignedCaseCount,
-    reserveMinutes: dto.reserveMinutes,
     durationMs: dto.durationMs,
     loads: dto.loads.map((load) => ({
       employeeId: load.employeeId,

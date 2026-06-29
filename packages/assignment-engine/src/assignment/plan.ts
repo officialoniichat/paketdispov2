@@ -8,7 +8,6 @@ import {
   type ISODateTime,
   type LocationMaster,
   type PickupSequenceProfile,
-  type PriorityFlag,
 } from '@paket/domain-types';
 import { DEFAULT_ENGINE_CONFIG, type EngineConfig } from '../config.js';
 import { computeEffort } from '../effort/effort-score.js';
@@ -17,7 +16,6 @@ import { teamCapacityMinutes } from '../capacity/net-capacity.js';
 import { autoAssignableCapacityMinutes } from '../capacity/shift-end.js';
 import { buildPickupSequence, type PickupCase } from '../pickup/pickup-order.js';
 import type { AssignmentPlan, EngineInput, EnrichedCase, UnassignedCase } from '../types.js';
-import { canConsumeReserve, computeIronReserve } from './reserve.js';
 import { createBalancedBundles, type ProtoBundle } from './bundling.js';
 import { distributeBundlesByWeightedLoad } from './distribute.js';
 import { detectDeliveryGroups, indexDeliveryGroups } from '../grouping/delivery-group.js';
@@ -27,9 +25,9 @@ import { detectDeliveryGroups, indexDeliveryGroups } from '../grouping/delivery-
  * Teamlead "Neu berechnen" / recalculate stays reproducible and well under the
  * Anhang E.5 budget of < 5 s for a typical day pool.
  *
- * Pipeline: enrich (priority + effort) → exclude → capacity → reserve → starter
- * packages → balanced bundles (Prio may break the reserve) → weighted distribution
- * (no specialists, heavy/light mix) → pickup order inside each finished bundle.
+ * Pipeline: enrich (priority + effort) → exclude → capacity → starter packages →
+ * balanced bundles (priority/FIFO order) → weighted distribution (no specialists,
+ * heavy/light mix) → pickup order inside each finished bundle.
  */
 
 export interface AssignWorkOptions {
@@ -99,7 +97,7 @@ export function assignWork(
   // Schichtende-Cutoff (ZIEL A, Punkt 5): the batch auto-distribution may only fill each
   // shift up to its cutoff point (plannedEnd − autoCutoffMinutes). We model this as an
   // effective shift whose netCapacityMinutes is the still-auto-assignable share at `now`,
-  // then run the UNCHANGED capacity/reserve/bundling/distribution pipeline on it — so the
+  // then run the UNCHANGED capacity/bundling/distribution pipeline on it — so the
   // cutoff is honoured everywhere with no downstream change. With the engine default
   // (autoCutoffMinutes = 0) this is a no-op (effective === net). A shift that is fully
   // inside its cutoff window drops to 0 and falls out of distribution automatically.
@@ -131,21 +129,13 @@ export function assignWork(
     }
   }
 
-  // Capacity (§4.3) and reserve (B.2) — over the cutoff-effective shifts.
+  // Capacity (§4.3) — over the cutoff-effective shifts.
   const totalCapacity = teamCapacityMinutes(effectiveShifts);
-  const activeEmployeeCount = effectiveShifts.filter(
-    (s) => s.active && s.netCapacityMinutes > 0,
-  ).length;
   const morningCapacity = totalCapacity * config.capacity.morningCapacityFraction;
-  const reserve = computeIronReserve({
-    plannedEmployeeCount: activeEmployeeCount,
-    nextMorningCapacityMinutes: input.nextMorningCapacityMinutes ?? totalCapacity,
-    config: config.reserve,
-  });
 
   // Starter packages from previous days, filled first against the morning capacity.
   const starterCandidates = sortByPriority(eligible.filter((e) => e.fromPreviousDays));
-  const todayCandidates = eligible.filter((e) => !e.fromPreviousDays);
+  const todayCandidates = sortByPriority(eligible.filter((e) => !e.fromPreviousDays));
   const starter = createBalancedBundles(
     starterCandidates,
     morningCapacity,
@@ -156,24 +146,10 @@ export function assignWork(
 
   const capacityAfterStarter = Math.max(0, totalCapacity - starterMinutes);
 
-  // Prio/overdue/manual cases may break the reserve; everything else respects it.
-  const overrideCandidates = sortByPriority(
-    todayCandidates.filter((e) => canConsumeReserve(e.case.priorityFlags, config.reserve)),
-  );
-  const normalCandidates = sortByPriority(
-    todayCandidates.filter((e) => !canConsumeReserve(e.case.priorityFlags, config.reserve)),
-  );
+  // Today's pool, in priority/FIFO order, filled against the remaining capacity.
+  const today = createBalancedBundles(todayCandidates, capacityAfterStarter, config.assignment);
 
-  const override = createBalancedBundles(
-    overrideCandidates,
-    capacityAfterStarter,
-    config.assignment,
-  );
-  const overrideMinutes = sumEffort(override.bundles);
-  const normalBudget = Math.max(0, capacityAfterStarter - overrideMinutes - reserve.minutes);
-  const normal = createBalancedBundles(normalCandidates, normalBudget, config.assignment);
-
-  const protoBundles: ProtoBundle[] = [...starter.bundles, ...override.bundles, ...normal.bundles];
+  const protoBundles: ProtoBundle[] = [...starter.bundles, ...today.bundles];
 
   // Delivery-group detection (Teamlead-Anforderung Punkt 1): recognise Belege of one
   // physical delivery (same Lieferschein OR a consecutive weBelegNo run) over the
@@ -222,7 +198,7 @@ export function assignWork(
   });
 
   // Cases that did not fit anywhere.
-  for (const e of [...starter.overflow, ...override.overflow, ...normal.overflow]) {
+  for (const e of [...starter.overflow, ...today.overflow]) {
     unassigned.push({ caseId: e.case.id, reason: 'no_capacity', priorityClass: e.priority.class });
   }
   for (const proto of distribution.unassigned) {
@@ -236,27 +212,18 @@ export function assignWork(
   }
 
   const assignedMinutes = bundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
-  const consumingFlags = new Set<PriorityFlag>();
-  for (const e of overrideCandidates) {
-    for (const flag of e.case.priorityFlags) {
-      if (config.reserve.overrideAllowedFor.includes(flag)) consumingFlags.add(flag);
-    }
-  }
 
   return {
     date: input.date,
     bundles,
     pickupSequences,
-    reserve,
     unassigned,
     loads: distribution.loads,
     diagnostics: {
       totalCapacityMinutes: totalCapacity,
       starterMinutes: Math.round(starterMinutes * 100) / 100,
       assignedMinutes: Math.round(assignedMinutes * 100) / 100,
-      reserveMinutes: reserve.minutes,
       excludedCaseCount: unassigned.filter((u) => u.reason === 'excluded').length,
-      priorityFlagsConsumingReserve: [...consumingFlags],
     },
   };
 }

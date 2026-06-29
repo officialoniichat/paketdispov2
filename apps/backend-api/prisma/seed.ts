@@ -223,9 +223,9 @@ interface SeedCase {
 }
 
 // 14 ready cases spread across the storage master. Effort sums to ~330 min,
-// comfortably below the ~1200 min net capacity even after the iron reserve,
-// so the engine forms multiple bundles across the three shifts. A mix of
-// prio/overdue/catman_due exercises the priority + reserve-override paths.
+// comfortably below the ~1200 min net capacity, so the engine forms multiple
+// bundles across the three shifts. A mix of prio/overdue/catman_due exercises
+// the priority ordering paths.
 const CASES: SeedCase[] = [
   { weBelegNo: 'WE-2026-000123', storageCode: 'R27', section: null, goodsTypeText: 'Prio', priorityFlags: ['prio'], totalQuantity: 84, effortPoints: 18.5, estimatedMinutes: 42, bookingDate: '2026-06-15' },
   { weBelegNo: 'WE-2026-000124', storageCode: 'R7', section: null, goodsTypeText: 'Prio', priorityFlags: ['prio'], totalQuantity: 31, effortPoints: 9, estimatedMinutes: 26, bookingDate: '2026-06-15' },

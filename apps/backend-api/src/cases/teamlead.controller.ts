@@ -54,7 +54,7 @@ export class TeamleadController {
   }
 
   @Get('capacity')
-  @ApiOperation({ summary: '§10.1 Day capacity tile (net / planned / reserve / utilisation)' })
+  @ApiOperation({ summary: '§10.1 Day capacity tile (net / planned / free / utilisation)' })
   @ApiOkResponse({ type: CapacityDto })
   capacity(@Query('date') date: string): Promise<CapacityDto> {
     return this.read.capacity(date ?? new Date().toISOString().slice(0, 10));

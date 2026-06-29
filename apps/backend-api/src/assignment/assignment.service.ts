@@ -134,7 +134,7 @@ export class AssignmentService {
       };
 
       const t0 = performance.now();
-      // §8.3 + Schichtende-Cutoff (Punkt 5): the engine reserves the last
+      // §8.3 + Schichtende-Cutoff (Punkt 5): the engine holds back the last
       // `autoCutoffMinutes` of each shift from auto-distribution, evaluated against `now`.
       const computedPlan = assignWork(input, engineConfig, { now: now.toISOString() });
       const elapsedMs = Math.round(performance.now() - t0);
@@ -164,8 +164,7 @@ export class AssignmentService {
    * bundle from the current `ready` pool. Reuses the engine primitives (priority +
    * Bereich-homogeneous balanced bundle + pickup sequence) for a single cart; the
    * teamlead `recalculate` path is untouched. Never assigns while the employee still
-   * has an open bundle, never breaks the iron reserve for non-override work, and
-   * stops at the shift's net capacity (Feierabend).
+   * has an open bundle, and stops at the shift's net capacity (Feierabend).
    */
   async assignNextBundle(
     principal: Principal,
@@ -281,10 +280,6 @@ export class AssignmentService {
       // A single indivisible case can exceed the finishable budget; if even the first
       // cart cannot be finished before shift end, hand out nothing (clean table).
       if (cart.effortMinutes > finishableBudget) return { assigned: false, reason: 'shift_ending' };
-
-      // NB: the iron reserve is a PLANNING-time guardian (teamlead recalculate). An
-      // idle worker pulling mid-shift should get available work rather than stand
-      // idle while ready Belege are held back — so the pull does not re-apply it.
 
       const caseById = new Map(cases.map((c) => [c.id, c]));
       const bundleSkeleton: AssignmentBundle = assignmentBundleSchema.parse({
@@ -424,7 +419,6 @@ export class AssignmentService {
       bundleCount: plan.bundles.length,
       assignedCaseCount,
       unassignedCaseCount: plan.unassigned.length,
-      reserveMinutes: plan.reserve.minutes,
       durationMs,
       loads: plan.loads.map((l) => ({
         employeeId: l.employeeId,

@@ -8,7 +8,6 @@ import type {
   Id,
   LocationMaster,
   PickupSequenceProfile,
-  PriorityFlag,
 } from '@paket/domain-types';
 
 /** Priority class ranks (§8.1). Lower rank = processed earlier. Rank 0 is excluded. */
@@ -72,25 +71,13 @@ export interface EngineInput {
    * the case's pre-computed `estimatedMinutes`/`effortPoints` are used as-is.
    */
   effortVectors?: ReadonlyMap<Id, EffortInputVector>;
-  /**
-   * Next morning's planned team capacity in minutes, used for the eiserne Reserve
-   * (B.2). When absent, the engine falls back to today's total capacity.
-   */
-  nextMorningCapacityMinutes?: number;
 }
 
 /** A case that could not be placed, with the reason (surfaced to Teamlead). */
 export interface UnassignedCase {
   caseId: Id;
-  reason: 'excluded' | 'no_capacity' | 'held_in_reserve';
+  reason: 'excluded' | 'no_capacity';
   priorityClass: PriorityClass;
-}
-
-/** Computed reserve outcome (B.2). */
-export interface ReserveResult {
-  minutes: number;
-  byPercentage: number;
-  byMinimumPerEmployee: number;
 }
 
 /** Per-employee load summary for fairness diagnostics (§8.4). */
@@ -109,7 +96,6 @@ export interface AssignmentPlan {
   date: ISODate;
   bundles: AssignmentBundle[];
   pickupSequences: BundlePickupSequence[];
-  reserve: ReserveResult;
   unassigned: UnassignedCase[];
   loads: EmployeeLoad[];
   /** Total capacity and how it was spent — for the Teamlead "Neu berechnen" delta. */
@@ -117,8 +103,6 @@ export interface AssignmentPlan {
     totalCapacityMinutes: number;
     starterMinutes: number;
     assignedMinutes: number;
-    reserveMinutes: number;
     excludedCaseCount: number;
-    priorityFlagsConsumingReserve: PriorityFlag[];
   };
 }

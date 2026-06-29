@@ -1,6 +1,6 @@
 %% C4 Level 3 — Components: @paket/assignment-engine (pure, deterministic)
 %% Verified against committed main: packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
-%% priority/, effort/{effort-score,effort-factors}.ts, assignment/{reserve,bundling,distribute}.ts,
+%% priority/, effort/{effort-score,effort-factors}.ts, assignment/{bundling,distribute}.ts,
 %% capacity/{net-capacity,shift-import,shift-end}.ts, grouping/delivery-group.ts, pickup/, config.ts, types.ts).
 flowchart TB
     classDef orch fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
@@ -27,7 +27,6 @@ flowchart TB
             shEnd["shift-end.ts<br/><i>autoAssignableCapacityMinutes · finishableBudgetMinutes (Pkt 5/6)</i>"]:::mod
         end
         subgraph asg["assignment/"]
-            reserve["reserve.ts<br/><i>computeIronReserve (B.2) · canConsumeReserve (Prio/overdue/TL)</i>"]:::mod
             bundling["bundling.ts<br/><i>createBalancedBundles (~55min, ≤6 cases, Bereich-homogen)</i>"]:::mod
             distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad (LPT + delivery affinity, §8.3/8.4)</i>"]:::mod
         end
@@ -37,7 +36,7 @@ flowchart TB
         subgraph pck["pickup/"]
             pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, type→number, never feeds back)</i>"]:::mod
         end
-        config["config.ts + types.ts<br/><i>EngineConfig (effort/reserve/bundle/grouping/shiftEnd) / EngineInput / AssignmentPlan</i>"]:::cfg
+        config["config.ts + types.ts<br/><i>EngineConfig (effort/capacity/assignment/priority/grouping/shiftEnd) / EngineInput / AssignmentPlan</i>"]:::cfg
     end
 
     types["@paket/domain-types<br/><i>schemas · enums · bereichFromLocationKind()</i>"]:::io
@@ -47,7 +46,6 @@ flowchart TB
     plan --> priEng
     plan --> effSc
     plan --> netCap
-    plan --> reserve
     plan --> bundling
     plan --> delivery
     plan --> distribute

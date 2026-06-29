@@ -17,7 +17,8 @@ export interface CapacitySummary {
   plannedEmployees: number;
   netCapacityMinutes: number;
   plannedMinutes: number;
-  reserveMinutes: number;
+  /** net − planned; negative = overbooked (cockpit „Überbucht" exception). */
+  freeCapacityMinutes: number;
   utilisationPct: number;
 }
 
@@ -58,7 +59,7 @@ export type LaneId =
   | 'jeden_tag'
   | 'verladeplan_heute'
   | 'verladeplan_morgen'
-  | 'reserve'
+  | 'sonstige'
   | 'geparkt'
   | 'probleme';
 
@@ -155,7 +156,6 @@ export interface PreviewResult {
   bundleCount: number;
   assignedCaseCount: number;
   unassignedCaseCount: number;
-  reserveMinutes: number;
   durationMs: number;
   loads: PreviewEmployeeLoad[];
 }

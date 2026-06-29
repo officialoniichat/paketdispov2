@@ -7,28 +7,25 @@
  * Anhang E.5 < 5 s budget.
  *
  * Pipeline: SEAK/PEP import → net capacity → priority (§8.1) → effort (§8.2) →
- * assignment (starter packages, eiserne Reserve, balanced bundles, no specialists,
- * heavy/light mix) → pickup order inside each finished bundle (§D.3, non-optimising).
+ * assignment (starter packages, balanced bundles, no specialists, heavy/light mix) →
+ * pickup order inside each finished bundle (§D.3, non-optimising).
  */
 
-// Configuration (Anhang B.2 / B.3 + engine tuning).
+// Configuration (Anhang B.3 + engine tuning).
 export {
   DEFAULT_ENGINE_CONFIG,
   DEFAULT_EFFORT_CONFIG,
-  DEFAULT_RESERVE_CONFIG,
   DEFAULT_CAPACITY_CONFIG,
   DEFAULT_ASSIGNMENT_CONFIG,
   DEFAULT_PRIORITY_CONFIG,
   DEFAULT_SHIFT_END_CONFIG,
   effortConfigSchema,
-  reserveConfigSchema,
   capacityConfigSchema,
   assignmentConfigSchema,
   priorityConfigSchema,
   shiftEndConfigSchema,
   type EngineConfig,
   type EffortConfig,
-  type ReserveConfig,
   type CapacityConfig,
   type AssignmentConfig,
   type PriorityConfig,
@@ -45,7 +42,6 @@ export {
   type EngineInput,
   type AssignmentPlan,
   type UnassignedCase,
-  type ReserveResult,
   type EmployeeLoad,
 } from './types.js';
 
@@ -95,7 +91,6 @@ export {
 } from './effort/effort-factors.js';
 
 // (4) Assignment (§8.3/§8.4).
-export { computeIronReserve, canConsumeReserve, type ReserveInput } from './assignment/reserve.js';
 export {
   createBalancedBundles,
   type ProtoBundle,

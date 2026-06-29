@@ -92,14 +92,14 @@ afterAll(async () => {
 });
 
 describe('capacity (§10.1 GET /api/teamlead/capacity)', () => {
-  it('computes net/planned/reserve/utilisation for the date', async () => {
+  it('computes net/planned/free/utilisation for the date', async () => {
     const cap = await teamleadSvc.capacity(DATE);
 
     expect(cap.date).toBe(DATE);
     expect(cap.plannedEmployees).toBe(2);
     expect(cap.netCapacityMinutes).toBe(780); // 480 + 300
     expect(cap.plannedMinutes).toBeGreaterThan(0);
-    expect(cap.reserveMinutes).toBe(cap.netCapacityMinutes - cap.plannedMinutes);
+    expect(cap.freeCapacityMinutes).toBe(cap.netCapacityMinutes - cap.plannedMinutes);
     expect(cap.utilisationPct).toBe(
       Math.round((cap.plannedMinutes / cap.netCapacityMinutes) * 1000) / 10,
     );

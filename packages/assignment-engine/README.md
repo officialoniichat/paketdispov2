@@ -18,7 +18,6 @@ It integrates with the rest of the modular monolith **only through the shared
 | Net capacity per employee/team | §4.3 | `capacity/net-capacity.ts` |
 | Priority classes (Ausschluss→Manuell→Prio→Überfällig→Jeden-Tag 7/4/8→Verladeplan 1/2/3→FIFO) | §8.1 | `priority/priority-engine.ts` |
 | Effort points (`EffortInputVector` + effort-rules) | §8.2 / Anhang B.3 | `effort/effort-score.ts` |
-| Eiserne Reserve | Anhang B.2 | `assignment/reserve.ts` |
 | Starter packages, balanced bundles, heavy/light mix | §8.3 / §8.4 | `assignment/bundling.ts` |
 | Distribution without specialists | §8.3 / §8.4 | `assignment/distribute.ts` |
 | Orchestrator `assignWork(date)` | §8.3 | `assignment/plan.ts` |
@@ -44,9 +43,9 @@ const plan = assignWork({
   cases,                 // ready GoodsReceiptCases (EPIC 2)
   shifts,
   locations,             // LocationMaster[]
-  // optional: effortVectors, pickupProfiles, nextMorningCapacityMinutes
+  // optional: effortVectors, pickupProfiles
 });
-// → plan.bundles, plan.pickupSequences, plan.reserve, plan.unassigned, plan.loads, plan.diagnostics
+// → plan.bundles, plan.pickupSequences, plan.unassigned, plan.loads, plan.diagnostics
 ```
 
 `assignWork` is a pure function of its input (pass `options.now` for a deterministic
@@ -60,5 +59,5 @@ the property the Teamlead simulation/recalculate relies on.
 - **`employeeNo` → employee id** mapping is injectable (`resolveEmployeeId`); unverified (#59).
 - **`effortPoints = minutes × pointsPerMinute`** (default `1`); calibration is a later phase.
 
-All rule parameters (B.2 reserve, B.3 effort, bundling/capacity tuning) are config-driven
+All rule parameters (B.3 effort, bundling/capacity tuning) are config-driven
 via `DEFAULT_ENGINE_CONFIG` and the exported Zod schemas, ready for Admin/Teamlead Regelpflege.

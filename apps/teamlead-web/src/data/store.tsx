@@ -70,7 +70,7 @@ function emptyCockpit(date: string): CockpitSummary {
       plannedEmployees: 0,
       netCapacityMinutes: 0,
       plannedMinutes: 0,
-      reserveMinutes: 0,
+      freeCapacityMinutes: 0,
       utilisationPct: 0,
     },
     pool: { openCases: 0, overdue: 0, prio: 0, catManDue: 0, openIssues: 0, endOfShiftOpen: 0 },

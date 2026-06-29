@@ -4,7 +4,7 @@
  * Model (docs/concept/automatik-dispo-konzept + dispo-flow-rework): the engine
  * distributes the free pool by itself. The teamlead does NOT click per batch —
  * Automatik (An by default) auto-commits new free work; only exceptions (Probleme,
- * Überlast, Reserve) surface for a human. „Aus" turns the same engine output into a
+ * Überlast, Überbuchung) surface for a human. „Aus" turns the same engine output into a
  * reviewable Vorschlag. One feedback line, no duplicate snackbars, no dead buttons.
  */
 import { useEffect, useRef, useState, type JSX } from 'react';
@@ -107,12 +107,12 @@ export function CockpitPage(): JSX.Element {
   // --- Exceptions: the only things that need a human ---
   const overloaded = board.filter((r) => r.utilisationPct >= OVERLOAD_PCT);
   const problems = pool.openIssues;
-  const reserveDanger = capacity.reserveMinutes <= 0;
+  const overbooked = capacity.freeCapacityMinutes <= 0;
   const exceptions: string[] = [];
   if (problems > 0) exceptions.push(`${problems} ${problems === 1 ? 'Problem' : 'Probleme'}`);
   if (overloaded.length > 0)
     exceptions.push(`${overloaded.map((r) => r.displayName).join(', ')} ausgelastet ≥ ${OVERLOAD_PCT}%`);
-  if (reserveDanger) exceptions.push('Reserve aufgebraucht');
+  if (overbooked) exceptions.push('Überbucht');
 
   // --- Plan status / trigger label ---
   const planCurrent = freeOpen === 0;
@@ -206,8 +206,7 @@ export function CockpitPage(): JSX.Element {
             <Chip size="small" color="success" label="Verteilt" />
             <Typography variant="body2">
               {recalcResult.assignedCaseCount} zugeteilt · {recalcResult.bundleCount} Pakete ·{' '}
-              {recalcResult.unassignedCaseCount} offen · Reserve{' '}
-              {formatMinutes(recalcResult.reserveMinutes)}
+              {recalcResult.unassignedCaseCount} offen
               {recalculate.isPending ? ' · verteilt …' : ''}
             </Typography>
           </Stack>
@@ -227,9 +226,9 @@ export function CockpitPage(): JSX.Element {
               <MetricCard label="Netto-Kapazität" value={formatMinutes(capacity.netCapacityMinutes)} />
               <MetricCard label="Verplant" value={formatMinutes(capacity.plannedMinutes)} tone="accent" />
               <MetricCard
-                label="Reserve"
-                value={formatMinutes(capacity.reserveMinutes)}
-                tone={capacity.reserveMinutes <= 0 ? 'danger' : 'positive'}
+                label="Freie Kapazität"
+                value={formatMinutes(capacity.freeCapacityMinutes)}
+                tone={capacity.freeCapacityMinutes <= 0 ? 'danger' : 'positive'}
               />
               <MetricCard label="Auslastung" value={formatPct(capacity.utilisationPct)} tone="accent" />
             </>

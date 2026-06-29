@@ -402,7 +402,7 @@
             "bearer": []
           }
         ],
-        "summary": "§10.1 Day capacity tile (net / planned / reserve / utilisation)",
+        "summary": "§10.1 Day capacity tile (net / planned / free / utilisation)",
         "tags": [
           "teamlead"
         ]
@@ -1390,7 +1390,7 @@
             "bearer": []
           }
         ],
-        "summary": "§11 Read the structured rule config (priority/reserve/bundle/effort).",
+        "summary": "§11 Read the structured rule config (priority/bundle/effort).",
         "tags": [
           "admin"
         ]
@@ -2382,14 +2382,15 @@
               "$ref": "#/components/schemas/BoardRowDto"
             }
           },
-          "reserveMinutes": {
-            "type": "number"
+          "freeCapacityMinutes": {
+            "type": "number",
+            "description": "Σ capacity − Σ planned across rows; negative = overbooked."
           }
         },
         "required": [
           "date",
           "rows",
-          "reserveMinutes"
+          "freeCapacityMinutes"
         ]
       },
       "CapacityDto": {
@@ -2408,8 +2409,9 @@
           "plannedMinutes": {
             "type": "number"
           },
-          "reserveMinutes": {
-            "type": "number"
+          "freeCapacityMinutes": {
+            "type": "number",
+            "description": "net − planned; negative = overbooked."
           },
           "utilisationPct": {
             "type": "number",
@@ -2421,7 +2423,7 @@
           "plannedEmployees",
           "netCapacityMinutes",
           "plannedMinutes",
-          "reserveMinutes",
+          "freeCapacityMinutes",
           "utilisationPct"
         ]
       },
@@ -2982,9 +2984,6 @@
           "unassignedCaseCount": {
             "type": "number"
           },
-          "reserveMinutes": {
-            "type": "number"
-          },
           "durationMs": {
             "type": "number",
             "description": "Wall-clock of the engine run (Anhang E.5 budget < 5000ms)."
@@ -3001,7 +3000,6 @@
           "bundleCount",
           "assignedCaseCount",
           "unassignedCaseCount",
-          "reserveMinutes",
           "durationMs",
           "loads"
         ]
@@ -3259,21 +3257,6 @@
           "manualPriorityWins"
         ]
       },
-      "ReserveRuleConfigDto": {
-        "type": "object",
-        "properties": {
-          "nextShiftCapacityPct": {
-            "type": "number"
-          },
-          "minMinutesPerEmployee": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "nextShiftCapacityPct",
-          "minMinutesPerEmployee"
-        ]
-      },
       "BundleRuleConfigDto": {
         "type": "object",
         "properties": {
@@ -3447,9 +3430,6 @@
           "priority": {
             "$ref": "#/components/schemas/PriorityRuleConfigDto"
           },
-          "reserve": {
-            "$ref": "#/components/schemas/ReserveRuleConfigDto"
-          },
           "bundle": {
             "$ref": "#/components/schemas/BundleRuleConfigDto"
           },
@@ -3471,7 +3451,6 @@
         },
         "required": [
           "priority",
-          "reserve",
           "bundle",
           "effort",
           "grouping",

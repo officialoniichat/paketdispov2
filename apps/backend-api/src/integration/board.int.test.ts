@@ -130,7 +130,7 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     expect(board.date).toBe(DATE);
     // Three scheduled employees in total (two planned + one idle).
     expect(board.rows.length).toBe(3);
-    expect(board.reserveMinutes).toBeGreaterThanOrEqual(0);
+    expect(board.freeCapacityMinutes).toBeGreaterThanOrEqual(0);
 
     const assigned = board.rows.filter((r) => r.bundleId !== null);
     expect(assigned.length).toBeGreaterThanOrEqual(1); // the engine placed the pool
@@ -151,10 +151,10 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     const placed = assigned.flatMap((r) => r.cases.map((c) => c.weBelegNo)).sort();
     expect(placed).toEqual(['WE-BOARD-0', 'WE-BOARD-1', 'WE-BOARD-2', 'WE-BOARD-3', 'WE-BOARD-4', 'WE-BOARD-5']);
 
-    // reserveMinutes = Σ capacity − Σ planned (across ALL rows, idle included)
+    // freeCapacityMinutes = Σ capacity − Σ planned (across ALL rows, idle included)
     const totalCap = board.rows.reduce((s, r) => s + r.capacityMinutes, 0);
     const totalPlanned = board.rows.reduce((s, r) => s + r.plannedEffortMinutes, 0);
-    expect(board.reserveMinutes).toBe(totalCap - totalPlanned);
+    expect(board.freeCapacityMinutes).toBe(totalCap - totalPlanned);
   });
 
   it('renders a scheduled-but-unassigned employee as an idle row', async () => {

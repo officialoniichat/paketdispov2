@@ -86,22 +86,23 @@ describe('assignWork (§8.3 end-to-end)', () => {
     expect(plan.diagnostics.excludedCaseCount).toBe(2);
   });
 
-  it('holds back the eiserne Reserve from normal work but lets Prio break it', () => {
-    // Tight capacity so the reserve actually bites.
-    const tight = baseInput({ shifts: [shift('E-1', 120)], nextMorningCapacityMinutes: 600 });
-    const withPrio = assignWork(
+  it('uses the full capacity with nothing held back, in priority order', () => {
+    // Tight single-employee capacity: exactly one 30-min case fits. The whole
+    // capacity is usable and the scarce slot goes to the highest-priority case;
+    // the normal one overflows purely for lack of capacity.
+    const tight = baseInput({ shifts: [shift('E-1', 30)] });
+    const plan = assignWork(
       {
         ...tight,
-        cases: [makeCase({ id: 'p', priorityFlags: ['prio'] }), makeCase({ id: 'n' })],
+        cases: [makeCase({ id: 'n' }), makeCase({ id: 'p', priorityFlags: ['prio'] })],
       },
       undefined,
       { now: NOW },
     );
-    // reserve = max(0.2*600, 60*1) = 120; the prio case overrides it, the normal one cannot.
-    expect(withPrio.reserve.minutes).toBe(120);
-    const assigned = withPrio.bundles.flatMap((b) => b.caseIds);
-    expect(assigned).toContain('p');
-    expect(withPrio.diagnostics.priorityFlagsConsumingReserve).toContain('prio');
+    expect(plan.bundles.flatMap((b) => b.caseIds)).toEqual(['p']);
+    expect(plan.unassigned.map((u) => ({ id: u.caseId, reason: u.reason }))).toEqual([
+      { id: 'n', reason: 'no_capacity' },
+    ]);
   });
 
   it('forms starter packages from previous-day cases', () => {

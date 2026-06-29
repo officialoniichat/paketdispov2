@@ -37,7 +37,7 @@ export class AdminController {
   }
 
   @Get('rules')
-  @ApiOperation({ summary: '§11 Read the structured rule config (priority/reserve/bundle/effort).' })
+  @ApiOperation({ summary: '§11 Read the structured rule config (priority/bundle/effort).' })
   @ApiOkResponse({ type: RuleConfigDto })
   rules(): Promise<RuleConfigDto> {
     return this.admin.getRuleConfig();

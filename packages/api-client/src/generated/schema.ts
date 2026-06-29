@@ -210,7 +210,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** §10.1 Day capacity tile (net / planned / reserve / utilisation) */
+        /** §10.1 Day capacity tile (net / planned / free / utilisation) */
         get: operations["TeamleadController_capacity"];
         put?: never;
         post?: never;
@@ -582,7 +582,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** §11 Read the structured rule config (priority/reserve/bundle/effort). */
+        /** §11 Read the structured rule config (priority/bundle/effort). */
         get: operations["AdminController_rules"];
         /** §11 Persist the structured rule config (Zod-validated). */
         put: operations["AdminController_replaceRules"];
@@ -864,7 +864,8 @@ export interface components {
             /** @description ISO date YYYY-MM-DD */
             date: string;
             rows: components["schemas"]["BoardRowDto"][];
-            reserveMinutes: number;
+            /** @description Σ capacity − Σ planned across rows; negative = overbooked. */
+            freeCapacityMinutes: number;
         };
         CapacityDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -872,7 +873,8 @@ export interface components {
             plannedEmployees: number;
             netCapacityMinutes: number;
             plannedMinutes: number;
-            reserveMinutes: number;
+            /** @description net − planned; negative = overbooked. */
+            freeCapacityMinutes: number;
             /** @description Round 1 decimal, 0 if net capacity = 0 */
             utilisationPct: number;
         };
@@ -1051,7 +1053,6 @@ export interface components {
             bundleCount: number;
             assignedCaseCount: number;
             unassignedCaseCount: number;
-            reserveMinutes: number;
             /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
             durationMs: number;
             loads: components["schemas"]["EmployeeLoadDto"][];
@@ -1139,10 +1140,6 @@ export interface components {
             fifoEnabled: boolean;
             manualPriorityWins: boolean;
         };
-        ReserveRuleConfigDto: {
-            nextShiftCapacityPct: number;
-            minMinutesPerEmployee: number;
-        };
         BundleRuleConfigDto: {
             minMinutes: number;
             maxMinutes: number;
@@ -1194,7 +1191,6 @@ export interface components {
         };
         RuleConfigDto: {
             priority: components["schemas"]["PriorityRuleConfigDto"];
-            reserve: components["schemas"]["ReserveRuleConfigDto"];
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
             grouping: components["schemas"]["GroupingRuleConfigDto"];

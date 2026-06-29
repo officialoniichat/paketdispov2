@@ -3,7 +3,7 @@
  *
  * Runs the real assignment engine as a non-committal PREVIEW
  * (`/assignments/preview`, persists nothing): shows the proposed bundle count,
- * assigned/unassigned cases, eiserne Reserve and the per-employee load. Nothing
+ * assigned/unassigned cases and the per-employee load. Nothing
  * on the board changes until the teamlead presses „Live zuweisen", which calls
  * the real persist (`/assignments/recalculate`) and refetches the cockpit.
  */
@@ -79,18 +79,7 @@ export function SimulationPanel({ open, onClose }: SimulationPanelProps): JSX.El
                 value={result.unassignedCaseCount}
                 tone={result.unassignedCaseCount > 0 ? 'warning' : 'neutral'}
               />
-              <MetricCard
-                label="Reserve"
-                value={formatMinutes(result.reserveMinutes)}
-                tone={result.reserveMinutes <= 0 ? 'danger' : 'positive'}
-              />
             </Stack>
-
-            {result.reserveMinutes <= 0 && (
-              <Alert severity="error">
-                Die eiserne Reserve wäre nach diesem Vorschlag aufgebraucht.
-              </Alert>
-            )}
 
             <Table size="small">
               <TableHead>

@@ -1,6 +1,6 @@
 /**
- * Admin- und Konfigurations-UX (§11). Regelpflege für Priorität, Reserve,
- * Bündelgröße, Aufwand, Verladeplan und Parser, plus LocationMaster-Pflege
+ * Admin- und Konfigurations-UX (§11). Regelpflege für Priorität, Bündelgröße,
+ * Aufwand, Verladeplan und Parser, plus LocationMaster-Pflege
  * (§11.2 – simple Lagerplatzliste, no routing graph in the MVP).
  *
  * The structured RuleConfig is loaded from and saved to the real backend
@@ -33,7 +33,6 @@ import { IntegrationenTab } from './IntegrationenTab.js';
 
 const TABS = [
   'Priorität',
-  'Reserve',
   'Bündel',
   'Aufwand',
   'Lieferungen',
@@ -46,17 +45,17 @@ const TABS = [
 ];
 
 /** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
-const GROUPING_TAB = 4;
+const GROUPING_TAB = 3;
 /** Read-only Verladeplan tab (display only — no save button). */
-const LOADPLAN_TAB = 5;
+const LOADPLAN_TAB = 4;
 /** RuleConfig-form tab index for the Schichtende-Cutoff (Punkt 5). */
-const SHIFT_END_TAB = 10;
+const SHIFT_END_TAB = 9;
 
 /** Tab indices that render a self-contained editor instead of the RuleConfig form. */
-const LOCATIONS_TAB = 6;
-const EMPLOYEES_TAB = 7;
-const SCHICHTPLAN_TAB = 8;
-const INTEGRATIONS_TAB = 9;
+const LOCATIONS_TAB = 5;
+const EMPLOYEES_TAB = 6;
+const SCHICHTPLAN_TAB = 7;
+const INTEGRATIONS_TAB = 8;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -176,25 +175,6 @@ export function AdminPage(): JSX.Element {
               {tab === 1 && (
                 <Grid>
                   <Num
-                    label="% nächste Frühschicht"
-                    value={draft.reserve.nextShiftCapacityPct}
-                    onChange={(v) => patch('reserve', { ...draft.reserve, nextShiftCapacityPct: v })}
-                    hint="Anteil der morgigen Frühschicht-Kapazität, der heute als eiserne Reserve freigehalten wird."
-                  />
-                  <Num
-                    label="Min. Minuten / MA"
-                    value={draft.reserve.minMinutesPerEmployee}
-                    onChange={(v) =>
-                      patch('reserve', { ...draft.reserve, minMinutesPerEmployee: v })
-                    }
-                    hint="Mindest-Reserve in Minuten je geplantem Mitarbeiter (greift, falls der %-Wert zu klein wäre)."
-                  />
-                </Grid>
-              )}
-
-              {tab === 2 && (
-                <Grid>
-                  <Num
                     label="Min. Minuten"
                     value={draft.bundle.minMinutes}
                     onChange={(v) => patch('bundle', { ...draft.bundle, minMinutes: v })}
@@ -221,7 +201,7 @@ export function AdminPage(): JSX.Element {
                 </Grid>
               )}
 
-              {tab === 3 && (
+              {tab === 2 && (
                 <Stack spacing={1.5}>
                   <Typography variant="body2" color="text.secondary">
                     Das sind die <strong>echten Aufwandsparameter</strong> der Engine — die

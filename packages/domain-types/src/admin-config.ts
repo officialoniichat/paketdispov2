@@ -41,13 +41,6 @@ export const priorityRuleConfigSchema = z.object({
 });
 export type PriorityRuleConfig = z.infer<typeof priorityRuleConfigSchema>;
 
-/** Iron-reserve protection (§8.3 / B.2). */
-export const reserveRuleConfigSchema = z.object({
-  nextShiftCapacityPct: z.number().min(0).max(100),
-  minMinutesPerEmployee: z.number().nonnegative(),
-});
-export type ReserveRuleConfig = z.infer<typeof reserveRuleConfigSchema>;
-
 /** Bundle-size guardrails (§8.3). */
 export const bundleRuleConfigSchema = z.object({
   minMinutes: z.number().nonnegative(),
@@ -166,7 +159,6 @@ export type LoadPlanRow = z.infer<typeof loadPlanRowSchema>;
 /** The whole structured rule config persisted under AppConfig `rule_config`. */
 export const ruleConfigSchema = z.object({
   priority: priorityRuleConfigSchema,
-  reserve: reserveRuleConfigSchema,
   bundle: bundleRuleConfigSchema,
   effort: effortRuleConfigSchema,
   grouping: groupingRuleConfigSchema,
@@ -189,10 +181,6 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     overdueLeadDaysOverrides: [],
     fifoEnabled: true,
     manualPriorityWins: true,
-  },
-  reserve: {
-    nextShiftCapacityPct: 20,
-    minMinutesPerEmployee: 30,
   },
   bundle: {
     minMinutes: 20,

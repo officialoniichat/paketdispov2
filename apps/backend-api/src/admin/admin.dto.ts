@@ -102,11 +102,6 @@ export class PriorityRuleConfigDto {
   @ApiProperty() @IsBoolean() manualPriorityWins!: boolean;
 }
 
-export class ReserveRuleConfigDto {
-  @ApiProperty() @IsNumber() @Min(0) nextShiftCapacityPct!: number;
-  @ApiProperty() @IsNumber() @Min(0) minMinutesPerEmployee!: number;
-}
-
 export class BundleRuleConfigDto {
   @ApiProperty() @IsNumber() @Min(0) minMinutes!: number;
   @ApiProperty() @IsNumber() @Min(0) maxMinutes!: number;
@@ -185,11 +180,6 @@ export class RuleConfigDto {
   @ValidateNested()
   @Type(() => PriorityRuleConfigDto)
   priority!: PriorityRuleConfigDto;
-
-  @ApiProperty({ type: ReserveRuleConfigDto })
-  @ValidateNested()
-  @Type(() => ReserveRuleConfigDto)
-  reserve!: ReserveRuleConfigDto;
 
   @ApiProperty({ type: BundleRuleConfigDto })
   @ValidateNested()

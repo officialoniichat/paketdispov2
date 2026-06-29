@@ -239,7 +239,8 @@ export class BoardRowDto {
 export class BoardDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
   @ApiProperty({ type: [BoardRowDto] }) rows!: BoardRowDto[];
-  @ApiProperty() reserveMinutes!: number;
+  @ApiProperty({ description: 'Σ capacity − Σ planned across rows; negative = overbooked.' })
+  freeCapacityMinutes!: number;
 }
 
 export class CapacityDto {
@@ -247,7 +248,8 @@ export class CapacityDto {
   @ApiProperty() plannedEmployees!: number;
   @ApiProperty() netCapacityMinutes!: number;
   @ApiProperty() plannedMinutes!: number;
-  @ApiProperty() reserveMinutes!: number;
+  @ApiProperty({ description: 'net − planned; negative = overbooked.' })
+  freeCapacityMinutes!: number;
   @ApiProperty({ description: 'Round 1 decimal, 0 if net capacity = 0' })
   utilisationPct!: number;
 }
