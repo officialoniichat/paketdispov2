@@ -52,11 +52,16 @@ describe('classifyPriority (§8.1)', () => {
     expect(classifyPriority(c, { today: TODAY }).rank).toBe(2);
   });
 
-  it('flags CatMan as due when catManDate is reached or passed', () => {
-    const due = makeCase({ id: 'e', catManDate: '2026-06-15' });
+  it('ignores catManDate for prioritisation — CatMan is informational only', () => {
+    const reached = makeCase({ id: 'e', catManDate: '2026-06-15' });
     const future = makeCase({ id: 'f', catManDate: '2026-06-20' });
-    expect(classifyPriority(due, { today: TODAY }).class).toBe('catman_due');
+    expect(classifyPriority(reached, { today: TODAY }).class).toBe('fifo');
     expect(classifyPriority(future, { today: TODAY }).class).toBe('fifo');
+  });
+
+  it('classifies an overdue flag as rank 3 (Überfällig)', () => {
+    const c = makeCase({ id: 'od', priorityFlags: ['overdue'] });
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('catman_due');
   });
 
   it('classifies sections 7/4/8 as Jeden-Tag-Ware', () => {

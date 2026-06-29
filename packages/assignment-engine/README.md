@@ -16,7 +16,7 @@ It integrates with the rest of the modular monolith **only through the shared
 |---|---|---|
 | SEAK/PEP CSV import (`ShiftImportRow`) | §13.2 | `capacity/shift-import.ts` |
 | Net capacity per employee/team | §4.3 | `capacity/net-capacity.ts` |
-| Priority classes (Ausschluss→Manuell→Prio→CatMan→Jeden-Tag 7/4/8→Verladeplan 1/2/3→FIFO) | §8.1 | `priority/priority-engine.ts` |
+| Priority classes (Ausschluss→Manuell→Prio→Überfällig→Jeden-Tag 7/4/8→Verladeplan 1/2/3→FIFO) | §8.1 | `priority/priority-engine.ts` |
 | Effort points (`EffortInputVector` + effort-rules) | §8.2 / Anhang B.3 | `effort/effort-score.ts` |
 | Eiserne Reserve | Anhang B.2 | `assignment/reserve.ts` |
 | Starter packages, balanced bundles, heavy/light mix | §8.3 / §8.4 | `assignment/bundling.ts` |

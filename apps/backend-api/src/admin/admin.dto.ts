@@ -87,8 +87,6 @@ export class LoadPlanLeadOverrideDto {
 }
 
 export class PriorityRuleConfigDto {
-  @ApiProperty() @IsNumber() @Min(0) catManWeight!: number;
-
   @ApiProperty({ description: 'Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit' })
   @IsInt()
   @Min(0)

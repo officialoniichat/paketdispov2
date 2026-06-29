@@ -28,7 +28,6 @@ export type LoadPlanLeadOverride = z.infer<typeof loadPlanLeadOverrideSchema>;
 
 /** Priority weighting + Überfälligkeits-Vorlauf (§8.1, Teamlead-Punkt 4). */
 export const priorityRuleConfigSchema = z.object({
-  catManWeight: z.number().nonnegative(),
   /**
    * Default Vorlauf in Tagen vor dem Verladetag, ab dem ein Verladeplan-Case
    * (Abschnitt 1/2/3) dringend/überfällig wird. Ersetzt die tote, nie konsumierte
@@ -114,7 +113,6 @@ export const RULE_CONFIG_KEY = 'rule_config';
  */
 export const DEFAULT_RULE_CONFIG: RuleConfig = {
   priority: {
-    catManWeight: 1.5,
     overdueLeadDays: 2,
     overdueLeadDaysOverrides: [],
     fifoEnabled: true,

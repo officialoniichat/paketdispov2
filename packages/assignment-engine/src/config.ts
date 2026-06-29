@@ -70,7 +70,7 @@ export const reserveConfigSchema = z.object({
   mode: z.literal('max_of_percentage_and_minutes_per_employee'),
   percentageOfNextMorningCapacity: z.number().min(0).max(1),
   minimumMinutesPerPlannedEmployee: z.number().nonnegative(),
-  /** Priority flags that may consume the reserve (Prio/CatMan/overdue/Teamlead). */
+  /** Priority flags that may consume the reserve (Prio/overdue/Teamlead). */
   overrideAllowedFor: z.array(priorityFlagSchema),
 });
 export type ReserveConfig = z.infer<typeof reserveConfigSchema>;
@@ -81,7 +81,7 @@ export const DEFAULT_RESERVE_CONFIG: ReserveConfig = {
   mode: 'max_of_percentage_and_minutes_per_employee',
   percentageOfNextMorningCapacity: 0.2,
   minimumMinutesPerPlannedEmployee: 60,
-  overrideAllowedFor: ['prio', 'catman_due', 'overdue', 'manual_teamlead_priority'],
+  overrideAllowedFor: ['prio', 'overdue', 'manual_teamlead_priority'],
 };
 
 /** Capacity derivation parameters (§4.3 / §13.2 import). */

@@ -83,9 +83,11 @@ describe('computeIronReserve (Anhang B.2)', () => {
     expect(r.minutes).toBe(0);
   });
 
-  it('lets Prio/CatMan override the reserve but not plain FIFO', () => {
+  it('lets Prio/overdue override the reserve but not CatMan or plain FIFO', () => {
     expect(canConsumeReserve(['prio'])).toBe(true);
-    expect(canConsumeReserve(['catman_due'])).toBe(true);
+    expect(canConsumeReserve(['overdue'])).toBe(true);
+    // CatMan is informational only — it must NOT break the iron reserve.
+    expect(canConsumeReserve(['catman_due'])).toBe(false);
     expect(canConsumeReserve(['same_day_required'])).toBe(false);
     expect(canConsumeReserve([])).toBe(false);
   });

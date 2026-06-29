@@ -15,7 +15,7 @@ export interface LoadPlanLeadOverride {
 
 /**
  * §8.1 Prioritätsklassen. Cases are classified into ranks 0–6 and then ordered
- * Ausschluss → Manuell → Prio → CatMan → Jeden-Tag (7/4/8) → Verladeplan (1/2/3) → FIFO.
+ * Ausschluss → Manuell → Prio → Überfällig → Jeden-Tag (7/4/8) → Verladeplan (1/2/3) → FIFO.
  * Classification returns the FIRST matching class, so e.g. a Prio case in section 7
  * is ranked as Prio, not Jeden-Tag.
  */
@@ -27,7 +27,7 @@ const LOAD_PLAN_SECTIONS: readonly SectionCode[] = [1, 2, 3];
 const DEFAULT_ELIGIBLE_STATUSES: readonly CaseStatus[] = ['ready', 'partially_completed'];
 
 export interface PriorityContext {
-  /** The planning date; CatMan/Verladeplan dates are compared against it. */
+  /** The planning date; Verladeplan dates are compared against it. */
   today: ISODate;
   eligibleStatuses?: readonly CaseStatus[];
   /**
@@ -98,12 +98,11 @@ export function classifyPriority(
     return { rank: PRIORITY_RANK.prioFlag, class: 'prio_flag', reason: 'Prio-Kennzeichen' };
   }
 
-  const catManDue =
-    flags.includes('catman_due') ||
-    flags.includes('overdue') ||
-    (goodsCase.catManDate !== undefined && goodsCase.catManDate <= ctx.today);
-  if (catManDue) {
-    return { rank: PRIORITY_RANK.catManDue, class: 'catman_due', reason: 'CatMan fällig/überfällig' };
+  // Rank-3 tier is driven by overdue only. CatMan (the `catman_due` flag and
+  // `catManDate`) is deliberately NOT a priority driver — it stays a purely
+  // informational field shown in the UIs. (Tier name kept for the overdue task.)
+  if (flags.includes('overdue')) {
+    return { rank: PRIORITY_RANK.catManDue, class: 'catman_due', reason: 'überfällig' };
   }
 
   const section = goodsCase.section;

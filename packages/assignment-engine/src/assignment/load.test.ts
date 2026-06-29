@@ -21,7 +21,7 @@ const DATE = '2026-06-16';
 const SECTIONS: (SectionCode | null)[] = [1, 2, 3, 4, 7, 8, null];
 
 function makeCase(i: number, fromPreviousDay = false): GoodsReceiptCase {
-  const flags: PriorityFlag[] = i % 9 === 0 ? ['prio'] : i % 7 === 0 ? ['catman_due'] : [];
+  const flags: PriorityFlag[] = i % 9 === 0 ? ['prio'] : i % 7 === 0 ? ['overdue'] : [];
   return goodsReceiptCaseSchema.parse({
     id: `case-${i}`,
     source: 'prohandel_api',

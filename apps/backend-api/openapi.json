@@ -3118,9 +3118,6 @@
       "PriorityRuleConfigDto": {
         "type": "object",
         "properties": {
-          "catManWeight": {
-            "type": "number"
-          },
           "overdueLeadDays": {
             "type": "number",
             "description": "Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit"
@@ -3139,7 +3136,6 @@
           }
         },
         "required": [
-          "catManWeight",
           "overdueLeadDays",
           "overdueLeadDaysOverrides",
           "fifoEnabled",

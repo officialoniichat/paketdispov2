@@ -134,30 +134,31 @@ describe('classifyPriority — class ladder & first-match semantics (§8.1)', ()
   });
 });
 
-describe('classifyPriority — CatMan due (§8.1 rank 3)', () => {
-  it('treats an explicit catman_due flag as due regardless of dates', () => {
-    const c = makeCase({ id: 'cm', priorityFlags: ['catman_due'] });
-    expect(classifyPriority(c, { today: TODAY }).class).toBe('catman_due');
-  });
-
-  it('treats an explicit overdue flag as CatMan due', () => {
+describe('classifyPriority — Überfällig (§8.1 rank 3)', () => {
+  it('treats an explicit overdue flag as rank 3', () => {
     const c = makeCase({ id: 'od', priorityFlags: ['overdue'] });
     const result = classifyPriority(c, { today: TODAY });
     expect(result.class).toBe('catman_due');
     expect(result.rank).toBe(PRIORITY_RANK.catManDue);
   });
 
-  it('treats catManDate on the planning day as due (inclusive boundary)', () => {
+  // CatMan is informational only — neither the flag nor the date may raise the rank.
+  it('does NOT raise the rank for a catman_due flag (falls through to FIFO)', () => {
+    const c = makeCase({ id: 'cm', priorityFlags: ['catman_due'] });
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
+  });
+
+  it('does NOT raise the rank for catManDate on the planning day (FIFO)', () => {
     const c = makeCase({ id: 'cd-today', catManDate: TODAY });
-    expect(classifyPriority(c, { today: TODAY }).class).toBe('catman_due');
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
 
-  it('treats a past catManDate as due', () => {
+  it('does NOT raise the rank for a past catManDate (FIFO)', () => {
     const c = makeCase({ id: 'cd-past', catManDate: '2026-06-01' });
-    expect(classifyPriority(c, { today: TODAY }).class).toBe('catman_due');
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
 
-  it('does not treat a future catManDate as due (falls through to FIFO)', () => {
+  it('does NOT raise the rank for a future catManDate (FIFO)', () => {
     const c = makeCase({ id: 'cd-future', catManDate: '2026-06-20' });
     expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
@@ -332,13 +333,13 @@ describe('sortByPriority — full ladder & determinism (§8.3)', () => {
       makeCase({ id: 'fifo', section: null }),
       makeCase({ id: 'loadplan', section: 1, loadPlanDate: TODAY }),
       makeCase({ id: 'everyday', section: 7 }),
-      makeCase({ id: 'catman', catManDate: TODAY }),
+      makeCase({ id: 'overdue', priorityFlags: ['overdue'] }),
       makeCase({ id: 'prio', priorityFlags: ['prio'] }),
       makeCase({ id: 'manual', priorityFlags: ['manual_teamlead_priority'] }),
     ].map(enrich);
 
     const ordered = sortByPriority(cases).map((e) => e.case.id);
-    expect(ordered).toEqual(['manual', 'prio', 'catman', 'everyday', 'loadplan', 'fifo']);
+    expect(ordered).toEqual(['manual', 'prio', 'overdue', 'everyday', 'loadplan', 'fifo']);
   });
 
   it('produces the same order regardless of input order (determinism)', () => {

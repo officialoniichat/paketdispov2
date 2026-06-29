@@ -116,7 +116,7 @@ describe('admin rule config (§11)', () => {
   it('returns the seeded default config', async () => {
     await admin.seedDefaultRuleConfig();
     const rules = await admin.getRuleConfig();
-    expect(rules.priority.catManWeight).toBe(DEFAULT_RULE_CONFIG.priority.catManWeight);
+    expect(rules.priority.overdueLeadDays).toBe(DEFAULT_RULE_CONFIG.priority.overdueLeadDays);
     expect(rules.bundle.maxCases).toBe(DEFAULT_RULE_CONFIG.bundle.maxCases);
   });
 

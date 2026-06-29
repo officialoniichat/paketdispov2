@@ -1102,7 +1102,6 @@ export interface components {
             leadDays: number;
         };
         PriorityRuleConfigDto: {
-            catManWeight: number;
             /** @description Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit */
             overdueLeadDays: number;
             overdueLeadDaysOverrides: components["schemas"]["LoadPlanLeadOverrideDto"][];

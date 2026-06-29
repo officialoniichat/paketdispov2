@@ -138,12 +138,6 @@ export function AdminPage(): JSX.Element {
               {tab === 0 && (
                 <Grid>
                   <Num
-                    label="Gewichtung CatMan"
-                    value={draft.priority.catManWeight}
-                    onChange={(v) => patch('priority', { ...draft.priority, catManWeight: v })}
-                    hint="Vorzug für Belege mit CatMan-Liefertermin (Aktionsware). Höher = früher zugeteilt."
-                  />
-                  <Num
                     label="Überfälligkeits-Vorlauf (Tage)"
                     value={draft.priority.overdueLeadDays}
                     onChange={(v) =>

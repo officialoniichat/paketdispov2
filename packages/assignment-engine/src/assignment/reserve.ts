@@ -34,7 +34,7 @@ export function computeIronReserve(input: ReserveInput): ReserveResult {
 
 /**
  * Whether a case with these priority flags may consume the reserve (B.2
- * `overrideAllowedFor`). Prio/CatMan/overdue/manual-Teamlead are never held back.
+ * `overrideAllowedFor`). Prio/overdue/manual-Teamlead are never held back.
  */
 export function canConsumeReserve(
   flags: readonly PriorityFlag[],

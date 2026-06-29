@@ -140,7 +140,7 @@ export function assignWork(
 
   const capacityAfterStarter = Math.max(0, totalCapacity - starterMinutes);
 
-  // Prio/CatMan/overdue/manual cases may break the reserve; everything else respects it.
+  // Prio/overdue/manual cases may break the reserve; everything else respects it.
   const overrideCandidates = sortByPriority(
     todayCandidates.filter((e) => canConsumeReserve(e.case.priorityFlags, config.reserve)),
   );
