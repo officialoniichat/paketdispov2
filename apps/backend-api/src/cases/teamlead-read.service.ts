@@ -112,7 +112,7 @@ export class TeamleadReadService {
     return { items, total, page, limit };
   }
 
-  async dashboard(): Promise<DashboardDto> {
+  async dashboard(now: Date = new Date()): Promise<DashboardDto> {
     const grouped = await this.prisma.goodsReceiptCase.groupBy({
       by: ['status'],
       _count: { _all: true },
@@ -138,7 +138,37 @@ export class TeamleadReadService {
       poolSize,
       prioOpen,
       oldestOpenBookingDate: oldest ? oldest.bookingDate.toISOString().slice(0, 10) : null,
+      endOfShiftOpenCount: await this.countEndOfShiftOpen(now),
     };
+  }
+
+  /**
+   * Punkt 6 (offen am Schichtende): non-terminal Belege still bound to a bundle whose
+   * employee's shift for today has already ended (`plannedEnd < now`). A partially
+   * completed Beleg counts as open (it is exactly the "halb bearbeitete Ware" concern).
+   * Surfaced as a cockpit exception so the teamlead can act before anything is left over
+   * night — the engine never re-distributes such Belege to other employees.
+   */
+  private async countEndOfShiftOpen(now: Date): Promise<number> {
+    const day = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const endedShifts = await this.prisma.shift.findMany({
+      where: { date: day, active: true, plannedEnd: { lt: now } },
+      select: { employeeId: true },
+    });
+    if (endedShifts.length === 0) return 0;
+
+    const bundles = await this.prisma.assignmentBundle.findMany({
+      where: { date: day, employeeId: { in: endedShifts.map((s) => s.employeeId) } },
+      select: { id: true },
+    });
+    if (bundles.length === 0) return 0;
+
+    return this.prisma.goodsReceiptCase.count({
+      where: {
+        assignedBundleId: { in: bundles.map((b) => b.id) },
+        status: { notIn: ['completed', 'zst_done', 'cancelled'] },
+      },
+    });
   }
 
   /**

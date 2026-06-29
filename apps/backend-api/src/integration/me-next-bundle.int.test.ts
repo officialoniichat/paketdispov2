@@ -48,6 +48,8 @@ function today(): Date {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
+const PULL_NOW = new Date(`${today().toISOString().slice(0, 10)}T09:00:00`);
+
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let assignment: AssignmentService;
@@ -135,7 +137,7 @@ afterAll(async () => {
 describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
   it('assigns one cart-sized bundle from the ready pool (≤6, bound to the worker)', async () => {
     await reset(8);
-    const res = await assignment.assignNextBundle(owner);
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res.assigned).toBe(true);
     expect(res.caseCount).toBe(6); // 8 ready × 10 min, capped at maxCasesPerBundle=6
 
@@ -144,7 +146,7 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
   });
 
   it('refuses a second pull while the first cart is still open', async () => {
-    const res = await assignment.assignNextBundle(owner);
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res).toMatchObject({ assigned: false, reason: 'active_bundle' });
   });
 
@@ -156,20 +158,20 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     });
     expect(firstBundle?.status).toBe('completed');
 
-    const next = await assignment.assignNextBundle(owner);
+    const next = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(next).toMatchObject({ assigned: true, caseCount: 2 });
   });
 
   it('returns pool_empty when nothing is free', async () => {
     await finishOwnersOpenCart();
-    const res = await assignment.assignNextBundle(owner);
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res).toMatchObject({ assigned: false, reason: 'pool_empty' });
   });
 
   it('returns no_shift when the employee is not working today', async () => {
     await reset(3);
     await prisma.user.update({ where: { id: employeeId }, data: { weeklyPattern: OFF_WEEK } });
-    const res = await assignment.assignNextBundle(owner);
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res).toMatchObject({ assigned: false, reason: 'no_shift' });
   });
 });

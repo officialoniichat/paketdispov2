@@ -787,7 +787,7 @@ export interface components {
         };
         NextBundleResultDto: {
             assigned: boolean;
-            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty */
+            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|shift_ending|pool_empty */
             reason?: string;
             /** @description Belege in the assigned cart */
             caseCount?: number;
@@ -823,6 +823,8 @@ export interface components {
             prioOpen: number;
             /** @description Booking date of oldest open case */
             oldestOpenBookingDate?: Record<string, never> | null;
+            /** @description Non-terminal Belege assigned to an employee whose shift has already ended (Punkt 6 — offen am Schichtende). */
+            endOfShiftOpenCount: number;
         };
         BoardCaseDto: {
             id: string;
@@ -1131,6 +1133,10 @@ export interface components {
             /** @description Max numeric gap between consecutive weBelegNo (1 = strict run) */
             maxWeBelegGap: number;
         };
+        ShiftEndRuleConfigDto: {
+            /** @description Minutes before plannedEnd at which auto-distribution stops (0 = off) */
+            autoCutoffMinutes: number;
+        };
         LoadPlanRowDto: {
             id: string;
             shopAreaNo: string;
@@ -1148,6 +1154,7 @@ export interface components {
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
             grouping: components["schemas"]["GroupingRuleConfigDto"];
+            shiftEnd: components["schemas"]["ShiftEndRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
         };
         TodayShiftDto: {

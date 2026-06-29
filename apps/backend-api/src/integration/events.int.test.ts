@@ -103,7 +103,7 @@ beforeAll(async () => {
   teamleadSvc = new TeamleadService(p, workflow, events, live);
   readSvc = new TeamleadReadService(p);
   await seed();
-  await assignment.recalculate(teamlead, DATE); // appends bundle.created + bundle.assigned (system)
+  await assignment.recalculate(teamlead, DATE, new Date(`${DATE}T07:00:00.000Z`)); // appends bundle.created + bundle.assigned (system)
   // A genuine teamlead action so the actorType=teamlead filter has events to match
   // (bundle.assigned is now a SYSTEM event and no longer counts as a teamlead one).
   const reviewCase = await prisma.goodsReceiptCase.findFirstOrThrow({

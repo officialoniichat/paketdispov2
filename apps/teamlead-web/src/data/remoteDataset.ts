@@ -139,6 +139,7 @@ function mapPool(dto: DashboardDto, items: PoolItemDto[]): PoolSummary {
     overdue: items.filter((i) => i.priorityFlags.includes('overdue')).length,
     catManDue: items.filter((i) => i.priorityFlags.includes('catman_due')).length,
     openIssues: items.filter((i) => i.status === 'issue_open').length,
+    endOfShiftOpen: dto.endOfShiftOpenCount,
   };
 }
 

@@ -2096,7 +2096,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|pool_empty"
+            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|shift_ending|pool_empty"
           },
           "caseCount": {
             "type": "number",
@@ -2198,12 +2198,17 @@
             "type": "object",
             "nullable": true,
             "description": "Booking date of oldest open case"
+          },
+          "endOfShiftOpenCount": {
+            "type": "number",
+            "description": "Non-terminal Belege assigned to an employee whose shift has already ended (Punkt 6 — offen am Schichtende)."
           }
         },
         "required": [
           "countsByStatus",
           "poolSize",
-          "prioOpen"
+          "prioOpen",
+          "endOfShiftOpenCount"
         ]
       },
       "BoardCaseDto": {
@@ -3227,6 +3232,18 @@
           "maxWeBelegGap"
         ]
       },
+      "ShiftEndRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "autoCutoffMinutes": {
+            "type": "number",
+            "description": "Minutes before plannedEnd at which auto-distribution stops (0 = off)"
+          }
+        },
+        "required": [
+          "autoCutoffMinutes"
+        ]
+      },
       "LoadPlanRowDto": {
         "type": "object",
         "properties": {
@@ -3281,6 +3298,9 @@
           "grouping": {
             "$ref": "#/components/schemas/GroupingRuleConfigDto"
           },
+          "shiftEnd": {
+            "$ref": "#/components/schemas/ShiftEndRuleConfigDto"
+          },
           "loadPlan": {
             "type": "array",
             "items": {
@@ -3294,6 +3314,7 @@
           "bundle",
           "effort",
           "grouping",
+          "shiftEnd",
           "loadPlan"
         ]
       },

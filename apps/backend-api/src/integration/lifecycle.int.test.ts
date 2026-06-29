@@ -41,6 +41,8 @@ function todayMidnightUtc(): Date {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
+const SHIFT_NOW = new Date(`${todayMidnightUtc().toISOString().slice(0, 10)}T06:00:00.000Z`);
+
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let events: EventLogService;
@@ -120,7 +122,7 @@ describe('assignment (§8.3 + §17.1 Zuteilung)', () => {
   it('runs the engine, persists bundles and links cases — deterministic, < 5 s', async () => {
     const { caseIds } = await seed();
 
-    const result = await assignment.recalculate(teamlead);
+    const result = await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
 
     expect(result.bundleCount).toBeGreaterThanOrEqual(1);
     expect(result.assignedCaseCount).toBe(caseIds.length);

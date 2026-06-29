@@ -132,6 +132,13 @@ export class GroupingRuleConfigDto {
   maxWeBelegGap!: number;
 }
 
+export class ShiftEndRuleConfigDto {
+  @ApiProperty({ description: 'Minutes before plannedEnd at which auto-distribution stops (0 = off)' })
+  @IsInt()
+  @Min(0)
+  autoCutoffMinutes!: number;
+}
+
 export class LoadPlanRowDto {
   @ApiProperty() @IsString() id!: string;
   @ApiProperty() @IsString() shopAreaNo!: string;
@@ -175,6 +182,11 @@ export class RuleConfigDto {
   @ValidateNested()
   @Type(() => GroupingRuleConfigDto)
   grouping!: GroupingRuleConfigDto;
+
+  @ApiProperty({ type: ShiftEndRuleConfigDto })
+  @ValidateNested()
+  @Type(() => ShiftEndRuleConfigDto)
+  shiftEnd!: ShiftEndRuleConfigDto;
 
   @ApiProperty({ type: [LoadPlanRowDto] })
   @IsArray()

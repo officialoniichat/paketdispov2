@@ -30,6 +30,7 @@ import { COLLECT, caseProcessPath } from '../routes/paths.js';
 const PULL_REASON_MSG: Record<string, string> = {
   pool_empty: 'Aktuell nichts frei zum Holen.',
   capacity_done: 'Feierabend – Tageskapazität erreicht.',
+  shift_ending: 'Schichtende – kein neues Bündel mehr, damit nichts offen liegen bleibt.',
   no_shift: 'Heute keine Schicht eingeplant.',
   active_bundle: 'Es läuft noch ein Bündel.',
   error: 'Konnte nicht laden – bitte später erneut.',

@@ -29,6 +29,8 @@ function todayMidnightUtc(): Date {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
+const SHIFT_NOW = new Date(`${todayMidnightUtc().toISOString().slice(0, 10)}T06:00:00.000Z`);
+
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let events: EventLogService;
@@ -99,12 +101,12 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
   it('runs twice for the same date without P2002 and without duplicating items', async () => {
     const { caseIds } = await seed();
 
-    const first = await assignment.recalculate(teamlead);
+    const first = await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
     expect(first.bundleCount).toBeGreaterThan(0);
     expect(first.assignedCaseCount).toBe(caseIds.length);
 
     // SECOND run for the same date must not throw (was P2002 on AssignmentItem.caseId).
-    const second = await assignment.recalculate(teamlead);
+    const second = await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
     expect(second.bundleCount).toBeGreaterThan(0);
     expect(second.assignedCaseCount).toBe(caseIds.length);
 
@@ -136,7 +138,7 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
       data: { status: 'in_progress' },
     });
 
-    await assignment.recalculate(teamlead);
+    await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
 
     const row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: inFlight.id } });
     expect(row.status).toBe('in_progress');

@@ -40,6 +40,8 @@ function todayMidnightUtc(): Date {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
+const SHIFT_NOW = new Date(`${todayMidnightUtc().toISOString().slice(0, 10)}T06:00:00.000Z`);
+
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let events: EventLogService;
@@ -110,7 +112,7 @@ beforeAll(async () => {
   teamleadSvc = new TeamleadService(p, workflow, events, live);
 
   await seedReadyPool();
-  await assignment.recalculate(teamlead);
+  await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
 }, 180_000);
 
 afterAll(async () => {

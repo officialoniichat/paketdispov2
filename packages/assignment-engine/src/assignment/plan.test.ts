@@ -9,6 +9,7 @@ import {
   type LocationMaster,
 } from '@paket/domain-types';
 import { assignWork } from './plan.js';
+import { DEFAULT_ENGINE_CONFIG, type EngineConfig } from '../config.js';
 import type { EngineInput } from '../types.js';
 
 const DATE = '2026-06-16';
@@ -226,5 +227,38 @@ describe('assignWork (§8.3 end-to-end)', () => {
 
     expect(elapsedMs).toBeLessThan(5000);
     expect(plan.bundles.length).toBeGreaterThan(0);
+  });
+});
+
+describe('assignWork — Schichtende-Cutoff (ZIEL A, Punkt 5)', () => {
+  // Shift window 06:00–14:30 (+02:00) = 510 min; cutoffPoint = 12:30 with a 120-min cutoff.
+  const cutoff120: EngineConfig = {
+    ...DEFAULT_ENGINE_CONFIG,
+    shiftEnd: { autoCutoffMinutes: 120 },
+  };
+
+  function poolFillingCapacity(): GoodsReceiptCase[] {
+    // 40 cases × 30 min = 1200 min of work — far more than two 480-min shifts can hold,
+    // so the assigned total is bounded by (effective) capacity, not by the pool size.
+    return Array.from({ length: 40 }, (_, i) => makeCase({ id: `cut-${i}` }));
+  }
+
+  it('assigns no new bundles once now is inside the cutoff window', () => {
+    const input = baseInput({ cases: poolFillingCapacity() });
+    // now 13:00 > cutoffPoint 12:30 → every shift is past its cutoff → effective 0.
+    const plan = assignWork(input, cutoff120, { now: '2026-06-16T13:00:00+02:00' });
+    expect(plan.bundles).toHaveLength(0);
+    expect(plan.unassigned.every((u) => u.reason === 'no_capacity')).toBe(true);
+  });
+
+  it('assigns strictly less work under the cutoff than without it', () => {
+    const input = baseInput({ cases: poolFillingCapacity() });
+    const planned = (config: EngineConfig): number =>
+      assignWork(input, config, { now: NOW }).diagnostics.assignedMinutes;
+
+    const withoutCutoff = planned(DEFAULT_ENGINE_CONFIG); // autoCutoffMinutes 0 → full capacity
+    const withCutoff = planned(cutoff120); // ~75% of capacity at shift start
+    expect(withCutoff).toBeGreaterThan(0);
+    expect(withCutoff).toBeLessThan(withoutCutoff);
   });
 });

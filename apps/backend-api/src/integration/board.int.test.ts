@@ -93,7 +93,7 @@ beforeAll(async () => {
   assignment = new AssignmentService(p, events);
   teamleadSvc = new TeamleadReadService(p);
   await seed();
-  await assignment.recalculate(teamlead, DATE);
+  await assignment.recalculate(teamlead, DATE, new Date(`${DATE}T07:00:00.000Z`));
 }, 180_000);
 
 afterAll(async () => {

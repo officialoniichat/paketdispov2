@@ -19,17 +19,20 @@ export {
   DEFAULT_CAPACITY_CONFIG,
   DEFAULT_ASSIGNMENT_CONFIG,
   DEFAULT_PRIORITY_CONFIG,
+  DEFAULT_SHIFT_END_CONFIG,
   effortConfigSchema,
   reserveConfigSchema,
   capacityConfigSchema,
   assignmentConfigSchema,
   priorityConfigSchema,
+  shiftEndConfigSchema,
   type EngineConfig,
   type EffortConfig,
   type ReserveConfig,
   type CapacityConfig,
   type AssignmentConfig,
   type PriorityConfig,
+  type ShiftEndConfig,
 } from './config.js';
 
 // Engine types.
@@ -59,6 +62,11 @@ export {
   teamCapacityMinutes,
   type NetCapacityOptions,
 } from './capacity/net-capacity.js';
+export {
+  minutesUntilShiftEnd,
+  autoAssignableCapacityMinutes,
+  finishableBudgetMinutes,
+} from './capacity/shift-end.js';
 
 // (2) Priority engine (§8.1).
 export {

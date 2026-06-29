@@ -142,6 +142,26 @@ export const DEFAULT_PRIORITY_CONFIG: PriorityConfig = {
   overdueLeadDaysOverrides: [],
 };
 
+/**
+ * Schichtende-Steuerung (Teamlead-Feedback Punkt 5). The batch auto-distribution
+ * reserves the last `autoCutoffMinutes` of each shift so workers self-pull the tail
+ * of the day instead of being pre-loaded into their final hours.
+ *
+ * The pure-engine DEFAULT is 0 (= no cutoff, no wall-clock dependence) so the
+ * deterministic engine test suite stays time-independent. The APPLICATION layer
+ * (backend recalculate) enables it from `RuleConfig.shiftEnd` (default 120) and feeds
+ * a real `now`. See docs/concept/shift-end-handling-concept.md.
+ */
+export const shiftEndConfigSchema = z.object({
+  /** Minutes before plannedEnd at which AUTO distribution stops (0 = disabled). */
+  autoCutoffMinutes: z.number().int().nonnegative(),
+});
+export type ShiftEndConfig = z.infer<typeof shiftEndConfigSchema>;
+
+export const DEFAULT_SHIFT_END_CONFIG: ShiftEndConfig = {
+  autoCutoffMinutes: 0,
+};
+
 /** Aggregated engine configuration. */
 export interface EngineConfig {
   effort: EffortConfig;
@@ -151,6 +171,7 @@ export interface EngineConfig {
   priority: PriorityConfig;
   /** Delivery-Group detection tuning (Teamlead-Anforderung Punkt 1). */
   grouping: GroupingConfig;
+  shiftEnd: ShiftEndConfig;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -160,4 +181,5 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   assignment: DEFAULT_ASSIGNMENT_CONFIG,
   priority: DEFAULT_PRIORITY_CONFIG,
   grouping: DEFAULT_GROUPING_CONFIG,
+  shiftEnd: DEFAULT_SHIFT_END_CONFIG,
 };

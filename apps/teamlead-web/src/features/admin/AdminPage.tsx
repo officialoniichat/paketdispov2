@@ -42,12 +42,16 @@ const TABS = [
   'Mitarbeiter',
   'Schichtplan',
   'Integrationen',
+  'Schichtende',
 ];
 
 /** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
 const GROUPING_TAB = 4;
 /** Read-only Verladeplan tab (display only — no save button). */
 const LOADPLAN_TAB = 5;
+/** RuleConfig-form tab index for the Schichtende-Cutoff (Punkt 5). */
+const SHIFT_END_TAB = 10;
+
 /** Tab indices that render a self-contained editor instead of the RuleConfig form. */
 const LOCATIONS_TAB = 6;
 const EMPLOYEES_TAB = 7;
@@ -283,6 +287,17 @@ export function AdminPage(): JSX.Element {
                     />
                   </Grid>
                 </Stack>
+              )}
+
+              {tab === SHIFT_END_TAB && (
+                <Grid>
+                  <Num
+                    label="Auto-Stopp vor Schichtende (Min.)"
+                    value={draft.shiftEnd.autoCutoffMinutes}
+                    onChange={(v) => patch('shiftEnd', { ...draft.shiftEnd, autoCutoffMinutes: v })}
+                    hint="So viele Minuten vor Schichtende stoppt die automatische Verteilung; den Rest holen Mitarbeitende selbst aus dem Pool (0 = bis Schichtende durchverteilen)."
+                  />
+                </Grid>
               )}
 
               {tab === LOADPLAN_TAB && (

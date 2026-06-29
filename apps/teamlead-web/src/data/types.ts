@@ -28,6 +28,8 @@ export interface PoolSummary {
   prio: number;
   catManDue: number;
   openIssues: number;
+  /** Punkt 6: non-terminal Belege whose assigned employee's shift has already ended. */
+  endOfShiftOpen: number;
 }
 
 /** ZST progress for the day (§10.1 ZST-Fortschritt, §15). */

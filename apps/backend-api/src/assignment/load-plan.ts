@@ -94,9 +94,9 @@ export function applyResolvedLoadPlanDates(
 }
 
 /**
- * Map the cockpit's structured {@link RuleConfig} priority settings onto the engine
- * config the pure engine consumes (only the Teamlead-Punkt-4 Vorlauf is wired here;
- * other engine tuning keeps the defaults until separately wired).
+ * Map the cockpit's structured {@link RuleConfig} onto the engine config the pure engine
+ * consumes: the Teamlead-Punkt-4 Vorlauf (priority) and the Punkt-5 Schichtende-Cutoff
+ * (shiftEnd). Other engine tuning keeps the defaults until separately wired.
  */
 export function engineConfigFromRuleConfig(config: RuleConfig): EngineConfig {
   return {
@@ -107,5 +107,10 @@ export function engineConfigFromRuleConfig(config: RuleConfig): EngineConfig {
     },
     // Delivery-Group detection (Teamlead-Anforderung Punkt 1).
     grouping: config.grouping,
+    // Schichtende-Cutoff (Punkt 5): default 120 (DEFAULT_RULE_CONFIG.shiftEnd) so the
+    // batch auto-distribution reserves the last 2h for self-pull unless reconfigured.
+    shiftEnd: {
+      autoCutoffMinutes: config.shiftEnd.autoCutoffMinutes,
+    },
   };
 }

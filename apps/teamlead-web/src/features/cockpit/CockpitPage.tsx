@@ -260,6 +260,12 @@ export function CockpitPage(): JSX.Element {
             )}
           </Stack>
         )}
+        {!isLoading && pool.endOfShiftOpen > 0 ? (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {pool.endOfShiftOpen} Beleg(e) noch offen, obwohl die Schicht des zugeteilten
+            Mitarbeiters beendet ist – bitte vor Schichtende klären (keine offene Ware über Nacht).
+          </Alert>
+        ) : null}
       </Box>
 
       <Paper variant="outlined" sx={{ p: 2 }}>

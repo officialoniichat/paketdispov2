@@ -69,6 +69,16 @@ export const groupingRuleConfigSchema = z.object({
 });
 export type GroupingRuleConfig = z.infer<typeof groupingRuleConfigSchema>;
 
+/**
+ * Schichtende-Steuerung (Teamlead-Feedback Punkt 5). `autoCutoffMinutes` is how long
+ * before plannedEnd the BATCH auto-distribution stops; the tail is left for self-pull.
+ * `0` disables the cutoff (auto-distribution runs to the very end).
+ */
+export const shiftEndRuleConfigSchema = z.object({
+  autoCutoffMinutes: z.number().int().nonnegative(),
+});
+export type ShiftEndRuleConfig = z.infer<typeof shiftEndRuleConfigSchema>;
+
 /** Effort-point driver factors (Anhang D / B.3). */
 export const effortRuleConfigSchema = z.object({
   priceLabelPrintFactor: z.number().nonnegative(),
@@ -99,6 +109,7 @@ export const ruleConfigSchema = z.object({
   bundle: bundleRuleConfigSchema,
   effort: effortRuleConfigSchema,
   grouping: groupingRuleConfigSchema,
+  shiftEnd: shiftEndRuleConfigSchema,
   loadPlan: z.array(loadPlanRowSchema),
 });
 export type RuleConfig = z.infer<typeof ruleConfigSchema>;
@@ -139,6 +150,9 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
   grouping: {
     enabled: true,
     maxWeBelegGap: 1,
+  },
+  shiftEnd: {
+    autoCutoffMinutes: 120,
   },
   loadPlan: [
     {

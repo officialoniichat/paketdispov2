@@ -180,6 +180,11 @@ export class DashboardDto {
   @ApiProperty() prioOpen!: number;
   @ApiPropertyOptional({ nullable: true, description: 'Booking date of oldest open case' })
   oldestOpenBookingDate!: string | null;
+  @ApiProperty({
+    description:
+      'Non-terminal Belege assigned to an employee whose shift has already ended (Punkt 6 — offen am Schichtende).',
+  })
+  endOfShiftOpenCount!: number;
 }
 
 // --- Teamlead read endpoints (board / capacity / kpis / events) -------------

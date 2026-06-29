@@ -14,6 +14,7 @@ import { DEFAULT_ENGINE_CONFIG, type EngineConfig } from '../config.js';
 import { computeEffort } from '../effort/effort-score.js';
 import { classifyPriority, sortByPriority } from '../priority/priority-engine.js';
 import { teamCapacityMinutes } from '../capacity/net-capacity.js';
+import { autoAssignableCapacityMinutes } from '../capacity/shift-end.js';
 import { buildPickupSequence, type PickupCase } from '../pickup/pickup-order.js';
 import type { AssignmentPlan, EngineInput, EnrichedCase, UnassignedCase } from '../types.js';
 import { canConsumeReserve, computeIronReserve } from './reserve.js';
@@ -94,6 +95,21 @@ export function assignWork(
   options: AssignWorkOptions = {},
 ): AssignmentPlan {
   const now = options.now ?? new Date().toISOString();
+
+  // Schichtende-Cutoff (ZIEL A, Punkt 5): the batch auto-distribution may only fill each
+  // shift up to its cutoff point (plannedEnd − autoCutoffMinutes). We model this as an
+  // effective shift whose netCapacityMinutes is the still-auto-assignable share at `now`,
+  // then run the UNCHANGED capacity/reserve/bundling/distribution pipeline on it — so the
+  // cutoff is honoured everywhere with no downstream change. With the engine default
+  // (autoCutoffMinutes = 0) this is a no-op (effective === net). A shift that is fully
+  // inside its cutoff window drops to 0 and falls out of distribution automatically.
+  const effectiveShifts = input.shifts.map((shift) => {
+    const effective = autoAssignableCapacityMinutes(shift, now, config.shiftEnd);
+    return effective === shift.netCapacityMinutes
+      ? shift
+      : { ...shift, netCapacityMinutes: effective };
+  });
+
   // A case's Bereich is FIXED by its Lagerplatz storage class (LocationKind), not a
   // free-text tag. The weighted distribution uses it to prefer matching specialists
   // and keep out-of-Bereich work off them (§8.4 routing).
@@ -115,9 +131,9 @@ export function assignWork(
     }
   }
 
-  // Capacity (§4.3) and reserve (B.2).
-  const totalCapacity = teamCapacityMinutes(input.shifts);
-  const activeEmployeeCount = input.shifts.filter(
+  // Capacity (§4.3) and reserve (B.2) — over the cutoff-effective shifts.
+  const totalCapacity = teamCapacityMinutes(effectiveShifts);
+  const activeEmployeeCount = effectiveShifts.filter(
     (s) => s.active && s.netCapacityMinutes > 0,
   ).length;
   const morningCapacity = totalCapacity * config.capacity.morningCapacityFraction;
@@ -172,8 +188,9 @@ export function assignWork(
   );
   const { groupIdByCaseId } = indexDeliveryGroups(deliveryGroups);
 
-  // Weighted distribution (§8.3/§8.4) with a soft delivery-group affinity.
-  const distribution = distributeBundlesByWeightedLoad(input.shifts, protoBundles, input.date, {
+  // Weighted distribution (§8.3/§8.4) with a soft delivery-group affinity, over the
+  // Schichtende-cutoff-effective shifts (Punkt 5).
+  const distribution = distributeBundlesByWeightedLoad(effectiveShifts, protoBundles, input.date, {
     avoidSpecialists: options.avoidSpecialists ?? true,
     balanceHeavyLight: options.balanceHeavyLight ?? true,
     groupIdByCaseId,

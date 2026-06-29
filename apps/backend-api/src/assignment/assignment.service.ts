@@ -5,6 +5,7 @@ import {
   buildPickupSequence,
   classifyPriority,
   createBalancedBundles,
+  finishableBudgetMinutes,
   sortByPriority,
   DEFAULT_ENGINE_CONFIG,
   type EngineInput,
@@ -62,8 +63,9 @@ export class AssignmentService {
 
   /**
    * Read the structured rule config (AppConfig `rule_config`), the single source for
-   * the Teamlead-Punkt-4 Vorlauf and the Verladeplan calendar. Falls back to the
-   * default when unset/invalid so recalculate/preview never fail on missing config.
+   * the Teamlead-Punkt-4 Vorlauf, the Verladeplan calendar and the Punkt-5 Schichtende-
+   * Cutoff. Falls back to the default when unset/invalid so recalculate/preview never
+   * fail on missing config.
    */
   private async readRuleConfig(): Promise<RuleConfig> {
     const row = await this.prisma.appConfig.findUnique({ where: { key: 'rule_config' } });
@@ -71,8 +73,12 @@ export class AssignmentService {
     return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG;
   }
 
-  async recalculate(principal: Principal, date?: string): Promise<RecalculateResultDto> {
-    const day = date ?? new Date().toISOString().slice(0, 10);
+  async recalculate(
+    principal: Principal,
+    date?: string,
+    now: Date = new Date(),
+  ): Promise<RecalculateResultDto> {
+    const day = date ?? now.toISOString().slice(0, 10);
     const start = day + 'T00:00:00.000Z';
     const end = day + 'T23:59:59.999Z';
     const dayStart = new Date(start);
@@ -125,7 +131,9 @@ export class AssignmentService {
       };
 
       const t0 = performance.now();
-      const computedPlan = assignWork(input, engineConfig);
+      // §8.3 + Schichtende-Cutoff (Punkt 5): the engine reserves the last
+      // `autoCutoffMinutes` of each shift from auto-distribution, evaluated against `now`.
+      const computedPlan = assignWork(input, engineConfig, { now: now.toISOString() });
       const elapsedMs = Math.round(performance.now() - t0);
 
       const seqByBundleId = new Map<string, BundlePickupSequence>(
@@ -156,8 +164,12 @@ export class AssignmentService {
    * has an open bundle, never breaks the iron reserve for non-override work, and
    * stops at the shift's net capacity (Feierabend).
    */
-  async assignNextBundle(principal: Principal, date?: string): Promise<NextBundleResultDto> {
-    const day = date ?? new Date().toISOString().slice(0, 10);
+  async assignNextBundle(
+    principal: Principal,
+    date?: string,
+    now: Date = new Date(),
+  ): Promise<NextBundleResultDto> {
+    const day = date ?? now.toISOString().slice(0, 10);
     const dayStart = new Date(day + 'T00:00:00.000Z');
     const dayEnd = new Date(day + 'T23:59:59.999Z');
 
@@ -173,7 +185,7 @@ export class AssignmentService {
     await this.materializeShiftsForDate(day, dayStart);
     const shift = await this.prisma.shift.findFirst({
       where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd }, active: true },
-      select: { netCapacityMinutes: true },
+      include: { employee: { select: { bereiche: true } } },
     });
     if (!shift || shift.netCapacityMinutes <= 0) return { assigned: false, reason: 'no_shift' };
 
@@ -196,6 +208,14 @@ export class AssignmentService {
     const usedMinutes = todaysBundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
     const remainingCapacity = shift.netCapacityMinutes - usedMinutes;
     if (remainingCapacity <= 0) return { assigned: false, reason: 'capacity_done' };
+
+    // ZIEL B (Punkt 6): never hand out work that cannot be finished before the shift
+    // ends. The cart budget is the smaller of the remaining net capacity and the real
+    // wall-clock time left until plannedEnd. Once that is 0 the worker is at shift end —
+    // they get nothing more so nothing stays open over night.
+    const shiftDomain = toEmployeeShift(shift, shift.employee.bereiche);
+    const finishableBudget = finishableBudgetMinutes(remainingCapacity, shiftDomain, now.toISOString());
+    if (finishableBudget <= 0) return { assigned: false, reason: 'shift_ending' };
 
     const ruleConfig = await this.readRuleConfig();
 
@@ -242,11 +262,14 @@ export class AssignmentService {
       const ordered = sortByPriority(enriched);
       const { bundles } = createBalancedBundles(
         ordered,
-        remainingCapacity,
+        finishableBudget,
         DEFAULT_ENGINE_CONFIG.assignment,
       );
       const cart = bundles[0];
       if (!cart) return { assigned: false, reason: 'pool_empty' };
+      // A single indivisible case can exceed the finishable budget; if even the first
+      // cart cannot be finished before shift end, hand out nothing (clean table).
+      if (cart.effortMinutes > finishableBudget) return { assigned: false, reason: 'shift_ending' };
 
       // NB: the iron reserve is a PLANNING-time guardian (teamlead recalculate). An
       // idle worker pulling mid-shift should get available work rather than stand
