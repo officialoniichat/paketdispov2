@@ -1466,6 +1466,41 @@
         "tags": [
           "employees"
         ]
+      },
+      "post": {
+        "operationId": "EmployeesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an employee (temporäre Kraft by default: measured=false, ohne Leistungsmessung).",
+        "tags": [
+          "employees"
+        ]
       }
     },
     "/api/admin/employees/{id}": {
@@ -3444,6 +3479,10 @@
           "active": {
             "type": "boolean"
           },
+          "measured": {
+            "type": "boolean",
+            "description": "false = temporäre Kraft (ohne Leistungsmessung)"
+          },
           "bereiche": {
             "type": "array",
             "items": {
@@ -3485,6 +3524,7 @@
           "displayName",
           "roles",
           "active",
+          "measured",
           "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
@@ -3520,6 +3560,44 @@
           "teamCapacityMinutes",
           "morningCapacityMinutes",
           "employees"
+        ]
+      },
+      "EmployeeCreateDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string",
+            "description": "Personalnummer; wird sonst automatisch vergeben"
+          },
+          "measured": {
+            "type": "boolean",
+            "description": "false = temporäre Kraft (Standard beim Anlegen)"
+          },
+          "bereiche": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "productivityFactor": {
+            "type": "number",
+            "description": "0,5…1,2"
+          },
+          "weeklyPattern": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WeeklyPatternDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "displayName"
         ]
       },
       "AuditEntryDto": {
@@ -3565,6 +3643,10 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "measured": {
+            "type": "boolean",
+            "description": "false = temporäre Kraft (ohne Leistungsmessung)"
           },
           "bereiche": {
             "type": "array",
@@ -3613,6 +3695,7 @@
           "displayName",
           "roles",
           "active",
+          "measured",
           "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
@@ -3625,6 +3708,10 @@
         "properties": {
           "active": {
             "type": "boolean"
+          },
+          "measured": {
+            "type": "boolean",
+            "description": "false = temporäre Kraft (ohne Leistungsmessung)"
           },
           "bereiche": {
             "type": "array",

@@ -66,6 +66,7 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'zst.created': 'ZST erfasst',
   'zst.exported': 'ZST exportiert',
   'assignment.overridden': 'Neu zugeteilt',
+  'employee.created': 'Mitarbeiter angelegt',
   'employee.profile_updated': 'Stammdaten geändert',
   'employee.shift_overridden': 'Schicht geändert',
 };

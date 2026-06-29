@@ -20,6 +20,7 @@ import {
   type SkuLineDto,
 } from './cases.dto.js';
 import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
+import { aggregateKpiTotals } from './kpi-aggregate.js';
 
 /** Priority flags counted as an "open prio" case in the dashboard tile. */
 const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 'same_day_required'];
@@ -340,7 +341,13 @@ export class TeamleadReadService {
     const [zstRecords, totalCases, completedCases] = await Promise.all([
       this.prisma.zstRecord.findMany({
         where: { completedAt: { gte: start, lte: end } },
-        select: { completedQuantity: true, effortPoints: true, startedAt: true, completedAt: true },
+        select: {
+          completedQuantity: true,
+          effortPoints: true,
+          startedAt: true,
+          completedAt: true,
+          employee: { select: { measured: true } },
+        },
       }),
       this.prisma.goodsReceiptCase.count({ where: { bookingDate: day } }),
       this.prisma.goodsReceiptCase.count({
@@ -348,31 +355,19 @@ export class TeamleadReadService {
       }),
     ]);
 
-    let completedParts = 0;
-    let effortPoints = 0;
-    let workedMinutes = 0;
-    for (const z of zstRecords) {
-      completedParts += z.completedQuantity;
-      effortPoints += z.effortPoints;
-      if (z.startedAt) {
-        workedMinutes += (z.completedAt.getTime() - z.startedAt.getTime()) / 60_000;
-      }
-    }
+    // Throughput counts all records; performance/productivity counts only measured
+    // employees, so temporary workers (measured=false) don't distort per-head KPIs.
+    const totals = aggregateKpiTotals(
+      zstRecords.map((z) => ({
+        completedQuantity: z.completedQuantity,
+        effortPoints: z.effortPoints,
+        startedAt: z.startedAt,
+        completedAt: z.completedAt,
+        measured: z.employee.measured,
+      })),
+    );
 
-    const hours = workedMinutes / 60;
-    const partsPerHour = hours === 0 ? 0 : Math.round(completedParts / hours);
-    const effortPointsPerHour = hours === 0 ? 0 : Math.round(effortPoints / hours);
-
-    return {
-      date,
-      completedCases,
-      totalCases,
-      completedParts,
-      effortPoints,
-      workedMinutes: Math.round(workedMinutes),
-      partsPerHour,
-      effortPointsPerHour,
-    };
+    return { date, completedCases, totalCases, ...totals };
   }
 
   /**

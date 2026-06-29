@@ -178,6 +178,10 @@ model User {
   email       String?  @unique
   displayName String
   active      Boolean  @default(true)
+  // Temporäre Kräfte (Azubis/Saisonaushilfen): measured=false schließt die Person
+  // aus der Leistungsmessung aus (manuelle/automatische Verteilung bleibt möglich) —
+  // see docs/concept/temporary-workers-concept.md.
+  measured    Boolean  @default(true)
   // Mitarbeiter-Einstellungen (capacity/effort per head) — see
   // docs/concept/employee-settings-ux-concept.md.
   bereiche             String[] @default([])

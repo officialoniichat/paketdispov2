@@ -111,6 +111,13 @@ export const employeeProfileSchema = z.object({
   roles: z.array(employeeRoleSchema),
   active: z.boolean(),
   /**
+   * Whether this employee's performance is measured. Temporary workers (Azubis,
+   * Saisonaushilfen) are `false`: they can still be assigned (manually or
+   * automatically) but are excluded from productivity/ZST performance metrics so
+   * they do not distort per-head KPIs. See docs/concept/temporary-workers-concept.md.
+   */
+  measured: z.boolean().default(true),
+  /**
    * Bereiche/Skills this employee handles, as labels from the admin Bereich catalog
    * (RuleConfig.bereiche). Empty = Allrounder (handles everything, no routing penalty).
    */

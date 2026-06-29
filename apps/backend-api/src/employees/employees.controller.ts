@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
 import {
+  EmployeeCreateDto,
   EmployeeDetailDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
@@ -27,6 +28,18 @@ export class EmployeesController {
   @ApiOkResponse({ type: EmployeeListResponseDto })
   list(@Query('date') date?: string): Promise<EmployeeListResponseDto> {
     return this.employees.list(date);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Create an employee (temporäre Kraft by default: measured=false, ohne Leistungsmessung).',
+  })
+  @ApiCreatedResponse({ type: EmployeeDetailDto })
+  create(
+    @CurrentUser() principal: Principal,
+    @Body() body: EmployeeCreateDto,
+  ): Promise<EmployeeDetailDto> {
+    return this.employees.create(principal, body);
   }
 
   @Get(':id')

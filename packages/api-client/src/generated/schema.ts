@@ -603,7 +603,8 @@ export interface paths {
         /** List employees with today’s shift, capacity and absence. */
         get: operations["EmployeesController_list"];
         put?: never;
-        post?: never;
+        /** Create an employee (temporäre Kraft by default: measured=false, ohne Leistungsmessung). */
+        post: operations["EmployeesController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1196,6 +1197,8 @@ export interface components {
             displayName: string;
             roles: string[];
             active: boolean;
+            /** @description false = temporäre Kraft (ohne Leistungsmessung) */
+            measured: boolean;
             bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
@@ -1212,6 +1215,17 @@ export interface components {
             morningCapacityMinutes: number;
             employees: components["schemas"]["EmployeeListItemDto"][];
         };
+        EmployeeCreateDto: {
+            displayName: string;
+            /** @description Personalnummer; wird sonst automatisch vergeben */
+            employeeNo?: string;
+            /** @description false = temporäre Kraft (Standard beim Anlegen) */
+            measured?: boolean;
+            bereiche?: string[];
+            /** @description 0,5…1,2 */
+            productivityFactor?: number;
+            weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+        };
         AuditEntryDto: {
             eventType: string;
             at: string;
@@ -1224,6 +1238,8 @@ export interface components {
             displayName: string;
             roles: string[];
             active: boolean;
+            /** @description false = temporäre Kraft (ohne Leistungsmessung) */
+            measured: boolean;
             bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
@@ -1235,6 +1251,8 @@ export interface components {
         };
         EmployeeProfileUpdateDto: {
             active?: boolean;
+            /** @description false = temporäre Kraft (ohne Leistungsmessung) */
+            measured?: boolean;
             bereiche?: string[];
             /** @description 0,5…1,2 */
             productivityFactor?: number;
@@ -2100,6 +2118,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeListResponseDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeCreateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDetailDto"];
                 };
             };
         };

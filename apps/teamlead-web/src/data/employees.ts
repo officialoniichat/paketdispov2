@@ -11,6 +11,7 @@ export type EmployeeListResponse = components['schemas']['EmployeeListResponseDt
 export type EmployeeListItem = components['schemas']['EmployeeListItemDto'];
 export type EmployeeDetail = components['schemas']['EmployeeDetailDto'];
 export type EmployeeProfileUpdate = components['schemas']['EmployeeProfileUpdateDto'];
+export type EmployeeCreate = components['schemas']['EmployeeCreateDto'];
 export type WeeklyPattern = components['schemas']['WeeklyPatternDto'];
 
 /** List employees with today's (or a given day's) shift, capacity and absence. */
@@ -27,6 +28,12 @@ export async function fetchEmployee(id: string, date?: string): Promise<Employee
     params: { path: { id }, query: date ? { date } : {} },
   });
   return unwrap<EmployeeDetail>(result, 'employee');
+}
+
+/** Create an employee — by default a temporäre Kraft (measured=false, ohne Messung). */
+export async function createEmployee(body: EmployeeCreate): Promise<EmployeeDetail> {
+  const result = await api.POST('/api/admin/employees', { body });
+  return unwrap<EmployeeDetail>(result, 'create employee');
 }
 
 /** Patch profile (active, areaTags, productivity, overtime, pattern). */

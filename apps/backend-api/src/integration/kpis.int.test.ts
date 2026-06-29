@@ -114,4 +114,70 @@ describe('kpis (§10.1 GET /api/teamlead/kpis)', () => {
     expect(empty.partsPerHour).toBe(0);
     expect(empty.effortPointsPerHour).toBe(0);
   });
+
+  it('counts temp-worker throughput but excludes them from performance KPIs', async () => {
+    const d2 = '2026-06-16';
+    const measured = await prisma.user.create({
+      data: { employeeNo: 'ma-201', displayName: 'Mara' },
+    });
+    const temp = await prisma.user.create({
+      data: { employeeNo: 'temp-1', displayName: 'Tom', measured: false },
+    });
+    const loc = await prisma.location.create({
+      data: { code: 'R28', displayName: 'Regal 28', kind: 'regal', sequenceIndex: 28 },
+    });
+    const mkCase = (ref: string, qty: number): Promise<{ id: string }> =>
+      prisma.goodsReceiptCase.create({
+        data: {
+          source: 'manual',
+          externalRef: 'kpi-set-2',
+          weBelegNo: ref,
+          bookingDate: asDate(d2),
+          branchNo: '1',
+          storageLocationId: loc.id,
+          section: 7,
+          totalQuantity: qty,
+          status: 'completed',
+          effortPoints: 0,
+          estimatedMinutes: 10,
+        },
+      });
+    const measuredCase = await mkCase('WE-D2-M', 30);
+    const tempCase = await mkCase('WE-D2-T', 50);
+    await prisma.zstRecord.create({
+      data: {
+        idempotencyKey: 'kpi-zst-m',
+        caseId: measuredCase.id,
+        employeeId: measured.id,
+        completedQuantity: 30,
+        effortPoints: 15,
+        startedAt: new Date(`${d2}T08:00:00.000Z`),
+        completedAt: new Date(`${d2}T08:30:00.000Z`), // 30 min
+        source: 'mobile_app',
+      },
+    });
+    await prisma.zstRecord.create({
+      data: {
+        idempotencyKey: 'kpi-zst-t',
+        caseId: tempCase.id,
+        employeeId: temp.id,
+        completedQuantity: 50,
+        effortPoints: 99,
+        startedAt: new Date(`${d2}T08:00:00.000Z`),
+        completedAt: new Date(`${d2}T12:00:00.000Z`), // 4h, would tank the rate
+        source: 'mobile_app',
+      },
+    });
+
+    const kpi = await teamleadSvc.kpis(d2);
+
+    // Durchsatz: both contribute (temp visible in the day's progress).
+    expect(kpi.completedCases).toBe(2);
+    expect(kpi.completedParts).toBe(80);
+    // Leistung/Produktivität: only the measured worker counts.
+    expect(kpi.effortPoints).toBe(15);
+    expect(kpi.workedMinutes).toBe(30);
+    expect(kpi.partsPerHour).toBe(60); // 30 measured parts / 0.5h (temp's 50 excluded)
+    expect(kpi.effortPointsPerHour).toBe(30); // 15 / 0.5h
+  });
 });

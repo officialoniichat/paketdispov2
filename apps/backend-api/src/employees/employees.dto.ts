@@ -63,6 +63,8 @@ export class EmployeeListItemDto {
   @ApiProperty() displayName!: string;
   @ApiProperty({ type: [String] }) roles!: string[];
   @ApiProperty() active!: boolean;
+  @ApiProperty({ description: 'false = temporäre Kraft (ohne Leistungsmessung)' })
+  measured!: boolean;
   @ApiProperty({ type: [String] }) bereiche!: string[];
   @ApiProperty() productivityFactor!: number;
   @ApiProperty() overtimeTolerancePct!: number;
@@ -99,6 +101,10 @@ export class EmployeeDetailDto extends EmployeeListItemDto {
 /** PATCH profile. Roles are read-only in this pilot (identity stays in the IdP). */
 export class EmployeeProfileUpdateDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
+  @ApiPropertyOptional({ description: 'false = temporäre Kraft (ohne Leistungsmessung)' })
+  @IsOptional()
+  @IsBoolean()
+  measured?: boolean;
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -116,6 +122,41 @@ export class EmployeeProfileUpdateDto {
   @Min(0)
   @Max(25)
   overtimeTolerancePct?: number;
+  @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WeeklyPatternDto)
+  weeklyPattern?: WeeklyPatternDto | null;
+}
+
+/**
+ * Create an employee. The primary use case is registering a temporary worker
+ * (Azubi/Saisonaushilfe) the teamlead can manually assign Belege to: `measured`
+ * defaults to false so they are excluded from performance KPIs. Regular master data
+ * still comes from the IdP; this is the lightweight "schnell anlegen" path.
+ * See docs/concept/temporary-workers-concept.md.
+ */
+export class EmployeeCreateDto {
+  @ApiProperty() @IsString() displayName!: string;
+  @ApiPropertyOptional({ description: 'Personalnummer; wird sonst automatisch vergeben' })
+  @IsOptional()
+  @IsString()
+  employeeNo?: string;
+  @ApiPropertyOptional({ description: 'false = temporäre Kraft (Standard beim Anlegen)' })
+  @IsOptional()
+  @IsBoolean()
+  measured?: boolean;
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  bereiche?: string[];
+  @ApiPropertyOptional({ description: '0,5…1,2' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(1.2)
+  productivityFactor?: number;
   @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
   @IsOptional()
   @ValidateNested()

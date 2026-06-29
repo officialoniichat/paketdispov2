@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import type { Principal } from '../auth/rbac.js';
 import type {
+  EmployeeCreateDto,
   EmployeeDetailDto,
   EmployeeListItemDto,
   EmployeeListResponseDto,
@@ -31,6 +32,7 @@ interface UserWithRelations {
   employeeNo: string;
   displayName: string;
   active: boolean;
+  measured: boolean;
   bereiche: string[];
   productivityFactor: number;
   overtimeTolerancePct: number;
@@ -94,6 +96,76 @@ export class EmployeesService {
 
   // --- Write ----------------------------------------------------------------
 
+  /**
+   * Create an employee — primarily a temporary worker (Azubi/Saisonaushilfe) the
+   * teamlead can manually assign Belege to. `measured` defaults to false so the
+   * person is excluded from performance KPIs; they remain a normal assignment target.
+   * See docs/concept/temporary-workers-concept.md.
+   */
+  async create(principal: Principal, dto: EmployeeCreateDto): Promise<EmployeeDetailDto> {
+    const displayName = dto.displayName.trim();
+    if (!displayName) throw new BadRequestException('displayName darf nicht leer sein');
+
+    const employeeNo = dto.employeeNo?.trim() || generateTempEmployeeNo();
+    const existing = await this.prisma.user.findUnique({ where: { employeeNo } });
+    if (existing) throw new BadRequestException(`Personalnummer ${employeeNo} ist bereits vergeben`);
+
+    let weeklyPattern: Prisma.InputJsonValue | undefined;
+    if (dto.weeklyPattern) {
+      const parsed = weeklyPatternSchema.safeParse(dto.weeklyPattern);
+      if (!parsed.success) {
+        throw new BadRequestException({
+          message: 'Ungültiges Wochenmuster',
+          issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        });
+      }
+      weeklyPattern = parsed.data as unknown as Prisma.InputJsonValue;
+    }
+
+    const date = todayIso();
+    const id = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          employeeNo,
+          displayName,
+          active: true,
+          // Temp workers are the default for this path — excluded from KPIs.
+          measured: dto.measured ?? false,
+          bereiche: dto.bereiche ?? [],
+          ...(dto.productivityFactor !== undefined
+            ? { productivityFactor: dto.productivityFactor }
+            : {}),
+          ...(weeklyPattern !== undefined ? { weeklyPattern } : {}),
+          roles: {
+            create: {
+              role: {
+                connectOrCreate: {
+                  where: { name: 'employee' },
+                  create: { name: 'employee', description: 'employee role' },
+                },
+              },
+            },
+          },
+        },
+      });
+      await this.materializeShift(tx, user.id, date);
+      await this.events.append(
+        {
+          eventType: 'employee.created',
+          entityType: 'User',
+          entityId: user.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { employeeNo, displayName, measured: user.measured },
+        },
+        tx,
+      );
+      return user.id;
+    });
+
+    return this.loadDetail(id, date);
+  }
+
   async updateProfile(
     principal: Principal,
     id: string,
@@ -104,6 +176,7 @@ export class EmployeesService {
 
     const data: Prisma.UserUpdateInput = {};
     if (dto.active !== undefined) data.active = dto.active;
+    if (dto.measured !== undefined) data.measured = dto.measured;
     if (dto.bereiche !== undefined) data.bereiche = dto.bereiche;
     if (dto.overtimeTolerancePct !== undefined) data.overtimeTolerancePct = dto.overtimeTolerancePct;
     if (dto.productivityFactor !== undefined) data.productivityFactor = dto.productivityFactor;
@@ -249,6 +322,7 @@ export class EmployeesService {
       displayName: u.displayName,
       roles: u.roles.map((r) => normalizeRole(r.role.name)),
       active: u.active,
+      measured: u.measured,
       bereiche: u.bereiche,
       productivityFactor: u.productivityFactor,
       overtimeTolerancePct: u.overtimeTolerancePct,
@@ -273,6 +347,11 @@ function normalizeRole(name: string): EmployeeRole {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Auto employeeNo for a quickly-created temp worker, e.g. "temp-lq3f7x". */
+function generateTempEmployeeNo(): string {
+  return `temp-${Date.now().toString(36)}`;
 }
 
 function parseDate(date: string): Date {

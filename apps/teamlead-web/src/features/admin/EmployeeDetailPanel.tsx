@@ -122,6 +122,14 @@ function ProfileSection({
         control={<Switch checked={emp.active} onChange={(e) => save({ active: e.target.checked })} />}
         label="Aktiv"
       />
+      <FormControlLabel
+        control={<Switch checked={!emp.measured} onChange={(e) => save({ measured: !e.target.checked })} />}
+        label="Temporäre Kraft (Azubi/Aushilfe – ohne Leistungsmessung)"
+      />
+      <Typography variant="caption" color="text.secondary">
+        Temp-Kräfte können wie alle Mitarbeiter (manuell/automatisch) Belege bekommen, zählen
+        aber nicht in die Produktivitäts-/ZST-Leistung. Der Durchsatz bleibt sichtbar.
+      </Typography>
       <div>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           Bereich / Skill {emp.bereiche.length === 0 && '· Allrounder (übernimmt alles)'}
