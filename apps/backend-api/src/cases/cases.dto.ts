@@ -217,10 +217,21 @@ export class BoardCaseDto {
 export class BoardRowDto {
   @ApiProperty() employeeNo!: string;
   @ApiProperty() employeeName!: string;
-  @ApiProperty() bundleId!: string;
-  @ApiProperty() bundleStatus!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Assigned bundle id; null for a scheduled-but-idle employee with no Paket.',
+  })
+  bundleId!: string | null;
+  @ApiProperty({ description: "Bundle status, or 'idle' when the employee has no Paket." })
+  bundleStatus!: string;
   @ApiProperty() plannedEffortMinutes!: number;
   @ApiProperty() capacityMinutes!: number;
+  @ApiProperty({
+    type: [String],
+    description: 'Fixed Bereiche/skills of the employee (shown on idle rows too).',
+  })
+  bereiche!: string[];
   @ApiProperty({ type: [BoardCaseDto] }) cases!: BoardCaseDto[];
   @ApiProperty({ type: [BoardRouteStopDto] }) routeStops!: BoardRouteStopDto[];
 }

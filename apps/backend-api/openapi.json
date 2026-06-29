@@ -2324,16 +2324,26 @@
             "type": "string"
           },
           "bundleId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Assigned bundle id; null for a scheduled-but-idle employee with no Paket."
           },
           "bundleStatus": {
-            "type": "string"
+            "type": "string",
+            "description": "Bundle status, or 'idle' when the employee has no Paket."
           },
           "plannedEffortMinutes": {
             "type": "number"
           },
           "capacityMinutes": {
             "type": "number"
+          },
+          "bereiche": {
+            "description": "Fixed Bereiche/skills of the employee (shown on idle rows too).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "cases": {
             "type": "array",
@@ -2351,10 +2361,10 @@
         "required": [
           "employeeNo",
           "employeeName",
-          "bundleId",
           "bundleStatus",
           "plannedEffortMinutes",
           "capacityMinutes",
+          "bereiche",
           "cases",
           "routeStops"
         ]

@@ -178,8 +178,9 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     openIssues: 0,
     currentCaseIndex: currentCaseIndex >= 0 ? currentCaseIndex : undefined,
     bundleSize: row.cases.length,
-    bundleId: row.bundleId,
+    bundleId: row.bundleId ?? undefined,
     paused: row.bundleStatus === 'paused',
+    bereiche: row.bereiche,
     cases: row.cases.map(toBoardCase),
   };
 }

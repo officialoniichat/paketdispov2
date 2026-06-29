@@ -119,6 +119,8 @@ export interface BoardRow {
   bundleSize?: number;
   bundleId?: string;
   paused: boolean;
+  /** Fixed Bereiche/skills of the employee (shown on idle rows too). */
+  bereiche: string[];
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
 }

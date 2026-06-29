@@ -849,10 +849,14 @@ export interface components {
         BoardRowDto: {
             employeeNo: string;
             employeeName: string;
-            bundleId: string;
+            /** @description Assigned bundle id; null for a scheduled-but-idle employee with no Paket. */
+            bundleId?: string | null;
+            /** @description Bundle status, or 'idle' when the employee has no Paket. */
             bundleStatus: string;
             plannedEffortMinutes: number;
             capacityMinutes: number;
+            /** @description Fixed Bereiche/skills of the employee (shown on idle rows too). */
+            bereiche: string[];
             cases: components["schemas"]["BoardCaseDto"][];
             routeStops: components["schemas"]["BoardRouteStopDto"][];
         };

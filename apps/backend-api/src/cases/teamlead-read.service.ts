@@ -173,9 +173,12 @@ export class TeamleadReadService {
   }
 
   /**
-   * §10.3 Mitarbeitenden-Board: the day's assigned bundles grouped per employee,
-   * with member cases + route stops + capacity. reserveMinutes = Σ capacity −
-   * Σ planned across the rows.
+   * §10.3 Mitarbeitenden-Board: EVERY employee scheduled for the day (active shift
+   * with net capacity > 0) gets exactly one row, even with no assigned Belege — so
+   * the teamlead always sees idle/free heads, not just the ones the engine loaded.
+   * Assigned bundles + cases + route stops are folded onto those rows; an employee
+   * who somehow holds a bundle without an active shift still gets a row so no work
+   * is ever hidden. reserveMinutes = Σ capacity − Σ planned across the rows.
    */
   async board(date: string): Promise<BoardDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
@@ -183,7 +186,7 @@ export class TeamleadReadService {
       this.prisma.assignmentBundle.findMany({
         where: { date: day },
         include: {
-          employee: { select: { employeeNo: true, displayName: true } },
+          employee: { select: { employeeNo: true, displayName: true, bereiche: true } },
           items: {
             orderBy: { sequence: 'asc' },
             include: {
@@ -204,7 +207,10 @@ export class TeamleadReadService {
         },
         orderBy: { createdAt: 'asc' },
       }),
-      this.prisma.shift.findMany({ where: { date: day, active: true } }),
+      this.prisma.shift.findMany({
+        where: { date: day, active: true, netCapacityMinutes: { gt: 0 }, employee: { active: true } },
+        include: { employee: { select: { employeeNo: true, displayName: true, bereiche: true } } },
+      }),
     ]);
 
     const capacityByEmployee = new Map<string, number>();
@@ -215,30 +221,51 @@ export class TeamleadReadService {
       );
     }
 
-    // One row per employee. The engine now emits exactly ONE bundle per employee
-    // per day, so this grouping is a 1:1 map (one bundle in → one row out) and
-    // `row.bundleId` owns precisely `row.cases` — which is what withdraw/add/
-    // reorder/pause/resume target. The per-employee fold is kept defensively so a
-    // legacy multi-bundle day (pre-migration) still renders coherently.
-    // Detection inputs collected while folding rows, so delivery groups are computed
-    // across ALL of the day's assigned Belege (Teamlead-Anforderung Punkt 1).
+    // Seed one IDLE row per scheduled employee first. The engine emits at most ONE
+    // bundle per employee per day, so each row maps 1:1 to a bundle once folded; the
+    // per-employee fold is kept defensively so a legacy multi-bundle day still renders.
+    // `bundleId === null` marks a free head with no Paket. Delivery-group detection
+    // inputs are collected while folding so groups span ALL assigned Belege (Punkt 1).
     const groupInputs: { id: string; weBelegNo: string; deliveryNoteNo: string | null }[] = [];
 
     const rowByEmployee = new Map<string, BoardRowDto>();
+    for (const s of shifts) {
+      if (rowByEmployee.has(s.employeeId)) continue;
+      rowByEmployee.set(s.employeeId, {
+        employeeNo: s.employee.employeeNo,
+        employeeName: s.employee.displayName,
+        bundleId: null,
+        bundleStatus: 'idle',
+        plannedEffortMinutes: 0,
+        capacityMinutes: capacityByEmployee.get(s.employeeId) ?? 0,
+        bereiche: s.employee.bereiche,
+        cases: [],
+        routeStops: [],
+      });
+    }
+
     for (const b of bundles) {
       let row = rowByEmployee.get(b.employeeId);
       if (!row) {
+        // Edge: a bundle whose employee has no active shift today. Still surface it
+        // so assigned work is never dropped from the board.
         row = {
           employeeNo: b.employee.employeeNo,
           employeeName: b.employee.displayName,
-          bundleId: b.id,
-          bundleStatus: b.status,
+          bundleId: null,
+          bundleStatus: 'idle',
           plannedEffortMinutes: 0,
           capacityMinutes: capacityByEmployee.get(b.employeeId) ?? 0,
+          bereiche: b.employee.bereiche,
           cases: [],
           routeStops: [],
         };
         rowByEmployee.set(b.employeeId, row);
+      }
+      // First bundle owns the row's identity (the per-employee 1:1 case).
+      if (row.bundleId === null) {
+        row.bundleId = b.id;
+        row.bundleStatus = b.status;
       }
       row.plannedEffortMinutes += b.plannedEffortMinutes;
       for (const it of b.items) {
@@ -276,7 +303,12 @@ export class TeamleadReadService {
     const grouping = await this.loadGroupingConfig();
     const groups = detectDeliveryGroups(groupInputs, grouping);
     const { groupIdByCaseId, sizeByGroupId } = indexDeliveryGroups(groups);
-    const rows = [...rowByEmployee.values()];
+    // Stable, deterministic order by name (idle heads stay interspersed, never hidden
+    // at the end) with employeeNo as tie-break.
+    const rows = [...rowByEmployee.values()].sort(
+      (a, b) =>
+        a.employeeName.localeCompare(b.employeeName) || a.employeeNo.localeCompare(b.employeeNo),
+    );
     for (const row of rows) {
       for (const c of row.cases) {
         const groupId = groupIdByCaseId.get(c.id);

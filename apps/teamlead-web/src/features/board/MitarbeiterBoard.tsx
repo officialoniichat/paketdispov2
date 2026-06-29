@@ -144,15 +144,25 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           sx={{ width: '100%' }}
         >
           <Typography sx={{ fontWeight: 700, minWidth: 90 }}>{row.displayName}</Typography>
+          {row.cases.length === 0 && (
+            <Chip size="small" color="success" variant="outlined" label="frei" />
+          )}
           <Typography variant="body2">{row.plannedHours} h geplant</Typography>
           <Chip
             size="small"
             label={`${formatPct(row.utilisationPct)} verplant`}
             color={row.utilisationPct > 95 ? 'warning' : 'default'}
           />
-          <Typography variant="body2" color="text.secondary">
-            {row.effortPoints} Pkt · schwer {row.heavyCaseCount}/leicht {row.lightCaseCount}
-          </Typography>
+          {row.bereiche.length > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {row.bereiche.join(', ')}
+            </Typography>
+          )}
+          {row.cases.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {row.effortPoints} Pkt · schwer {row.heavyCaseCount}/leicht {row.lightCaseCount}
+            </Typography>
+          )}
           {row.openIssues > 0 && (
             <ProblemChip status="open" count={row.openIssues} size="small" />
           )}

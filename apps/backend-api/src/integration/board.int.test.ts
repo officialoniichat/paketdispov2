@@ -14,10 +14,14 @@ import { Role, type Principal } from '../auth/rbac.js';
  * Integration test for GET /api/teamlead/board (Task 1.1). Seeds two employees
  * with shifts + a ready pool, runs the engine (recalculate), then asserts the
  * board groups assigned bundles per employee with member cases + route stops.
+ * A THIRD employee gets a shift only AFTER planning, so she is scheduled but
+ * holds no bundle — the board must still render her as an idle row.
  */
 
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATE = '2026-06-15';
+/** employeeNo of the scheduled-but-idle worker added after recalculate. */
+const IDLE_EMPLOYEE_NO = 'ma-103';
 
 const teamlead: Principal = {
   sub: 'oidc-tl-1',
@@ -35,30 +39,33 @@ let prisma: PrismaClient;
 let assignment: AssignmentService;
 let teamleadSvc: TeamleadReadService;
 
+/** All-days-working pattern so DATE is a working day and recalculate's
+ * materialization keeps the planned employees' capacity (Wochenplan drives capacity). */
+const FULL_DAY = { working: true, start: '07:00', end: '15:00', breakMinutes: 0, partTimePct: 100 };
+const WEEK_PATTERN = {
+  mon: FULL_DAY,
+  tue: FULL_DAY,
+  wed: FULL_DAY,
+  thu: FULL_DAY,
+  fri: FULL_DAY,
+  sat: FULL_DAY,
+  sun: FULL_DAY,
+};
+
 async function seed(): Promise<void> {
-  const e1 = await prisma.user.create({ data: { employeeNo: 'ma-101', displayName: 'Anna' } });
-  const e2 = await prisma.user.create({ data: { employeeNo: 'ma-102', displayName: 'Bernd' } });
+  // Two planned employees with a weekly pattern: recalculate materializes their
+  // concrete shift (≈480 net) and the engine distributes the pool across them.
+  await prisma.user.create({
+    data: { employeeNo: 'ma-101', displayName: 'Anna', weeklyPattern: WEEK_PATTERN },
+  });
+  await prisma.user.create({
+    data: { employeeNo: 'ma-102', displayName: 'Bernd', weeklyPattern: WEEK_PATTERN },
+  });
   await prisma.user.create({ data: { employeeNo: 'tl-001', displayName: 'TL' } });
 
   const loc = await prisma.location.create({
     data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
   });
-
-  for (const [emp, net] of [
-    [e1, 480],
-    [e2, 300],
-  ] as const) {
-    await prisma.shift.create({
-      data: {
-        employeeId: emp.id,
-        date: asDate(DATE),
-        plannedStart: new Date(`${DATE}T07:00:00.000Z`),
-        plannedEnd: new Date(`${DATE}T15:00:00.000Z`),
-        plannedHours: net / 60,
-        netCapacityMinutes: net,
-      },
-    });
-  }
 
   for (let i = 0; i < 6; i++) {
     await prisma.goodsReceiptCase.create({
@@ -94,6 +101,21 @@ beforeAll(async () => {
   teamleadSvc = new TeamleadReadService(p);
   await seed();
   await assignment.recalculate(teamlead, DATE, new Date(`${DATE}T07:00:00.000Z`));
+  // Schedule a third worker AFTER planning: she has an active shift (capacity) but
+  // the engine never gave her a bundle — exactly the "free head" the board must show.
+  const idle = await prisma.user.create({
+    data: { employeeNo: IDLE_EMPLOYEE_NO, displayName: 'Clara', bereiche: ['regal'] },
+  });
+  await prisma.shift.create({
+    data: {
+      employeeId: idle.id,
+      date: asDate(DATE),
+      plannedStart: new Date(`${DATE}T07:00:00.000Z`),
+      plannedEnd: new Date(`${DATE}T15:00:00.000Z`),
+      plannedHours: 8,
+      netCapacityMinutes: 480,
+    },
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -106,26 +128,54 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     const board = await teamleadSvc.board(DATE);
 
     expect(board.date).toBe(DATE);
-    expect(board.rows.length).toBe(2); // one bundle per employee with a shift
+    // Three scheduled employees in total (two planned + one idle).
+    expect(board.rows.length).toBe(3);
     expect(board.reserveMinutes).toBeGreaterThanOrEqual(0);
 
-    for (const row of board.rows) {
+    const assigned = board.rows.filter((r) => r.bundleId !== null);
+    expect(assigned.length).toBeGreaterThanOrEqual(1); // the engine placed the pool
+
+    for (const row of assigned) {
       expect(row.employeeNo).toBeTruthy();
       expect(row.employeeName).toBeTruthy();
       expect(row.bundleId).toBeTruthy();
       expect(row.cases.length).toBeGreaterThan(0);
       expect(row.routeStops.length).toBeGreaterThan(0);
       expect(row.capacityMinutes).toBeGreaterThan(0);
-      const firstCase = row.cases[0]!;
-      expect(firstCase.weBelegNo).toMatch(/^WE-BOARD-/);
       const firstStop = row.routeStops[0]!;
       expect(firstStop.locationCode).toBe('R27');
       expect(typeof firstStop.scanned).toBe('boolean');
     }
 
-    // reserveMinutes = Σ capacity − Σ planned
+    // All six pool Belege ended up on the board's assigned rows.
+    const placed = assigned.flatMap((r) => r.cases.map((c) => c.weBelegNo)).sort();
+    expect(placed).toEqual(['WE-BOARD-0', 'WE-BOARD-1', 'WE-BOARD-2', 'WE-BOARD-3', 'WE-BOARD-4', 'WE-BOARD-5']);
+
+    // reserveMinutes = Σ capacity − Σ planned (across ALL rows, idle included)
     const totalCap = board.rows.reduce((s, r) => s + r.capacityMinutes, 0);
     const totalPlanned = board.rows.reduce((s, r) => s + r.plannedEffortMinutes, 0);
     expect(board.reserveMinutes).toBe(totalCap - totalPlanned);
+  });
+
+  it('renders a scheduled-but-unassigned employee as an idle row', async () => {
+    const board = await teamleadSvc.board(DATE);
+
+    const idle = board.rows.find((r) => r.employeeNo === IDLE_EMPLOYEE_NO);
+    expect(idle).toBeDefined();
+    expect(idle!.employeeName).toBe('Clara');
+    // Free head: no bundle, no Paket, but capacity + Bereiche are visible.
+    expect(idle!.bundleId).toBeNull();
+    expect(idle!.bundleStatus).toBe('idle');
+    expect(idle!.cases).toEqual([]);
+    expect(idle!.routeStops).toEqual([]);
+    expect(idle!.plannedEffortMinutes).toBe(0);
+    expect(idle!.capacityMinutes).toBe(480);
+    expect(idle!.bereiche).toEqual(['regal']);
+  });
+
+  it('orders rows deterministically by name', async () => {
+    const board = await teamleadSvc.board(DATE);
+    const names = board.rows.map((r) => r.employeeName);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   });
 });
