@@ -192,6 +192,8 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
     effortPoints: c.effortPoints,
     // BoardCaseDto carries no storage code; the board caption hides it when empty.
     storageCode: '',
+    deliveryGroupId: c.deliveryGroupId,
+    deliveryGroupSize: c.deliveryGroupSize,
   };
 }
 

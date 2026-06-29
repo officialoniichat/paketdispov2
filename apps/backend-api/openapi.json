@@ -2226,6 +2226,15 @@
           },
           "effortPoints": {
             "type": "number"
+          },
+          "deliveryGroupId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone"
+          },
+          "deliveryGroupSize": {
+            "type": "number",
+            "description": "Number of Belege in this Beleg's delivery group (1 = standalone)"
           }
         },
         "required": [
@@ -2234,7 +2243,8 @@
           "status",
           "totalQuantity",
           "estimatedMinutes",
-          "effortPoints"
+          "effortPoints",
+          "deliveryGroupSize"
         ]
       },
       "BoardRouteStopDto": {
@@ -3205,6 +3215,22 @@
           "boxSplittingFactor"
         ]
       },
+      "GroupingRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "maxWeBelegGap": {
+            "type": "number",
+            "description": "Max numeric gap between consecutive weBelegNo (1 = strict run)"
+          }
+        },
+        "required": [
+          "enabled",
+          "maxWeBelegGap"
+        ]
+      },
       "LoadPlanRowDto": {
         "type": "object",
         "properties": {
@@ -3256,6 +3282,9 @@
           "effort": {
             "$ref": "#/components/schemas/EffortRuleConfigDto"
           },
+          "grouping": {
+            "$ref": "#/components/schemas/GroupingRuleConfigDto"
+          },
           "loadPlan": {
             "type": "array",
             "items": {
@@ -3268,6 +3297,7 @@
           "reserve",
           "bundle",
           "effort",
+          "grouping",
           "loadPlan"
         ]
       },

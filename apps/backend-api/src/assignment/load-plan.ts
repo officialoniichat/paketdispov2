@@ -105,5 +105,7 @@ export function engineConfigFromRuleConfig(config: RuleConfig): EngineConfig {
       overdueLeadDays: config.priority.overdueLeadDays,
       overdueLeadDaysOverrides: config.priority.overdueLeadDaysOverrides,
     },
+    // Delivery-Group detection (Teamlead-Anforderung Punkt 1).
+    grouping: config.grouping,
   };
 }

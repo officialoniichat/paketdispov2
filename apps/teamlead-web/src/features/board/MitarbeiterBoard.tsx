@@ -44,11 +44,31 @@ export function MitarbeiterBoard(): JSX.Element {
   // First failing intervention drives the error snackbar.
   const failed = [withdraw, addToBundle, reorder, pauseResume].find((m) => m.isError);
 
+  // Delivery groups (Teamlead-Anforderung Punkt 1) that ended up split across more than
+  // one employee — surfaced so the teamlead can pull them back onto one person.
+  const groupEmployees = new Map<string, Set<string>>();
+  for (const row of board) {
+    for (const c of row.cases) {
+      if (!c.deliveryGroupId) continue;
+      const set = groupEmployees.get(c.deliveryGroupId) ?? new Set<string>();
+      set.add(row.employeeId);
+      groupEmployees.set(c.deliveryGroupId, set);
+    }
+  }
+  const splitGroupCount = [...groupEmployees.values()].filter((s) => s.size > 1).length;
+
   return (
     <Stack spacing={2}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
         Mitarbeiterboard
       </Typography>
+      {splitGroupCount > 0 && (
+        <Alert severity="warning" variant="outlined">
+          {splitGroupCount === 1
+            ? '1 zusammengehörige Lieferung ist auf mehrere Mitarbeiter verteilt — bitte zusammen einem Mitarbeiter zuweisen.'
+            : `${splitGroupCount} zusammengehörige Lieferungen sind auf mehrere Mitarbeiter verteilt — bitte jeweils einem Mitarbeiter zuweisen.`}
+        </Alert>
+      )}
       <Stack spacing={1}>
         {board.map((row) => (
           <EmployeeRow key={row.employeeId} row={row} requestReason={setPending} />
@@ -181,6 +201,14 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               </IconButton>
               <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
               <CaseStatusChip status={c.status} size="small" />
+              {c.deliveryGroupSize != null && c.deliveryGroupSize > 1 && (
+                <Chip
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  label={`Lieferung ×${c.deliveryGroupSize}`}
+                />
+              )}
               <Typography variant="caption" color="text.secondary">
                 {c.storageCode ? `${c.storageCode} · ` : ''}
                 {formatMinutes(c.estimatedMinutes)}

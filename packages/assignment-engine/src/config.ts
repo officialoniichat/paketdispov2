@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { priorityFlagSchema } from '@paket/domain-types';
+import { DEFAULT_GROUPING_CONFIG, type GroupingConfig } from './grouping/delivery-group.js';
 
 /**
  * Engine rule parameters. These mirror the configurable "Regelparameter" from the
@@ -148,6 +149,8 @@ export interface EngineConfig {
   capacity: CapacityConfig;
   assignment: AssignmentConfig;
   priority: PriorityConfig;
+  /** Delivery-Group detection tuning (Teamlead-Anforderung Punkt 1). */
+  grouping: GroupingConfig;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -156,4 +159,5 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   capacity: DEFAULT_CAPACITY_CONFIG,
   assignment: DEFAULT_ASSIGNMENT_CONFIG,
   priority: DEFAULT_PRIORITY_CONFIG,
+  grouping: DEFAULT_GROUPING_CONFIG,
 };

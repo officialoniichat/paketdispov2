@@ -100,3 +100,15 @@ export { assignWork, type AssignWorkOptions } from './assignment/plan.js';
 
 // (5) Pickup order inside a finished bundle (§D.3).
 export { buildPickupSequence, type PickupCase, type PickupOptions } from './pickup/pickup-order.js';
+
+// (6) Delivery-Group detection (Teamlead-Anforderung Punkt 1).
+export {
+  detectDeliveryGroups,
+  indexDeliveryGroups,
+  DEFAULT_GROUPING_CONFIG,
+  type GroupingConfig,
+  type DeliveryGroupInput,
+  type DeliveryGroup,
+  type DeliveryGroupReason,
+  type DeliveryGroupIndex,
+} from './grouping/delivery-group.js';

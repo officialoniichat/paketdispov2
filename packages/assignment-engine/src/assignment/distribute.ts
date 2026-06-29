@@ -2,6 +2,7 @@ import {
   assignmentBundleSchema,
   type AssignmentBundle,
   type EmployeeShift,
+  type Id,
   type ISODate,
 } from '@paket/domain-types';
 import type { EmployeeLoad } from '../types.js';
@@ -28,6 +29,15 @@ const SPECIALIST_PENALTY = 0.05;
 const HEAVY_PENALTY = 0.03;
 /** Soft penalty per case whose Bereich a (non-Allrounder) employee does not handle. */
 const BEREICH_PENALTY = 0.04;
+/**
+ * Soft bonus per delivery-group member case an employee ALREADY holds when a proto
+ * from the same group is scored (Teamlead-Anforderung Punkt 1). Keeps one physical
+ * delivery on one person. It scales per held case so it keeps pace with — and slightly
+ * outweighs — the per-case specialist push (SPECIALIST_PENALTY), yet stays far below
+ * the load ratio of an over-full shift: a group that no longer fits is split rather
+ * than blocking work or wrecking fairness (capacity still wins, §8.4).
+ */
+const GROUP_AFFINITY_BONUS = 0.1;
 const EPSILON = 1e-9;
 
 /**
@@ -49,6 +59,12 @@ function bereichMismatchPenalty(bereiche: readonly string[] | undefined, proto: 
 export interface DistributeOptions {
   avoidSpecialists?: boolean;
   balanceHeavyLight?: boolean;
+  /**
+   * caseId → delivery-group id (Teamlead-Anforderung Punkt 1). When supplied, the LPT
+   * step prefers to keep a group's proto-bundles on the employee already holding it.
+   * Omitted ⇒ no group bias (behaviour unchanged).
+   */
+  groupIdByCaseId?: ReadonlyMap<Id, string>;
 }
 
 export interface DistributionResult {
@@ -67,8 +83,27 @@ interface EmployeeState {
   bundleCount: number;
   heavyCount: number;
   wgrCounts: Map<string, number>;
+  /** Delivery-group id → number of that group's member cases this employee holds. */
+  groupCounts: Map<string, number>;
   /** Proto-bundles assigned to this employee, in LPT-assignment order (for the merge). */
   assignedProtos: ProtoBundle[];
+}
+
+/**
+ * For `proto`, the count of its cases per delivery group (via `groupIdByCaseId`).
+ * Empty when no group map is supplied or none of the cases belong to a group.
+ */
+function protoGroupCaseCounts(
+  groupIdByCaseId: ReadonlyMap<Id, string> | undefined,
+  proto: ProtoBundle,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!groupIdByCaseId) return counts;
+  for (const c of proto.cases) {
+    const g = groupIdByCaseId.get(c.case.id);
+    if (g) counts.set(g, (counts.get(g) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function pad(n: number): string {
@@ -87,6 +122,7 @@ export function distributeBundlesByWeightedLoad(
 ): DistributionResult {
   const avoidSpecialists = options.avoidSpecialists ?? true;
   const balanceHeavyLight = options.balanceHeavyLight ?? true;
+  const groupIdByCaseId = options.groupIdByCaseId;
 
   const states: EmployeeState[] = shifts
     .filter((s) => s.active && s.netCapacityMinutes > 0)
@@ -98,6 +134,7 @@ export function distributeBundlesByWeightedLoad(
       bundleCount: 0,
       heavyCount: 0,
       wgrCounts: new Map<string, number>(),
+      groupCounts: new Map<string, number>(),
       assignedProtos: [],
     }));
 
@@ -119,6 +156,7 @@ export function distributeBundlesByWeightedLoad(
   for (const proto of order) {
     let best: EmployeeState | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
+    const protoGroups = protoGroupCaseCounts(groupIdByCaseId, proto);
 
     for (const st of states) {
       const ratio = (st.assignedMinutes + proto.effortMinutes) / st.shift.netCapacityMinutes;
@@ -128,7 +166,14 @@ export function distributeBundlesByWeightedLoad(
           : 0;
       const heavy = balanceHeavyLight && proto.containsHeavy ? st.heavyCount * HEAVY_PENALTY : 0;
       const bereich = bereichMismatchPenalty(st.shift.bereiche, proto);
-      const score = ratio + specialist + heavy + bereich;
+      // Pull a delivery group toward whoever already holds its members (negative term),
+      // scaled by how many of those member cases the employee already carries. Gated on
+      // Bereich: a delivery is never kept together by putting work on someone who does
+      // not handle that Bereich (fixed skill) — Bereich routing always wins over cohesion.
+      let heldGroupCases = 0;
+      for (const g of protoGroups.keys()) heldGroupCases += st.groupCounts.get(g) ?? 0;
+      const groupAffinity = bereich > 0 ? 0 : heldGroupCases * GROUP_AFFINITY_BONUS;
+      const score = ratio + specialist + heavy + bereich - groupAffinity;
 
       const isBetter = score < bestScore - EPSILON;
       const isTie = Math.abs(score - bestScore) <= EPSILON;
@@ -146,6 +191,9 @@ export function distributeBundlesByWeightedLoad(
       for (const wgr of c.wgrCodes) {
         chosen.wgrCounts.set(wgr, (chosen.wgrCounts.get(wgr) ?? 0) + 1);
       }
+    }
+    for (const [g, count] of protoGroups) {
+      chosen.groupCounts.set(g, (chosen.groupCounts.get(g) ?? 0) + count);
     }
     chosen.assignedProtos.push(proto);
   }

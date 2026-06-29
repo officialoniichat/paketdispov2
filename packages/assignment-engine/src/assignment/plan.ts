@@ -19,6 +19,7 @@ import type { AssignmentPlan, EngineInput, EnrichedCase, UnassignedCase } from '
 import { canConsumeReserve, computeIronReserve } from './reserve.js';
 import { createBalancedBundles, type ProtoBundle } from './bundling.js';
 import { distributeBundlesByWeightedLoad } from './distribute.js';
+import { detectDeliveryGroups, indexDeliveryGroups } from '../grouping/delivery-group.js';
 
 /**
  * assignWork(date) — the §8.3 Zuteilungsalgorithmus. Pure and deterministic so the
@@ -158,10 +159,24 @@ export function assignWork(
 
   const protoBundles: ProtoBundle[] = [...starter.bundles, ...override.bundles, ...normal.bundles];
 
-  // Weighted distribution (§8.3/§8.4).
+  // Delivery-group detection (Teamlead-Anforderung Punkt 1): recognise Belege of one
+  // physical delivery (same Lieferschein OR a consecutive weBelegNo run) over the
+  // eligible pool, so the distribution can keep each group on a single person.
+  const deliveryGroups = detectDeliveryGroups(
+    eligible.map((e) => ({
+      id: e.case.id,
+      weBelegNo: e.case.weBelegNo,
+      deliveryNoteNo: e.case.deliveryNoteNo,
+    })),
+    config.grouping,
+  );
+  const { groupIdByCaseId } = indexDeliveryGroups(deliveryGroups);
+
+  // Weighted distribution (§8.3/§8.4) with a soft delivery-group affinity.
   const distribution = distributeBundlesByWeightedLoad(input.shifts, protoBundles, input.date, {
     avoidSpecialists: options.avoidSpecialists ?? true,
     balanceHeavyLight: options.balanceHeavyLight ?? true,
+    groupIdByCaseId,
   });
 
   // Pickup order INSIDE each finished bundle (§D.3). Never feeds back into distribution.

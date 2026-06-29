@@ -831,6 +831,10 @@ export interface components {
             totalQuantity: number;
             estimatedMinutes: number;
             effortPoints: number;
+            /** @description Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone */
+            deliveryGroupId?: string | null;
+            /** @description Number of Belege in this Beleg's delivery group (1 = standalone) */
+            deliveryGroupSize: number;
         };
         BoardRouteStopDto: {
             id: string;
@@ -1123,6 +1127,11 @@ export interface components {
             checkShareFactor: number;
             boxSplittingFactor: number;
         };
+        GroupingRuleConfigDto: {
+            enabled: boolean;
+            /** @description Max numeric gap between consecutive weBelegNo (1 = strict run) */
+            maxWeBelegGap: number;
+        };
         LoadPlanRowDto: {
             id: string;
             shopAreaNo: string;
@@ -1139,6 +1148,7 @@ export interface components {
             reserve: components["schemas"]["ReserveRuleConfigDto"];
             bundle: components["schemas"]["BundleRuleConfigDto"];
             effort: components["schemas"]["EffortRuleConfigDto"];
+            grouping: components["schemas"]["GroupingRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
         };
         TodayShiftDto: {

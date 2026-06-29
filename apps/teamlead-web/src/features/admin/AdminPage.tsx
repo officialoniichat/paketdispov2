@@ -36,6 +36,7 @@ const TABS = [
   'Reserve',
   'Bündel',
   'Aufwand',
+  'Lieferungen',
   'Verladeplan',
   'Lagerplätze',
   'Mitarbeiter',
@@ -43,11 +44,15 @@ const TABS = [
   'Integrationen',
 ];
 
+/** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
+const GROUPING_TAB = 4;
+/** Read-only Verladeplan tab (display only — no save button). */
+const LOADPLAN_TAB = 5;
 /** Tab indices that render a self-contained editor instead of the RuleConfig form. */
-const LOCATIONS_TAB = 5;
-const EMPLOYEES_TAB = 6;
-const SCHICHTPLAN_TAB = 7;
-const INTEGRATIONS_TAB = 8;
+const LOCATIONS_TAB = 6;
+const EMPLOYEES_TAB = 7;
+const SCHICHTPLAN_TAB = 8;
+const INTEGRATIONS_TAB = 9;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -262,7 +267,31 @@ export function AdminPage(): JSX.Element {
                 </Stack>
               )}
 
-              {tab === 4 && (
+              {tab === GROUPING_TAB && (
+                <Stack spacing={2}>
+                  <Typography variant="body2" color="text.secondary">
+                    Zusammengehörige Lieferscheine erkennen: Belege einer physischen
+                    Lieferung (gleicher Lieferschein ODER fortlaufende Beleg-Nummern)
+                    werden erkannt und möglichst einem Mitarbeiter zugeteilt.
+                  </Typography>
+                  <Grid>
+                    <Toggle
+                      label="Erkennung aktiv"
+                      checked={draft.grouping.enabled}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, enabled: v })}
+                      hint="Erkennt zusammengehörige Lieferscheine und hält sie bei einem Mitarbeiter zusammen."
+                    />
+                    <Num
+                      label="Max. Beleg-Abstand"
+                      value={draft.grouping.maxWeBelegGap}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, maxWeBelegGap: v })}
+                      hint="Größter Abstand zwischen fortlaufenden Beleg-Nummern, der noch als eine Lieferung zählt (1 = streng aufeinanderfolgend)."
+                    />
+                  </Grid>
+                </Stack>
+              )}
+
+              {tab === LOADPLAN_TAB && (
                 <Stack spacing={1}>
                   <Typography variant="body2" color="text.secondary">
                     Verladeplan: Shopbereich, Etage, Wochentag, gültig ab/bis, Sondertage.
@@ -277,7 +306,7 @@ export function AdminPage(): JSX.Element {
                 </Stack>
               )}
 
-              {tab !== 4 && (
+              {tab !== LOADPLAN_TAB && (
                 <Button
                   variant="contained"
                   sx={{ mt: 2 }}

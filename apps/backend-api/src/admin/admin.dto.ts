@@ -125,6 +125,15 @@ export class EffortRuleConfigDto {
   @ApiProperty() @IsNumber() @Min(0) boxSplittingFactor!: number;
 }
 
+/** Delivery-Group detection (Teamlead-Anforderung Punkt 1). */
+export class GroupingRuleConfigDto {
+  @ApiProperty() @IsBoolean() enabled!: boolean;
+  @ApiProperty({ description: 'Max numeric gap between consecutive weBelegNo (1 = strict run)' })
+  @IsInt()
+  @Min(0)
+  maxWeBelegGap!: number;
+}
+
 export class LoadPlanRowDto {
   @ApiProperty() @IsString() id!: string;
   @ApiProperty() @IsString() shopAreaNo!: string;
@@ -163,6 +172,11 @@ export class RuleConfigDto {
   @ValidateNested()
   @Type(() => EffortRuleConfigDto)
   effort!: EffortRuleConfigDto;
+
+  @ApiProperty({ type: GroupingRuleConfigDto })
+  @ValidateNested()
+  @Type(() => GroupingRuleConfigDto)
+  grouping!: GroupingRuleConfigDto;
 
   @ApiProperty({ type: [LoadPlanRowDto] })
   @IsArray()

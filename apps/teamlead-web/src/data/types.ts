@@ -96,6 +96,10 @@ export interface BoardCase {
   estimatedMinutes: number;
   effortPoints: number;
   storageCode: string;
+  /** Delivery-group id (Teamlead-Anforderung Punkt 1); null/undefined if standalone. */
+  deliveryGroupId?: string | null;
+  /** Belege in this case's delivery group (1 = standalone). */
+  deliveryGroupSize?: number;
 }
 
 export interface BoardRow {

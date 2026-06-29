@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AssignmentStatus, CaseStatus, PriorityFlag } from '@prisma/client';
+import { detectDeliveryGroups, indexDeliveryGroups } from '@paket/assignment-engine';
+import { groupingRuleConfigSchema, RULE_CONFIG_KEY, DEFAULT_RULE_CONFIG } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type AuditEventDto,
@@ -158,6 +160,7 @@ export class TeamleadReadService {
                 select: {
                   id: true,
                   weBelegNo: true,
+                  deliveryNoteNo: true,
                   status: true,
                   totalQuantity: true,
                   estimatedMinutes: true,
@@ -186,6 +189,10 @@ export class TeamleadReadService {
     // `row.bundleId` owns precisely `row.cases` — which is what withdraw/add/
     // reorder/pause/resume target. The per-employee fold is kept defensively so a
     // legacy multi-bundle day (pre-migration) still renders coherently.
+    // Detection inputs collected while folding rows, so delivery groups are computed
+    // across ALL of the day's assigned Belege (Teamlead-Anforderung Punkt 1).
+    const groupInputs: { id: string; weBelegNo: string; deliveryNoteNo: string | null }[] = [];
+
     const rowByEmployee = new Map<string, BoardRowDto>();
     for (const b of bundles) {
       let row = rowByEmployee.get(b.employeeId);
@@ -211,6 +218,14 @@ export class TeamleadReadService {
           totalQuantity: it.case.totalQuantity,
           estimatedMinutes: it.case.estimatedMinutes,
           effortPoints: it.case.effortPoints,
+          // Delivery-group fields are filled in once all board cases are known (below).
+          deliveryGroupId: null,
+          deliveryGroupSize: 1,
+        });
+        groupInputs.push({
+          id: it.case.id,
+          weBelegNo: it.case.weBelegNo,
+          deliveryNoteNo: it.case.deliveryNoteNo,
         });
       }
       for (const rs of b.routeStops) {
@@ -224,10 +239,34 @@ export class TeamleadReadService {
       }
     }
 
+    // Annotate each board case with its delivery group (same Lieferschein OR a
+    // consecutive weBelegNo run), using the SAME pure engine detection + the §11
+    // configured grouping rule. Standalone Belege keep null / size 1.
+    const grouping = await this.loadGroupingConfig();
+    const groups = detectDeliveryGroups(groupInputs, grouping);
+    const { groupIdByCaseId, sizeByGroupId } = indexDeliveryGroups(groups);
     const rows = [...rowByEmployee.values()];
+    for (const row of rows) {
+      for (const c of row.cases) {
+        const groupId = groupIdByCaseId.get(c.id);
+        if (groupId) {
+          c.deliveryGroupId = groupId;
+          c.deliveryGroupSize = sizeByGroupId.get(groupId) ?? 1;
+        }
+      }
+    }
+
     const totalCapacity = rows.reduce((sum, r) => sum + r.capacityMinutes, 0);
     const totalPlanned = rows.reduce((sum, r) => sum + r.plannedEffortMinutes, 0);
     return { date, rows, reserveMinutes: totalCapacity - totalPlanned };
+  }
+
+  /** §11 grouping rule from the AppConfig singleton; engine default when unset/invalid. */
+  private async loadGroupingConfig(): Promise<{ enabled: boolean; maxWeBelegGap: number }> {
+    const row = await this.prisma.appConfig.findUnique({ where: { key: RULE_CONFIG_KEY } });
+    const value = row && isJsonObject(row.value) ? row.value['grouping'] : undefined;
+    const parsed = groupingRuleConfigSchema.safeParse(value);
+    return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG.grouping;
   }
 
   /**

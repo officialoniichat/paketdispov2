@@ -199,6 +199,14 @@ export class BoardCaseDto {
   @ApiProperty() totalQuantity!: number;
   @ApiProperty() estimatedMinutes!: number;
   @ApiProperty() effortPoints!: number;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone',
+  })
+  deliveryGroupId!: string | null;
+  @ApiProperty({ description: "Number of Belege in this Beleg's delivery group (1 = standalone)" })
+  deliveryGroupSize!: number;
 }
 
 export class BoardRowDto {

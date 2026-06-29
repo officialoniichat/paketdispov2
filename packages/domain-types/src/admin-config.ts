@@ -58,6 +58,18 @@ export const bundleRuleConfigSchema = z.object({
 });
 export type BundleRuleConfig = z.infer<typeof bundleRuleConfigSchema>;
 
+/**
+ * Delivery-Group detection (Teamlead-Anforderung Punkt 1). Recognises Belege of one
+ * physical delivery (same Lieferschein OR a consecutive weBelegNo run) so the
+ * distribution keeps them on one person. Mirrors the engine's `GroupingConfig`.
+ */
+export const groupingRuleConfigSchema = z.object({
+  enabled: z.boolean(),
+  /** Max numeric gap between consecutive weBelegNo to still count as one run (1 = strict). */
+  maxWeBelegGap: z.number().int().nonnegative(),
+});
+export type GroupingRuleConfig = z.infer<typeof groupingRuleConfigSchema>;
+
 /** Effort-point driver factors (Anhang D / B.3). */
 export const effortRuleConfigSchema = z.object({
   priceLabelPrintFactor: z.number().nonnegative(),
@@ -87,6 +99,7 @@ export const ruleConfigSchema = z.object({
   reserve: reserveRuleConfigSchema,
   bundle: bundleRuleConfigSchema,
   effort: effortRuleConfigSchema,
+  grouping: groupingRuleConfigSchema,
   loadPlan: z.array(loadPlanRowSchema),
 });
 export type RuleConfig = z.infer<typeof ruleConfigSchema>;
@@ -124,6 +137,10 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     redPriceFactor: 1.1,
     checkShareFactor: 1.25,
     boxSplittingFactor: 1.4,
+  },
+  grouping: {
+    enabled: true,
+    maxWeBelegGap: 1,
   },
   loadPlan: [
     {
