@@ -1,0 +1,20 @@
+%% Wie die Engine entscheidet (vereinfachte Teamlead-Sicht)
+flowchart TB
+    classDef step fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
+    classDef io fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef note fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+
+    pool["Pool: alle Belege 'ready'<br/>+ aktive Schichten + Lagerplätze"]:::io
+    cut["Schichtende-Cutoff<br/><i>letzte ~2 h je Schicht für Selbst-Abruf reserviert (Pkt 5)</i>"]:::step
+    prio["Priorität bestimmen (Rang 0–6)<br/>0 ausgeschlossen · 1 manuell · 2 Prio · 3 überfällig<br/>· 4 Jeden-Tag · 5 Verladeplan · 6 FIFO"]:::step
+    eff["Aufwand schätzen<br/><i>Minuten + Aufwandspunkte je Beleg</i>"]:::step
+    res["Eiserne Reserve sichern<br/><i>Puffer für nächsten Morgen / Prio</i>"]:::step
+    bun["Bündel bilden (~55 Min, ≤ 6 Belege)<br/>Bereich-homogen · Starter / Override / Normal"]:::step
+    grp["Lieferschein-Gruppen erkennen<br/><i>Gruppe möglichst bei einer Person halten</i>"]:::step
+    dist["Fair verteilen (LPT)<br/><i>gleiche Auslastung · schwer/leicht gemischt</i>"]:::step
+    pick["Abholreihenfolge je Bündel<br/><i>Regal → Palette → Hängebahn → … (fix)</i>"]:::step
+    out["Bündel je Mitarbeiter<br/>+ Diagnose (Auslastung, nicht zugeteilt)"]:::io
+
+    pool --> cut --> prio --> eff --> res --> bun --> grp --> dist --> pick --> out
+    n1["Deterministisch &amp; nachvollziehbar:<br/>gleicher Input → gleiches Ergebnis (&lt; 5 s)"]:::note
+    out -.-> n1

@@ -1,0 +1,35 @@
+%% Mitarbeiter-App: COLLECT → PROCESS → DONE
+flowchart TB
+    classDef phase fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef act fill:#1d222c,stroke:#56b6ff,color:#eef1f6;
+    classDef gate fill:#3a2b2b,stroke:#f5b955,color:#0b0d12;
+    classDef prob fill:#3a2b2b,stroke:#ff6b6b,color:#eef1f6;
+
+    start(["Bündel erhalten<br/>(Tagesstart)"]):::phase
+
+    subgraph COLLECT["1 · SAMMELN"]
+        c1["Zu jedem Lagerplatz fahren"]:::act
+        c2["Platz abhaken (Scan optional)"]:::act
+    end
+    gateC{"Alle Plätze geholt?<br/>(harte Sperre)"}:::gate
+
+    subgraph PROCESS["2 · BEARBEITEN (je Beleg)"]
+        p1["Preis-Etiketten drucken"]:::act
+        p2["Karton öffnen<br/><i>erst nach Druck (G.2)</i>"]:::act
+        p3["Mindestmenge je Position prüfen<br/><i>immer nötig (auch wenn 'Prüfung WE = Nein')</i>"]:::act
+        p4["Beleg erledigt / Teilabschluss"]:::act
+    end
+    prob["Problem melden<br/><i>Beleg / Position / SKU / Box</i>"]:::prob
+    gateP{"Etiketten ✓ · alle Mengen ✓ · kein offenes Problem?"}:::gate
+
+    done(["Beleg fertig (ZST)"]):::phase
+    next{"Alle Belege fertig?"}:::gate
+    pull["Nächstes Bündel holen"]:::act
+
+    start --> c1 --> c2 --> gateC
+    gateC -->|"ja"| p1 --> p2 --> p3 --> gateP
+    p3 -. "Abweichung" .-> prob
+    prob -.-> p3
+    gateP -->|"ja"| p4 --> done --> next
+    next -->|"ja"| pull
+    next -->|"nein"| p1

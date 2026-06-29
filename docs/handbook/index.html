@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paketlagerdispo — Handbuch (Teamlead &amp; Mitarbeiter)</title>
+    <style>
+      :root {
+        --bg: #0f1115; --panel: #161a22; --panel-2: #1d222c; --ink: #eef1f6;
+        --muted: #98a2b3; --line: #2a313d; --radius: 12px;
+        --system: #7c8696; --teamlead: #8b7cf6; --employee: #2dd4a7; --backend: #56b6ff; --data: #f5b955;
+        --ok: #3fd07f; --warn: #f5b955; --bad: #ff6b6b;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; background: radial-gradient(1100px 700px at 85% -15%, #1b2030 0%, var(--bg) 55%); color: var(--ink); -webkit-font-smoothing: antialiased; }
+      a { color: var(--backend); }
+      .layout { display: grid; grid-template-columns: 280px 1fr; align-items: start; }
+
+      /* sidebar TOC */
+      aside { position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, var(--panel-2), var(--panel)); padding: 20px 14px; }
+      .brand .eyebrow { letter-spacing: 0.2em; text-transform: uppercase; font-size: 10.5px; color: var(--muted); font-weight: 700; }
+      .brand h1 { margin: 6px 0 2px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+      .brand h1 span { background: linear-gradient(90deg, var(--employee), var(--teamlead)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .brand p { margin: 4px 0 14px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+      nav a { display: block; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--ink); text-decoration: none; border: 1px solid transparent; line-height: 1.25; }
+      nav a:hover { background: #0d1016; }
+      nav a.active { background: #0d1016; border-color: var(--teamlead); color: #fff; }
+      nav a .n { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 7px; font-weight: 700; }
+      nav .grp { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 14px 10px 4px; }
+
+      main { max-width: 1000px; padding: 40px 40px 120px; }
+      section { margin-bottom: 56px; scroll-margin-top: 24px; }
+      h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px; }
+      h2 .num { color: var(--teamlead); font-variant-numeric: tabular-nums; margin-right: 10px; }
+      h3 { font-size: 17px; font-weight: 700; margin: 26px 0 8px; }
+      .lead { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 6px 0 0; max-width: 80ch; }
+      p, li { font-size: 14.5px; line-height: 1.65; color: #d7dce5; }
+      strong { color: #fff; }
+      code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; background: #0d1016; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: var(--employee); }
+
+      .hero { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, var(--panel-2), var(--panel)); padding: 28px 30px; margin-bottom: 40px; position: relative; overflow: hidden; }
+      .hero::after { content: ""; position: absolute; inset: auto -40px -120px auto; width: 320px; height: 320px; background: radial-gradient(circle, rgba(139,124,246,.25), transparent 60%); }
+
+      figure { margin: 16px 0 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 16px; }
+      figure img { width: 100%; height: auto; display: block; cursor: zoom-in; }
+      figcaption { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+      table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+      th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
+      tbody tr:hover { background: #0d1016; }
+
+      .callout { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 12px 16px; margin: 14px 0; background: var(--panel); }
+      .callout .ch { font-weight: 800; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 4px; }
+      .callout.info { border-left-color: var(--backend); } .callout.info .ch { color: var(--backend); }
+      .callout.ok { border-left-color: var(--ok); } .callout.ok .ch { color: var(--ok); }
+      .callout.warn { border-left-color: var(--warn); } .callout.warn .ch { color: var(--warn); }
+      .callout.bad { border-left-color: var(--bad); } .callout.bad .ch { color: var(--bad); }
+
+      .pill { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+      .pill.ok { color: var(--ok); border-color: var(--ok); } .pill.warn { color: var(--warn); border-color: var(--warn); } .pill.bad { color: var(--bad); border-color: var(--bad); }
+      .sev { font-weight: 800; } .sev.h { color: var(--bad); } .sev.m { color: var(--warn); } .sev.l { color: var(--muted); }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } aside { position: static; height: auto; } .grid2 { grid-template-columns: 1fr; } main { padding: 24px; } }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside>
+        <div class="brand">
+          <div class="eyebrow">L&amp;T · Digitale Belegverteilung</div>
+          <h1>Hand<span>buch</span></h1>
+          <p>Wie das System funktioniert — für Teamleads &amp; Mitarbeitende. Geprüft am Code (Branch <code>main</code>).</p>
+        </div>
+        <nav id="toc">
+          <div class="grp">Grundlagen</div>
+          <a href="#ueberblick"><span class="n">1</span>Überblick &amp; Tagesablauf</a>
+          <a href="#daten"><span class="n">2</span>Welche Daten kommen rein</a>
+          <a href="#gruppierung"><span class="n">3</span>Lieferschein-Gruppierung</a>
+          <a href="#engine"><span class="n">4</span>Wie die Engine entscheidet</a>
+          <div class="grp">Abläufe</div>
+          <a href="#mitarbeiter"><span class="n">5</span>Mitarbeiter-App</a>
+          <a href="#lebenszyklus"><span class="n">6</span>Beleg-Lebenszyklus</a>
+          <a href="#teamlead"><span class="n">7</span>Teamlead-Cockpit</a>
+          <div class="grp">Status &amp; Qualität</div>
+          <a href="#anforderungen"><span class="n">8</span>Die 7 Anforderungen</a>
+          <a href="#befunde"><span class="n">9</span>Befunde &amp; Inkonsistenzen</a>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="hero">
+          <div class="eyebrow" style="letter-spacing:.2em;text-transform:uppercase;font-size:11px;color:var(--muted);font-weight:700">Funktions- &amp; Bedienhandbuch</div>
+          <h2 style="font-size:32px;margin-top:8px">Paketlagerdispo — wie alles funktioniert</h2>
+          <p class="lead">Dieses Handbuch erklärt alle Funktionen für <strong>Teamleads</strong> und <strong>Mitarbeitende</strong>: welche Daten reinkommen, wie die Engine Belege priorisiert und fair verteilt, wie zusammengehörige Lieferscheine erkannt werden, wie die Mitarbeiter-App Schritt für Schritt funktioniert, und welche Wünsche aus dem Feedback umgesetzt sind. Am Ende: ehrliche Befunde zu Inkonsistenzen. Alle Diagramme sind aus dem echten Code abgeleitet (Mermaid).</p>
+        </div>
+
+        <!-- 1 -->
+        <section id="ueberblick">
+          <h2><span class="num">1</span>Überblick &amp; Tagesablauf</h2>
+          <p class="lead">Das System nimmt Wareneingangs-<strong>Belege</strong> entgegen, macht daraus faire, planbare <strong>Tagesbündel</strong> je Mitarbeiter und begleitet sie bis zum <strong>Tagesabschluss (ZST)</strong>. Der Teamlead steuert, greift bei Bedarf ein und behält die Auslastung im Blick.</p>
+          <figure><a href="img/overview-flow.svg" target="_blank" rel="noopener"><img src="img/overview-flow.svg" alt="Tagesablauf End-to-End" loading="lazy"></a><figcaption>Tagesablauf: ProHandel → Pool → Engine → Bündel → Mitarbeiter-App → Tagesabschluss. (Klick = groß)</figcaption></figure>
+          <h3>Rollen</h3>
+          <ul>
+            <li><strong>Mitarbeiter:in</strong> — bekommt ein Bündel, sammelt die Plätze ab, bearbeitet Belege, meldet Probleme.</li>
+            <li><strong>Teamlead</strong> — steuert den Pool (Priorisieren, Parken, Eingriffe), startet Simulation/Neuberechnung und den Tagesabschluss.</li>
+            <li><strong>Admin / IT</strong> — pflegt Regeln, Lagerplätze, Mitarbeitende und Integrationen.</li>
+          </ul>
+          <h3>Kurz-Glossar</h3>
+          <table>
+            <tr><th>Begriff</th><th>Bedeutung</th></tr>
+            <tr><td><strong>Beleg</strong></td><td>Ein Wareneingang (WE-Beleg) mit Positionen und Größen/Mengen.</td></tr>
+            <tr><td><strong>Bündel</strong></td><td>Eine „Karre" Arbeit für eine Person (~55 Min, ≤ 6 Belege).</td></tr>
+            <tr><td><strong>Pool</strong></td><td>Alle Belege im Status <code>ready</code>, die verteilt werden können.</td></tr>
+            <tr><td><strong>Eiserne Reserve</strong></td><td>Puffer, der nicht verplant wird (für nächsten Morgen / Eilfälle).</td></tr>
+            <tr><td><strong>ZST</strong></td><td>Zeit-/Leistungs-Tagesabschluss; Export der erledigten Belege als CSV.</td></tr>
+          </table>
+        </section>
+
+        <!-- 2 -->
+        <section id="daten">
+          <h2><span class="num">2</span>Welche Daten kommen rein</h2>
+          <p class="lead">Jeder Beleg ist nach dem Industrie-Standard (ASN/DESADV) dreistufig aufgebaut: <strong>Beleg-Kopf</strong> → <strong>Positionen</strong> → <strong>SKU-Zeilen</strong> (EAN × Größe). Dazu kommen Arbeitsanweisungen auf Kopf- und Positionsebene.</p>
+          <figure><a href="img/data-in.svg" target="_blank" rel="noopener"><img src="img/data-in.svg" alt="Datenmodell Beleg-Kopf / Position / SKU" loading="lazy"></a><figcaption>Datenmodell: Beleg-Kopf vs. Position vs. SKU-Zeile mit Kardinalitäten.</figcaption></figure>
+          <table>
+            <tr><th>Ebene</th><th>Wichtige Felder</th><th>Wofür</th></tr>
+            <tr><td><strong>Beleg-Kopf</strong></td><td>WE-Beleg-Nr, Lieferschein-Nr, Filiale, Abschnitt (1–4,7,8), Warenart, Lagerplatz, Buchungs-/Verladetag, Prio-Kennzeichen</td><td>Identität, Priorität, Lagerort, Verladelogik</td></tr>
+            <tr><td><strong>Position</strong></td><td>Warengruppe (WGR), Lieferanten-Artikel-Nr, Farbe, Saison, NOS-Kennzeichen, Shop/Etage</td><td>Artikel-Identität, Handling</td></tr>
+            <tr><td><strong>SKU-Zeile</strong></td><td>EAN, Größe, Soll-Menge (Ist-Menge erst beim Bearbeiten)</td><td>Mengen-Prüfung</td></tr>
+          </table>
+          <div class="callout warn"><div class="ch">⚠ Status der Datenanlieferung</div>ProHandel ist als <strong>System of Record</strong> vorgesehen (Belege tragen <code>source=prohandel_api</code> + <code>externalRef</code>). Der eigentliche <strong>Delta-Pull ist Konzept-/v1-Stand</strong>: derzeit ein Lesezugriff ohne Rückschreiben. Bis position-genaue Aufwandsdaten geliefert werden, rechnet die Engine mit dem je Beleg vorab gespeicherten <code>estimatedMinutes</code> (siehe Abschnitt 4 &amp; 9).</div>
+        </section>
+
+        <!-- 3 -->
+        <section id="gruppierung">
+          <h2><span class="num">3</span>Lieferschein-Gruppierung</h2>
+          <p class="lead">Damit zusammengehörige Belege einer Anlieferung nicht über das ganze Team zersplittern, erkennt die Engine <strong>Lieferungs-Gruppen</strong> und versucht, eine Gruppe möglichst bei <strong>einer Person</strong> zu halten (Teamlead-Anforderung Punkt 1).</p>
+          <figure><a href="img/lieferschein-grouping.svg" target="_blank" rel="noopener"><img src="img/lieferschein-grouping.svg" alt="Lieferschein-Gruppierung" loading="lazy"></a><figcaption>Erkennung &amp; weiche Zuordnung zusammengehöriger Belege.</figcaption></figure>
+          <h3>Wie erkannt wird</h3>
+          <ul>
+            <li><strong>Gleiche Lieferschein-Nr</strong> → eine Gruppe, <em>oder</em></li>
+            <li><strong>Fortlaufende WE-Beleg-Nummern</strong> (Lücke ≤ <code>maxWeBelegGap</code>, Standard 1) → eine Gruppe.</li>
+          </ul>
+          <p>Technisch: <code>detectDeliveryGroups()</code> (Union-Find) im <code>assignment-engine</code>, konfiguriert über den Admin-Tab <strong>„Lieferungen"</strong> (<code>enabled</code>, <code>maxWeBelegGap</code>).</p>
+          <h3>Wie zugeordnet wird</h3>
+          <p>Die Verteilung wendet eine <strong>weiche Affinität</strong> an: Belege einer Gruppe landen bevorzugt beim selben Mitarbeiter — aber nur, wenn dessen <strong>Bereich</strong> passt und die Fairness/Kapazität es zulässt. Lässt sich eine Gruppe nicht halten, zeigt das <strong>Mitarbeiter-Board</strong> eine Aufteilungs-Warnung.</p>
+          <div class="callout info"><div class="ch">ℹ Wichtig</div>Die Gruppierung ist eine <strong>Leitplanke, kein Zwang</strong>: Priorität, Reserve und faire Auslastung haben Vorrang. Eine Gruppe kann also bewusst geteilt werden, wenn sonst die Balance bricht.</div>
+        </section>
+
+        <!-- 4 -->
+        <section id="engine">
+          <h2><span class="num">4</span>Wie die Engine entscheidet</h2>
+          <p class="lead">Die Engine ist <strong>regelbasiert &amp; deterministisch</strong>: gleicher Input → gleiches Ergebnis, in unter 5 Sekunden. Sie erfindet nichts — sie wendet die eingestellten Regeln in fester Reihenfolge an.</p>
+          <figure><a href="img/engine-decision.svg" target="_blank" rel="noopener"><img src="img/engine-decision.svg" alt="Entscheidungsschritte der Engine" loading="lazy"></a><figcaption>Schritte: Schichtende-Cutoff → Priorität → Aufwand → Reserve → Bündel → Lieferschein-Gruppen → Verteilen → Abholreihenfolge.</figcaption></figure>
+          <h3>Prioritäts-Ränge (0 = zuerst raus / ausgeschlossen)</h3>
+          <table>
+            <tr><th>Rang</th><th>Klasse</th><th>Bedeutung</th></tr>
+            <tr><td>0</td><td>Ausschluss</td><td>nicht planbar (z. B. fehlende Daten) → bleibt liegen</td></tr>
+            <tr><td>1</td><td>Manuell (Teamlead)</td><td>vom Teamlead priorisiert — schlägt alle Regeln</td></tr>
+            <tr><td>2</td><td>Prio-Kennzeichen</td><td>Beleg trägt <code>prio</code></td></tr>
+            <tr><td>3</td><td>Überfällig</td><td>relativ zum Verladetag (siehe Punkt 4 unten); <em>CatMan nur Anzeige</em></td></tr>
+            <tr><td>4</td><td>Jeden-Tag-Ware</td><td>Abschnitt 7, 4, 8</td></tr>
+            <tr><td>5</td><td>Verladeplan heute</td><td>Abschnitt 1, 2, 3 mit heutigem Verladetag</td></tr>
+            <tr><td>6</td><td>FIFO</td><td>Rest nach Buchungsdatum</td></tr>
+          </table>
+          <h3>Faire Verteilung &amp; Reserve</h3>
+          <p>Belege werden zu <strong>Bündeln</strong> (~55 Min, ≤ 6 Belege, möglichst ein Bereich) gepackt und per <strong>LPT-Verfahren</strong> (Largest-Processing-Time) auf die Mitarbeitenden verteilt — gleichmäßige Auslastung, schwere/leichte Belege gemischt. Die <strong>eiserne Reserve</strong> bleibt geschützt; nur Prio/überfällig/Teamlead dürfen sie anbrechen.</p>
+          <div class="callout bad"><div class="ch">⚠ Wirksame vs. unwirksame Stellschrauben</div>Aktuell beeinflussen nur diese Admin-Einstellungen die echte Zuteilung: <strong>Priorität</strong> (Vorlauf-Tage), <strong>Lieferungen</strong> (Gruppierung), <strong>Schichtende</strong>, <strong>Verladeplan</strong> und die Stammdaten (Lagerplätze/Mitarbeiter/Schichten). Die Tabs <strong>Reserve</strong> und <strong>Bündel</strong> werden gespeichert, aber <em>nicht</em> an die Engine übergeben (Standardwerte greifen). <strong>Aufwand</strong> ist verdrahtet, wirkt aber praktisch nicht, weil keine positionsgenauen Aufwandsdaten reinkommen. Details in Abschnitt 9.</div>
+        </section>
+
+        <!-- 5 -->
+        <section id="mitarbeiter">
+          <h2><span class="num">5</span>Mitarbeiter-App</h2>
+          <p class="lead">Die App führt in drei Phasen: <strong>1 Sammeln → 2 Bearbeiten → 3 Fertig</strong>. Sie ist <strong>offline-fähig</strong> (lokale Datenbank), synchronisiert mit dem Backend, sobald Netz da ist.</p>
+          <figure><a href="img/employee-flow.svg" target="_blank" rel="noopener"><img src="img/employee-flow.svg" alt="Mitarbeiter-Ablauf COLLECT PROCESS DONE" loading="lazy"></a><figcaption>Ablauf mit den wichtigsten Leitplanken (Gates).</figcaption></figure>
+          <h3>1 · Sammeln (COLLECT)</h3>
+          <p>Alle Lagerplätze des Bündels in Route-Reihenfolge abfahren und abhaken (Scan optional). <strong>Harte Sperre:</strong> Bearbeiten startet erst, wenn <em>alle</em> Plätze geholt sind.</p>
+          <h3>2 · Bearbeiten (PROCESS, je Beleg)</h3>
+          <ol>
+            <li><strong>Preis-Etiketten drucken</strong> (setzt Beleg auf „in Arbeit").</li>
+            <li><strong>Karton öffnen</strong> — erst <em>nach</em> dem Druck möglich (Leitplanke G.2: „erst drucken, dann auspacken").</li>
+            <li><strong>Mindestmenge je Position prüfen</strong> — <em>immer</em> nötig, auch wenn „Prüfung WE = Nein" (Leitplanke G.1).</li>
+            <li><strong>Beleg erledigt</strong> oder <strong>Teilabschluss</strong> (mit Grund).</li>
+          </ol>
+          <p><strong>Problem melden</strong> ist jederzeit möglich (Ziel: ganzer Beleg, Position, SKU oder Box; Typen z. B. Fehlmenge, Beschädigung, Etikett-/Sicherungs-/Druckerproblem). Ein offenes Problem blockiert „Beleg erledigt".</p>
+          <div class="callout ok"><div class="ch">✓ Abschluss-Gate</div>„Beleg erledigt" geht nur, wenn: Etiketten gedruckt (falls nötig) <strong>und</strong> alle Mengen geprüft <strong>und</strong> kein offenes Problem.</div>
+          <p>Sind alle Belege fertig → <strong>„Nächstes Bündel holen"</strong> (Selbst-Abruf, solange Kapazität/Schichtzeit reicht).</p>
+        </section>
+
+        <!-- 6 -->
+        <section id="lebenszyklus">
+          <h2><span class="num">6</span>Beleg-Lebenszyklus</h2>
+          <p class="lead">Jeder Beleg durchläuft klar definierte Status. Teamlead-Eingriffe und Mitarbeiter-Aktionen lösen die Übergänge aus — jeder Übergang wird im fälschungssicheren Audit-Log protokolliert.</p>
+          <figure><a href="img/case-lifecycle.svg" target="_blank" rel="noopener"><img src="img/case-lifecycle.svg" alt="Beleg-Status-Maschine" loading="lazy"></a><figcaption>Status-Maschine vom Import bis zum Tagesabschluss.</figcaption></figure>
+          <table>
+            <tr><th>Status</th><th>Bedeutung</th></tr>
+            <tr><td><code>needs_review</code></td><td>prüfbedürftig importiert — Teamlead gibt frei</td></tr>
+            <tr><td><code>ready</code></td><td>im Pool, verteilbar</td></tr>
+            <tr><td><code>parked</code></td><td>geparkt — von der Automatik ausgenommen</td></tr>
+            <tr><td><code>assigned</code> / <code>in_progress</code></td><td>einem Bündel zugeordnet / wird bearbeitet</td></tr>
+            <tr><td><code>issue_open</code></td><td>Problem gemeldet</td></tr>
+            <tr><td><code>completed</code> / <code>partially_completed</code></td><td>fertig / Teilabschluss</td></tr>
+            <tr><td><code>zst_done</code></td><td>im Tagesabschluss exportiert</td></tr>
+            <tr><td><code>cancelled</code></td><td>storniert</td></tr>
+          </table>
+        </section>
+
+        <!-- 7 -->
+        <section id="teamlead">
+          <h2><span class="num">7</span>Teamlead-Cockpit</h2>
+          <p class="lead">Alle Steuerungsfunktionen an einem Ort. Jeder eingreifende Schritt verlangt einen <strong>Grund</strong> (min. 10 Zeichen) und landet im Audit-Log.</p>
+          <figure><a href="img/teamlead-map.svg" target="_blank" rel="noopener"><img src="img/teamlead-map.svg" alt="Teamlead-Cockpit Funktionsübersicht" loading="lazy"></a><figcaption>Funktionsübersicht des Cockpits.</figcaption></figure>
+          <div class="grid2">
+            <div class="callout info"><div class="ch">Cockpit / KPIs</div>Kapazität (netto/geplant/Reserve), Auslastung, Pool-Kennzahlen. <strong>Automatik-Schalter</strong>: AN = neue freie Arbeit wird automatisch neu berechnet; AUS = Teamlead klickt selbst. (Der Schalter steuert <em>nur</em>, ob automatisch ausgelöst wird — die Engine-Logik bleibt gleich.)</div>
+            <div class="callout info"><div class="ch">Simulation</div><strong>„Vorschlag ansehen"</strong> = Probelauf (speichert nichts). <strong>„Übernehmen / Live zuweisen"</strong> = neu berechnen &amp; speichern (Pool leeren, Engine, Bündel + Audit-Events).</div>
+            <div class="callout info"><div class="ch">Digitale Ablagen</div>7 Lanes mit fester Reihenfolge: Probleme → Geparkt → Prio → Verladeplan heute → (Verladeplan morgen) → Jeden-Tag → Reserve. Karten-Aktionen je nach Status.</div>
+            <div class="callout info"><div class="ch">Mitarbeiter-Board</div>Auslastung je Person, Bündel-Inhalt, Lieferungs-Warnungen. Eingriffe: <strong>entnehmen, zuordnen, umsortieren, pausieren, fortsetzen</strong> (auditiert).</div>
+            <div class="callout info"><div class="ch">Belege &amp; Aufteilungen</div>Filterbare Belegliste + Detail (Status, Positionen, Verlauf). <strong>Aufteilen</strong> eines Belegs auf mehrere Personen (mengen-/positions-basiert).</div>
+            <div class="callout info"><div class="ch">Admin / Regeln</div>Priorität · Reserve · Bündel · Aufwand (+ Live-Vorschau) · Lieferungen · Verladeplan · Lagerplätze · Mitarbeiter · Schichtplan · Schichtende · Integrationen.</div>
+          </div>
+          <h3>Beleg-Aktionen (mit Grund, auditiert)</h3>
+          <table>
+            <tr><th>Aktion</th><th>Wirkung</th><th>Status danach</th></tr>
+            <tr><td>Freigeben</td><td>Prüfbeleg in den Pool</td><td>needs_review → ready</td></tr>
+            <tr><td>Parken / Entparken</td><td>aus Automatik nehmen / zurück</td><td>ready ↔ parked</td></tr>
+            <tr><td>Priorisieren / Entfernen</td><td>manuelles Prio-Kennzeichen</td><td>(Flag)</td></tr>
+            <tr><td>Problem freigeben</td><td>Problem gelöst</td><td>issue_open → in_progress</td></tr>
+            <tr><td>Rest reaktivieren</td><td>Teilrest neu in den Pool</td><td>partially_completed → ready</td></tr>
+            <tr><td>Stornieren</td><td>Beleg beenden, aus Bündel lösen</td><td>→ cancelled</td></tr>
+          </table>
+          <h3>Tagesabschluss (ZST)</h3>
+          <p>„Tagesabschluss" verschiebt alle <code>completed</code>-Belege nach <code>zst_done</code>, stempelt den Export-Zeitpunkt und liefert eine <strong>CSV</strong> (Beleg, Mitarbeiter, Menge, Aufwandspunkte, Zeit). Mehrfach ausführbar — exportiert nur neu Erledigtes.</p>
+        </section>
+
+        <!-- 8 -->
+        <section id="anforderungen">
+          <h2><span class="num">8</span>Die 7 Anforderungen (Teamlead-Feedback)</h2>
+          <p class="lead">Status der aus dem Feedback gewünschten Funktionen — wie sie gedacht sind und wo sie stehen (Stand Branch <code>main</code>).</p>
+          <table>
+            <tr><th>#</th><th>Anforderung</th><th>So gedacht</th><th>Status</th></tr>
+            <tr><td>1</td><td>Lieferschein-Gruppierung</td><td>Zusammengehörige Belege erkennen &amp; bei einer Person halten (Abschnitt 3)</td><td><span class="pill ok">umgesetzt</span></td></tr>
+            <tr><td>2</td><td>Aufwandsfaktoren transparent</td><td>Admin sieht live, wie Faktoren den Aufwand verändern (EffortPreview)</td><td><span class="pill warn">teilweise</span> Transparenz da; Faktoren wirken (noch) nicht auf die echte Zuteilung</td></tr>
+            <tr><td>3</td><td>Aushilfen / Azubis</td><td><code>measured</code>-Flag: zählen für Durchsatz, aber nicht für die Leistungs-KPIs</td><td><span class="pill bad">nicht auf main</span> (eigener Branch)</td></tr>
+            <tr><td>4</td><td>Überfälligkeit relativ zum Verladetag</td><td><code>heute ≥ Verladetag − Vorlauftage</code> statt Stunden-Schwelle</td><td><span class="pill ok">umgesetzt</span></td></tr>
+            <tr><td>5+6</td><td>Schichtende-Handling</td><td>Letzte ~2 h von Auto-Verteilung ausnehmen; Rest per Selbst-Abruf; nichts bleibt über Nacht offen</td><td><span class="pill ok">umgesetzt</span></td></tr>
+            <tr><td>7</td><td>CatMan-Gewichtung aus</td><td>CatMan ist nur noch Anzeige (Chip/Zähler); Rang 3 = nur „überfällig"</td><td><span class="pill ok">umgesetzt</span></td></tr>
+          </table>
+        </section>
+
+        <!-- 9 -->
+        <section id="befunde">
+          <h2><span class="num">9</span>Befunde &amp; Inkonsistenzen</h2>
+          <p class="lead">Ehrliche Liste dessen, was beim Code-Abgleich auffiel — mit Schweregrad und Empfehlung. (Dokumentation, kein Code wurde geändert.)</p>
+
+          <h3>Engine / Konfiguration</h3>
+          <table>
+            <tr><th>Schwere</th><th>Befund</th><th>Empfehlung</th></tr>
+            <tr><td><span class="sev h">Hoch</span></td><td><strong>Admin-Tabs „Reserve" und „Bündel" sind totes Konfig.</strong> <code>engineConfigFromRuleConfig()</code> mappt sie nicht in die EngineConfig — die Engine nutzt die Standardwerte. Änderungen wirken nicht.</td><td>Mapping ergänzen <em>oder</em> die Tabs als „read-only / geplant" kennzeichnen.</td></tr>
+            <tr><td><span class="sev h">Hoch</span></td><td><strong>„Aufwand"-Faktoren wirken praktisch nicht.</strong> Sie werden zwar übergeben, aber ohne positionsgenaue <code>effortVectors</code> läuft <code>computeEffort</code> nie — die Engine nutzt das vorab gespeicherte <code>estimatedMinutes</code>. (Im Code so kommentiert.)</td><td>Bei ProHandel-Ingestion effortVectors liefern; bis dahin im UI klar als „Vorschau, noch ohne Echtwirkung" labeln.</td></tr>
+            <tr><td><span class="sev h">Hoch</span></td><td><strong>Selbst-Abruf ignoriert die Bündel-Konfig.</strong> <code>assignNextBundle()</code> nutzt <code>DEFAULT_ENGINE_CONFIG.assignment</code> statt der (verdrahteten) Regeln — Batch-Neuberechnung und Selbst-Abruf bündeln unterschiedlich.</td><td><code>engineConfigFromRuleConfig(ruleConfig).assignment</code> verwenden.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Reserve kann negativ werden</strong> und wird nur als weiche Warnung gezeigt; „Übernehmen" bleibt klickbar.</td><td>Bei aufgebrauchter Reserve bestätigen lassen oder hart warnen.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Lane „Verladeplan morgen" wird nie befüllt</strong> — alles außer Abschnitt 1/2/3-heute fällt in „Reserve".</td><td>Routing anhand <code>loadPlanDate</code> (morgen) ergänzen.</td></tr>
+            <tr><td><span class="sev l">Niedrig</span></td><td><strong>CatMan-Datum ist totes Feld</strong> (nur Anzeige) — bewusst so seit Punkt 7, aber leicht verwirrend.</td><td>Im Datenmodell als „display-only" dokumentieren.</td></tr>
+          </table>
+
+          <h3>Teamlead-UI</h3>
+          <table>
+            <tr><th>Schwere</th><th>Befund</th><th>Empfehlung</th></tr>
+            <tr><td><span class="sev h">Hoch</span></td><td><strong>Aufteilungen sind nur Session-Zustand</strong> — werden nicht ans Backend gespeichert; nach Reload weg.</td><td>Backend-Endpoint für Splits ergänzen (Konzept liegt vor).</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>ProHandel-Integration ist Read-only v1</strong> — kein Rückschreiben; Storno wird ProHandel nicht mitgeteilt.</td><td>Bidirektionalen Sync planen; UI-Erwartung klarstellen.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>„Vorlauftage je Shop/Abschnitt" (overdueLeadDaysOverrides) nicht im UI editierbar</strong> — existiert nur im Schema.</td><td>Editor im Prioritäts-Tab nachrüsten.</td></tr>
+            <tr><td><span class="sev l">Niedrig</span></td><td><strong>Name „Automatik" ist missverständlich</strong> — er schaltet nur das automatische Auslösen, nicht die Engine.</td><td>Umbenennen in „Auto-Zuweisen" o. ä.</td></tr>
+          </table>
+
+          <h3>Mitarbeiter-App</h3>
+          <table>
+            <tr><th>Schwere</th><th>Befund</th><th>Empfehlung</th></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Lokales Event-Log wird nicht ans Backend synchronisiert</strong> — nur End-Status (Start/Fertig/Problem) landen serverseitig; Zwischenschritte (Druck, Mengenprüfung) nicht.</td><td>Outbox-Sync der Events ergänzen, falls lückenloses Audit gewünscht.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Foto bei Problemmeldung versprochen, aber kein Upload-UI.</strong> <code>photoKeys</code> existiert, wird nie befüllt.</td><td>Kamera/Upload nachrüsten oder Hinweis entfernen.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Demo-Modus „nächstes Szenario" löscht den Fortschritt</strong> (<code>db.progress.clear()</code>) — anders als der echte Pull, der Fortschritt erhält.</td><td>Nur Demo-relevant; vor Pilot entfernen/kapseln.</td></tr>
+            <tr><td><span class="sev m">Mittel</span></td><td><strong>Fehlgeschlagene Synchronisierung ohne Rückmeldung</strong> — POST-Fehler werden still geschluckt (offline-first), Mitarbeiter sieht keinen „nicht synchronisiert"-Hinweis.</td><td>Pending-/Fehler-Indikator anzeigen.</td></tr>
+            <tr><td><span class="sev l">Niedrig</span></td><td><strong>Kein manueller Scan-Fallback</strong> (<code>ScanField</code> ungenutzt); <code>step.skipped</code>-Eventtyp definiert, aber ohne Skip-Button.</td><td>Toten Code entfernen oder Feature fertigstellen.</td></tr>
+          </table>
+        </section>
+
+        <footer style="border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12.5px">
+          Handbuch · Diagramme mit Mermaid gerendert (Quellen in <code>docs/handbook/src/</code>, SVGs in <code>img/</code>). Inhalt geprüft gegen Branch <code>main</code>. Reine Dokumentation — keine Produktionslogik geändert.
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      // Scrollspy: highlight active TOC entry
+      const links = [...document.querySelectorAll('#toc a')];
+      const map = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            links.forEach((l) => l.classList.remove('active'));
+            const a = map.get(e.target.id); if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+      document.querySelectorAll('main section').forEach((s) => obs.observe(s));
+    </script>
+  </body>
+</html>

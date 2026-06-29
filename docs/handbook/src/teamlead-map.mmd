@@ -1,0 +1,23 @@
+%% Teamlead-Cockpit — Funktionsübersicht
+flowchart LR
+    classDef hub fill:#16314a,stroke:#8b7cf6,color:#eef1f6;
+    classDef area fill:#1d222c,stroke:#56b6ff,color:#eef1f6;
+    classDef sub fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+
+    hub["TEAMLEAD-COCKPIT"]:::hub
+
+    ck["Cockpit / KPIs<br/>Kapazität · Auslastung · Automatik-Schalter<br/>Simulieren / Live zuweisen"]:::area
+    ab["Digitale Ablagen<br/>7 Lanes: Probleme · Geparkt · Prio<br/>Verladeplan heute/morgen · Jeden-Tag · Reserve"]:::area
+    bo["Mitarbeiter-Board<br/>Auslastung je Person · Bündel<br/>Eingriffe: entnehmen/zuordnen/umsortieren/pausieren"]:::area
+    be["Belege<br/>Liste (Filter) + Detail<br/>Status · Positionen · Verlauf"]:::area
+    sp["Aufteilungen<br/>Beleg auf mehrere Personen splitten<br/><i>(derzeit nur Session, nicht gespeichert)</i>"]:::area
+    ad["Admin / Regeln<br/>Priorität · Reserve · Bündel · Aufwand<br/>Lieferungen · Verladeplan · Lagerplätze<br/>Mitarbeiter · Schichtplan · Schichtende · Integrationen"]:::area
+    zs["Tagesabschluss<br/>ZST-Export (CSV)"]:::area
+
+    hub --> ck
+    hub --> ab
+    hub --> bo
+    hub --> be
+    hub --> sp
+    hub --> ad
+    hub --> zs
