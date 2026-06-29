@@ -14,14 +14,18 @@ import {
 import {
   assignmentBundleSchema,
   bereichFromLocationKind,
+  ruleConfigSchema,
   weeklyPatternSchema,
+  DEFAULT_RULE_CONFIG,
   type AssignmentBundle,
   type BundlePickupSequence,
   type GoodsReceiptCase,
   type LocationMaster,
+  type RuleConfig,
   type WeeklyPattern,
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
 
 type PrismaTx = Prisma.TransactionClient;
 import { EventLogService } from '../events/event-log.service.js';
@@ -56,6 +60,17 @@ export class AssignmentService {
     private readonly events: EventLogService,
   ) {}
 
+  /**
+   * Read the structured rule config (AppConfig `rule_config`), the single source for
+   * the Teamlead-Punkt-4 Vorlauf and the Verladeplan calendar. Falls back to the
+   * default when unset/invalid so recalculate/preview never fail on missing config.
+   */
+  private async readRuleConfig(): Promise<RuleConfig> {
+    const row = await this.prisma.appConfig.findUnique({ where: { key: 'rule_config' } });
+    const parsed = ruleConfigSchema.safeParse(row?.value);
+    return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG;
+  }
+
   async recalculate(principal: Principal, date?: string): Promise<RecalculateResultDto> {
     const day = date ?? new Date().toISOString().slice(0, 10);
     const start = day + 'T00:00:00.000Z';
@@ -69,13 +84,15 @@ export class AssignmentService {
     // because the calendar rolled over to a new (un-materialized) date.
     await this.materializeShiftsForDate(day, dayStart);
 
-    const [shiftRows, locationRows] = await Promise.all([
+    const [shiftRows, locationRows, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
         include: { employee: { select: { bereiche: true } } },
       }),
       this.prisma.location.findMany({ where: { active: true } }),
+      this.readRuleConfig(),
     ]);
+    const engineConfig = engineConfigFromRuleConfig(ruleConfig);
 
     // ONE transaction: clearing the prior plan, re-reading the freed pool, running
     // the engine, and persisting the new plan all commit (or roll back) together so
@@ -96,13 +113,19 @@ export class AssignmentService {
 
       const input: EngineInput = {
         date: day,
-        cases: casesRows.map(toGoodsReceiptCase),
+        // Resolve each case's next Verladetag from the live calendar so the engine's
+        // Vorlauf-relative overdue logic (Teamlead-Punkt 4) has a date to compare.
+        cases: applyResolvedLoadPlanDates(
+          casesRows.map(toGoodsReceiptCase),
+          ruleConfig.loadPlan,
+          day,
+        ),
         shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
         locations: locationRows.map(toLocationMaster),
       };
 
       const t0 = performance.now();
-      const computedPlan = assignWork(input);
+      const computedPlan = assignWork(input, engineConfig);
       const elapsedMs = Math.round(performance.now() - t0);
 
       const seqByBundleId = new Map<string, BundlePickupSequence>(
@@ -174,6 +197,8 @@ export class AssignmentService {
     const remainingCapacity = shift.netCapacityMinutes - usedMinutes;
     if (remainingCapacity <= 0) return { assigned: false, reason: 'capacity_done' };
 
+    const ruleConfig = await this.readRuleConfig();
+
     return this.prisma.$transaction(async (tx) => {
       const [caseRows, locationRows] = await Promise.all([
         tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: { storageLocation: true } }),
@@ -183,7 +208,13 @@ export class AssignmentService {
 
       const locations: LocationMaster[] = locationRows.map(toLocationMaster);
       const kindByCode = new Map(locations.map((l) => [l.code, l.kind]));
-      const cases: GoodsReceiptCase[] = caseRows.map(toGoodsReceiptCase);
+      // Same Verladetag-relative priority as recalculate: resolve the loading day from
+      // the live calendar, then classify with the configured Vorlauf (Teamlead-Punkt 4).
+      const cases: GoodsReceiptCase[] = applyResolvedLoadPlanDates(
+        caseRows.map(toGoodsReceiptCase),
+        ruleConfig.loadPlan,
+        day,
+      );
       const allowedBereiche = new Set(employee.bereiche);
 
       // Enrich (priority + effort fallback) and keep only this employee's Bereiche.
@@ -192,7 +223,11 @@ export class AssignmentService {
           const kind = kindByCode.get(c.storageLocation.code);
           return {
             case: c,
-            priority: classifyPriority(c, { today: day }),
+            priority: classifyPriority(c, {
+              today: day,
+              overdueLeadDays: ruleConfig.priority.overdueLeadDays,
+              overdueLeadDaysOverrides: ruleConfig.priority.overdueLeadDaysOverrides,
+            }),
             effortMinutes: c.estimatedMinutes,
             effortPoints: c.effortPoints,
             wgrCodes: [],
@@ -304,7 +339,7 @@ export class AssignmentService {
     const dayStart = new Date(day + 'T00:00:00.000Z');
     const dayEnd = new Date(day + 'T23:59:59.999Z');
 
-    const [shiftRows, locationRows, casesRows] = await Promise.all([
+    const [shiftRows, locationRows, casesRows, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
         include: { employee: { select: { bereiche: true } } },
@@ -314,6 +349,7 @@ export class AssignmentService {
         where: { status: { in: [...PREVIEW_POOL_STATUSES] } },
         include: { storageLocation: true },
       }),
+      this.readRuleConfig(),
     ]);
 
     // The engine's §8.1 eligibility is `ready`/`partially_completed`; an already
@@ -321,17 +357,18 @@ export class AssignmentService {
     // those `assigned` cases to the pure engine AS `ready` so it re-proposes today's
     // plan (recalculate is untouched — this normalisation is preview-only and never
     // persisted). Started/finished cases were already excluded by the read filter.
+    const normalizedCases = casesRows
+      .map(toGoodsReceiptCase)
+      .map((c) => (c.status === 'assigned' ? { ...c, status: 'ready' as const } : c));
     const input: EngineInput = {
       date: day,
-      cases: casesRows
-        .map(toGoodsReceiptCase)
-        .map((c) => (c.status === 'assigned' ? { ...c, status: 'ready' as const } : c)),
+      cases: applyResolvedLoadPlanDates(normalizedCases, ruleConfig.loadPlan, day),
       shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
       locations: locationRows.map(toLocationMaster),
     };
 
     const t0 = performance.now();
-    const plan = assignWork(input);
+    const plan = assignWork(input, engineConfigFromRuleConfig(ruleConfig));
     const durationMs = Math.round(performance.now() - t0);
 
     // Proposed assignment count = cases the engine placed into bundles (no DB write).

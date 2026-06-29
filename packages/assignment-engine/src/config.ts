@@ -118,12 +118,36 @@ export const DEFAULT_ASSIGNMENT_CONFIG: AssignmentConfig = {
   heavyCaseMinutes: 45,
 };
 
+/** Prioritäts-Tuning (§8.1, Teamlead-Punkt 4). */
+export const priorityConfigSchema = z.object({
+  /**
+   * Default Vorlauf in days before a Verladeplan loading day at which a case becomes
+   * due/overdue (Teamlead-Punkt 4). 0 reproduces the legacy "due on/after loading day".
+   */
+  overdueLeadDays: z.number().int().nonnegative(),
+  /** Shop-/section-specific overrides; most specific match wins. */
+  overdueLeadDaysOverrides: z.array(
+    z.object({
+      shopAreaNo: z.string().optional(),
+      section: z.number().int().optional(),
+      leadDays: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type PriorityConfig = z.infer<typeof priorityConfigSchema>;
+
+export const DEFAULT_PRIORITY_CONFIG: PriorityConfig = {
+  overdueLeadDays: 0,
+  overdueLeadDaysOverrides: [],
+};
+
 /** Aggregated engine configuration. */
 export interface EngineConfig {
   effort: EffortConfig;
   reserve: ReserveConfig;
   capacity: CapacityConfig;
   assignment: AssignmentConfig;
+  priority: PriorityConfig;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -131,4 +155,5 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   reserve: DEFAULT_RESERVE_CONFIG,
   capacity: DEFAULT_CAPACITY_CONFIG,
   assignment: DEFAULT_ASSIGNMENT_CONFIG,
+  priority: DEFAULT_PRIORITY_CONFIG,
 };

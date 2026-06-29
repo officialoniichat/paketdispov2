@@ -1089,9 +1089,19 @@ export interface components {
             scanCode?: string | null;
             active: boolean;
         };
+        LoadPlanLeadOverrideDto: {
+            /** @description Shopbereich; weggelassen = alle */
+            shopAreaNo?: string;
+            /** @description Abschnitt 1..8; weggelassen = alle */
+            section?: number;
+            /** @description Vorlauf in Tagen vor dem Verladetag */
+            leadDays: number;
+        };
         PriorityRuleConfigDto: {
             catManWeight: number;
-            overdueThresholdHours: number;
+            /** @description Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit */
+            overdueLeadDays: number;
+            overdueLeadDaysOverrides: components["schemas"]["LoadPlanLeadOverrideDto"][];
             fifoEnabled: boolean;
             manualPriorityWins: boolean;
         };

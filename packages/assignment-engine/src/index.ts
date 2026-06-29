@@ -18,15 +18,18 @@ export {
   DEFAULT_RESERVE_CONFIG,
   DEFAULT_CAPACITY_CONFIG,
   DEFAULT_ASSIGNMENT_CONFIG,
+  DEFAULT_PRIORITY_CONFIG,
   effortConfigSchema,
   reserveConfigSchema,
   capacityConfigSchema,
   assignmentConfigSchema,
+  priorityConfigSchema,
   type EngineConfig,
   type EffortConfig,
   type ReserveConfig,
   type CapacityConfig,
   type AssignmentConfig,
+  type PriorityConfig,
 } from './config.js';
 
 // Engine types.
@@ -62,7 +65,9 @@ export {
   classifyPriority,
   comparePriority,
   sortByPriority,
+  resolveLeadDays,
   type PriorityContext,
+  type LoadPlanLeadOverride,
 } from './priority/priority-engine.js';
 
 // (3) Effort score (§8.2).

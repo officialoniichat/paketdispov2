@@ -48,7 +48,11 @@ function enrichCase(
     : { minutes: goodsCase.estimatedMinutes, points: goodsCase.effortPoints };
   return {
     case: goodsCase,
-    priority: classifyPriority(goodsCase, { today: input.date }),
+    priority: classifyPriority(goodsCase, {
+      today: input.date,
+      overdueLeadDays: config.priority.overdueLeadDays,
+      overdueLeadDaysOverrides: config.priority.overdueLeadDaysOverrides,
+    }),
     effortMinutes: effort.minutes,
     effortPoints: effort.points,
     wgrCodes: vector ? vector.wgrCodes : [],

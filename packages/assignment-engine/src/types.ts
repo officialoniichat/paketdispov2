@@ -18,7 +18,7 @@ export const PRIORITY_RANK = {
   prioFlag: 2,
   catManDue: 3,
   everyDay: 4,
-  loadPlanToday: 5,
+  loadPlanDue: 5,
   fifo: 6,
 } as const;
 
@@ -30,7 +30,7 @@ export type PriorityClass =
   | 'prio_flag'
   | 'catman_due'
   | 'every_day'
-  | 'load_plan_today'
+  | 'load_plan_due'
   | 'fifo';
 
 /** Result of classifying one case against §8.1. */

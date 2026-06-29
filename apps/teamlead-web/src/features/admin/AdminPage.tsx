@@ -138,12 +138,12 @@ export function AdminPage(): JSX.Element {
                     hint="Vorzug für Belege mit CatMan-Liefertermin (Aktionsware). Höher = früher zugeteilt."
                   />
                   <Num
-                    label="Überfälligkeitsschwelle (h)"
-                    value={draft.priority.overdueThresholdHours}
+                    label="Überfälligkeits-Vorlauf (Tage)"
+                    value={draft.priority.overdueLeadDays}
                     onChange={(v) =>
-                      patch('priority', { ...draft.priority, overdueThresholdHours: v })
+                      patch('priority', { ...draft.priority, overdueLeadDays: v })
                     }
-                    hint="Ab so vielen Stunden seit Buchung gilt ein Beleg als überfällig und wird vorgezogen."
+                    hint="So viele Tage vor dem Verladetag gilt ein Verladeplan-Beleg als überfällig und wird vorgezogen. Greift auch bei seltenen (z. B. wöchentlichen) Verladetagen. Shop-spezifische Ausnahmen siehe Verladeplan-Tab."
                   />
                   <Toggle
                     label="FIFO aktiv"

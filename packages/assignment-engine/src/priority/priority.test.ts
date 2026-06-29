@@ -67,10 +67,10 @@ describe('classifyPriority (§8.1)', () => {
     }
   });
 
-  it('classifies sections 1/2/3 as Verladeplan only when loadPlanDate is today or past', () => {
+  it('classifies sections 1/2/3 as Verladeplan-due on/after the loading day (no Vorlauf)', () => {
     const today = makeCase({ id: 'g', section: 1, loadPlanDate: TODAY });
     const future = makeCase({ id: 'h', section: 1, loadPlanDate: '2026-06-20' });
-    expect(classifyPriority(today, { today: TODAY }).class).toBe('load_plan_today');
+    expect(classifyPriority(today, { today: TODAY }).class).toBe('load_plan_due');
     expect(classifyPriority(future, { today: TODAY }).class).toBe('fifo');
   });
 });

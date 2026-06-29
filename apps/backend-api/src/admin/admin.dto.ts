@@ -69,9 +69,37 @@ export class LocationUpsertDto {
 
 // --- Rule config ------------------------------------------------------------
 
+export class LoadPlanLeadOverrideDto {
+  @ApiPropertyOptional({ description: 'Shopbereich; weggelassen = alle' })
+  @IsOptional()
+  @IsString()
+  shopAreaNo?: string;
+
+  @ApiPropertyOptional({ description: 'Abschnitt 1..8; weggelassen = alle' })
+  @IsOptional()
+  @IsInt()
+  section?: number;
+
+  @ApiProperty({ description: 'Vorlauf in Tagen vor dem Verladetag' })
+  @IsInt()
+  @Min(0)
+  leadDays!: number;
+}
+
 export class PriorityRuleConfigDto {
   @ApiProperty() @IsNumber() @Min(0) catManWeight!: number;
-  @ApiProperty() @IsNumber() @Min(0) overdueThresholdHours!: number;
+
+  @ApiProperty({ description: 'Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit' })
+  @IsInt()
+  @Min(0)
+  overdueLeadDays!: number;
+
+  @ApiProperty({ type: [LoadPlanLeadOverrideDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LoadPlanLeadOverrideDto)
+  overdueLeadDaysOverrides!: LoadPlanLeadOverrideDto[];
+
   @ApiProperty() @IsBoolean() fifoEnabled!: boolean;
   @ApiProperty() @IsBoolean() manualPriorityWins!: boolean;
 }

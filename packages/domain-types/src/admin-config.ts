@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema } from './primitives.js';
+import { sectionCodeSchema } from './enums.js';
 
 /**
  * §11 Admin / Regelpflege — the one cohesive, structured rule configuration the
@@ -13,10 +14,29 @@ import { idSchema, isoDateSchema } from './primitives.js';
  * whole config.
  */
 
-/** Priority weighting + thresholds (§8.1). */
+/**
+ * Shop-/Abschnitts-spezifischer Überfälligkeits-Vorlauf (Teamlead-Punkt 4). Every
+ * specified field must equal the case's; `undefined` fields are wildcards. The most
+ * specific match wins in the engine.
+ */
+export const loadPlanLeadOverrideSchema = z.object({
+  shopAreaNo: z.string().optional(),
+  section: sectionCodeSchema.optional(),
+  leadDays: z.number().int().nonnegative(),
+});
+export type LoadPlanLeadOverride = z.infer<typeof loadPlanLeadOverrideSchema>;
+
+/** Priority weighting + Überfälligkeits-Vorlauf (§8.1, Teamlead-Punkt 4). */
 export const priorityRuleConfigSchema = z.object({
   catManWeight: z.number().nonnegative(),
-  overdueThresholdHours: z.number().nonnegative(),
+  /**
+   * Default Vorlauf in Tagen vor dem Verladetag, ab dem ein Verladeplan-Case
+   * (Abschnitt 1/2/3) dringend/überfällig wird. Ersetzt die tote, nie konsumierte
+   * Stundenschwelle `overdueThresholdHours`. 0 = erst am/nach dem Verladetag.
+   */
+  overdueLeadDays: z.number().int().nonnegative(),
+  /** Shop-/abschnittsspezifische Übersteuerungen des Vorlaufs. */
+  overdueLeadDaysOverrides: z.array(loadPlanLeadOverrideSchema),
   fifoEnabled: z.boolean(),
   manualPriorityWins: z.boolean(),
 });
@@ -82,7 +102,8 @@ export const RULE_CONFIG_KEY = 'rule_config';
 export const DEFAULT_RULE_CONFIG: RuleConfig = {
   priority: {
     catManWeight: 1.5,
-    overdueThresholdHours: 48,
+    overdueLeadDays: 2,
+    overdueLeadDaysOverrides: [],
     fifoEnabled: true,
     manualPriorityWins: true,
   },

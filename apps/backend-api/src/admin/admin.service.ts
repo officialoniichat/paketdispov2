@@ -108,7 +108,9 @@ export class AdminService {
    * of truth) and persist it as the singleton JSON document. A parse failure is
    * surfaced as a 400 with the field-level Zod issues, not a 500.
    */
-  async replaceRuleConfig(input: RuleConfig): Promise<RuleConfigDto> {
+  async replaceRuleConfig(input: RuleConfigDto): Promise<RuleConfigDto> {
+    // The DTO's `section` widens to `number` for OpenAPI; the Zod schema is the trust
+    // boundary that narrows it back to a valid SectionCode (or 400s).
     const parsed = ruleConfigSchema.safeParse(input);
     if (!parsed.success) {
       throw new BadRequestException({

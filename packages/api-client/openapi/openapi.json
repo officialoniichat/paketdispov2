@@ -3085,14 +3085,41 @@
           "active"
         ]
       },
+      "LoadPlanLeadOverrideDto": {
+        "type": "object",
+        "properties": {
+          "shopAreaNo": {
+            "type": "string",
+            "description": "Shopbereich; weggelassen = alle"
+          },
+          "section": {
+            "type": "number",
+            "description": "Abschnitt 1..8; weggelassen = alle"
+          },
+          "leadDays": {
+            "type": "number",
+            "description": "Vorlauf in Tagen vor dem Verladetag"
+          }
+        },
+        "required": [
+          "leadDays"
+        ]
+      },
       "PriorityRuleConfigDto": {
         "type": "object",
         "properties": {
           "catManWeight": {
             "type": "number"
           },
-          "overdueThresholdHours": {
-            "type": "number"
+          "overdueLeadDays": {
+            "type": "number",
+            "description": "Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit"
+          },
+          "overdueLeadDaysOverrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadPlanLeadOverrideDto"
+            }
           },
           "fifoEnabled": {
             "type": "boolean"
@@ -3103,7 +3130,8 @@
         },
         "required": [
           "catManWeight",
-          "overdueThresholdHours",
+          "overdueLeadDays",
+          "overdueLeadDaysOverrides",
           "fifoEnabled",
           "manualPriorityWins"
         ]
