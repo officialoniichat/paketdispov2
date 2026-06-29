@@ -280,7 +280,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               onClick={() =>
                 requestReason({
                   title: `Reihenfolge für ${row.displayName} speichern`,
-                  description: 'Neue Abholreihenfolge des Pakets.',
+                  description: 'Neue Abholreihenfolge des Bündels.',
                   suggestions: ['Laufweg optimiert', 'Prio vorgezogen'],
                   run: (reason) => {
                     if (bundleId) reorder.mutate({ bundleId, caseIds: draft, reason });
