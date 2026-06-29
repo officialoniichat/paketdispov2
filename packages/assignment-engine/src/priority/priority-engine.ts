@@ -124,7 +124,7 @@ export function classifyPriority(
       const overdue = ctx.today > goodsCase.loadPlanDate;
       const reason = overdue
         ? `Verladeplan-Ware überfällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate})`
-        : `Verladeplan-Ware fällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate}, Vorlauf ${leadDays} Tage)`;
+        : `Verladeplan-Ware fällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate}, Vorlauf ${leadDays}� Tage)`;
       return { rank: PRIORITY_RANK.loadPlanDue, class: 'load_plan_due', reason };
     }
   }

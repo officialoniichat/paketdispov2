@@ -235,6 +235,9 @@ importers:
       '@paket/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@paket/assignment-engine':
+        specifier: workspace:*
+        version: link:../../packages/assignment-engine
       '@paket/domain-types':
         specifier: workspace:*
         version: link:../../packages/domain-types

@@ -99,7 +99,6 @@ describe('engineConfigFromRuleConfig', () => {
   it('threads the priority Vorlauf + overrides into the engine config', () => {
     const config = engineConfigFromRuleConfig({
       priority: {
-        catManWeight: 1.5,
         overdueLeadDays: 3,
         overdueLeadDaysOverrides: [{ shopAreaNo: '21', leadDays: 5 }],
         fifoEnabled: true,
@@ -115,6 +114,8 @@ describe('engineConfigFromRuleConfig', () => {
         checkShareFactor: 1.25,
         boxSplittingFactor: 1.4,
       },
+      grouping: { enabled: true, maxWeBelegGap: 1 },
+      shiftEnd: { autoCutoffMinutes: 120 },
       loadPlan: [],
     });
     expect(config.priority.overdueLeadDays).toBe(3);
