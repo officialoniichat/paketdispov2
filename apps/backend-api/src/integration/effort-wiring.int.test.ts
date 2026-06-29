@@ -8,6 +8,7 @@ import { DEFAULT_RULE_CONFIG, RULE_CONFIG_KEY } from '@paket/domain-types';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
+import { TeamleadReadService } from '../cases/teamlead-read.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -36,6 +37,7 @@ const WEEK_PATTERN = { mon: FULL_DAY, tue: FULL_DAY, wed: FULL_DAY, thu: FULL_DA
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let assignment: AssignmentService;
+let teamleadSvc: TeamleadReadService;
 
 /**
  * One ready case at a regal location with a work instruction: 40 Teile, Etikettendruck,
@@ -122,6 +124,7 @@ beforeAll(async () => {
   prisma = new PrismaClient({ datasourceUrl: url });
   const p = prisma as unknown as PrismaService;
   assignment = new AssignmentService(p, new EventLogService(p));
+  teamleadSvc = new TeamleadReadService(p);
   await seed();
 }, 180_000);
 
@@ -145,6 +148,22 @@ describe('live effort wiring (§8.2 Teamlead-Punkt 2)', () => {
       select: { estimatedMinutes: true },
     });
     expect(row.estimatedMinutes).toBe(SENTINEL_MINUTES);
+  });
+
+  it('the Belegdetail read model shows the live-computed effort + breakdown (compute-on-read)', async () => {
+    await setPriceLabelPrintMinutes(4); // distinct from the engine default so we can see it
+    const found = await prisma.goodsReceiptCase.findUniqueOrThrow({
+      where: { weBelegNo: 'WE-EFFORT-1' },
+      select: { id: true },
+    });
+    const detail = await teamleadSvc.caseDetail(found.id);
+    expect(detail.effortComputed).toBe(true);
+    expect(detail.effortComponents).not.toBeNull();
+    // The detail's print minutes reflect the cockpit value (4), not the engine default.
+    expect(detail.effortComponents!.priceLabelPrint).toBeCloseTo(4, 2);
+    // estimatedMinutes is the live total, NOT the stored 999 sentinel.
+    expect(detail.case.estimatedMinutes).toBeLessThan(100);
+    expect(detail.case.estimatedMinutes).not.toBe(SENTINEL_MINUTES);
   });
 
   it('reflects a cockpit effort change live: doubling print minutes adds exactly 2 min', async () => {

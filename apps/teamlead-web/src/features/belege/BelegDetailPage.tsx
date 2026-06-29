@@ -35,6 +35,7 @@ import {
   type BelegZst,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
+import { EFFORT_COMPONENT_LABEL, EFFORT_COMPONENT_ORDER } from '../../lib/effort.js';
 import { CaseActions } from '../../components/CaseActions.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
@@ -110,6 +111,9 @@ export function BelegDetailPage(): JSX.Element {
       </Stack>
     );
   }
+
+  // Narrowed once so the per-driver breakdown stays type-safe inside the tab callbacks.
+  const effortComponents = c.effortComponents;
 
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
@@ -187,25 +191,40 @@ export function BelegDetailPage(): JSX.Element {
           />
         )}
         {tab === 2 && (
-          <FieldGrid
-            rows={[
-              ['Aufwandspunkte', String(c.effortPoints)],
-              ['Geschätzte Minuten', formatMinutes(c.estimatedMinutes)],
-              ['Menge (Aufwandstreiber)', String(c.totalQuantity)],
-              [
-                'Preisetikett-Positionen',
-                String(c.positions.filter((p) => p.priceLabelRequired).length),
-              ],
-              [
-                'Sicherungs-Positionen',
-                String(c.positions.filter((p) => p.securityRequired).length),
-              ],
-              [
-                'Online-Positionen',
-                String(c.positions.filter((p) => p.onlineHandlingRequired).length),
-              ],
-            ]}
-          />
+          <Stack spacing={1.5}>
+            <FieldGrid
+              rows={[
+                ['Aufwandspunkte', String(c.effortPoints)],
+                ['Geschätzte Minuten', formatMinutes(c.estimatedMinutes)],
+                ['Menge (Aufwandstreiber)', String(c.totalQuantity)],
+                [
+                  'Berechnung',
+                  c.effortComputed
+                    ? 'Live aus Arbeitsanweisung (Aufwandsparameter)'
+                    : 'Gespeicherter Schätzwert (keine Arbeitsanweisung)',
+                ],
+              ]}
+            />
+            {effortComponents ? (
+              <>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Aufwandsaufschlüsselung (Minuten)
+                </Typography>
+                <FieldGrid
+                  rows={EFFORT_COMPONENT_ORDER.filter((k) => effortComponents[k] > 0).map((k) => [
+                    EFFORT_COMPONENT_LABEL[k],
+                    formatMinutes(effortComponents[k]),
+                  ])}
+                />
+              </>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Ohne Arbeitsanweisung wird der gespeicherte Schätzwert angezeigt. Sobald
+                Positionsdaten vorliegen, berechnet das System den Aufwand live aus den
+                Aufwandsparametern (Admin → „Aufwand“).
+              </Typography>
+            )}
+          </Stack>
         )}
         {tab === 3 && <PositionsTab positions={c.positions} />}
         {tab === 4 && <BoxesTab boxes={c.boxes} />}

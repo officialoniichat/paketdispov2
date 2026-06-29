@@ -337,9 +337,35 @@ export class ZstSummaryDto {
  * §10.4 Belegdetails read model: rich header + work instruction + positions
  * (with SKU lines) + transport boxes + audit history.
  */
+/**
+ * Per-driver minute breakdown of a case's effort (§8.2), mirroring the engine's
+ * EffortComponents. Present only when the effort was computed live from a work instruction.
+ */
+export class EffortComponentsDto {
+  @ApiProperty({ description: 'Grundzeit je Beleg' }) base!: number;
+  @ApiProperty({ description: 'Mengenerfassung' }) quantity!: number;
+  @ApiProperty({ description: 'Etiketten drucken' }) priceLabelPrint!: number;
+  @ApiProperty({ description: 'Etiketten anbringen' }) labelAttach!: number;
+  @ApiProperty({ description: 'Warensicherung' }) security!: number;
+  @ApiProperty({ description: 'Online-Behandlung' }) online!: number;
+  @ApiProperty({ description: 'Rotpreis-Auszeichnung' }) redPrice!: number;
+  @ApiProperty({ description: 'Prüfung (Mehraufwand)' }) check!: number;
+  @ApiProperty({ description: 'Handling / Füllmaterial' }) handling!: number;
+}
+
 export class CaseDetailDto {
   @ApiProperty({ type: CaseSummaryDto }) case!: CaseSummaryDto;
   @ApiProperty({ description: 'Effort points (Aufwandspunkte)' }) effortPoints!: number;
+  @ApiProperty({
+    description: 'true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert',
+  })
+  effortComputed!: boolean;
+  @ApiPropertyOptional({
+    type: EffortComponentsDto,
+    nullable: true,
+    description: 'Per-Treiber-Minutenaufschlüsselung; null beim gespeicherten Schätzwert',
+  })
+  effortComponents!: EffortComponentsDto | null;
   @ApiPropertyOptional({ type: String, nullable: true }) deliveryNoteNo!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) primaryShopAreaNo!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) primaryFloor!: string | null;

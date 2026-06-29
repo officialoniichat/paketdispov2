@@ -929,6 +929,26 @@ export interface components {
             page: number;
             limit: number;
         };
+        EffortComponentsDto: {
+            /** @description Grundzeit je Beleg */
+            base: number;
+            /** @description Mengenerfassung */
+            quantity: number;
+            /** @description Etiketten drucken */
+            priceLabelPrint: number;
+            /** @description Etiketten anbringen */
+            labelAttach: number;
+            /** @description Warensicherung */
+            security: number;
+            /** @description Online-Behandlung */
+            online: number;
+            /** @description Rotpreis-Auszeichnung */
+            redPrice: number;
+            /** @description Prüfung (Mehraufwand) */
+            check: number;
+            /** @description Handling / Füllmaterial */
+            handling: number;
+        };
         PositionDetailDto: {
             id: string;
             positionNo: number;
@@ -975,6 +995,10 @@ export interface components {
             case: components["schemas"]["CaseSummaryDto"];
             /** @description Effort points (Aufwandspunkte) */
             effortPoints: number;
+            /** @description true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert */
+            effortComputed: boolean;
+            /** @description Per-Treiber-Minutenaufschlüsselung; null beim gespeicherten Schätzwert */
+            effortComponents?: components["schemas"]["EffortComponentsDto"] | null;
             deliveryNoteNo?: string | null;
             primaryShopAreaNo?: string | null;
             primaryFloor?: string | null;

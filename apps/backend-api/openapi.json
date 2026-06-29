@@ -2607,6 +2607,58 @@
           "limit"
         ]
       },
+      "EffortComponentsDto": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "number",
+            "description": "Grundzeit je Beleg"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Mengenerfassung"
+          },
+          "priceLabelPrint": {
+            "type": "number",
+            "description": "Etiketten drucken"
+          },
+          "labelAttach": {
+            "type": "number",
+            "description": "Etiketten anbringen"
+          },
+          "security": {
+            "type": "number",
+            "description": "Warensicherung"
+          },
+          "online": {
+            "type": "number",
+            "description": "Online-Behandlung"
+          },
+          "redPrice": {
+            "type": "number",
+            "description": "Rotpreis-Auszeichnung"
+          },
+          "check": {
+            "type": "number",
+            "description": "Prüfung (Mehraufwand)"
+          },
+          "handling": {
+            "type": "number",
+            "description": "Handling / Füllmaterial"
+          }
+        },
+        "required": [
+          "base",
+          "quantity",
+          "priceLabelPrint",
+          "labelAttach",
+          "security",
+          "online",
+          "redPrice",
+          "check",
+          "handling"
+        ]
+      },
       "PositionDetailDto": {
         "type": "object",
         "properties": {
@@ -2749,6 +2801,20 @@
             "type": "number",
             "description": "Effort points (Aufwandspunkte)"
           },
+          "effortComputed": {
+            "type": "boolean",
+            "description": "true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert"
+          },
+          "effortComponents": {
+            "nullable": true,
+            "description": "Per-Treiber-Minutenaufschlüsselung; null beim gespeicherten Schätzwert",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EffortComponentsDto"
+              }
+            ]
+          },
           "deliveryNoteNo": {
             "type": "string",
             "nullable": true
@@ -2822,6 +2888,7 @@
         "required": [
           "case",
           "effortPoints",
+          "effortComputed",
           "positions",
           "transportBoxes",
           "issues",

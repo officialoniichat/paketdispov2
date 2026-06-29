@@ -12,24 +12,8 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import type { EffortRuleConfig } from '@paket/domain-types';
-import {
-  previewEffort,
-  EXAMPLE_EFFORT_VECTOR,
-  type EffortPreviewComponent,
-} from '@paket/assignment-engine';
-
-/** German label per formula term (where the minutes come from). */
-const COMPONENT_LABEL: Record<EffortPreviewComponent['key'], string> = {
-  base: 'Grundzeit je Beleg',
-  quantity: 'Mengenerfassung',
-  priceLabelPrint: 'Etiketten drucken',
-  labelAttach: 'Etiketten anbringen',
-  security: 'Warensicherung',
-  online: 'Online-Behandlung',
-  redPrice: 'Rotpreis-Auszeichnung',
-  check: 'Prüfung (Mehraufwand)',
-  handling: 'Handling / Füllmaterial',
-};
+import { previewEffort, EXAMPLE_EFFORT_VECTOR } from '@paket/assignment-engine';
+import { EFFORT_COMPONENT_LABEL } from '../../lib/effort.js';
 
 /** "44.75" → "44,75 min" — German decimal comma for minutes. */
 function min(value: number): string {
@@ -75,7 +59,7 @@ export function EffortPreview({ config }: { config: EffortRuleConfig }): JSX.Ele
         {preview.components
           .filter((c) => c.minutes > 0)
           .map((c) => (
-            <Row key={c.key} left={COMPONENT_LABEL[c.key]} right={min(c.minutes)} />
+            <Row key={c.key} left={EFFORT_COMPONENT_LABEL[c.key]} right={min(c.minutes)} />
           ))}
         <Divider sx={{ my: 0.5 }} />
         <Row left="Bearbeitungszeit gesamt" right={min(preview.totalMinutes)} strong />

@@ -15,9 +15,7 @@ import {
 import {
   assignmentBundleSchema,
   bereichFromLocationKind,
-  ruleConfigSchema,
   weeklyPatternSchema,
-  DEFAULT_RULE_CONFIG,
   type AssignmentBundle,
   type BundlePickupSequence,
   type GoodsReceiptCase,
@@ -28,6 +26,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
 import { buildEffortVectors } from './effort-vector.js';
+import { caseEffortInclude } from '../cases/case-effort.js';
+import { loadRuleConfig } from '../config/rule-config.js';
 
 type PrismaTx = Prisma.TransactionClient;
 import { EventLogService } from '../events/event-log.service.js';
@@ -38,20 +38,6 @@ import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto
 const POOL_STATUS = 'ready' as const;
 /** A case in one of these no longer counts as "open" within a bundle. */
 const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
-
-/**
- * Prisma include that loads everything {@link buildEffortVector} needs to recompute a
- * case's effort live from the cockpit-edited parameters (§8.2 wiring): the storage class
- * (handling class), the work-instruction header (print + check mode) and each position's
- * instruction (label/security/online/red-price counts) + WGR.
- */
-const EFFORT_CASE_INCLUDE = {
-  storageLocation: true,
-  workInstruction: true,
-  // Explicit positionNo ordering keeps the derived vector (e.g. wgrCodes order) stable
-  // across runs — the plan stays deterministic regardless of DB row order.
-  positions: { include: { instruction: true }, orderBy: { positionNo: 'asc' } },
-} satisfies Prisma.GoodsReceiptCaseInclude;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -82,10 +68,8 @@ export class AssignmentService {
    * Cutoff. Falls back to the default when unset/invalid so recalculate/preview never
    * fail on missing config.
    */
-  private async readRuleConfig(): Promise<RuleConfig> {
-    const row = await this.prisma.appConfig.findUnique({ where: { key: 'rule_config' } });
-    const parsed = ruleConfigSchema.safeParse(row?.value);
-    return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG;
+  private readRuleConfig(): Promise<RuleConfig> {
+    return loadRuleConfig(this.prisma);
   }
 
   async recalculate(
@@ -129,7 +113,7 @@ export class AssignmentService {
       //    are back in the pool, in-flight cases are excluded by their status).
       const casesRows = await tx.goodsReceiptCase.findMany({
         where: { status: POOL_STATUS },
-        include: EFFORT_CASE_INCLUDE,
+        include: caseEffortInclude,
       });
 
       const input: EngineInput = {
@@ -241,7 +225,7 @@ export class AssignmentService {
 
     return this.prisma.$transaction(async (tx) => {
       const [caseRows, locationRows] = await Promise.all([
-        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: EFFORT_CASE_INCLUDE }),
+        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: caseEffortInclude }),
         tx.location.findMany({ where: { active: true } }),
       ]);
       if (caseRows.length === 0) return { assigned: false, reason: 'pool_empty' };
@@ -397,7 +381,7 @@ export class AssignmentService {
       this.prisma.location.findMany({ where: { active: true } }),
       this.prisma.goodsReceiptCase.findMany({
         where: { status: { in: [...PREVIEW_POOL_STATUSES] } },
-        include: EFFORT_CASE_INCLUDE,
+        include: caseEffortInclude,
       }),
       this.readRuleConfig(),
     ]);

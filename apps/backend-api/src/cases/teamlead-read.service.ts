@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AssignmentStatus, CaseStatus, PriorityFlag } from '@prisma/client';
 import { detectDeliveryGroups, indexDeliveryGroups } from '@paket/assignment-engine';
-import { groupingRuleConfigSchema, RULE_CONFIG_KEY, DEFAULT_RULE_CONFIG } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type AuditEventDto,
@@ -21,6 +20,8 @@ import {
 } from './cases.dto.js';
 import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
+import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
+import { loadRuleConfig } from '../config/rule-config.js';
 
 /** Priority flags counted as an "open prio" case in the dashboard tile. */
 const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 'same_day_required'];
@@ -78,11 +79,11 @@ export class TeamleadReadService {
       ...(query.section !== undefined ? { section: query.section } : {}),
     };
 
-    const [rows, total] = await this.prisma.$transaction([
+    const [rows, total, ruleConfig] = await Promise.all([
       this.prisma.goodsReceiptCase.findMany({
         where,
         include: {
-          storageLocation: { select: { code: true } },
+          ...caseEffortInclude,
           assignedBundle: {
             select: { employee: { select: { employeeNo: true, displayName: true } } },
           },
@@ -92,23 +93,29 @@ export class TeamleadReadService {
         take: limit,
       }),
       this.prisma.goodsReceiptCase.count({ where }),
+      loadRuleConfig(this.prisma),
     ]);
 
-    const items: PoolItemDto[] = rows.map((c) => ({
-      id: c.id,
-      weBelegNo: c.weBelegNo,
-      status: c.status,
-      section: c.section,
-      priorityFlags: c.priorityFlags,
-      totalQuantity: c.totalQuantity,
-      estimatedMinutes: c.estimatedMinutes,
-      storageLocationCode: c.storageLocation.code,
-      bookingDate: c.bookingDate.toISOString().slice(0, 10),
-      goodsType: c.goodsTypeText,
-      assignedEmployeeName: c.assignedBundle?.employee?.displayName ?? null,
-      assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
-      effortPoints: c.effortPoints,
-    }));
+    const items: PoolItemDto[] = rows.map((c) => {
+      // Show the SAME effort the distribution uses: live-computed for instructionalised
+      // cases, stored estimate otherwise (see resolveCaseEffort).
+      const effort = resolveCaseEffort(c, ruleConfig.effort);
+      return {
+        id: c.id,
+        weBelegNo: c.weBelegNo,
+        status: c.status,
+        section: c.section,
+        priorityFlags: c.priorityFlags,
+        totalQuantity: c.totalQuantity,
+        estimatedMinutes: effort.minutes,
+        storageLocationCode: c.storageLocation.code,
+        bookingDate: c.bookingDate.toISOString().slice(0, 10),
+        goodsType: c.goodsTypeText,
+        assignedEmployeeName: c.assignedBundle?.employee?.displayName ?? null,
+        assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
+        effortPoints: effort.points,
+      };
+    });
 
     return { items, total, page, limit };
   }
@@ -182,7 +189,7 @@ export class TeamleadReadService {
    */
   async board(date: string): Promise<BoardDto> {
     const day = new Date(`${date}T00:00:00.000Z`);
-    const [bundles, shifts] = await Promise.all([
+    const [bundles, shifts, ruleConfig] = await Promise.all([
       this.prisma.assignmentBundle.findMany({
         where: { date: day },
         include: {
@@ -199,6 +206,30 @@ export class TeamleadReadService {
                   totalQuantity: true,
                   estimatedMinutes: true,
                   effortPoints: true,
+                  // Effort-driver relations so each case line shows the SAME live effort
+                  // the distribution used (resolveCaseEffort), not a stale stored value.
+                  storageLocation: { select: { kind: true } },
+                  workInstruction: {
+                    select: {
+                      priceLabelPrintRequired: true,
+                      goodsReceiptCheckMode: true,
+                      goodsReceiptCheckPercentage: true,
+                    },
+                  },
+                  positions: {
+                    orderBy: { positionNo: 'asc' },
+                    select: {
+                      wgr: true,
+                      instruction: {
+                        select: {
+                          priceLabelAttachRequired: true,
+                          securityRequired: true,
+                          onlineHandlingRequired: true,
+                          redPriceRequired: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -211,6 +242,7 @@ export class TeamleadReadService {
         where: { date: day, active: true, netCapacityMinutes: { gt: 0 }, employee: { active: true } },
         include: { employee: { select: { employeeNo: true, displayName: true, bereiche: true } } },
       }),
+      loadRuleConfig(this.prisma),
     ]);
 
     const capacityByEmployee = new Map<string, number>();
@@ -269,13 +301,14 @@ export class TeamleadReadService {
       }
       row.plannedEffortMinutes += b.plannedEffortMinutes;
       for (const it of b.items) {
+        const effort = resolveCaseEffort(it.case, ruleConfig.effort);
         row.cases.push({
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,
           status: it.case.status,
           totalQuantity: it.case.totalQuantity,
-          estimatedMinutes: it.case.estimatedMinutes,
-          effortPoints: it.case.effortPoints,
+          estimatedMinutes: effort.minutes,
+          effortPoints: effort.points,
           // Delivery-group fields are filled in once all board cases are known (below).
           deliveryGroupId: null,
           deliveryGroupSize: 1,
@@ -300,8 +333,7 @@ export class TeamleadReadService {
     // Annotate each board case with its delivery group (same Lieferschein OR a
     // consecutive weBelegNo run), using the SAME pure engine detection + the §11
     // configured grouping rule. Standalone Belege keep null / size 1.
-    const grouping = await this.loadGroupingConfig();
-    const groups = detectDeliveryGroups(groupInputs, grouping);
+    const groups = detectDeliveryGroups(groupInputs, ruleConfig.grouping);
     const { groupIdByCaseId, sizeByGroupId } = indexDeliveryGroups(groups);
     // Stable, deterministic order by name (idle heads stay interspersed, never hidden
     // at the end) with employeeNo as tie-break.
@@ -322,14 +354,6 @@ export class TeamleadReadService {
     const totalCapacity = rows.reduce((sum, r) => sum + r.capacityMinutes, 0);
     const totalPlanned = rows.reduce((sum, r) => sum + r.plannedEffortMinutes, 0);
     return { date, rows, reserveMinutes: totalCapacity - totalPlanned };
-  }
-
-  /** §11 grouping rule from the AppConfig singleton; engine default when unset/invalid. */
-  private async loadGroupingConfig(): Promise<{ enabled: boolean; maxWeBelegGap: number }> {
-    const row = await this.prisma.appConfig.findUnique({ where: { key: RULE_CONFIG_KEY } });
-    const value = row && isJsonObject(row.value) ? row.value['grouping'] : undefined;
-    const parsed = groupingRuleConfigSchema.safeParse(value);
-    return parsed.success ? parsed.data : DEFAULT_RULE_CONFIG.grouping;
   }
 
   /**
@@ -438,7 +462,7 @@ export class TeamleadReadService {
     const found = await this.prisma.goodsReceiptCase.findUnique({
       where: { id: caseId },
       include: {
-        storageLocation: { select: { code: true } },
+        storageLocation: { select: { code: true, kind: true } },
         assignedBundle: { select: { employee: { select: { displayName: true } } } },
         workInstruction: true,
         positions: {
@@ -457,6 +481,11 @@ export class TeamleadReadService {
       throw new NotFoundException(`Case ${caseId} not found`);
     }
 
+    // Same effort the distribution uses: live-computed when the case is instructionalised,
+    // stored estimate otherwise. The per-driver breakdown shows where the minutes come from.
+    const ruleConfig = await loadRuleConfig(this.prisma);
+    const effort = resolveCaseEffort(found, ruleConfig.effort);
+
     const summary: CaseSummaryDto = {
       id: found.id,
       weBelegNo: found.weBelegNo,
@@ -464,7 +493,7 @@ export class TeamleadReadService {
       section: found.section,
       priorityFlags: found.priorityFlags,
       totalQuantity: found.totalQuantity,
-      estimatedMinutes: found.estimatedMinutes,
+      estimatedMinutes: effort.minutes,
       storageLocationCode: found.storageLocation.code,
       bookingDate: found.bookingDate.toISOString().slice(0, 10),
       goodsType: found.goodsTypeText,
@@ -475,7 +504,9 @@ export class TeamleadReadService {
 
     return {
       case: summary,
-      effortPoints: found.effortPoints,
+      effortPoints: effort.points,
+      effortComputed: effort.computed,
+      effortComponents: effort.components,
       deliveryNoteNo: found.deliveryNoteNo,
       primaryShopAreaNo: found.primaryShopAreaNo,
       primaryFloor: found.primaryFloor,

@@ -15,6 +15,7 @@ import type {
   WorkflowEventType,
 } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
+import type { EffortComponents } from '@paket/assignment-engine';
 import { api } from './api.js';
 import { unwrap } from './http.js';
 import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './narrow.js';
@@ -170,6 +171,10 @@ export interface BelegDetail {
   totalQuantity: number;
   effortPoints: number;
   estimatedMinutes: number;
+  /** true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert. */
+  effortComputed: boolean;
+  /** Per-Treiber-Minutenaufschlüsselung; null beim gespeicherten Schätzwert. */
+  effortComponents: EffortComponents | null;
   catManDate: string | null;
   loadPlanDate: string | null;
   goodsType: string | null;
@@ -241,6 +246,8 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     totalQuantity: dto.case.totalQuantity,
     effortPoints: dto.effortPoints,
     estimatedMinutes: dto.case.estimatedMinutes,
+    effortComputed: dto.effortComputed,
+    effortComponents: dto.effortComponents ?? null,
     catManDate: dto.catManDate ?? null,
     loadPlanDate: dto.loadPlanDate ?? null,
     goodsType: dto.goodsType ?? null,
