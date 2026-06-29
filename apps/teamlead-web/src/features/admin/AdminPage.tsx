@@ -180,25 +180,25 @@ export function AdminPage(): JSX.Element {
                     label="Min. Minuten"
                     value={draft.bundle.minMinutes}
                     onChange={(v) => patch('bundle', { ...draft.bundle, minMinutes: v })}
-                    hint="Mindestaufwand je Paket; kleinere Reste werden zu einem Paket zusammengelegt."
+                    hint="Mindestaufwand je Bündel; kleinere Reste werden zu einem Bündel zusammengelegt."
                   />
                   <Num
                     label="Max. Minuten"
                     value={draft.bundle.maxMinutes}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxMinutes: v })}
-                    hint="Maximaler Aufwand je Paket; danach wird ein neues Paket begonnen."
+                    hint="Maximaler Aufwand je Bündel; danach wird ein neues Bündel begonnen."
                   />
                   <Num
-                    label="Max. Belege / Paket"
+                    label="Max. Belege / Bündel"
                     value={draft.bundle.maxCases}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxCases: v })}
-                    hint="Höchstzahl Belege je Paket (Rollwagen-/Kapazitätsgrenze)."
+                    hint="Höchstzahl Belege je Bündel (Rollwagen-/Kapazitätsgrenze)."
                   />
                   <Num
                     label="Max. schwere Belege"
                     value={draft.bundle.maxHeavyCases}
                     onChange={(v) => patch('bundle', { ...draft.bundle, maxHeavyCases: v })}
-                    hint="Höchstzahl aufwändiger Belege je Paket, damit schwer/leicht gemischt bleibt."
+                    hint="Höchstzahl aufwändiger Belege je Bündel, damit schwer/leicht gemischt bleibt."
                   />
                 </Grid>
               )}

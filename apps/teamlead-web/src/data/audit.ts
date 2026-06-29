@@ -14,6 +14,7 @@ export type OverrideAction =
   | 'parken'
   | 'entziehen'
   | 'hinzufuegen'
+  | 'manual_assign'
   | 'neuverteilen'
   | 'aufteilen'
   | 'freigeben'
@@ -25,8 +26,10 @@ export type OverrideAction =
 export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
   vorziehen: 'Vorziehen',
   parken: 'Parken',
-  entziehen: 'Paket entziehen',
-  hinzufuegen: 'Paket hinzufügen',
+  entziehen: 'Beleg entziehen',
+  hinzufuegen: 'Beleg zuweisen',
+  // Manuelle Zuweisung „Beleg → Mitarbeiter" vom Mitarbeiterboard (Bündel ggf. neu).
+  manual_assign: 'Beleg zuweisen',
   neuverteilen: 'Neu verteilen',
   aufteilen: 'Beleg aufteilen',
   freigeben: 'Freigeben',
@@ -49,9 +52,9 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.cancelled': 'Storniert',
   'case.delivery_group_merged': 'Lieferung zusammengeführt',
   'case.delivery_group_split': 'Lieferung getrennt',
-  'bundle.created': 'Paket gebildet',
-  'bundle.assigned': 'Paket zugeteilt',
-  'bundle.completed': 'Paket abgeschlossen',
+  'bundle.created': 'Bündel gebildet',
+  'bundle.assigned': 'Bündel zugeteilt',
+  'bundle.completed': 'Bündel abgeschlossen',
   'pickup.location_scanned': 'Lagerplatz gescannt',
   'case.started': 'Bearbeitung gestartet',
   'position.confirmed': 'Position bestätigt',
@@ -93,7 +96,7 @@ export function toOverrideAction(value: string | null | undefined): OverrideActi
 
 /**
  * The single human-readable label for one audit row. Prefers the specific override
- * action (e.g. "Paket entziehen") and otherwise uses the event-type label. Reused
+ * action (e.g. "Beleg entziehen") and otherwise uses the event-type label. Reused
  * by the cockpit feed, the Beleg-Historie and the Mitarbeiter-Audit.
  */
 export function formatAuditAction(eventType: WorkflowEventType, action?: OverrideAction): string {
@@ -143,6 +146,7 @@ const ACTION_EVENT_TYPE: Record<OverrideAction, WorkflowEventType> = {
   parken: 'case.parked',
   entziehen: 'assignment.overridden',
   hinzufuegen: 'assignment.overridden',
+  manual_assign: 'assignment.overridden',
   neuverteilen: 'assignment.overridden',
   aufteilen: 'assignment.overridden',
   freigeben: 'case.ready',

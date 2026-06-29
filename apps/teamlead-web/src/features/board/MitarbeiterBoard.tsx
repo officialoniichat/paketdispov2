@@ -1,8 +1,8 @@
 /**
  * Mitarbeitenden-Board (§10.3 / Anhang E.4 "Workforce dispatch board").
  *
- * Per person: current Paket, Restkapazität, Aufwandspunkte, schwer/leicht mix
- * and Problem-Status. Teamlead actions – Paket entziehen/hinzufügen, Reihenfolge
+ * Per person: current Bündel, Restkapazität, Aufwandspunkte, schwer/leicht mix
+ * and Problem-Status. Teamlead actions – Beleg entziehen/zuweisen, Reihenfolge
  * neu setzen, Pause/Abwesenheit – all require a reason and are audited (§8.4),
  * and are POSTed to the real backend with an optimistic board update + rollback.
  */
@@ -28,6 +28,7 @@ import { CaseStatusChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
+import { AssignDialog } from '../../components/AssignDialog.js';
 import type { BoardRow } from '../../data/types.js';
 
 interface PendingAction {
@@ -38,11 +39,13 @@ interface PendingAction {
 }
 
 export function MitarbeiterBoard(): JSX.Element {
-  const { board, withdraw, addToBundle, reorder, pauseResume } = useCockpitData();
+  const { board, withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
 
   // First failing intervention drives the error snackbar.
-  const failed = [withdraw, addToBundle, reorder, pauseResume].find((m) => m.isError);
+  const failed = [withdraw, addToBundle, assignToEmployee, reorder, pauseResume].find(
+    (m) => m.isError,
+  );
 
   // Delivery groups (Teamlead-Anforderung Punkt 1) that ended up split across more than
   // one employee — surfaced so the teamlead can pull them back onto one person.
@@ -104,12 +107,14 @@ interface EmployeeRowProps {
 }
 
 function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
-  const { pool, withdraw, addToBundle, reorder, pauseResume } = useCockpitData();
+  const { pool, withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
   const navigate = useNavigate();
   const bundleId = row.bundleId;
   const caseKey = row.cases.map((c) => c.caseId).join();
   const [draft, setDraft] = useState<string[]>(() => row.cases.map((c) => c.caseId));
   const [addId, setAddId] = useState('');
+  const [assignOpen, setAssignOpen] = useState(false);
+  const selectedPoolCase = pool.find((p) => p.caseId === addId) ?? null;
 
   // Keep the reorder draft in sync once a mutation changes the bundle.
   useEffect(() => {
@@ -168,7 +173,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           )}
           {row.bundleSize != null && (
             <Typography variant="body2">
-              Paket {(row.currentCaseIndex ?? 0) + 1}/{row.bundleSize}
+              Beleg {(row.currentCaseIndex ?? 0) + 1}/{row.bundleSize}
             </Typography>
           )}
           {row.paused && (
@@ -185,7 +190,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
         <Stack spacing={1}>
           {draftCases.length === 0 && (
             <Typography variant="body2" color="text.secondary">
-              Kein Paket zugewiesen.
+              Frei — keine Belege zugewiesen.
             </Typography>
           )}
           {draftCases.map((c, i) => (
@@ -250,38 +255,27 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             <TextField
               select
               size="small"
-              label="Paket hinzufügen"
+              label="Beleg zuweisen"
               value={addId}
               onChange={(e) => setAddId(e.target.value)}
-              sx={{ minWidth: 220 }}
-              disabled={pool.length === 0 || !bundleId}
+              sx={{ minWidth: 260 }}
+              disabled={pool.length === 0}
             >
               {pool.length === 0 && <MenuItem value="">Kein freier Beleg</MenuItem>}
               {pool.map((c) => (
                 <MenuItem key={c.caseId} value={c.caseId}>
-                  {c.weBelegNo} · {formatMinutes(c.estimatedMinutes)}
+                  {c.weBelegNo}
+                  {c.bereich ? ` · ${c.bereich}` : ''} · {formatMinutes(c.estimatedMinutes)}
                 </MenuItem>
               ))}
             </TextField>
             <Button
               size="small"
               variant="outlined"
-              disabled={!addId || !bundleId}
-              onClick={() => {
-                const c = pool.find((p) => p.caseId === addId);
-                if (!c || !bundleId) return;
-                requestReason({
-                  title: `${c.weBelegNo} zu ${row.displayName} hinzufügen`,
-                  description: 'Manuelle Zuweisung an dieses Paket.',
-                  suggestions: ['Kapazität frei', 'Prio-Beleg'],
-                  run: (reason) => {
-                    addToBundle.mutate({ caseId: c.caseId, bundleId, reason });
-                    setAddId('');
-                  },
-                });
-              }}
+              disabled={!addId}
+              onClick={() => setAssignOpen(true)}
             >
-              Hinzufügen
+              {bundleId ? 'Beleg zuweisen' : 'Beleg zuweisen & Bündel anlegen'}
             </Button>
 
             <Button
@@ -321,6 +315,27 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               {row.paused ? 'Pause beenden' : 'Pause/Abwesenheit'}
             </Button>
           </Stack>
+
+          <AssignDialog
+            open={assignOpen}
+            row={row}
+            poolCase={selectedPoolCase}
+            onClose={() => setAssignOpen(false)}
+            onConfirm={(reason) => {
+              if (!selectedPoolCase) return;
+              // Belegt → append to the existing Bündel; free → create it via assignToEmployee.
+              if (bundleId) {
+                addToBundle.mutate({ caseId: selectedPoolCase.caseId, bundleId, reason });
+              } else {
+                assignToEmployee.mutate({
+                  employeeNo: row.employeeId,
+                  caseId: selectedPoolCase.caseId,
+                  reason,
+                });
+              }
+              setAddId('');
+            }}
+          />
         </Stack>
       </AccordionDetails>
     </Accordion>

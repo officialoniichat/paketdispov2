@@ -126,10 +126,12 @@ export interface BoardRow {
   cases: BoardCase[];
 }
 
-/** A free (ready, unassigned) case available to add to a bundle (§10.3). */
+/** A free (ready, unassigned) case available to assign to an employee (§10.3). */
 export interface PoolCase {
   caseId: string;
   weBelegNo: string;
+  /** Fixed Bereich of the Beleg (Hängebahn/Palette/Regal); drives the soft skill warning. */
+  bereich?: string;
   estimatedMinutes: number;
 }
 

@@ -115,6 +115,7 @@ function toPoolCase(item: PoolItemDto): PoolCase {
     caseId: item.id,
     weBelegNo: item.weBelegNo,
     estimatedMinutes: item.estimatedMinutes,
+    bereich: item.bereich ?? undefined,
   };
 }
 

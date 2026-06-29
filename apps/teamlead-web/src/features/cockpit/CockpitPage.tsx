@@ -205,7 +205,7 @@ export function CockpitPage(): JSX.Element {
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
             <Chip size="small" color="success" label="Verteilt" />
             <Typography variant="body2">
-              {recalcResult.assignedCaseCount} zugeteilt · {recalcResult.bundleCount} Pakete ·{' '}
+              {recalcResult.assignedCaseCount} zugeteilt · {recalcResult.bundleCount} Bündel ·{' '}
               {recalcResult.unassignedCaseCount} offen
               {recalculate.isPending ? ' · verteilt …' : ''}
             </Typography>

@@ -11,6 +11,7 @@ import type { PreviewResult } from './types.js';
 
 type WithdrawDto = components['schemas']['WithdrawDto'];
 type AddToBundleDto = components['schemas']['AddToBundleDto'];
+type AssignToEmployeeDto = components['schemas']['AssignToEmployeeDto'];
 type ReorderBundleDto = components['schemas']['ReorderBundleDto'];
 type BundlePauseDto = components['schemas']['BundlePauseDto'];
 type RecalculateDto = components['schemas']['RecalculateDto'];
@@ -82,6 +83,34 @@ export async function addCaseToBundle(
     'Hinzufügen',
     await api.POST('/api/teamlead/bundles/{bundleId}/add', {
       params: { path: { bundleId } },
+      body,
+    }),
+  );
+}
+
+export interface AssignToEmployeeArgs {
+  employeeNo: string;
+  caseId: string;
+  reason: string;
+  /** Operational day of the board (YYYY-MM-DD); the Bündel is bound to this day. */
+  date: string;
+}
+
+/**
+ * §8.4 audited manual override: assign a ready Beleg to an employee. If the employee
+ * has no Bündel for the day yet, the backend creates it and places the Beleg as its
+ * first member (find-or-create); otherwise the Beleg is appended. The engine stays
+ * single-source for the automatic plan — this is an override.
+ */
+export async function assignToEmployee(
+  api: PaketApiClient,
+  { employeeNo, caseId, reason, date }: AssignToEmployeeArgs,
+): Promise<BundleMutationResultDto> {
+  const body: AssignToEmployeeDto = { caseId, reason, date };
+  return ensure(
+    'Beleg zuweisen',
+    await api.POST('/api/teamlead/employees/{employeeNo}/assign', {
+      params: { path: { employeeNo } },
       body,
     }),
   );

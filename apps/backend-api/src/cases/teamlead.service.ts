@@ -16,6 +16,7 @@ import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
 import {
   type AddToBundleDto,
+  type AssignToEmployeeDto,
   type BundleMutationResultDto,
   type BundlePauseDto,
   type CancelDto,
@@ -32,6 +33,15 @@ type PrismaTx = Prisma.TransactionClient;
 
 /** Bundle statuses an employee work already passed; these block destructive overrides. */
 const TERMINAL_BUNDLE_STATUSES: AssignmentStatus[] = ['completed', 'cancelled'];
+
+/**
+ * UTC-midnight Date for an optional `YYYY-MM-DD` (or `now`'s day) — matches the
+ * `@db.Date` / board day semantics used across the read service.
+ */
+function resolveDay(date: string | undefined, now: Date): Date {
+  const ymd = date ?? now.toISOString().slice(0, 10);
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
 
 /** True iff `candidate` contains exactly the same ids as `current` (any order). */
 function isPermutation(current: string[], candidate: string[]): boolean {
@@ -339,36 +349,7 @@ export class TeamleadService {
   ): Promise<BundleMutationResultDto> {
     return this.prisma.$transaction(async (tx) => {
       const bundle = await this.loadBundle(tx, bundleId);
-      if (TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) {
-        throw new ConflictException(`Bundle ${bundleId} is ${bundle.status} and cannot take cases`);
-      }
-      const theCase = await tx.goodsReceiptCase.findUnique({
-        where: { id: dto.caseId },
-        select: { id: true, status: true },
-      });
-      if (!theCase) throw new NotFoundException(`Case ${dto.caseId} not found`);
-      if (theCase.status !== 'ready') {
-        throw new ConflictException(
-          `Only a ready case can be added (case is ${theCase.status})`,
-        );
-      }
-
-      const nextSeq = bundle.items.length;
-      await tx.assignmentItem.create({
-        data: { bundleId, caseId: dto.caseId, sequence: nextSeq },
-      });
-      await tx.goodsReceiptCase.update({
-        where: { id: dto.caseId },
-        data: { status: 'assigned', assignedBundleId: bundleId, version: { increment: 1 } },
-      });
-
-      const caseIds = [...bundle.items.map((i) => i.caseId), dto.caseId];
-      const plannedEffortMinutes = await this.recomputeEffort(tx, caseIds);
-      await tx.assignmentBundle.update({
-        where: { id: bundleId },
-        data: { plannedEffortMinutes },
-      });
-
+      const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(tx, bundle, dto.caseId);
       const eventId = await this.auditOverride(tx, principal, bundleId, 'add', dto.reason, {
         caseId: dto.caseId,
       });
@@ -382,6 +363,120 @@ export class TeamleadService {
         eventId,
       };
     });
+  }
+
+  /**
+   * §8.4 Manuelle Zuweisung „Beleg → Mitarbeiter" vom Mitarbeiterboard. Has the
+   * employee already a (non-terminal) Bündel for the day, the Beleg is appended to
+   * it; is the employee FREE, this CREATES the day's Bündel (`createdBy=teamlead`,
+   * `status=assigned`) and places the Beleg as its first member. A pure override —
+   * it does NOT run the engine; it reuses the exact §8.4 append path
+   * ({@link addCaseToBundleTx}). The Beleg's Bereich is a SOFT signal handled in the
+   * UI: a Bereich mismatch is never blocked here. A later `recalculate` re-plans the
+   * day and can overwrite the manual Bündel (same caveat as every §8.4 override).
+   */
+  async assignToEmployee(
+    principal: Principal,
+    employeeNo: string,
+    dto: AssignToEmployeeDto,
+    now: Date = new Date(),
+  ): Promise<BundleMutationResultDto> {
+    const day = resolveDay(dto.date, now);
+    return this.prisma.$transaction(async (tx) => {
+      const employee = await tx.user.findUnique({
+        where: { employeeNo },
+        select: { id: true, active: true },
+      });
+      if (!employee) throw new NotFoundException(`Employee ${employeeNo} not found`);
+      if (!employee.active) throw new ConflictException(`Employee ${employeeNo} is inactive`);
+
+      // The board folds the earliest non-terminal Bündel of the day; find that one
+      // (or create it). There is no @@unique([employeeId, date]) — find-then-create.
+      const existing = await tx.assignmentBundle.findFirst({
+        where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
+        orderBy: { createdAt: 'asc' },
+        include: { items: { orderBy: { sequence: 'asc' }, select: { id: true, caseId: true } } },
+      });
+
+      let bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] };
+      let bundleCreated = false;
+      if (existing) {
+        bundle = { id: existing.id, status: existing.status, items: existing.items };
+      } else {
+        const created = await tx.assignmentBundle.create({
+          data: {
+            employeeId: employee.id,
+            date: day,
+            status: 'assigned',
+            createdBy: 'teamlead',
+            plannedEffortMinutes: 0,
+          },
+          select: { id: true, status: true },
+        });
+        bundle = { id: created.id, status: created.status, items: [] };
+        bundleCreated = true;
+      }
+
+      const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(
+        tx,
+        bundle,
+        dto.caseId,
+      );
+      const eventId = await this.auditOverride(tx, principal, bundle.id, 'manual_assign', dto.reason, {
+        caseId: dto.caseId,
+        employeeNo,
+        bundleCreated,
+      });
+      return {
+        bundleId: bundle.id,
+        bundleStatus: bundle.status,
+        plannedEffortMinutes,
+        caseIds,
+        caseId: dto.caseId,
+        caseStatus: 'assigned',
+        eventId,
+        bundleCreated,
+      };
+    });
+  }
+
+  /**
+   * Shared §8.4 append used by {@link addToBundle} (existing Bündel) and
+   * {@link assignToEmployee} (free head): validate the Bündel is non-terminal and the
+   * Beleg is `ready`, create the item at the tail, move the case to `assigned`, link
+   * it, recompute the Bündel's planned effort. Caller owns the audit event + result.
+   */
+  private async addCaseToBundleTx(
+    tx: PrismaTx,
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    caseId: string,
+  ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
+    if (TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) {
+      throw new ConflictException(`Bundle ${bundle.id} is ${bundle.status} and cannot take cases`);
+    }
+    const theCase = await tx.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { id: true, status: true },
+    });
+    if (!theCase) throw new NotFoundException(`Case ${caseId} not found`);
+    if (theCase.status !== 'ready') {
+      throw new ConflictException(`Only a ready case can be assigned (case is ${theCase.status})`);
+    }
+
+    const nextSeq = bundle.items.length;
+    await tx.assignmentItem.create({ data: { bundleId: bundle.id, caseId, sequence: nextSeq } });
+    await tx.goodsReceiptCase.update({
+      where: { id: caseId },
+      data: { status: 'assigned', assignedBundleId: bundle.id, version: { increment: 1 } },
+    });
+
+    const caseIds = [...bundle.items.map((i) => i.caseId), caseId];
+    const plannedEffortMinutes = await this.recomputeEffort(tx, caseIds);
+    await tx.assignmentBundle.update({
+      where: { id: bundle.id },
+      data: { plannedEffortMinutes },
+    });
+    return { plannedEffortMinutes, caseIds };
   }
 
   /**

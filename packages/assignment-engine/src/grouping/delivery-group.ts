@@ -6,7 +6,7 @@ import type { Id } from '@paket/domain-types';
  * delivery split across several Lieferscheine; because the warehouse books per
  * Lieferschein and labels each Beleg individually, those Belege must be recognised as
  * belonging together so a single person processes the whole group — otherwise a
- * colleague keeps hunting for a Paket someone else already took.
+ * colleague keeps hunting for a Beleg someone else already took.
  *
  * Pure and deterministic (no fetch, no clock, no randomness): the same pool always
  * yields the same groups, so the Teamlead "Neu berechnen"/Vorschau stays reproducible.

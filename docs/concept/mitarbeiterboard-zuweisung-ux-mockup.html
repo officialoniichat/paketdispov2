@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mitarbeiterboard — Beleg-Zuweisung — UX-Mockup</title>
+<style>
+  :root{
+    --brand:#0a3d62; --brand2:#0c2f4a; --brand-light:#3c6e8f; --accent:#e58e26;
+    --surface:#f5f7fa; --raised:#ffffff; --text:#1a2430; --text2:#516170;
+    --border:#d6dde5; --danger:#c62828; --warning:#b26a00; --success:#2e7d32; --info:#1565c0;
+    --r:14px; --mono:ui-monospace,Menlo,"SFMono-Regular",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e7ecf1;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45;-webkit-font-smoothing:antialiased}
+  header.page{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:38px 32px 30px}
+  header.page h1{margin:0 0 6px;font-size:29px;letter-spacing:-.3px}
+  header.page p{margin:2px 0;color:#cddcea;max-width:940px}
+  header.page .meta{margin-top:13px;font-size:13px;color:#9fbdd6}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 32px 70px}
+
+  /* flow strip */
+  .flowmap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--r);padding:15px 18px;margin:0 0 6px}
+  .pill{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600}
+  .pill.a{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .pill.b{background:#fff;color:var(--brand);border-color:var(--brand)}
+  .pill.ok{background:var(--success);color:#fff;border-color:var(--success)}
+  .arrow{color:var(--text2);font-weight:700}
+  .flow-note{font-size:12.5px;color:var(--text2);margin:0 0 26px}
+  .flow-note b{color:var(--brand)}
+
+  h2.sec{font-size:18px;margin:42px 0 4px;padding-bottom:7px;border-bottom:3px solid var(--accent);display:inline-block}
+  .sec-intro{color:var(--text2);margin:8px 0 18px;max-width:920px;font-size:14px}
+
+  /* terminology cards */
+  .terms{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:6px 0 4px}
+  .term{background:var(--raised);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+  .term h4{margin:0 0 4px;font-size:15px;color:var(--brand);display:flex;align-items:center;gap:9px}
+  .term .code{font-family:var(--mono);font-size:11.5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1px 7px;color:var(--text2);font-weight:600}
+  .term p{margin:6px 0 0;font-size:13px;color:var(--text2)}
+  .term.b{border-left:4px solid var(--accent)}
+  .term.p{border-left:4px solid var(--brand)}
+
+  /* app shell */
+  .app{background:var(--raised);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(10,30,50,.16)}
+  .appbar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  .appbar .logo{font-weight:800;letter-spacing:.4px}
+  .appbar .crumbs{font-size:13px;color:#bcd3e6}
+  .appbar .who{margin-left:auto;font-size:13px;color:#bcd3e6;display:flex;align-items:center;gap:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#3a2400;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+  .tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 14px}
+  .tab{padding:13px 16px;font-size:14px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;cursor:default}
+  .tab.on{color:var(--brand);border-bottom-color:var(--accent);font-weight:800}
+
+  .layout{display:grid;grid-template-columns:1.55fr .95fr;gap:0;background:var(--surface)}
+  .col{padding:18px 18px 24px}
+  .col.left{border-right:1px solid var(--border)}
+  .col h4.colh{margin:0 0 12px;font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);display:flex;align-items:center;gap:8px}
+  .cnt{background:var(--border);color:var(--text2);border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
+
+  /* employee bundle card */
+  .emp{background:#fff;border:1px solid var(--border);border-radius:13px;padding:14px 15px;margin-bottom:13px;box-shadow:0 2px 6px rgba(10,30,50,.05)}
+  .emp .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .emp .nm{font-weight:800;font-size:15px}
+  .emp .av{width:30px;height:30px;border-radius:50%;background:var(--brand-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+  .chip{font-size:11px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+  .chip.free{background:#e7f5ea;color:var(--success);border-color:#b6dcc0}
+  .chip.util{background:#eef4fb;color:var(--brand);border-color:#c7ddf2}
+  .chip.util.warn{background:#fff3e2;color:var(--warning);border-color:#f0d4a8}
+  .chip.temp{background:#f3eefb;color:#6a3db8;border-color:#d8c8f0}
+  .chip.area{background:#fff;color:var(--text2)}
+  .emp .meta{margin-left:auto;font-size:12px;color:var(--text2)}
+
+  .paket{margin-top:12px;border:1px dashed var(--border);border-radius:11px;padding:10px 12px;background:var(--surface)}
+  .paket .pk-h{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .beleg{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:7px}
+  .beleg:last-child{margin-bottom:0}
+  .beleg .seq{width:18px;font-size:12px;color:var(--text2);font-weight:700;text-align:center}
+  .beleg .id{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--brand)}
+  .beleg .tags{display:flex;gap:6px;flex-wrap:wrap;margin-left:4px}
+  .tag{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+  .tag.qty{background:#eef4fb;color:var(--brand);border-color:#c7ddf2}
+  .tag.deliv{background:#eaf3ff;color:var(--info);border-color:#bcd9f7}
+  .beleg .t{margin-left:auto;font-size:12px;color:var(--text2)}
+  .beleg .x{border:none;background:#fff;color:var(--danger);font-weight:800;font-size:12px;border:1px solid #efc9c9;border-radius:7px;padding:4px 9px;cursor:default}
+
+  .empty-free{margin-top:12px;border:1px dashed #b6dcc0;background:#f3faf5;border-radius:11px;padding:14px;text-align:center;color:var(--success);font-size:13px;font-weight:700}
+
+  .btnrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btn{border:none;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:800;cursor:default}
+  .btn.primary{background:var(--accent);color:#3a2400}
+  .btn.brand{background:var(--brand);color:#fff}
+  .btn.ghost{background:#fff;border:1.5px solid var(--border);color:var(--text)}
+  .btn.sm{padding:7px 11px;font-size:12px}
+  .btn.disabled{background:#eef1f4;color:#9aa7b3;border:1px solid var(--border)}
+  .hint{font-size:11.5px;color:var(--text2);margin-top:7px}
+
+  /* pool column */
+  .pool .pcard{background:#fff;border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+  .pool .pcard .id{font-family:var(--mono);font-size:12.5px;font-weight:800;color:var(--brand)}
+  .pool .pcard .sub{font-size:11.5px;color:var(--text2)}
+  .pool .pcard .go{margin-left:auto}
+  .pool .pcard.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(229,142,38,.25)}
+  .pool .pcard.flagged{border-left:4px solid var(--warning)}
+
+  /* dialog */
+  .modalstage{background:#dfe6ee;border:1px solid var(--border);border-radius:18px;padding:30px 26px;display:flex;justify-content:center}
+  .modal{width:680px;max-width:100%;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(10,30,50,.32);overflow:hidden}
+  .modal .mh{background:var(--brand);color:#fff;padding:15px 22px;display:flex;align-items:center;gap:12px}
+  .modal .mh h3{margin:0;font-size:17px}
+  .modal .mh .mid{font-family:var(--mono);font-size:12px;color:#bcd3e6;margin-left:auto}
+  .modal .mb{padding:20px 22px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:11.5px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+  .select{border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;display:flex;align-items:center;gap:10px;background:#fff}
+  .select .av{width:26px;height:26px;border-radius:50%;background:var(--brand-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px}
+  .select .cap{margin-left:auto;font-size:12px;color:var(--text2)}
+  .select .chev{color:var(--text2);font-weight:800}
+
+  .route{display:flex;flex-direction:column;gap:9px}
+  .opt{border:1.5px solid var(--border);border-radius:12px;padding:13px 15px;display:flex;gap:12px;align-items:flex-start}
+  .opt .radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);margin-top:2px;flex:none}
+  .opt.on{border-color:var(--accent);background:#fffaf2}
+  .opt.on .radio{border-color:var(--accent);background:radial-gradient(circle at center,var(--accent) 0 6px,#fff 6px 10px)}
+  .opt .ttl{font-weight:800;font-size:14px}
+  .opt .desc{font-size:12.5px;color:var(--text2);margin-top:3px}
+  .opt .mini-paket{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+  .opt .mini-b{font-family:var(--mono);font-size:11px;font-weight:700;background:#fff;border:1px solid var(--border);border-radius:7px;padding:3px 8px;color:var(--brand)}
+  .opt .plus{font-family:var(--mono);font-size:11px;font-weight:800;background:var(--accent);color:#3a2400;border-radius:7px;padding:3px 8px}
+
+  .warnbox{font-size:12.5px;color:var(--warning);background:#fff3e2;border:1px solid #f0d4a8;border-radius:9px;padding:9px 12px;margin:4px 0 14px;display:flex;gap:8px;align-items:flex-start}
+  .reasonbox{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface);font-size:13px;color:var(--text2)}
+  .reasonchips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+  .rc{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:#fff;border:1px solid var(--border);color:var(--text2)}
+  .rc.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .modal .mf{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;border-top:1px solid var(--border);background:#fafbfc}
+
+  .infonote{background:#eef4fb;border:1px solid #c7ddf2;border-radius:10px;padding:9px 12px;font-size:12px;color:#23527c;margin:4px 0 14px;display:flex;gap:8px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:10px 0 0}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:4px;margin-right:6px;vertical-align:-2px}
+
+  .callouts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  .callout{background:var(--raised);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+  .callout h4{margin:0 0 6px;font-size:14px;color:var(--brand)}
+  .callout ul{margin:0;padding-left:18px;font-size:13px;color:var(--text2)}
+  .callout li{margin:4px 0}
+  .callout.warn{border-left:4px solid var(--warning)}
+  .num{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#3a2400;font-size:12px;font-weight:800;align-items:center;justify-content:center;margin-right:7px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Mitarbeiterboard — Beleg einem Mitarbeitenden zuweisen</h1>
+  <p>Konzept-Mockup: freie und belegte Mitarbeitende sehen, einen <b>Beleg</b> aus dem Pool
+     wählen und ihn <b>einem bestehenden Paket hinzufügen</b> — oder bei einem freien
+     Mitarbeitenden ein <b>neues Bündel anlegen</b>. Ein auditierter §8.4-Override, kein zweites
+     Verteilsystem.</p>
+  <div class="meta">L&amp;T Logistics · Paketlagerdispo · Teamlead-Cockpit › Mitarbeiterboard · Stand-in-Daten</div>
+</header>
+
+<div class="wrap">
+
+  <div class="flowmap">
+    <span class="pill a">Pool: freie Belege</span>
+    <span class="arrow">→</span>
+    <span class="pill b">Beleg wählen</span>
+    <span class="arrow">→</span>
+    <span class="pill b">Mitarbeitenden wählen</span>
+    <span class="arrow">→</span>
+    <span class="pill">Bündel: anhängen <b>oder</b> neu</span>
+    <span class="arrow">→</span>
+    <span class="pill ok">zugewiesen · auditiert</span>
+  </div>
+  <p class="flow-note">Ein <b>Beleg</b> ist die zuweisbare Einheit. Ein <b>Bündel</b> ist die
+    Tagesmenge an Belegen eines Mitarbeitenden (genau eins pro Tag). „Beleg zuweisen" = Beleg
+    ins Bündel legen — oder das Bündel anlegen, wenn der Mitarbeitende noch frei ist.</p>
+
+  <!-- ===== Terminologie ===== -->
+  <h2 class="sec">1 · Begriffe richtig benannt</h2>
+  <p class="sec-intro">Heute heißt das Dropdown irreführend „Paket hinzufügen", obwohl es einen
+     einzelnen Beleg hinzufügt. Klare Trennung:</p>
+  <div class="terms">
+    <div class="term b">
+      <h4>Beleg <span class="code">GoodsReceiptCase</span></h4>
+      <p>Ein Wareneingangs-Vorgang (ein WE-Beleg, z. B. <b>WE-2041</b>). Die kleinste Einheit, die
+         der Teamlead zuweisen, entziehen oder umsortieren kann.</p>
+    </div>
+    <div class="term p">
+      <h4>Bündel <span class="code">AssignmentBundle</span></h4>
+      <p>Die Sammlung aller Belege eines Mitarbeitenden für den Tag, in Abhol-Reihenfolge.
+         <b>Genau ein Bündel pro Mitarbeitendem und Tag.</b></p>
+    </div>
+  </div>
+
+  <!-- ===== Board ===== -->
+  <h2 class="sec">2 · Board — Bündel sehen, Belege zuweisen</h2>
+  <p class="sec-intro">Links die Mitarbeitenden mit ihrem Bündel (belegt) bzw. „frei" (kein Bündel).
+     Rechts der Pool freier Belege. Jede Zeile kann einen Beleg aufnehmen — auch die freien.</p>
+
+  <div class="app">
+    <div class="appbar">
+      <span class="logo">L&amp;T · Dispo</span>
+      <span class="crumbs">Cockpit › Mitarbeiterboard</span>
+      <span class="who"><span>Mo., 29.06.2026</span><span class="avatar">TL</span></span>
+    </div>
+    <div class="tabs">
+      <span class="tab">Tagescockpit</span>
+      <span class="tab on">Mitarbeiterboard</span>
+      <span class="tab">Digitale Ablagen</span>
+      <span class="tab">Belege</span>
+    </div>
+
+    <div class="layout">
+      <!-- left: employees -->
+      <div class="col left">
+        <h4 class="colh">Eingeplant heute <span class="cnt">3</span></h4>
+
+        <!-- belegt -->
+        <div class="emp">
+          <div class="head">
+            <span class="av">AB</span>
+            <span class="nm">Anna Berger</span>
+            <span class="chip util warn">98 % verplant</span>
+            <span class="chip area">Hängebahn</span>
+            <span class="meta">7,9 h · 41 Pkt</span>
+          </div>
+          <div class="paket">
+            <div class="pk-h">Bündel · 3 Belege <span class="cnt">in Abholfolge</span></div>
+            <div class="beleg"><span class="seq">1.</span><span class="id">WE-2017</span>
+              <span class="tags"><span class="tag qty">120 Stk</span><span class="tag deliv">Lieferung ×2</span></span>
+              <span class="t">R27 · 25 min</span><button class="x">Entziehen</button></div>
+            <div class="beleg"><span class="seq">2.</span><span class="id">WE-2018</span>
+              <span class="tags"><span class="tag qty">90 Stk</span><span class="tag deliv">Lieferung ×2</span></span>
+              <span class="t">R27 · 18 min</span><button class="x">Entziehen</button></div>
+            <div class="beleg"><span class="seq">3.</span><span class="id">WE-2033</span>
+              <span class="tags"><span class="tag qty">60 Stk</span></span>
+              <span class="t">H12 · 14 min</span><button class="x">Entziehen</button></div>
+          </div>
+          <div class="btnrow">
+            <button class="btn primary sm">+ Beleg zuweisen</button>
+            <button class="btn ghost sm">Reihenfolge</button>
+            <button class="btn ghost sm">Pause</button>
+          </div>
+        </div>
+
+        <!-- frei -->
+        <div class="emp" style="border-color:#b6dcc0;box-shadow:0 0 0 2px rgba(46,125,50,.10)">
+          <div class="head">
+            <span class="av" style="background:var(--success)">MA</span>
+            <span class="nm">Azubi Mara</span>
+            <span class="chip free">● frei</span>
+            <span class="chip temp">Aushilfe · ohne Leistungsmessung</span>
+            <span class="chip area">Regal</span>
+            <span class="meta">5,3 h frei</span>
+          </div>
+          <div class="empty-free">Kein Bündel — Mara ist eingeplant, hat aber noch keine Belege.</div>
+          <div class="btnrow">
+            <button class="btn primary sm">+ Beleg zuweisen</button>
+            <span class="hint">Erste Zuweisung legt automatisch ihr Bündel an.</span>
+          </div>
+        </div>
+
+        <!-- belegt -->
+        <div class="emp">
+          <div class="head">
+            <span class="av">TS</span>
+            <span class="nm">Tom Schuster</span>
+            <span class="chip util">54 % verplant</span>
+            <span class="chip area">Palette</span>
+            <span class="meta">6,8 h · 22 Pkt</span>
+          </div>
+          <div class="paket">
+            <div class="pk-h">Bündel · 2 Belege</div>
+            <div class="beleg"><span class="seq">1.</span><span class="id">WE-2050</span>
+              <span class="tags"><span class="tag qty">200 Stk</span></span>
+              <span class="t">P03 · 30 min</span><button class="x">Entziehen</button></div>
+            <div class="beleg"><span class="seq">2.</span><span class="id">WE-2051</span>
+              <span class="tags"><span class="tag qty">40 Stk</span></span>
+              <span class="t">P03 · 12 min</span><button class="x">Entziehen</button></div>
+          </div>
+          <div class="btnrow">
+            <button class="btn primary sm">+ Beleg zuweisen</button>
+            <button class="btn ghost sm">Reihenfolge</button>
+            <button class="btn ghost sm">Pause</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- right: pool -->
+      <div class="col pool">
+        <h4 class="colh">Freie Belege (Pool) <span class="cnt">5</span></h4>
+        <div class="pcard sel">
+          <div><div class="id">WE-2041</div><div class="sub">Hängebahn · H12 · 60 Stk · 16 min</div></div>
+          <span class="go"><button class="btn brand sm">Zuweisen →</button></span>
+        </div>
+        <div class="pcard flagged">
+          <div><div class="id">WE-2044</div><div class="sub">Regal · R31 · 80 Stk · Prio</div></div>
+          <span class="go"><button class="btn ghost sm">Zuweisen</button></span>
+        </div>
+        <div class="pcard">
+          <div><div class="id">WE-2045</div><div class="sub">Palette · P07 · 150 Stk · 24 min</div></div>
+          <span class="go"><button class="btn ghost sm">Zuweisen</button></span>
+        </div>
+        <div class="pcard">
+          <div><div class="id">WE-2047</div><div class="sub">Regal · R12 · 35 Stk · 9 min</div></div>
+          <span class="go"><button class="btn ghost sm">Zuweisen</button></span>
+        </div>
+        <div class="pcard">
+          <div><div class="id">WE-2048</div><div class="sub">Hängebahn · H04 · 45 Stk · 12 min</div></div>
+          <span class="go"><button class="btn ghost sm">Zuweisen</button></span>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--accent)"></i>ausgewählter Beleg</span>
+          <span><i style="background:var(--warning)"></i>Prio</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Dialog ===== -->
+  <h2 class="sec">3 · Zuweisen-Dialog — anhängen ODER neues Bündel</h2>
+  <p class="sec-intro">Egal ob der Einstieg über „+ Beleg zuweisen" (Mitarbeitender) oder
+     „Zuweisen" (Beleg) erfolgt — es öffnet sich derselbe Dialog. Der Dialog entscheidet sichtbar
+     zwischen <b>ans bestehende Bündel anhängen</b> und <b>neues Bündel anlegen</b>.</p>
+
+  <div class="modalstage">
+    <div class="modal">
+      <div class="mh"><h3>Beleg zuweisen</h3><span class="mid">WE-2041 · Hängebahn · 16 min</span></div>
+      <div class="mb">
+
+        <div class="field">
+          <label>Mitarbeitende:r</label>
+          <div class="select"><span class="av" style="background:var(--success)">MA</span>
+            <span><b>Azubi Mara</b> · Regal</span>
+            <span class="cap">frei · 5,3 h Kapazität</span>
+            <span class="chev">▾</span></div>
+        </div>
+
+        <div class="warnbox">⚠ <span><b>Bereich-Hinweis:</b> Beleg ist <b>Hängebahn</b>, Mara ist für
+          <b>Regal</b> eingeteilt. Zuweisung bleibt möglich (weiche Warnung, wie in der Automatik) —
+          bitte bewusst entscheiden.</span></div>
+
+        <div class="field">
+          <label>Ziel-Bündel</label>
+          <div class="route">
+            <div class="opt on">
+              <span class="radio"></span>
+              <div>
+                <div class="ttl">Neues Bündel für Mara anlegen</div>
+                <div class="desc">Mara hat heute noch kein Bündel. Mit dieser Zuweisung wird ihr
+                  Bündel erstellt und WE-2041 als erster Beleg gesetzt.</div>
+                <div class="mini-paket"><span class="plus">+ WE-2041</span></div>
+              </div>
+            </div>
+            <div class="opt" style="opacity:.6">
+              <span class="radio"></span>
+              <div>
+                <div class="ttl">An bestehendes Bündel anhängen</div>
+                <div class="desc">Für freie Mitarbeitende nicht verfügbar — es existiert noch kein
+                  Bündel. (Bei belegten Mitarbeitenden ist dies die Vorauswahl.)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="reasonbox">
+          <b>Grund (Pflicht, §8.4-Audit):</b>
+          <div class="reasonchips">
+            <span class="rc on">Kapazität frei</span>
+            <span class="rc">Prio-Beleg</span>
+            <span class="rc">Bereich-Aushilfe</span>
+            <span class="rc">Reserve nutzen</span>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button class="btn ghost">Abbrechen</button>
+        <button class="btn primary">Zuweisen &amp; Bündel anlegen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="infonote" style="margin-top:18px">ℹ Bei einem <b>belegten</b> Mitarbeitenden ist
+    „An bestehendes Bündel anhängen" vorausgewählt und zeigt die aktuelle Bündel-Liste mit dem neuen
+    Beleg ans Ende angehängt (Reihenfolge danach editierbar). Der „neues Bündel"-Zweig entfällt dort.</div>
+
+  <!-- ===== Logik / Hinweise ===== -->
+  <h2 class="sec">4 · Was im Hintergrund passiert</h2>
+  <div class="callouts">
+    <div class="callout">
+      <h4>Ein Command, zwei Wege</h4>
+      <ul>
+        <li><span class="num">1</span>findOrCreate Bündel für (Mitarbeiter, Tag)</li>
+        <li><span class="num">2</span>Beleg anhängen → Status <b>assigned</b>, Aufwand neu rechnen</li>
+        <li><span class="num">3</span>§8.4-Audit: <b>manual_assign</b> mit Grund</li>
+      </ul>
+    </div>
+    <div class="callout warn">
+      <h4>Grenzen — bewusst</h4>
+      <ul>
+        <li><b>„Live zuweisen" (Automatik) überschreibt</b> manuelle Bündel — genau wie heute bei
+          Entziehen/Hinzufügen. Hinweis im Dialog.</li>
+        <li>Engine bleibt <b>single-source</b> der Automatik; dies ist ein Override.</li>
+        <li>Bereich-Mismatch = <b>weiche Warnung</b>, kein Block.</li>
+        <li>Kein Beleg-Split hier (separates Konzept).</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

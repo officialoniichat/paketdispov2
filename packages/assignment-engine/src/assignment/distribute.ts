@@ -21,7 +21,7 @@ import type { ProtoBundle } from './bundling.js';
  * same employee is MERGED into a single AssignmentBundle: one bundle = one employee's
  * day plan. caseIds are concatenated in proto-assignment order, effort is summed, and
  * the bundle gets one stable id (`bundle-<date>-<employeeIndex>`). The whole cockpit
- * (board row, withdraw/add/reorder/pause/resume, the "Paket x/y" counter, §10.3) keys
+ * (board row, withdraw/add/reorder/pause/resume, the "Beleg x/y" counter, §10.3) keys
  * off exactly one bundle per employee, so the engine emits exactly that.
  */
 

@@ -164,6 +164,13 @@ export class CaseAggregateDto {
 export class PoolItemDto extends CaseSummaryDto {
   @ApiPropertyOptional({ nullable: true }) assignedEmployeeNo!: string | null;
   @ApiProperty() effortPoints!: number;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      "Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds.",
+  })
+  bereich!: string | null;
 }
 
 export class PoolListDto {
@@ -220,10 +227,10 @@ export class BoardRowDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Assigned bundle id; null for a scheduled-but-idle employee with no Paket.',
+    description: 'Assigned bundle id; null for a scheduled-but-idle employee with no Bündel.',
   })
   bundleId!: string | null;
-  @ApiProperty({ description: "Bundle status, or 'idle' when the employee has no Paket." })
+  @ApiProperty({ description: "Bundle status, or 'idle' when the employee has no Bündel." })
   bundleStatus!: string;
   @ApiProperty() plannedEffortMinutes!: number;
   @ApiProperty() capacityMinutes!: number;
@@ -504,14 +511,27 @@ export class ResolveIssueDto {
   resolution?: string;
 }
 
-export class ManualAssignmentDto {
-  @ApiProperty()
+/**
+ * Body for POST /api/teamlead/employees/:employeeNo/assign — manually assign a ready
+ * Beleg to an employee. If the employee already has a Bündel for the day the Beleg is
+ * appended; if the employee is free the Bündel is created. A §8.4 audited override.
+ */
+export class AssignToEmployeeDto {
+  @ApiProperty({ description: 'Ready Beleg (GoodsReceiptCase) to assign to the employee' })
   @IsString()
-  employeeNo!: string;
+  caseId!: string;
 
-  @ApiProperty({ type: [String] })
-  @IsArray()
-  caseIds!: string[];
+  @ApiProperty({ description: 'Reason logged in the §8.4 audit event (assignment.overridden)' })
+  @IsString()
+  reason!: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day.',
+  })
+  @IsOptional()
+  @IsString()
+  date?: string;
 }
 
 /** Body for POST /api/teamlead/bundles/:bundleId/withdraw — pull a case out of a bundle. */
@@ -574,6 +594,11 @@ export class BundleMutationResultDto {
   caseStatus!: string | null;
   @ApiPropertyOptional({ nullable: true, description: 'Audit event id, if recorded' })
   eventId!: string | null;
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'True when this mutation CREATED the Bündel (employee was free / had none).',
+  })
+  bundleCreated?: boolean;
 }
 
 export class EventQueryDto {

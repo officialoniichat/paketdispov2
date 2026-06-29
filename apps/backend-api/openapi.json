@@ -1160,6 +1160,52 @@
         ]
       }
     },
+    "/api/teamlead/employees/{employeeNo}/assign": {
+      "post": {
+        "operationId": "TeamleadController_assignToEmployee",
+        "parameters": [
+          {
+            "name": "employeeNo",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignToEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§8.4 Manuelle Zuweisung: assign a ready Beleg to an employee — appended to the day Bündel, or it is CREATED when the employee is free.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/bundles/{bundleId}/reorder": {
       "post": {
         "operationId": "TeamleadController_reorder",
@@ -2326,11 +2372,11 @@
           "bundleId": {
             "type": "string",
             "nullable": true,
-            "description": "Assigned bundle id; null for a scheduled-but-idle employee with no Paket."
+            "description": "Assigned bundle id; null for a scheduled-but-idle employee with no Bündel."
           },
           "bundleStatus": {
             "type": "string",
-            "description": "Bundle status, or 'idle' when the employee has no Paket."
+            "description": "Bundle status, or 'idle' when the employee has no Bündel."
           },
           "plannedEffortMinutes": {
             "type": "number"
@@ -2569,6 +2615,11 @@
           },
           "effortPoints": {
             "type": "number"
+          },
+          "bereich": {
+            "type": "string",
+            "nullable": true,
+            "description": "Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds."
           }
         },
         "required": [
@@ -3076,6 +3127,10 @@
             "type": "object",
             "nullable": true,
             "description": "Audit event id, if recorded"
+          },
+          "bundleCreated": {
+            "type": "boolean",
+            "description": "True when this mutation CREATED the Bündel (employee was free / had none)."
           }
         },
         "required": [
@@ -3099,6 +3154,27 @@
         },
         "required": [
           "caseId"
+        ]
+      },
+      "AssignToEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Ready Beleg (GoodsReceiptCase) to assign to the employee"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the §8.4 audit event (assignment.overridden)"
+          },
+          "date": {
+            "type": "string",
+            "description": "Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day."
+          }
+        },
+        "required": [
+          "caseId",
+          "reason"
         ]
       },
       "ReorderBundleDto": {

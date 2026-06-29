@@ -506,6 +506,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/employees/{employeeNo}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** §8.4 Manuelle Zuweisung: assign a ready Beleg to an employee — appended to the day Bündel, or it is CREATED when the employee is free. */
+        post: operations["TeamleadController_assignToEmployee"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/bundles/{bundleId}/reorder": {
         parameters: {
             query?: never;
@@ -849,9 +866,9 @@ export interface components {
         BoardRowDto: {
             employeeNo: string;
             employeeName: string;
-            /** @description Assigned bundle id; null for a scheduled-but-idle employee with no Paket. */
+            /** @description Assigned bundle id; null for a scheduled-but-idle employee with no Bündel. */
             bundleId?: string | null;
-            /** @description Bundle status, or 'idle' when the employee has no Paket. */
+            /** @description Bundle status, or 'idle' when the employee has no Bündel. */
             bundleStatus: string;
             plannedEffortMinutes: number;
             capacityMinutes: number;
@@ -924,6 +941,8 @@ export interface components {
             assignedEmployeeName?: string | null;
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
+            /** @description Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds. */
+            bereich?: string | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1084,12 +1103,22 @@ export interface components {
             caseStatus?: Record<string, never> | null;
             /** @description Audit event id, if recorded */
             eventId?: Record<string, never> | null;
+            /** @description True when this mutation CREATED the Bündel (employee was free / had none). */
+            bundleCreated?: boolean;
         };
         AddToBundleDto: {
             /** @description Ready case to add to the bundle */
             caseId: string;
             /** @description Reason logged in the §8.4 audit event */
             reason?: string;
+        };
+        AssignToEmployeeDto: {
+            /** @description Ready Beleg (GoodsReceiptCase) to assign to the employee */
+            caseId: string;
+            /** @description Reason logged in the §8.4 audit event (assignment.overridden) */
+            reason: string;
+            /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
+            date?: string;
         };
         ReorderBundleDto: {
             /** @description Permutation of the bundle's current case ids */
@@ -1967,6 +1996,31 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AddToBundleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_assignToEmployee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeNo: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignToEmployeeDto"];
             };
         };
         responses: {

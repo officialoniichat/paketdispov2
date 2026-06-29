@@ -76,7 +76,7 @@ describe('createOverrideEvent (§8.4 audit)', () => {
 
 describe('formatAuditAction (§8.4 – human-readable audit feed)', () => {
   it('prefers the recorded override action label', () => {
-    expect(formatAuditAction('assignment.overridden', 'entziehen')).toBe('Paket entziehen');
+    expect(formatAuditAction('assignment.overridden', 'entziehen')).toBe('Beleg entziehen');
     expect(formatAuditAction('case.parked', 'parken')).toBe('Parken');
   });
 
