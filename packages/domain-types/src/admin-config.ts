@@ -52,13 +52,33 @@ export type BundleRuleConfig = z.infer<typeof bundleRuleConfigSchema>;
 
 /**
  * Delivery-Group detection (Teamlead-Anforderung Punkt 1). Recognises Belege of one
- * physical delivery (same Lieferschein OR a consecutive weBelegNo run) so the
- * distribution keeps them on one person. Mirrors the engine's `GroupingConfig`.
+ * physical delivery so the distribution keeps them on one person — otherwise a
+ * colleague hunts for a Paket someone else already took.
+ *
+ * Three RANKED signals, highest hit sets the group's confidence (mirrors the engine's
+ * `GroupingConfig`):
+ *   - source key  „Lieferschein X von N" aus ProHandel  → bestätigt (T1)
+ *   - gleiche Lieferschein-Nr (deliveryNoteNo)          → wahrscheinlich (T2)
+ *   - fortlaufender Belegnummern-Lauf                    → vermutet (T3, gehärtet)
+ * A Teamlead-Korrektur (manualDeliveryGroupKey on the case) always wins.
  */
 export const groupingRuleConfigSchema = z.object({
+  /** Master switch — when false, no groups are detected at all. */
   enabled: z.boolean(),
+  /** T1: trust the source group key / „X von N" from ProHandel (bestätigt). */
+  useSourceKey: z.boolean(),
+  /** T2: link Belege that share the same deliveryNoteNo (wahrscheinlich). */
+  useDeliveryNote: z.boolean(),
+  /** T3: link a consecutive weBelegNo run (vermutet). */
+  useBelegRun: z.boolean(),
   /** Max numeric gap between consecutive weBelegNo to still count as one run (1 = strict). */
   maxWeBelegGap: z.number().int().nonnegative(),
+  /** Harden T3: a run only links Belege booked on the SAME day (kills daily-sequence over-grouping). */
+  runRequiresSameDay: z.boolean(),
+  /** Harden T3: a run only links Belege of the SAME Bereich/section. */
+  runRequiresSameSection: z.boolean(),
+  /** When false, only confirmed/likely groups auto-distribute; suspected (T3) wait for Teamlead confirm. */
+  autoDistributeSuspected: z.boolean(),
 });
 export type GroupingRuleConfig = z.infer<typeof groupingRuleConfigSchema>;
 
@@ -191,7 +211,13 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
   effort: DEFAULT_EFFORT_RULE_CONFIG,
   grouping: {
     enabled: true,
+    useSourceKey: true,
+    useDeliveryNote: true,
+    useBelegRun: true,
     maxWeBelegGap: 1,
+    runRequiresSameDay: true,
+    runRequiresSameSection: true,
+    autoDistributeSuspected: false,
   },
   shiftEnd: {
     autoCutoffMinutes: 120,

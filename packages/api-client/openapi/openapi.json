@@ -657,6 +657,80 @@
         ]
       }
     },
+    "/api/teamlead/delivery-groups/merge": {
+      "post": {
+        "operationId": "TeamleadController_mergeDeliveryGroup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryGroupEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryGroupEditResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Teamlead-Punkt 1: merge/confirm Belege into one locked Lieferung",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/delivery-groups/split": {
+      "post": {
+        "operationId": "TeamleadController_splitDeliveryGroup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryGroupEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryGroupEditResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Teamlead-Punkt 1: split/remove Belege out of a Lieferung (each solo)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/cases/{caseId}/park": {
       "post": {
         "operationId": "TeamleadController_park",
@@ -2246,6 +2320,59 @@
           "endOfShiftOpenCount"
         ]
       },
+      "DeliveryGroupRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Delivery-group id"
+          },
+          "signal": {
+            "type": "string",
+            "enum": [
+              "source",
+              "note",
+              "run",
+              "manual",
+              "mixed"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "likely",
+              "suspected",
+              "locked"
+            ]
+          },
+          "presentSize": {
+            "type": "number",
+            "description": "Belege of this group present in the pool"
+          },
+          "expectedSize": {
+            "type": "number",
+            "nullable": true,
+            "description": "Expected total N from „Lieferschein X von N\"; null if unknown"
+          },
+          "missingCount": {
+            "type": "number",
+            "description": "Missing = max(0, expectedSize − presentSize); 0 if unknown"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "Teamlead-locked (frozen against re-detection)"
+          }
+        },
+        "required": [
+          "id",
+          "signal",
+          "confidence",
+          "presentSize",
+          "missingCount",
+          "locked"
+        ]
+      },
       "BoardCaseDto": {
         "type": "object",
         "properties": {
@@ -2267,14 +2394,15 @@
           "effortPoints": {
             "type": "number"
           },
-          "deliveryGroupId": {
-            "type": "string",
+          "deliveryGroup": {
             "nullable": true,
-            "description": "Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone"
-          },
-          "deliveryGroupSize": {
-            "type": "number",
-            "description": "Number of Belege in this Beleg's delivery group (1 = standalone)"
+            "description": "Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryGroupRefDto"
+              }
+            ]
           }
         },
         "required": [
@@ -2283,8 +2411,7 @@
           "status",
           "totalQuantity",
           "estimatedMinutes",
-          "effortPoints",
-          "deliveryGroupSize"
+          "effortPoints"
         ]
       },
       "BoardRouteStopDto": {
@@ -2569,6 +2696,16 @@
           },
           "effortPoints": {
             "type": "number"
+          },
+          "deliveryGroup": {
+            "nullable": true,
+            "description": "Delivery-group context so groups are visible BEFORE distribution; null if standalone",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryGroupRefDto"
+              }
+            ]
           }
         },
         "required": [
@@ -2793,6 +2930,96 @@
           "source"
         ]
       },
+      "DeliveryGroupMemberDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Anhang A CaseStatus"
+          },
+          "assignedEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "true ⇒ this is the Beleg being viewed"
+          }
+        },
+        "required": [
+          "caseId",
+          "weBelegNo",
+          "status",
+          "isCurrent"
+        ]
+      },
+      "DeliveryGroupDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Delivery-group id"
+          },
+          "signal": {
+            "type": "string",
+            "enum": [
+              "source",
+              "note",
+              "run",
+              "manual",
+              "mixed"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "likely",
+              "suspected",
+              "locked"
+            ]
+          },
+          "presentSize": {
+            "type": "number",
+            "description": "Belege of this group present in the pool"
+          },
+          "expectedSize": {
+            "type": "number",
+            "nullable": true,
+            "description": "Expected total N from „Lieferschein X von N\"; null if unknown"
+          },
+          "missingCount": {
+            "type": "number",
+            "description": "Missing = max(0, expectedSize − presentSize); 0 if unknown"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "Teamlead-locked (frozen against re-detection)"
+          },
+          "members": {
+            "description": "All siblings, by weBelegNo",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryGroupMemberDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "signal",
+          "confidence",
+          "presentSize",
+          "missingCount",
+          "locked",
+          "members"
+        ]
+      },
       "CaseDetailDto": {
         "type": "object",
         "properties": {
@@ -2885,6 +3112,16 @@
             "items": {
               "$ref": "#/components/schemas/AuditEventDto"
             }
+          },
+          "deliveryGroup": {
+            "nullable": true,
+            "description": "Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryGroupDetailDto"
+              }
+            ]
           }
         },
         "required": [
@@ -2906,6 +3143,45 @@
             "description": "Reason for manual teamlead priority"
           }
         }
+      },
+      "DeliveryGroupEditDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Cases to merge into / split out of a Lieferung",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason logged in the audit event"
+          }
+        },
+        "required": [
+          "caseIds"
+        ]
+      },
+      "DeliveryGroupEditResultDto": {
+        "type": "object",
+        "properties": {
+          "manualGroupKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "New `grp:` key on merge; null on split"
+          },
+          "affectedCaseIds": {
+            "description": "Cases whose grouping was changed",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "affectedCaseIds"
+        ]
       },
       "ParkDto": {
         "type": "object",

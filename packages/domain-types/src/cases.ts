@@ -96,6 +96,18 @@ export const goodsReceiptCaseSchema = z.object({
   externalRef: z.string(),
   weBelegNo: z.string(),
   deliveryNoteNo: z.string().optional(),
+  /**
+   * Delivery-Group T1 signal (Teamlead-Punkt 1). When ProHandel emits „Lieferschein X von N",
+   * `deliverySourceGroupKey` is the shared key of that physical delivery and
+   * `deliverySourceGroupSize` is N (the expected total) — lets the UI show „3 von 4 da · 1 fehlt".
+   */
+  deliverySourceGroupKey: z.string().optional(),
+  deliverySourceGroupSize: z.number().int().positive().optional(),
+  /**
+   * Teamlead-Korrektur (lock): when set, this case ignores auto-detection and joins exactly the
+   * Belege sharing the same key. `solo:<id>` isolates a case (split/remove); `grp:<key>` merges.
+   */
+  manualDeliveryGroupKey: z.string().optional(),
   bookingDate: isoDateSchema,
   weDate: isoDateSchema.optional(),
   branchNo: z.string(),

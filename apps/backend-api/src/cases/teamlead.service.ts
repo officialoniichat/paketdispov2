@@ -19,6 +19,8 @@ import {
   type BundleMutationResultDto,
   type BundlePauseDto,
   type CancelDto,
+  type DeliveryGroupEditDto,
+  type DeliveryGroupEditResultDto,
   type ParkDto,
   type ZstExportResultDto,
   type PrioritizeDto,
@@ -193,6 +195,88 @@ export class TeamleadService {
     });
 
     return { caseId, status: found.status, version: found.version + 1, eventId: null };
+  }
+
+  /**
+   * Teamlead-Korrektur „Lieferung" (Teamlead-Punkt 1): merge Belege into ONE locked
+   * delivery group. Also serves „bestätigen" (promote a suspected group to locked). The
+   * shared `grp:` key freezes them against auto re-detection.
+   */
+  async mergeDeliveryGroup(
+    principal: Principal,
+    dto: DeliveryGroupEditDto,
+  ): Promise<DeliveryGroupEditResultDto> {
+    const caseIds = [...new Set(dto.caseIds)];
+    if (caseIds.length < 2) {
+      throw new BadRequestException('Eine Lieferung braucht mindestens zwei Belege.');
+    }
+    const found = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: caseIds } },
+      select: { id: true },
+    });
+    if (found.length !== caseIds.length) {
+      throw new NotFoundException('Mindestens ein Beleg wurde nicht gefunden.');
+    }
+    const manualGroupKey = `grp:${[...caseIds].sort()[0]}`;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.goodsReceiptCase.updateMany({
+        where: { id: { in: caseIds } },
+        data: { manualDeliveryGroupKey: manualGroupKey, version: { increment: 1 } },
+      });
+      await this.events.append(
+        {
+          eventType: 'case.delivery_group_merged',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseIds[0]!,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { caseIds, manualGroupKey, reason: dto.reason },
+        },
+        tx,
+      );
+    });
+    return { manualGroupKey, affectedCaseIds: caseIds };
+  }
+
+  /**
+   * Teamlead-Korrektur „Lieferung" (Teamlead-Punkt 1): split Belege out of a group — each
+   * becomes solo and is frozen against auto re-detection. Serves „trennen"/„entfernen".
+   */
+  async splitDeliveryGroup(
+    principal: Principal,
+    dto: DeliveryGroupEditDto,
+  ): Promise<DeliveryGroupEditResultDto> {
+    const caseIds = [...new Set(dto.caseIds)];
+    if (caseIds.length === 0) {
+      throw new BadRequestException('Keine Belege angegeben.');
+    }
+    const found = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: caseIds } },
+      select: { id: true },
+    });
+    if (found.length !== caseIds.length) {
+      throw new NotFoundException('Mindestens ein Beleg wurde nicht gefunden.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of caseIds) {
+        await tx.goodsReceiptCase.update({
+          where: { id },
+          data: { manualDeliveryGroupKey: `solo:${id}`, version: { increment: 1 } },
+        });
+      }
+      await this.events.append(
+        {
+          eventType: 'case.delivery_group_split',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseIds[0]!,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { caseIds, reason: dto.reason },
+        },
+        tx,
+      );
+    });
+    return { manualGroupKey: null, affectedCaseIds: caseIds };
   }
 
   async deprioritize(

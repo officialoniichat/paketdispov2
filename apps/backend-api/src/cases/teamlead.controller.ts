@@ -15,6 +15,8 @@ import {
   CapacityDto,
   CaseDetailDto,
   DashboardDto,
+  DeliveryGroupEditDto,
+  DeliveryGroupEditResultDto,
   EventQueryDto,
   KpiDto,
   ParkDto,
@@ -96,6 +98,26 @@ export class TeamleadController {
     @Body() dto: PrioritizeDto,
   ): Promise<TransitionResultDto> {
     return this.teamlead.prioritize(principal, caseId, dto);
+  }
+
+  @Post('delivery-groups/merge')
+  @ApiOperation({ summary: 'Teamlead-Punkt 1: merge/confirm Belege into one locked Lieferung' })
+  @ApiOkResponse({ type: DeliveryGroupEditResultDto })
+  mergeDeliveryGroup(
+    @CurrentUser() principal: Principal,
+    @Body() dto: DeliveryGroupEditDto,
+  ): Promise<DeliveryGroupEditResultDto> {
+    return this.teamlead.mergeDeliveryGroup(principal, dto);
+  }
+
+  @Post('delivery-groups/split')
+  @ApiOperation({ summary: 'Teamlead-Punkt 1: split/remove Belege out of a Lieferung (each solo)' })
+  @ApiOkResponse({ type: DeliveryGroupEditResultDto })
+  splitDeliveryGroup(
+    @CurrentUser() principal: Principal,
+    @Body() dto: DeliveryGroupEditDto,
+  ): Promise<DeliveryGroupEditResultDto> {
+    return this.teamlead.splitDeliveryGroup(principal, dto);
   }
 
   @Post('cases/:caseId/park')

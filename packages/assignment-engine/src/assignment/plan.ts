@@ -18,7 +18,11 @@ import { buildPickupSequence, type PickupCase } from '../pickup/pickup-order.js'
 import type { AssignmentPlan, EngineInput, EnrichedCase, UnassignedCase } from '../types.js';
 import { createBalancedBundles, type ProtoBundle } from './bundling.js';
 import { distributeBundlesByWeightedLoad } from './distribute.js';
-import { detectDeliveryGroups, indexDeliveryGroups } from '../grouping/delivery-group.js';
+import {
+  detectDeliveryGroups,
+  indexDeliveryGroups,
+  withheldCaseIds,
+} from '../grouping/delivery-group.js';
 
 /**
  * assignWork(date) — the §8.3 Zuteilungsalgorithmus. Pure and deterministic so the
@@ -120,14 +124,45 @@ export function assignWork(
   });
 
   const unassigned: UnassignedCase[] = [];
-  const eligible: EnrichedCase[] = [];
+  const preEligible: EnrichedCase[] = [];
   for (const e of enriched) {
     if (e.priority.rank === 0) {
       unassigned.push({ caseId: e.case.id, reason: 'excluded', priorityClass: e.priority.class });
     } else {
+      preEligible.push(e);
+    }
+  }
+
+  // Delivery-group detection (Teamlead-Anforderung Punkt 1) over the eligible pool. Done
+  // up front so suspected (T3-only) groups can be WITHHELD from auto-distribution when
+  // `autoDistributeSuspected` is off — they wait in the pool for a Teamlead confirm.
+  const deliveryGroups = detectDeliveryGroups(
+    preEligible.map((e) => ({
+      id: e.case.id,
+      weBelegNo: e.case.weBelegNo,
+      deliveryNoteNo: e.case.deliveryNoteNo,
+      deliverySourceGroupKey: e.case.deliverySourceGroupKey,
+      deliverySourceGroupSize: e.case.deliverySourceGroupSize,
+      manualDeliveryGroupKey: e.case.manualDeliveryGroupKey,
+      bookingDate: e.case.bookingDate,
+      section: e.case.section,
+    })),
+    config.grouping,
+  );
+  const withheld = withheldCaseIds(deliveryGroups, config.grouping);
+  const eligible: EnrichedCase[] = [];
+  for (const e of preEligible) {
+    if (withheld.has(e.case.id)) {
+      unassigned.push({
+        caseId: e.case.id,
+        reason: 'delivery_unconfirmed',
+        priorityClass: e.priority.class,
+      });
+    } else {
       eligible.push(e);
     }
   }
+  const { groupIdByCaseId } = indexDeliveryGroups(deliveryGroups);
 
   // Capacity (§4.3) — over the cutoff-effective shifts.
   const totalCapacity = teamCapacityMinutes(effectiveShifts);
@@ -150,19 +185,6 @@ export function assignWork(
   const today = createBalancedBundles(todayCandidates, capacityAfterStarter, config.assignment);
 
   const protoBundles: ProtoBundle[] = [...starter.bundles, ...today.bundles];
-
-  // Delivery-group detection (Teamlead-Anforderung Punkt 1): recognise Belege of one
-  // physical delivery (same Lieferschein OR a consecutive weBelegNo run) over the
-  // eligible pool, so the distribution can keep each group on a single person.
-  const deliveryGroups = detectDeliveryGroups(
-    eligible.map((e) => ({
-      id: e.case.id,
-      weBelegNo: e.case.weBelegNo,
-      deliveryNoteNo: e.case.deliveryNoteNo,
-    })),
-    config.grouping,
-  );
-  const { groupIdByCaseId } = indexDeliveryGroups(deliveryGroups);
 
   // Weighted distribution (§8.3/§8.4) with a soft delivery-group affinity, over the
   // Schichtende-cutoff-effective shifts (Punkt 5).

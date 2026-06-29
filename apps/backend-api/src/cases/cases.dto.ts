@@ -32,6 +32,42 @@ export class CaseSummaryDto {
   assignedEmployeeName!: string | null;
 }
 
+/**
+ * Per-case delivery-group summary (Teamlead-Anforderung Punkt 1). Attached to a Beleg
+ * wherever it is shown (Board, Pool, Detail) so the „Lieferung ×n" badge + confidence
+ * colour + „X von N" completeness render everywhere. `null` ⇒ standalone Beleg.
+ */
+export class DeliveryGroupRefDto {
+  @ApiProperty({ description: 'Delivery-group id' }) id!: string;
+  @ApiProperty({ enum: ['source', 'note', 'run', 'manual', 'mixed'] }) signal!: string;
+  @ApiProperty({ enum: ['confirmed', 'likely', 'suspected', 'locked'] }) confidence!: string;
+  @ApiProperty({ description: 'Belege of this group present in the pool' }) presentSize!: number;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Expected total N from „Lieferschein X von N"; null if unknown',
+  })
+  expectedSize!: number | null;
+  @ApiProperty({ description: 'Missing = max(0, expectedSize − presentSize); 0 if unknown' })
+  missingCount!: number;
+  @ApiProperty({ description: 'Teamlead-locked (frozen against re-detection)' }) locked!: boolean;
+}
+
+/** One sibling Beleg of a delivery group, with who currently holds it (Detail panel). */
+export class DeliveryGroupMemberDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty() weBelegNo!: string;
+  @ApiProperty({ description: 'Anhang A CaseStatus' }) status!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) assignedEmployeeName!: string | null;
+  @ApiProperty({ description: 'true ⇒ this is the Beleg being viewed' }) isCurrent!: boolean;
+}
+
+/** Full delivery-group context for the Belegdetailview (ref + the sibling list). */
+export class DeliveryGroupDetailDto extends DeliveryGroupRefDto {
+  @ApiProperty({ type: [DeliveryGroupMemberDto], description: 'All siblings, by weBelegNo' })
+  members!: DeliveryGroupMemberDto[];
+}
+
 export class RouteStopDto {
   @ApiProperty() id!: string;
   @ApiProperty() sequence!: number;
@@ -164,6 +200,12 @@ export class CaseAggregateDto {
 export class PoolItemDto extends CaseSummaryDto {
   @ApiPropertyOptional({ nullable: true }) assignedEmployeeNo!: string | null;
   @ApiProperty() effortPoints!: number;
+  @ApiPropertyOptional({
+    type: DeliveryGroupRefDto,
+    nullable: true,
+    description: 'Delivery-group context so groups are visible BEFORE distribution; null if standalone',
+  })
+  deliveryGroup!: DeliveryGroupRefDto | null;
 }
 
 export class PoolListDto {
@@ -205,13 +247,11 @@ export class BoardCaseDto {
   @ApiProperty() estimatedMinutes!: number;
   @ApiProperty() effortPoints!: number;
   @ApiPropertyOptional({
-    type: String,
+    type: DeliveryGroupRefDto,
     nullable: true,
-    description: 'Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone',
+    description: 'Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone',
   })
-  deliveryGroupId!: string | null;
-  @ApiProperty({ description: "Number of Belege in this Beleg's delivery group (1 = standalone)" })
-  deliveryGroupSize!: number;
+  deliveryGroup!: DeliveryGroupRefDto | null;
 }
 
 export class BoardRowDto {
@@ -387,6 +427,12 @@ export class CaseDetailDto {
   zstRecords!: ZstSummaryDto[];
   @ApiProperty({ type: [AuditEventDto], description: 'Audit history, newest first' })
   history!: AuditEventDto[];
+  @ApiPropertyOptional({
+    type: DeliveryGroupDetailDto,
+    nullable: true,
+    description: 'Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone',
+  })
+  deliveryGroup!: DeliveryGroupDetailDto | null;
 }
 
 /** Result of the Tagesabschluss/ZST export (§15.1): completed cases → zst_done + CSV. */
@@ -512,6 +558,30 @@ export class ManualAssignmentDto {
   @ApiProperty({ type: [String] })
   @IsArray()
   caseIds!: string[];
+}
+
+/**
+ * Body for the Teamlead delivery-group correction (Teamlead-Punkt 1):
+ * merge = link these Belege into one locked Lieferung (also used by „bestätigen");
+ * split = unlink them (each becomes solo, also used by „entfernen"/„trennen").
+ */
+export class DeliveryGroupEditDto {
+  @ApiProperty({ type: [String], description: 'Cases to merge into / split out of a Lieferung' })
+  @IsArray()
+  caseIds!: string[];
+
+  @ApiPropertyOptional({ description: 'Reason logged in the audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Result of a delivery-group correction — the locked key (merge) or null (split). */
+export class DeliveryGroupEditResultDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'New `grp:` key on merge; null on split' })
+  manualGroupKey!: string | null;
+  @ApiProperty({ type: [String], description: 'Cases whose grouping was changed' })
+  affectedCaseIds!: string[];
 }
 
 /** Body for POST /api/teamlead/bundles/:bundleId/withdraw — pull a case out of a bundle. */

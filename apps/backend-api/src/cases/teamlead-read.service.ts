@@ -10,6 +10,8 @@ import {
   type CaseDetailDto,
   type CaseSummaryDto,
   type DashboardDto,
+  type DeliveryGroupDetailDto,
+  type DeliveryGroupMemberDto,
   type EventQueryDto,
   type KpiDto,
   type PoolItemDto,
@@ -18,7 +20,7 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { mapBoxTarget, mapWorkInstruction } from './mappers.js';
+import { mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
 import { loadRuleConfig } from '../config/rule-config.js';
@@ -96,10 +98,41 @@ export class TeamleadReadService {
       loadRuleConfig(this.prisma),
     ]);
 
+    // Detect delivery groups over ALL filtered Belege (not just this page) so the Eingang
+    // shows groups BEFORE distribution and a group is never split by pagination.
+    const groupRows = await this.prisma.goodsReceiptCase.findMany({
+      where,
+      select: {
+        id: true,
+        weBelegNo: true,
+        deliveryNoteNo: true,
+        deliverySourceGroupKey: true,
+        deliverySourceGroupSize: true,
+        manualDeliveryGroupKey: true,
+        bookingDate: true,
+        section: true,
+      },
+    });
+    const groups = detectDeliveryGroups(
+      groupRows.map((c) => ({
+        id: c.id,
+        weBelegNo: c.weBelegNo,
+        deliveryNoteNo: c.deliveryNoteNo,
+        deliverySourceGroupKey: c.deliverySourceGroupKey,
+        deliverySourceGroupSize: c.deliverySourceGroupSize,
+        manualDeliveryGroupKey: c.manualDeliveryGroupKey,
+        bookingDate: c.bookingDate.toISOString().slice(0, 10),
+        section: c.section,
+      })),
+      ruleConfig.grouping,
+    );
+    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+
     const items: PoolItemDto[] = rows.map((c) => {
       // Show the SAME effort the distribution uses: live-computed for instructionalised
       // cases, stored estimate otherwise (see resolveCaseEffort).
       const effort = resolveCaseEffort(c, ruleConfig.effort);
+      const group = groupById.get(groupIdByCaseId.get(c.id) ?? '');
       return {
         id: c.id,
         weBelegNo: c.weBelegNo,
@@ -114,6 +147,7 @@ export class TeamleadReadService {
         assignedEmployeeName: c.assignedBundle?.employee?.displayName ?? null,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
+        deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
       };
     });
 
@@ -203,6 +237,11 @@ export class TeamleadReadService {
                   id: true,
                   weBelegNo: true,
                   deliveryNoteNo: true,
+                  deliverySourceGroupKey: true,
+                  deliverySourceGroupSize: true,
+                  manualDeliveryGroupKey: true,
+                  bookingDate: true,
+                  section: true,
                   status: true,
                   totalQuantity: true,
                   estimatedMinutes: true,
@@ -259,7 +298,16 @@ export class TeamleadReadService {
     // per-employee fold is kept defensively so a legacy multi-bundle day still renders.
     // `bundleId === null` marks a free head with no Paket. Delivery-group detection
     // inputs are collected while folding so groups span ALL assigned Belege (Punkt 1).
-    const groupInputs: { id: string; weBelegNo: string; deliveryNoteNo: string | null }[] = [];
+    const groupInputs: {
+      id: string;
+      weBelegNo: string;
+      deliveryNoteNo: string | null;
+      deliverySourceGroupKey: string | null;
+      deliverySourceGroupSize: number | null;
+      manualDeliveryGroupKey: string | null;
+      bookingDate: string;
+      section: number | null;
+    }[] = [];
 
     const rowByEmployee = new Map<string, BoardRowDto>();
     for (const s of shifts) {
@@ -310,14 +358,18 @@ export class TeamleadReadService {
           totalQuantity: it.case.totalQuantity,
           estimatedMinutes: effort.minutes,
           effortPoints: effort.points,
-          // Delivery-group fields are filled in once all board cases are known (below).
-          deliveryGroupId: null,
-          deliveryGroupSize: 1,
+          // Delivery-group ref is filled in once all board cases are known (below).
+          deliveryGroup: null,
         });
         groupInputs.push({
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,
           deliveryNoteNo: it.case.deliveryNoteNo,
+          deliverySourceGroupKey: it.case.deliverySourceGroupKey,
+          deliverySourceGroupSize: it.case.deliverySourceGroupSize,
+          manualDeliveryGroupKey: it.case.manualDeliveryGroupKey,
+          bookingDate: it.case.bookingDate.toISOString().slice(0, 10),
+          section: it.case.section,
         });
       }
       for (const rs of b.routeStops) {
@@ -335,7 +387,7 @@ export class TeamleadReadService {
     // consecutive weBelegNo run), using the SAME pure engine detection + the §11
     // configured grouping rule. Standalone Belege keep null / size 1.
     const groups = detectDeliveryGroups(groupInputs, ruleConfig.grouping);
-    const { groupIdByCaseId, sizeByGroupId } = indexDeliveryGroups(groups);
+    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
     // Stable, deterministic order by name (idle heads stay interspersed, never hidden
     // at the end) with employeeNo as tie-break.
     const rows = [...rowByEmployee.values()].sort(
@@ -344,11 +396,8 @@ export class TeamleadReadService {
     );
     for (const row of rows) {
       for (const c of row.cases) {
-        const groupId = groupIdByCaseId.get(c.id);
-        if (groupId) {
-          c.deliveryGroupId = groupId;
-          c.deliveryGroupSize = sizeByGroupId.get(groupId) ?? 1;
-        }
+        const group = groupById.get(groupIdByCaseId.get(c.id) ?? '');
+        if (group) c.deliveryGroup = mapDeliveryGroupRef(group);
       }
     }
 
@@ -536,7 +585,63 @@ export class TeamleadReadService {
         source: z.source,
       })),
       history,
+      deliveryGroup: await this.deliveryGroupDetail(found.id, found.bookingDate),
     };
+  }
+
+  /**
+   * Zugehörige Lieferung for the Belegdetailview (Teamlead-Punkt 1): detect the group
+   * containing `caseId` across the whole booking day and list every sibling with who
+   * holds it. `null` when the Beleg is standalone.
+   */
+  private async deliveryGroupDetail(
+    caseId: string,
+    bookingDate: Date,
+  ): Promise<DeliveryGroupDetailDto | null> {
+    const dayCases = await this.prisma.goodsReceiptCase.findMany({
+      where: { bookingDate },
+      select: {
+        id: true,
+        weBelegNo: true,
+        deliveryNoteNo: true,
+        deliverySourceGroupKey: true,
+        deliverySourceGroupSize: true,
+        manualDeliveryGroupKey: true,
+        bookingDate: true,
+        section: true,
+        status: true,
+        assignedBundle: { select: { employee: { select: { displayName: true } } } },
+      },
+    });
+    const grouping = (await loadRuleConfig(this.prisma)).grouping;
+    const groups = detectDeliveryGroups(
+      dayCases.map((c) => ({
+        id: c.id,
+        weBelegNo: c.weBelegNo,
+        deliveryNoteNo: c.deliveryNoteNo,
+        deliverySourceGroupKey: c.deliverySourceGroupKey,
+        deliverySourceGroupSize: c.deliverySourceGroupSize,
+        manualDeliveryGroupKey: c.manualDeliveryGroupKey,
+        bookingDate: c.bookingDate.toISOString().slice(0, 10),
+        section: c.section,
+      })),
+      grouping,
+    );
+    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+    const group = groupById.get(groupIdByCaseId.get(caseId) ?? '');
+    if (!group) return null;
+    const byId = new Map(dayCases.map((c) => [c.id, c]));
+    const members: DeliveryGroupMemberDto[] = group.caseIds.map((id) => {
+      const c = byId.get(id);
+      return {
+        caseId: id,
+        weBelegNo: c?.weBelegNo ?? id,
+        status: c?.status ?? 'unknown',
+        assignedEmployeeName: c?.assignedBundle?.employee?.displayName ?? null,
+        isCurrent: id === caseId,
+      };
+    });
+    return { ...mapDeliveryGroupRef(group), members };
   }
 
   // --- projection helpers ---------------------------------------------------

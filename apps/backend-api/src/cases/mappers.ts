@@ -6,12 +6,34 @@
  * onto the same response DTOs. These are the single source of those two shared
  * projections so the two services don't carry byte-identical private copies.
  */
+import type { DeliveryGroup } from '@paket/assignment-engine';
 import type {
+  DeliveryGroupRefDto,
   PositionInstructionDto,
   SkuLineDto,
   TransportBoxTargetDto,
   WorkInstructionHeaderDto,
 } from './cases.dto.js';
+
+/**
+ * Project a detected {@link DeliveryGroup} onto the per-case {@link DeliveryGroupRefDto}
+ * shown on every surface (Board, Pool, Detail). `missingCount` realises the „X von N"
+ * completeness — how many Belege of the delivery have not been booked yet.
+ */
+export function mapDeliveryGroupRef(group: DeliveryGroup): DeliveryGroupRefDto {
+  const missingCount = group.expectedSize
+    ? Math.max(0, group.expectedSize - group.presentSize)
+    : 0;
+  return {
+    id: group.id,
+    signal: group.signal,
+    confidence: group.confidence,
+    presentSize: group.presentSize,
+    expectedSize: group.expectedSize ?? null,
+    missingCount,
+    locked: group.locked,
+  };
+}
 
 /** Persistence shape of a work-instruction header (the fields both views expose). */
 export interface WorkInstructionRow {

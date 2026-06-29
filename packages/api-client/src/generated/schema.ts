@@ -304,6 +304,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/delivery-groups/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Teamlead-Punkt 1: merge/confirm Belege into one locked Lieferung */
+        post: operations["TeamleadController_mergeDeliveryGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/delivery-groups/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Teamlead-Punkt 1: split/remove Belege out of a Lieferung (each solo) */
+        post: operations["TeamleadController_splitDeliveryGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/cases/{caseId}/park": {
         parameters: {
             query?: never;
@@ -827,6 +861,22 @@ export interface components {
             /** @description Non-terminal Belege assigned to an employee whose shift has already ended (Punkt 6 — offen am Schichtende). */
             endOfShiftOpenCount: number;
         };
+        DeliveryGroupRefDto: {
+            /** @description Delivery-group id */
+            id: string;
+            /** @enum {string} */
+            signal: "source" | "note" | "run" | "manual" | "mixed";
+            /** @enum {string} */
+            confidence: "confirmed" | "likely" | "suspected" | "locked";
+            /** @description Belege of this group present in the pool */
+            presentSize: number;
+            /** @description Expected total N from „Lieferschein X von N"; null if unknown */
+            expectedSize?: number | null;
+            /** @description Missing = max(0, expectedSize − presentSize); 0 if unknown */
+            missingCount: number;
+            /** @description Teamlead-locked (frozen against re-detection) */
+            locked: boolean;
+        };
         BoardCaseDto: {
             id: string;
             weBelegNo: string;
@@ -834,10 +884,8 @@ export interface components {
             totalQuantity: number;
             estimatedMinutes: number;
             effortPoints: number;
-            /** @description Delivery-group id (Teamlead-Anforderung Punkt 1); null if standalone */
-            deliveryGroupId?: string | null;
-            /** @description Number of Belege in this Beleg's delivery group (1 = standalone) */
-            deliveryGroupSize: number;
+            /** @description Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone */
+            deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
         };
         BoardRouteStopDto: {
             id: string;
@@ -924,6 +972,8 @@ export interface components {
             assignedEmployeeName?: string | null;
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
+            /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
+            deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -993,6 +1043,33 @@ export interface components {
             /** @description ZstSource: mobile_app|teamlead_dashboard|manual_import */
             source: string;
         };
+        DeliveryGroupMemberDto: {
+            caseId: string;
+            weBelegNo: string;
+            /** @description Anhang A CaseStatus */
+            status: string;
+            assignedEmployeeName?: string | null;
+            /** @description true ⇒ this is the Beleg being viewed */
+            isCurrent: boolean;
+        };
+        DeliveryGroupDetailDto: {
+            /** @description Delivery-group id */
+            id: string;
+            /** @enum {string} */
+            signal: "source" | "note" | "run" | "manual" | "mixed";
+            /** @enum {string} */
+            confidence: "confirmed" | "likely" | "suspected" | "locked";
+            /** @description Belege of this group present in the pool */
+            presentSize: number;
+            /** @description Expected total N from „Lieferschein X von N"; null if unknown */
+            expectedSize?: number | null;
+            /** @description Missing = max(0, expectedSize − presentSize); 0 if unknown */
+            missingCount: number;
+            /** @description Teamlead-locked (frozen against re-detection) */
+            locked: boolean;
+            /** @description All siblings, by weBelegNo */
+            members: components["schemas"]["DeliveryGroupMemberDto"][];
+        };
         CaseDetailDto: {
             case: components["schemas"]["CaseSummaryDto"];
             /** @description Effort points (Aufwandspunkte) */
@@ -1019,10 +1096,24 @@ export interface components {
             zstRecords: components["schemas"]["ZstSummaryDto"][];
             /** @description Audit history, newest first */
             history: components["schemas"]["AuditEventDto"][];
+            /** @description Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone */
+            deliveryGroup?: components["schemas"]["DeliveryGroupDetailDto"] | null;
         };
         PrioritizeDto: {
             /** @description Reason for manual teamlead priority */
             reason?: string;
+        };
+        DeliveryGroupEditDto: {
+            /** @description Cases to merge into / split out of a Lieferung */
+            caseIds: string[];
+            /** @description Reason logged in the audit event */
+            reason?: string;
+        };
+        DeliveryGroupEditResultDto: {
+            /** @description New `grp:` key on merge; null on split */
+            manualGroupKey?: string | null;
+            /** @description Cases whose grouping was changed */
+            affectedCaseIds: string[];
         };
         ParkDto: {
             reason?: string;
@@ -1690,6 +1781,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_mergeDeliveryGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliveryGroupEditDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryGroupEditResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_splitDeliveryGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliveryGroupEditDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryGroupEditResultDto"];
                 };
             };
         };

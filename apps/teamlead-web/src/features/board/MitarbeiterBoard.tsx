@@ -8,6 +8,7 @@
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LieferungChip } from '../../components/LieferungChip';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -49,10 +50,11 @@ export function MitarbeiterBoard(): JSX.Element {
   const groupEmployees = new Map<string, Set<string>>();
   for (const row of board) {
     for (const c of row.cases) {
-      if (!c.deliveryGroupId) continue;
-      const set = groupEmployees.get(c.deliveryGroupId) ?? new Set<string>();
+      const groupId = c.deliveryGroup?.id;
+      if (!groupId) continue;
+      const set = groupEmployees.get(groupId) ?? new Set<string>();
       set.add(row.employeeId);
-      groupEmployees.set(c.deliveryGroupId, set);
+      groupEmployees.set(groupId, set);
     }
   }
   const splitGroupCount = [...groupEmployees.values()].filter((s) => s.size > 1).length;
@@ -211,14 +213,7 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               </IconButton>
               <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
               <CaseStatusChip status={c.status} size="small" />
-              {c.deliveryGroupSize != null && c.deliveryGroupSize > 1 && (
-                <Chip
-                  size="small"
-                  color="info"
-                  variant="outlined"
-                  label={`Lieferung ×${c.deliveryGroupSize}`}
-                />
-              )}
+              <LieferungChip group={c.deliveryGroup} />
               <Typography variant="caption" color="text.secondary">
                 {c.storageCode ? `${c.storageCode} · ` : ''}
                 {formatMinutes(c.estimatedMinutes)}

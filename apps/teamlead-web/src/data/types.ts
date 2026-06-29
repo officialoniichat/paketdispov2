@@ -91,6 +91,17 @@ export interface Lane {
 // §10.3 Mitarbeitenden-Board (workforce dispatch)
 // ---------------------------------------------------------------------------
 
+/** Per-case Lieferung context (Teamlead-Punkt 1) shared by Board, Pool and Detail. */
+export interface DeliveryGroupRef {
+  id: string;
+  signal: 'source' | 'note' | 'run' | 'manual' | 'mixed';
+  confidence: 'confirmed' | 'likely' | 'suspected' | 'locked';
+  presentSize: number;
+  expectedSize?: number | null;
+  missingCount: number;
+  locked: boolean;
+}
+
 /** One case in an employee's bundle, in pickup order (§10.3 board detail). */
 export interface BoardCase {
   caseId: string;
@@ -99,10 +110,8 @@ export interface BoardCase {
   estimatedMinutes: number;
   effortPoints: number;
   storageCode: string;
-  /** Delivery-group id (Teamlead-Anforderung Punkt 1); null/undefined if standalone. */
-  deliveryGroupId?: string | null;
-  /** Belege in this case's delivery group (1 = standalone). */
-  deliveryGroupSize?: number;
+  /** Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone. */
+  deliveryGroup?: DeliveryGroupRef | null;
 }
 
 export interface BoardRow {

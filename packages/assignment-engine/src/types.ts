@@ -76,7 +76,7 @@ export interface EngineInput {
 /** A case that could not be placed, with the reason (surfaced to Teamlead). */
 export interface UnassignedCase {
   caseId: Id;
-  reason: 'excluded' | 'no_capacity';
+  reason: 'excluded' | 'no_capacity' | 'delivery_unconfirmed';
   priorityClass: PriorityClass;
 }
 

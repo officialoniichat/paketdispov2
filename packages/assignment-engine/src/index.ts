@@ -111,10 +111,12 @@ export { buildPickupSequence, type PickupCase, type PickupOptions } from './pick
 export {
   detectDeliveryGroups,
   indexDeliveryGroups,
+  withheldCaseIds,
   DEFAULT_GROUPING_CONFIG,
   type GroupingConfig,
   type DeliveryGroupInput,
   type DeliveryGroup,
-  type DeliveryGroupReason,
+  type DeliveryGroupSignal,
+  type DeliveryGroupConfidence,
   type DeliveryGroupIndex,
 } from './grouping/delivery-group.js';

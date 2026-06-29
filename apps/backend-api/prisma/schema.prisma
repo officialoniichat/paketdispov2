@@ -310,6 +310,11 @@ model GoodsReceiptCase {
   externalRef       String // ProHandel booking reference (idempotency anchor)
   weBelegNo         String         @unique
   deliveryNoteNo    String?
+  // Delivery-Group (Teamlead-Punkt 1): T1 source key + N from „Lieferschein X von N",
+  // and the Teamlead manual override (`grp:<key>` merge / `solo:<id>` isolate).
+  deliverySourceGroupKey  String?
+  deliverySourceGroupSize Int?
+  manualDeliveryGroupKey  String?
   bookingDate       DateTime       @db.Date
   weDate            DateTime?      @db.Date
   branchNo          String

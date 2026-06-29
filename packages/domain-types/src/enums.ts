@@ -155,6 +155,8 @@ export const workflowEventTypeSchema = z.enum([
   'zst.created',
   'zst.exported',
   'assignment.overridden',
+  'case.delivery_group_merged',
+  'case.delivery_group_split',
   'employee.created',
   'employee.profile_updated',
   'employee.shift_overridden',
