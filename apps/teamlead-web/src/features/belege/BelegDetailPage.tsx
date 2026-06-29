@@ -8,6 +8,7 @@
 import { useState, type JSX, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { DeliveryGroupPanel } from './DeliveryGroupPanel';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -157,6 +158,8 @@ export function BelegDetailPage(): JSX.Element {
           ctx={actionCtx}
         />
       </Stack>
+
+      {c.deliveryGroup && <DeliveryGroupPanel caseId={c.id} group={c.deliveryGroup} />}
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
         {TABS.map((t) => (

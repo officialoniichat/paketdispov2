@@ -368,11 +368,51 @@ export function AdminPage(): JSX.Element {
                       onChange={(v) => patch('grouping', { ...draft.grouping, enabled: v })}
                       hint="Erkennt zusammengehörige Lieferscheine und hält sie bei einem Mitarbeiter zusammen."
                     />
+                    <Toggle
+                      label="Signal: Quelle (X von N)"
+                      checked={draft.grouping.useSourceKey}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, useSourceKey: v })}
+                      hint="Sicherstes Signal (bestätigt): der Lieferschein-Gruppenschlüssel aus ProHandel."
+                    />
+                    <Toggle
+                      label="Signal: gleiche Lieferschein-Nr"
+                      checked={draft.grouping.useDeliveryNote}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, useDeliveryNote: v })}
+                      hint="Belege mit identischer Lieferschein-Nummer (wahrscheinlich)."
+                    />
+                    <Toggle
+                      label="Signal: fortlaufende Belegnummern"
+                      checked={draft.grouping.useBelegRun}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, useBelegRun: v })}
+                      hint="Aufeinanderfolgende Beleg-Nummern (vermutet) — schwächstes Signal."
+                    />
                     <Num
                       label="Max. Beleg-Abstand"
                       value={draft.grouping.maxWeBelegGap}
                       onChange={(v) => patch('grouping', { ...draft.grouping, maxWeBelegGap: v })}
                       hint="Größter Abstand zwischen fortlaufenden Beleg-Nummern, der noch als eine Lieferung zählt (1 = streng aufeinanderfolgend)."
+                    />
+                    <Toggle
+                      label="Lauf nur am selben Tag"
+                      checked={draft.grouping.runRequiresSameDay}
+                      onChange={(v) => patch('grouping', { ...draft.grouping, runRequiresSameDay: v })}
+                      hint="Verhindert, dass die globale Tagesnummerierung fälschlich zu einer Lieferung zusammenfasst."
+                    />
+                    <Toggle
+                      label="Lauf nur im selben Bereich"
+                      checked={draft.grouping.runRequiresSameSection}
+                      onChange={(v) =>
+                        patch('grouping', { ...draft.grouping, runRequiresSameSection: v })
+                      }
+                      hint="Ein fortlaufender Lauf verbindet nur Belege desselben Bereichs/Abschnitts."
+                    />
+                    <Toggle
+                      label="Vermutete automatisch zuteilen"
+                      checked={draft.grouping.autoDistributeSuspected}
+                      onChange={(v) =>
+                        patch('grouping', { ...draft.grouping, autoDistributeSuspected: v })
+                      }
+                      hint="Aus = vermutete (🟠) Lieferungen warten auf Teamlead-Bestätigung, bevor sie verteilt werden."
                     />
                   </Grid>
                 </Stack>

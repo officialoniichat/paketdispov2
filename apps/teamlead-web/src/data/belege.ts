@@ -16,6 +16,7 @@ import type {
 } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import type { EffortComponents } from '@paket/assignment-engine';
+import type { DeliveryGroupRef } from './types';
 import { api } from './api.js';
 import { unwrap } from './http.js';
 import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './narrow.js';
@@ -157,6 +158,20 @@ export interface BelegWorkInstruction {
 }
 
 /** The full §10.4 Belegdetails view-model (the 7 tabs read from this). */
+/** One sibling Beleg of the Lieferung in the Belegdetail panel. */
+export interface DeliveryGroupMember {
+  caseId: string;
+  weBelegNo: string;
+  status: CaseStatus;
+  assignedEmployeeName: string | null;
+  isCurrent: boolean;
+}
+
+/** „Zugehörige Lieferung" detail (ref + siblings) for the Belegdetailview. */
+export interface DeliveryGroupDetail extends DeliveryGroupRef {
+  members: DeliveryGroupMember[];
+}
+
 export interface BelegDetail {
   id: string;
   weBelegNo: string;
@@ -186,11 +201,29 @@ export interface BelegDetail {
   issues: BelegIssue[];
   zstRecords: BelegZst[];
   history: BelegHistoryEntry[];
+  /** Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone. */
+  deliveryGroup: DeliveryGroupDetail | null;
 }
 
 // ---------------------------------------------------------------------------
 // Fetchers
 // ---------------------------------------------------------------------------
+
+/** Teamlead-Punkt 1: merge/confirm Belege into one locked Lieferung. */
+export async function mergeDeliveryGroup(caseIds: string[]): Promise<void> {
+  const result = await api.POST('/api/teamlead/delivery-groups/merge', {
+    body: { caseIds },
+  });
+  unwrap(result, 'merge delivery group');
+}
+
+/** Teamlead-Punkt 1: split/remove Belege out of a Lieferung (each becomes solo). */
+export async function splitDeliveryGroup(caseIds: string[]): Promise<void> {
+  const result = await api.POST('/api/teamlead/delivery-groups/split', {
+    body: { caseIds },
+  });
+  unwrap(result, 'split delivery group');
+}
 
 /** §10.4 Beleg list — the full operational pool (pilot scale: one page of 200). */
 export async function fetchBelegeList(): Promise<BelegRow[]> {
@@ -261,6 +294,24 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     issues: dto.issues.map(toBelegIssue),
     zstRecords: dto.zstRecords.map(toBelegZst),
     history: dto.history.map(toBelegHistoryEntry),
+    deliveryGroup: dto.deliveryGroup
+      ? {
+          id: dto.deliveryGroup.id,
+          signal: dto.deliveryGroup.signal,
+          confidence: dto.deliveryGroup.confidence,
+          presentSize: dto.deliveryGroup.presentSize,
+          expectedSize: dto.deliveryGroup.expectedSize ?? null,
+          missingCount: dto.deliveryGroup.missingCount,
+          locked: dto.deliveryGroup.locked,
+          members: dto.deliveryGroup.members.map((m) => ({
+            caseId: m.caseId,
+            weBelegNo: m.weBelegNo,
+            status: toCaseStatus(m.status),
+            assignedEmployeeName: m.assignedEmployeeName ?? null,
+            isCurrent: m.isCurrent,
+          })),
+        }
+      : null,
   };
 }
 
