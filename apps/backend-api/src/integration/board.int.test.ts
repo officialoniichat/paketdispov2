@@ -163,7 +163,7 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     const idle = board.rows.find((r) => r.employeeNo === IDLE_EMPLOYEE_NO);
     expect(idle).toBeDefined();
     expect(idle!.employeeName).toBe('Clara');
-    // Free head: no bundle, no Paket, but capacity + Bereiche are visible.
+    // Free head: no bundle, no Bündel, but capacity + Bereiche are visible.
     expect(idle!.bundleId).toBeNull();
     expect(idle!.bundleStatus).toBe('idle');
     expect(idle!.cases).toEqual([]);

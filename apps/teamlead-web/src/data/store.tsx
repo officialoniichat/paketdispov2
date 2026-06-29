@@ -32,6 +32,7 @@ import { api, CURRENT_TEAMLEAD_ID } from './api.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
 import {
   addCaseToBundle as addCaseToBundleRequest,
+  assignToEmployee as assignToEmployeeRequest,
   commitAssignment,
   pauseBundle as pauseBundleRequest,
   previewAssignment,
@@ -98,6 +99,12 @@ export interface AddVars {
   bundleId: string;
   reason: string;
 }
+export interface AssignVars {
+  /** employeeNo of the target (the only employee id the board exposes). */
+  employeeNo: string;
+  caseId: string;
+  reason: string;
+}
 export interface ReorderVars {
   bundleId: string;
   caseIds: string[];
@@ -145,6 +152,8 @@ export interface CockpitApi {
   /** Audited bundle interventions backed by real endpoints (§8.4). */
   withdraw: BundleMutation<WithdrawVars>;
   addToBundle: BundleMutation<AddVars>;
+  /** §8.4 manual assign: append the Beleg to the employee's Bündel, or create it if free. */
+  assignToEmployee: BundleMutation<AssignVars>;
   reorder: BundleMutation<ReorderVars>;
   pauseResume: BundleMutation<PauseVars>;
 }
@@ -366,6 +375,15 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpit,
   });
 
+  // Manual assign (§8.4). No optimistic patch: a free employee has no bundleId to
+  // target with patchBoardRow, and the backend find-or-create decides the target —
+  // a plain invalidate-on-settle is the correct, safe choice for both branches.
+  const assignToEmployee = useMutation<unknown, Error, AssignVars>({
+    mutationFn: ({ employeeNo, caseId, reason }) =>
+      assignToEmployeeRequest(api, { employeeNo, caseId, reason, date }),
+    onSettled: invalidateCockpit,
+  });
+
   const reorder = useMutation<unknown, Error, ReorderVars, { previous: CockpitSnapshot | undefined }>({
     mutationFn: ({ bundleId, caseIds, reason }) =>
       reorderBundleRequest(api, { bundleId, caseIds, reason }),
@@ -423,6 +441,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
 
       withdraw,
       addToBundle,
+      assignToEmployee,
       reorder,
       pauseResume,
     }),
@@ -441,6 +460,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       resolveIssueMutation,
       withdraw,
       addToBundle,
+      assignToEmployee,
       reorder,
       pauseResume,
       date,

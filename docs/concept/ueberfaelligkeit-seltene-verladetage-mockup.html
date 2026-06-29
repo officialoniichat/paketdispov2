@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Überfälligkeit bei seltenen Verladetagen — Settings-UX-Mockup</title>
+<style>
+  :root{
+    --brand:#0a3d62; --brand2:#0c2f4a; --brand-light:#3c6e8f; --accent:#e58e26;
+    --surface:#f5f7fa; --raised:#ffffff; --text:#1a2430; --text2:#516170;
+    --border:#d6dde5; --danger:#c62828; --warning:#b26a00; --success:#2e7d32; --info:#1565c0;
+    --r:14px; --mono:ui-monospace,Menlo,"SFMono-Regular",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e7ecf1;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45;-webkit-font-smoothing:antialiased}
+  header.page{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:38px 32px 30px}
+  header.page h1{margin:0 0 6px;font-size:29px;letter-spacing:-.3px}
+  header.page p{margin:2px 0;color:#cddcea;max-width:920px}
+  header.page .meta{margin-top:13px;font-size:13px;color:#9fbdd6}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 32px 60px}
+
+  h2.sec{font-size:18px;margin:36px 0 4px;padding-bottom:7px;border-bottom:3px solid var(--accent);display:inline-block}
+  .sec-intro{color:var(--text2);margin:8px 0 18px;max-width:900px;font-size:14px}
+
+  /* problem strip */
+  .prob{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin:6px 0 8px}
+  .pc{background:var(--raised);border:1px solid var(--border);border-left:4px solid var(--danger);border-radius:12px;padding:13px 15px}
+  .pc.ok{border-left-color:var(--success)}
+  .pc b{font-size:13px;color:var(--brand)} .pc.ok b{color:var(--success)}
+  .pc p{margin:5px 0 0;font-size:12.5px;color:var(--text2)}
+  .pc code{font-family:var(--mono);font-size:11.5px;background:var(--surface);padding:1px 5px;border-radius:5px}
+
+  /* app shell */
+  .app{background:var(--raised);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(10,30,50,.16);margin-top:6px}
+  .appbar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  .appbar .logo{font-weight:800;letter-spacing:.4px}
+  .appbar .crumbs{font-size:13px;color:#bcd3e6}
+  .appbar .who{margin-left:auto;font-size:13px;color:#bcd3e6;display:flex;align-items:center;gap:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#3a2400;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+  .tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 14px;overflow-x:auto}
+  .tab{padding:13px 14px;font-size:13.5px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;cursor:default;white-space:nowrap}
+  .tab.on{color:var(--brand);border-bottom-color:var(--accent);font-weight:800}
+
+  .content{background:var(--surface);padding:24px 26px}
+  .titlerow{display:flex;align-items:center;gap:12px;margin:0 0 4px}
+  .titlerow h3{margin:0;font-size:18px}
+  .titlerow .pill{margin-left:auto}
+  .pill{background:#eef4fb;color:var(--brand);border:1px solid #c7ddf2;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
+  .desc{font-size:13px;color:var(--text2);margin:2px 0 18px;max-width:880px}
+
+  /* global default banner */
+  .gdef{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 16px;margin:0 0 18px}
+  .gdef .lbl{font-size:13px;font-weight:700;color:var(--text2)}
+  .gdef .num{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 10px}
+  .gdef .num input,.numbox input{width:46px;border:none;background:transparent;font-size:15px;font-weight:800;color:var(--text);text-align:center;font-family:var(--mono)}
+  .gdef .num .u{font-size:12px;color:var(--text2)}
+  .gdef .ghint{font-size:12px;color:var(--text2);max-width:430px}
+
+  /* shop-area cards */
+  .shopcard{background:#fff;border:1px solid var(--border);border-radius:14px;padding:0;margin:0 0 16px;overflow:hidden}
+  .shopcard.rare{border-color:#e6c79a;box-shadow:0 0 0 1px #f0d9b6 inset}
+  .schead{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fbfcfe;border-bottom:1px solid var(--border)}
+  .schead .scid{font-family:var(--mono);font-size:14px;font-weight:800;color:var(--brand)}
+  .schead .scfloor{font-size:12.5px;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 9px}
+  .schead .cad{font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;margin-left:4px}
+  .cad.weekly{background:#fdf1de;color:var(--warning);border:1px solid #e6c79a}
+  .cad.multi{background:#e9f6ea;color:#1f5a23;border:1px solid #bfe2c2}
+  .schead .del{margin-left:auto;font-size:12px;font-weight:700;color:var(--danger);border:1.5px solid #eccccc;background:#fff;border-radius:9px;padding:6px 11px}
+
+  .scbody{display:grid;grid-template-columns:1.25fr 1fr;gap:0}
+  .scol{padding:16px 18px}
+  .scol.l{border-right:1px solid var(--border)}
+  .flabel{display:block;font-size:12px;font-weight:700;color:var(--text2);margin:0 0 8px;letter-spacing:.2px;text-transform:uppercase}
+
+  /* weekday chips */
+  .days{display:flex;gap:6px;flex-wrap:wrap}
+  .day{width:42px;text-align:center;font-size:13px;font-weight:700;border-radius:9px;padding:8px 0;background:#fff;border:1.5px solid var(--border);color:var(--text2)}
+  .day.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .day.special{background:var(--accent);color:#3a2400;border-color:var(--accent)}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .field label{display:block;font-size:11.5px;font-weight:700;color:var(--text2);margin:0 0 5px;letter-spacing:.2px}
+  .inp{width:100%;background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13.5px;color:var(--text);font-family:inherit}
+  .inp.mono{font-family:var(--mono);font-size:12.5px}
+  .checkrow{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:13px;font-weight:600;color:var(--text)}
+  .cbx{width:18px;height:18px;border-radius:5px;border:2px solid var(--brand);background:var(--brand);position:relative;flex-shrink:0}
+  .cbx::after{content:"\2713";position:absolute;inset:0;color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
+  .cbx.off{background:#fff} .cbx.off::after{content:""}
+
+  /* vorlauf box */
+  .vbox{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px}
+  .vrow{display:flex;align-items:center;gap:10px}
+  .numbox{display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--brand);border-radius:10px;padding:7px 10px}
+  .numbox.ph{border-color:var(--border)} .numbox.ph input{color:var(--text2);font-weight:600}
+  .numbox .u{font-size:12px;color:var(--text2)}
+  .vrow .vt{font-size:12.5px;color:var(--text2)}
+  .suggest{display:flex;align-items:center;gap:9px;background:#fdf1de;border:1px solid #e6c79a;border-radius:9px;padding:9px 11px;margin-top:11px;font-size:12.5px;color:#7a4e08}
+  .suggest b{color:var(--warning)}
+  .suggest .take{margin-left:auto;font-size:12px;font-weight:800;color:#3a2400;background:var(--accent);border:none;border-radius:8px;padding:6px 12px;flex-shrink:0}
+  .adv{margin-top:11px;font-size:12px;font-weight:700;color:var(--brand)}
+  .adv::before{content:"\25B8 ";color:var(--text2)}
+
+  /* preview */
+  .preview{margin-top:14px;background:#fff;border:1px dashed var(--border);border-radius:11px;padding:13px 15px}
+  .preview h5{margin:0 0 9px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)}
+  .pvline{display:flex;align-items:baseline;gap:8px;font-size:13px;padding:3px 0}
+  .pvline .k{color:var(--text2);width:150px;flex-shrink:0;font-size:12.5px}
+  .pvline .v{font-weight:700;font-family:var(--mono);font-size:12.5px}
+  .pvstat{margin-top:9px;font-size:12.5px;font-weight:700;border-radius:8px;padding:7px 10px;display:inline-flex;gap:7px;align-items:center}
+  .pvstat.due{background:#fdeaea;color:var(--danger)}
+  .pvstat.soon{background:#fdf1de;color:var(--warning)}
+  .pvstat.calm{background:#eef4fb;color:var(--brand)}
+  .pvstat.miss{background:#fdeaea;color:var(--danger)}
+
+  .addrow{text-align:center;margin:4px 0 6px}
+  .addbtn{font-size:13px;font-weight:700;color:var(--brand);border:1.5px dashed var(--border);background:#fff;border-radius:11px;padding:11px 18px}
+
+  .actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;align-items:center}
+  .btn{border:none;border-radius:11px;padding:12px 18px;font-size:14px;font-weight:800;cursor:default}
+  .btn.primary{background:var(--accent);color:#3a2400}
+  .btn.ghost{background:#fff;border:1.5px solid var(--border);color:var(--text)}
+  .savehint{font-size:12px;color:var(--text2)}
+
+  /* legend */
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:24px}
+  .lg{background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .lg b{color:var(--brand);font-size:13.5px} .lg p{margin:5px 0 0;font-size:12.5px;color:var(--text2)}
+  .footnote{margin-top:26px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:14px}
+  .footnote code{font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Überfälligkeit bei seltenen Verladetagen</h1>
+  <p>Settings-UX für Teamlead-Punkt 4 (Folgeausbau). Die Vorlauf-Logik <b>relativ zum Verladetag</b>
+     existiert bereits in der Engine — hier wird sie im <b>Admin → Verladeplan</b> endlich
+     bedienbar und transparent gemacht.</p>
+  <p class="meta">Mockup · keine echte Anwendung · Stil = AdminPage (teamlead-web) · heute = Mo 29.06.2026</p>
+</header>
+
+<div class="wrap">
+
+  <h2 class="sec">Das Problem in einem Bild</h2>
+  <p class="sec-intro">Logik fertig, Konfiguration fehlt. Vier Lücken, alle im Admin-Settings-UX.</p>
+  <div class="prob">
+    <div class="pc ok">
+      <b>✓ Logik bereits gelöst</b>
+      <p>Überfällig wenn <code>heute ≥ Verladetag − Vorlauf</code>. Funktioniert auch bei
+         1×/Woche — keine Stundenschwelle mehr.</p>
+    </div>
+    <div class="pc">
+      <b>L1 · Verladeplan nur lesbar</b>
+      <p>Wochentag, Gültigkeit, Sondertag pro Shop nicht editierbar. Wochen-Shop nicht konfigurierbar.</p>
+    </div>
+    <div class="pc">
+      <b>L2 · Vorlauf-Overrides ohne UI</b>
+      <p><code>overdueLeadDaysOverrides</code> existiert im Schema, hat aber kein Eingabefeld.</p>
+    </div>
+    <div class="pc">
+      <b>L3 + L4 · irreführend &amp; unsichtbar</b>
+      <p>Hinweis verweist auf nicht-vorhandene Funktion; „Überfällig"-Kachel zählt Verladeplan-Fälle nicht.</p>
+    </div>
+  </div>
+
+  <h2 class="sec">Neuer Tab „Verladeplan" — editierbar + transparent</h2>
+  <p class="sec-intro">Pro Shop-Bereich: Verladetage als Chips, eigener Vorlauf mit Kadenz-Vorschlag,
+     und eine Live-Vorschau, die zeigt <i>wann genau</i> die Schwelle bei diesem Shop greift.</p>
+
+  <div class="app">
+    <div class="appbar">
+      <span class="logo">PAKET · Admin</span>
+      <span class="crumbs">Regeln &amp; Stammdaten</span>
+      <span class="who"><span class="avatar">TL</span> Teamlead</span>
+    </div>
+    <div class="tabs">
+      <div class="tab">Priorität</div>
+      <div class="tab">Bündel</div>
+      <div class="tab">Aufwand</div>
+      <div class="tab">Lieferungen</div>
+      <div class="tab on">Verladeplan</div>
+      <div class="tab">Lagerplätze</div>
+      <div class="tab">Mitarbeiter</div>
+      <div class="tab">Schichtplan</div>
+      <div class="tab">Integrationen</div>
+      <div class="tab">Schichtende</div>
+    </div>
+
+    <div class="content">
+      <div class="titlerow">
+        <h3>Verladeplan</h3>
+        <span class="pill">2 Shop-Bereiche · 1 Wochen-Shop</span>
+      </div>
+      <p class="desc">Pro Shop-Bereich &amp; Etage: an welchen Wochentagen verladen wird, ab wann der Plan
+        gilt, und wie viele Tage vorher die Ware als überfällig vorgezogen wird. Der globale Vorlauf
+        gilt überall, wo kein eigener Wert gesetzt ist.</p>
+
+      <!-- global default -->
+      <div class="gdef">
+        <span class="lbl">Globaler Überfälligkeits-Vorlauf</span>
+        <span class="num"><input value="2"><span class="u">Tage</span></span>
+        <span class="ghint">Standard für alle Shop-Bereiche ohne eigenen Wert. Mit <b>0</b> gilt ein
+          Beleg erst am Verladetag selbst als fällig.</span>
+      </div>
+
+      <!-- RARE / WEEKLY shop -->
+      <div class="shopcard rare">
+        <div class="schead">
+          <span class="scid">Shop 21</span>
+          <span class="scfloor">Etage EG</span>
+          <span class="cad weekly">⚠ 1 Verladetag / Woche</span>
+          <button class="del">Entfernen</button>
+        </div>
+        <div class="scbody">
+          <div class="scol l">
+            <span class="flabel">Verladetage</span>
+            <div class="days">
+              <div class="day on">Mo</div>
+              <div class="day">Di</div>
+              <div class="day">Mi</div>
+              <div class="day">Do</div>
+              <div class="day">Fr</div>
+              <div class="day">Sa</div>
+              <div class="day">So</div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Gültig ab</label><input class="inp mono" value="2026-01-01"></div>
+              <div class="field"><label>Gültig bis (optional)</label><input class="inp mono" value=""></div>
+            </div>
+            <div class="checkrow"><span class="cbx off"></span> Sondertag (einmalige Abweichung)</div>
+          </div>
+          <div class="scol r">
+            <span class="flabel">Überfälligkeits-Vorlauf für diesen Shop</span>
+            <div class="vbox">
+              <div class="vrow">
+                <span class="numbox"><input value="3"><span class="u">Tage</span></span>
+                <span class="vt">eigener Wert · übersteuert den globalen Standard (2)</span>
+              </div>
+              <div class="suggest">
+                <span>Kadenz <b>7 Tage</b> erkannt → empfohlen <b>3 Tage</b> (halbe Kadenz)</span>
+                <button class="take">Übernehmen</button>
+              </div>
+              <div class="adv">Erweitert: Vorlauf je Abschnitt (1 / 2 / 3)</div>
+            </div>
+            <div class="preview">
+              <h5>Vorschau — Wirkung heute (Mo 29.06.)</h5>
+              <div class="pvline"><span class="k">Nächster Verladetag</span><span class="v">Mo 06.07.</span></div>
+              <div class="pvline"><span class="k">Wird dringend ab</span><span class="v">Fr 03.07.</span></div>
+              <div class="pvline"><span class="k">Überfällig ab</span><span class="v">Di 07.07.</span></div>
+              <span class="pvstat calm">● Noch ruhig — Vorlauf-Fenster öffnet in 4 Tagen</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MULTI-day shop -->
+      <div class="shopcard">
+        <div class="schead">
+          <span class="scid">Shop 22</span>
+          <span class="scfloor">Etage OG</span>
+          <span class="cad multi">2 Verladetage / Woche</span>
+          <button class="del">Entfernen</button>
+        </div>
+        <div class="scbody">
+          <div class="scol l">
+            <span class="flabel">Verladetage</span>
+            <div class="days">
+              <div class="day">Mo</div>
+              <div class="day">Di</div>
+              <div class="day on">Mi</div>
+              <div class="day">Do</div>
+              <div class="day on">Fr</div>
+              <div class="day">Sa</div>
+              <div class="day">So</div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Gültig ab</label><input class="inp mono" value="2026-01-01"></div>
+              <div class="field"><label>Gültig bis (optional)</label><input class="inp mono" value=""></div>
+            </div>
+            <div class="checkrow"><span class="cbx off"></span> Sondertag (einmalige Abweichung)</div>
+          </div>
+          <div class="scol r">
+            <span class="flabel">Überfälligkeits-Vorlauf für diesen Shop</span>
+            <div class="vbox">
+              <div class="vrow">
+                <span class="numbox ph"><input value="2"><span class="u">Tage</span></span>
+                <span class="vt">kein eigener Wert · globaler Standard (2) gilt</span>
+              </div>
+              <div class="suggest">
+                <span>Kadenz <b>3–4 Tage</b> erkannt → empfohlen <b>2 Tage</b></span>
+                <button class="take">Übernehmen</button>
+              </div>
+              <div class="adv">Erweitert: Vorlauf je Abschnitt (1 / 2 / 3)</div>
+            </div>
+            <div class="preview">
+              <h5>Vorschau — Wirkung heute (Mo 29.06.)</h5>
+              <div class="pvline"><span class="k">Nächster Verladetag</span><span class="v">Mi 01.07.</span></div>
+              <div class="pvline"><span class="k">Wird dringend ab</span><span class="v">Mo 29.06.</span></div>
+              <div class="pvline"><span class="k">Überfällig ab</span><span class="v">Do 02.07.</span></div>
+              <span class="pvstat soon">● Im Vorlauf-Fenster — wird heute vorgezogen</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="addrow"><button class="addbtn">+ Shop-Bereich hinzufügen</button></div>
+
+      <div class="actions">
+        <button class="btn primary">Regeln speichern</button>
+        <button class="btn ghost">Verwerfen</button>
+        <span class="savehint">Speichert den gesamten Regelsatz · <code>PUT /api/admin/rules</code></span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">Wie die Vorschau-Zustände aussehen</h2>
+  <p class="sec-intro">Die Vorschau übersetzt die Engine-Arithmetik in Klartext — der direkte Konter
+     gegen „greift praktisch nie".</p>
+  <div class="legend">
+    <div class="lg"><b>● Noch ruhig</b><p>Heute liegt vor dem Vorlauf-Fenster. Zeigt, in wie vielen
+      Tagen es scharf wird — z. B. Wochen-Shop, der erst Ende der Woche zieht.</p></div>
+    <div class="lg"><b>● Im Vorlauf-Fenster</b><p><code>heute ≥ Verladetag − Vorlauf</code>. Belege dieses
+      Shops werden ab jetzt vorgezogen, noch vor dem Verladetag.</p></div>
+    <div class="lg"><b>● Verpasst / überfällig</b><p><code>Verladetag &lt; heute</code>. Bleibt überfällig
+      (Anker = Buchungsdatum), springt nicht jede Woche zurück.</p></div>
+    <div class="lg"><b>Kadenz-Vorschlag</b><p>Aus den aktiven Wochentagen abgeleitet, nur Vorschlag —
+      nie automatisch gesetzt. 1×/Woche → 3 Tage, 2×/Woche → 2, täglich → 1.</p></div>
+  </div>
+
+  <p class="footnote">
+    Schichtung: <b>keine</b> Engine-Änderung — <code>priority-engine.ts</code> (Vorlauf-Arithmetik +
+    Override-Auflösung) und <code>load-plan.ts</code> (Verladetag-Auflösung pro <code>shopAreaNo+floor</code>)
+    bleiben unverändert. Geändert wird nur der read-only-Block in <code>AdminPage.tsx</code> → editierbarer
+    Shop-Bereich-Editor; Persistenz über bestehendes <code>patch()</code> → <code>PUT /api/admin/rules</code>.
+    Datenmodell unverändert: aktiver Chip = ein <code>LoadPlanRow</code>; eigener Vorlauf = ein
+    <code>overdueLeadDaysOverride</code> (Match über <code>shopAreaNo</code>, Abschnitt nur im Erweitert-Fall).
+    Konzept: <code>ueberfaelligkeit-seltene-verladetage-concept.md</code>.
+  </p>
+</div>
+</body>
+</html>

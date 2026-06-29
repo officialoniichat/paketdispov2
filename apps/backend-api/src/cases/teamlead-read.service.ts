@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { AssignmentStatus, CaseStatus, PriorityFlag } from '@prisma/client';
+import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag } from '@prisma/client';
 import { detectDeliveryGroups, indexDeliveryGroups } from '@paket/assignment-engine';
+import { bereichFromLocationKind } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type AuditEventDto,
@@ -148,6 +149,7 @@ export class TeamleadReadService {
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
         deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
+        bereich: bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null,
       };
     });
 
@@ -296,7 +298,7 @@ export class TeamleadReadService {
     // Seed one IDLE row per scheduled employee first. The engine emits at most ONE
     // bundle per employee per day, so each row maps 1:1 to a bundle once folded; the
     // per-employee fold is kept defensively so a legacy multi-bundle day still renders.
-    // `bundleId === null` marks a free head with no Paket. Delivery-group detection
+    // `bundleId === null` marks a free head with no Bündel. Delivery-group detection
     // inputs are collected while folding so groups span ALL assigned Belege (Punkt 1).
     const groupInputs: {
       id: string;

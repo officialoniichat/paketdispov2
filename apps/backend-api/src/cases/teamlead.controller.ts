@@ -7,6 +7,7 @@ import { TeamleadService } from './teamlead.service.js';
 import { TeamleadReadService } from './teamlead-read.service.js';
 import {
   AddToBundleDto,
+  AssignToEmployeeDto,
   AuditEventDto,
   BoardDto,
   BundleMutationResultDto,
@@ -255,6 +256,20 @@ export class TeamleadController {
     @Body() dto: AddToBundleDto,
   ): Promise<BundleMutationResultDto> {
     return this.teamlead.addToBundle(principal, bundleId, dto);
+  }
+
+  @Post('employees/:employeeNo/assign')
+  @ApiOperation({
+    summary:
+      '§8.4 Manuelle Zuweisung: assign a ready Beleg to an employee — appended to the day Bündel, or it is CREATED when the employee is free.',
+  })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  assignToEmployee(
+    @CurrentUser() principal: Principal,
+    @Param('employeeNo') employeeNo: string,
+    @Body() dto: AssignToEmployeeDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.assignToEmployee(principal, employeeNo, dto);
   }
 
   @Post('bundles/:bundleId/reorder')
