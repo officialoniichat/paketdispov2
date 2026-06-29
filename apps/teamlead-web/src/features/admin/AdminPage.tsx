@@ -4,7 +4,8 @@
  * (§11.2 – simple Lagerplatzliste, no routing graph in the MVP).
  *
  * The structured RuleConfig is loaded from and saved to the real backend
- * (`/api/admin/rules`) via {@link ../../data/admin}; loadPlan is a read-only list.
+ * (`/api/admin/rules`) via {@link ../../data/admin}; the Verladeplan (loadPlan +
+ * shop-specific Vorlauf) is edited in {@link ./VerladeplanTab}.
  * Lagerplätze are edited in {@link ./LocationMasterEditor}.
  */
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
@@ -26,6 +27,7 @@ import Typography from '@mui/material/Typography';
 import type { RuleConfig } from '@paket/domain-types';
 import { fetchRuleConfig, saveRuleConfig } from '../../data/admin.js';
 import { LocationMasterEditor } from './LocationMasterEditor.js';
+import { VerladeplanTab } from './VerladeplanTab.js';
 import { EffortPreview } from './EffortPreview.js';
 import { EmployeeSettings } from './EmployeeSettings.js';
 import { SchichtplanTab } from './SchichtplanTab.js';
@@ -46,7 +48,7 @@ const TABS = [
 
 /** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
 const GROUPING_TAB = 3;
-/** Read-only Verladeplan tab (display only — no save button). */
+/** Editable Verladeplan tab (loadPlan + shop-specific Vorlauf, Teamlead-Punkt 4). */
 const LOADPLAN_TAB = 4;
 /** RuleConfig-form tab index for the Schichtende-Cutoff (Punkt 5). */
 const SHIFT_END_TAB = 9;
@@ -155,7 +157,7 @@ export function AdminPage(): JSX.Element {
                     onChange={(v) =>
                       patch('priority', { ...draft.priority, overdueLeadDays: v })
                     }
-                    hint="So viele Tage vor dem Verladetag gilt ein Verladeplan-Beleg als überfällig und wird vorgezogen. Greift auch bei seltenen (z. B. wöchentlichen) Verladetagen. Shop-spezifische Ausnahmen siehe Verladeplan-Tab."
+                    hint="Standard-Vorlauf: so viele Tage vor dem Verladetag gilt ein Verladeplan-Beleg als überfällig und wird vorgezogen. Greift auch bei seltenen (z. B. wöchentlichen) Verladetagen. Shop-spezifische Vorläufe pflegst du im Tab „Verladeplan“ direkt am Shop-Bereich."
                   />
                   <Toggle
                     label="FIFO aktiv"
@@ -389,31 +391,16 @@ export function AdminPage(): JSX.Element {
                 </Grid>
               )}
 
-              {tab === LOADPLAN_TAB && (
-                <Stack spacing={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    Verladeplan: Shopbereich, Etage, Wochentag, gültig ab/bis, Sondertage.
-                  </Typography>
-                  {draft.loadPlan.map((lp) => (
-                    <Typography key={lp.id} variant="body2">
-                      Shopbereich {lp.shopAreaNo} · Etage {lp.floor} · {lp.weekday} · ab{' '}
-                      {lp.validFrom}
-                      {lp.specialDay ? ' · Sondertag' : ''}
-                    </Typography>
-                  ))}
-                </Stack>
-              )}
+              {tab === LOADPLAN_TAB && <VerladeplanTab draft={draft} patch={patch} />}
 
-              {tab !== LOADPLAN_TAB && (
-                <Button
-                  variant="contained"
-                  sx={{ mt: 2 }}
-                  onClick={save}
-                  disabled={mutation.isPending}
-                >
-                  Regeln speichern
-                </Button>
-              )}
+              <Button
+                variant="contained"
+                sx={{ mt: 2 }}
+                onClick={save}
+                disabled={mutation.isPending}
+              >
+                Regeln speichern
+              </Button>
             </>
           )}
         </Paper>
