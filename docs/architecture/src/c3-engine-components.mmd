@@ -1,0 +1,54 @@
+%% C4 Level 3 — Components: @paket/assignment-engine (pure, deterministic)
+%% Verified against packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
+%% priority/, effort/, assignment/{reserve,bundling,distribute}.ts, capacity/, pickup/, config.ts, types.ts).
+flowchart TB
+    classDef orch fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef mod fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
+    classDef io fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+    classDef cfg fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
+
+    caller["backend AssignmentService<br/><i>builds EngineInput from Prisma rows</i>"]:::io
+
+    subgraph engine["@paket/assignment-engine"]
+        direction TB
+        plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>orchestrator → AssignmentPlan</i>"]:::orch
+
+        subgraph prio["priority/"]
+            priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6) · sortByPriority · comparePriority</i>"]:::mod
+        end
+        subgraph eff["effort/"]
+            effSc["effort-score.ts<br/><i>computeEffort → minutes + fairness points (B.3)</i>"]:::mod
+        end
+        subgraph cap["capacity/"]
+            netCap["net-capacity.ts<br/><i>computeNetCapacityMinutes · teamCapacityMinutes</i>"]:::mod
+            shImp["shift-import.ts<br/><i>parseShiftImportCsv (SEAK/PEP)</i>"]:::mod
+        end
+        subgraph asg["assignment/"]
+            reserve["reserve.ts<br/><i>computeIronReserve (B.2) · canConsumeReserve</i>"]:::mod
+            bundling["bundling.ts<br/><i>createBalancedBundles (~55min, ≤6 cases, Bereich-homogen)</i>"]:::mod
+            distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad (LPT, §8.3/8.4)</i>"]:::mod
+        end
+        subgraph pck["pickup/"]
+            pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, type→number, never feeds back)</i>"]:::mod
+        end
+        config["config.ts + types.ts<br/><i>EngineConfig / EngineInput / AssignmentPlan (Zod defaults)</i>"]:::cfg
+    end
+
+    types["@paket/domain-types<br/><i>schemas · enums · bereichFromLocationKind()</i>"]:::io
+
+    caller -->|"assignWork()"| plan
+    plan --> priEng
+    plan --> effSc
+    plan --> netCap
+    plan --> reserve
+    plan --> bundling
+    plan --> distribute
+    plan --> pickup
+    bundling --> priEng
+    distribute --> netCap
+    plan -. "reads defaults" .-> config
+    priEng --> types
+    effSc --> types
+    pickup --> types
+    config --> types
+    plan -->|"AssignmentPlan"| caller

@@ -1,0 +1,15 @@
+{
+  "theme": "dark",
+  "themeVariables": {
+    "fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+    "fontSize": "14px",
+    "primaryColor": "#1d222c",
+    "primaryTextColor": "#eef1f6",
+    "primaryBorderColor": "#2a313d",
+    "lineColor": "#98a2b3",
+    "tertiaryColor": "#161a22"
+  },
+  "flowchart": { "htmlLabels": true, "curve": "basis", "useMaxWidth": true },
+  "er": { "useMaxWidth": true },
+  "c4": { "useMaxWidth": true }
+}

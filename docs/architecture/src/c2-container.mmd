@@ -1,0 +1,42 @@
+%% C4 Level 2 — Container
+%% Verified: apps/{employee-pwa,teamlead-web,backend-api}, packages/{assignment-engine,domain-types,api-client,ui},
+%% apps/backend-api/prisma/schema.prisma, docker-compose.yml, apps/*/railway.json.
+C4Container
+    title Container — Paketlagerdispo
+
+    Person(employee, "Mitarbeiter:in", "Warehouse worker")
+    Person(teamlead, "Teamlead / Admin", "Pool steering & config")
+
+    System_Ext(prohandel, "ProHandel ERP", "System of record (delta-pull = concept-stage)")
+    System_Ext(oidc, "OIDC Provider", "Keycloak / Entra (JWKS)")
+
+    Container_Boundary(paket, "Paketlagerdispo") {
+        Container(pwa, "employee-pwa", "React + Vite PWA, Dexie/IndexedDB", "Offline-first mobile app. COLLECT->PROCESS->DONE bundle flow, keyboard-wedge scanner, optimistic-lock outbox.")
+        Container(web, "teamlead-web", "React + Vite + MUI, TanStack Query", "Cockpit, Digitale Ablagen (Kanban), Mitarbeiter-Board, Belege, Aufteilungen, Admin (Regeln + Stammdaten).")
+        Container(api, "backend-api", "NestJS on Fastify, Prisma", "Modular monolith. REST + SSE, OIDC/RBAC guards, §7.1 state machine, §7.2 hash-chain audit log, OpenAPI.")
+        ContainerDb(db, "PostgreSQL", "PostgreSQL 16", "System of record for cases, bundles, shifts, locations, rules (AppConfig), immutable WorkflowEvent log.")
+
+        Container(engine, "assignment-engine", "TypeScript library (pure)", "Deterministic planner: enrich -> exclude -> capacity/reserve -> bundles -> distribute -> pickup. No IO. <5s/day.")
+        Container(types, "domain-types", "TypeScript + Zod", "Single source of truth: enums, schemas, RuleConfig, Bereich derivation. Shared by all containers.")
+        Container(apiclient, "api-client", "TypeScript (openapi-typescript + openapi-fetch)", "Typed client generated from the backend OpenAPI spec. Consumed by both frontends.")
+    }
+
+    Rel(employee, pwa, "Uses", "HTTPS")
+    Rel(teamlead, web, "Uses", "HTTPS")
+
+    Rel(pwa, api, "GET /api/me/*, POST next-bundle; SSE /api/me/stream", "REST + SSE (Bearer JWT)")
+    Rel(web, api, "GET/POST /api/teamlead/*, /api/admin/*; SSE /api/teamlead/stream", "REST + SSE (Bearer JWT)")
+
+    Rel(pwa, apiclient, "calls", "in-process")
+    Rel(web, apiclient, "calls", "in-process")
+    Rel(api, engine, "runs assignWork()", "in-process")
+    Rel(api, db, "reads/writes via Prisma", "SQL/TCP")
+    Rel(api, oidc, "verifies JWT (JWKS)", "OIDC")
+    Rel(prohandel, api, "cases (concept-stage)", "API pull")
+
+    Rel(apiclient, types, "re-exports", "build-time")
+    Rel(engine, types, "imports", "build-time")
+    Rel(api, types, "imports", "build-time")
+
+    UpdateRelStyle(prohandel, api, $lineColor="grey", $offsetX="-30")
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

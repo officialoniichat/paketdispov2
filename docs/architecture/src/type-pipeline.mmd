@@ -1,0 +1,39 @@
+%% Type-generation pipeline — how domain-types (Zod), Prisma, OpenAPI and api-client relate.
+%% Verified: packages/domain-types (zod), apps/backend-api/src/openapi/generate.ts (preview-mode),
+%% apps/backend-api/src/swagger.ts (@nestjs/swagger), package.json scripts (openapi:generate),
+%% packages/api-client (openapi-typescript -> src/generated/schema.ts, openapi-fetch, openapi-drift.test.ts).
+flowchart LR
+    classDef src fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef gen fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
+    classDef artifact fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
+    classDef consumer fill:#16314a,stroke:#56b6ff,color:#eef1f6;
+
+    zod["@paket/domain-types<br/><b>Zod schemas — single source of truth</b><br/><i>enums · RuleConfig · case/position/sku schemas</i>"]:::src
+    prismaSchema["prisma/schema.prisma<br/><i>DB models</i>"]:::src
+
+    prismaGen["prisma generate"]:::gen
+    prismaClient["PrismaClient types<br/><i>(backend-internal)</i>"]:::artifact
+
+    dtos["backend DTOs + @nestjs/swagger decorators"]:::gen
+    openapiGen["openapi:generate<br/><i>src/openapi/generate.ts (NestFactory preview:true, DB-less)</i>"]:::gen
+    openapiJson["openapi.json"]:::artifact
+
+    otsc["api-client: openapi-typescript<br/><i>pnpm --filter @paket/api-client generate</i>"]:::gen
+    schemaTs["api-client/src/generated/schema.ts<br/><i>paths · components · operations</i>"]:::artifact
+    client["createApiClient() — openapi-fetch<br/><i>+ re-exports domain-types</i>"]:::artifact
+    drift["openapi-drift.test.ts<br/><i>guards spec ↔ generated drift</i>"]:::gen
+
+    pwa["employee-pwa"]:::consumer
+    web["teamlead-web"]:::consumer
+
+    zod --> dtos
+    prismaSchema --> prismaGen --> prismaClient
+    prismaClient --> dtos
+    dtos --> openapiGen --> openapiJson
+    zod -. "validates RuleConfig / payloads" .-> dtos
+    openapiJson --> otsc --> schemaTs --> client
+    zod --> client
+    client --> pwa
+    client --> web
+    openapiJson -. "compared by" .-> drift
+    schemaTs -. "compared by" .-> drift

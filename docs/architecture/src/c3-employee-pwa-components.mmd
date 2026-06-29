@@ -1,0 +1,54 @@
+%% C4 Level 3 — Components: employee-pwa (React + Vite PWA, offline-first)
+%% Verified against apps/employee-pwa/src/* (screens/, workflow/, db/, data/, events/, routes/).
+flowchart TB
+    classDef screen fill:#16314a,stroke:#56b6ff,color:#eef1f6;
+    classDef hook fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
+    classDef store fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
+    classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+
+    api["backend-api<br/>/api/me/today · /aggregate · next-bundle"]:::ext
+
+    subgraph pwa["employee-pwa container"]
+        direction TB
+        subgraph screens["screens/ (router: routes/paths.ts)"]
+            home["BundleHomeScreen<br/><i>/ — phases + pullNextBundle()</i>"]:::screen
+            collect["CollectScreen<br/><i>/collect — COLLECT</i>"]:::screen
+            process["BelegProcessScreen<br/><i>/case/:id — PROCESS</i>"]:::screen
+            problem["ProblemMeldenScreen<br/><i>/case/:id/problem</i>"]:::screen
+        end
+        subgraph wf["workflow/"]
+            useBundle["useBundle()<br/><i>COLLECT: toggleStop · counts</i>"]:::hook
+            useCaseFlow["useCaseFlow()<br/><i>start · confirmQuantity · printLabels · openCarton · complete · skip</i>"]:::hook
+            model["workflowModel.ts<br/><i>guards: canOpenCarton · canCompleteCase · requiresQuantityCheck</i>"]:::logic
+            collectLogic["collect.ts · belegList.ts · issueTarget.ts"]:::logic
+        end
+        subgraph dbl["db/ (offline-first)"]
+            dexie["db.ts — PaketDb (Dexie v4)<br/><i>bundle · collectStops · bundleProgress · belege · aggregates · progress · events</i>"]:::store
+            repo["repository.ts<br/><i>saveProgress(expectedVersion) → OptimisticLockError · reconcileVersion</i>"]:::logic
+            sync["sync.ts<br/><i>loadAssignedWork() · pullNextBundle() · DTO→domain mappers</i>"]:::logic
+            seed["seed.ts<br/><i>seedIfEmpty · cycleDemoScenario (offline demo)</i>"]:::logic
+        end
+        subgraph data["data/ + events/"]
+            apiClient["data/api.ts → @paket/api-client<br/><i>getApiClient · isBackendEnabled flag</i>"]:::logic
+            eventLog["events/eventLog.ts<br/><i>append() local append-only log (step.skipped)</i>"]:::logic
+        end
+    end
+
+    home --> useBundle
+    collect --> useBundle
+    process --> useCaseFlow
+    problem --> useCaseFlow
+    useBundle --> collectLogic
+    useCaseFlow --> model
+    useCaseFlow --> eventLog
+    useBundle --> repo
+    useCaseFlow --> repo
+    repo --> dexie
+    sync --> dexie
+    seed --> dexie
+    home --> sync
+    sync --> apiClient
+    home --> apiClient
+    apiClient -->|"REST (Bearer JWT)"| api
+    api -. "SSE /api/me/stream" .-> home

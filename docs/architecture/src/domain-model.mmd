@@ -1,0 +1,200 @@
+%% Domain / Entity model (ER) — verified against apps/backend-api/prisma/schema.prisma
+%% Cardinality: ||--o{ = one-to-many ; ||--|| = one-to-one ; }o--o{ = many-to-many (via join).
+%% Warenbezeichnung (ASN/DESADV): Beleg-Kopf fields live on GOODS_RECEIPT_CASE;
+%% article identity / NOS / Saison live on RECEIPT_POSITION (see annotations).
+erDiagram
+    USER ||--o{ USER_ROLE : has
+    ROLE ||--o{ USER_ROLE : grants
+    ROLE ||--o{ ROLE_PERMISSION : has
+    PERMISSION ||--o{ ROLE_PERMISSION : in
+    USER ||--o{ SHIFT : works
+    USER ||--o{ ASSIGNMENT_BUNDLE : owns
+    USER ||--o{ ISSUE : reports
+    USER ||--o{ ZST_RECORD : completes
+
+    LOCATION ||--o{ WORKSTATION : hosts
+    WORKSTATION ||--o{ SHIFT : "staffed at"
+    LOCATION ||--o{ GOODS_RECEIPT_CASE : "stored at"
+    LOCATION ||--o{ ROUTE_STOP : "visited by"
+
+    GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf AW"
+    GOODS_RECEIPT_CASE ||--o{ RECEIPT_POSITION : contains
+    RECEIPT_POSITION ||--o| POSITION_INSTRUCTION : "position AW"
+    RECEIPT_POSITION ||--o{ RECEIPT_SKU_LINE : "EAN x size"
+
+    GOODS_RECEIPT_CASE ||--o{ ISSUE : raises
+    GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "packed into"
+    GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "closed by"
+
+    ASSIGNMENT_BUNDLE ||--o{ ASSIGNMENT_ITEM : orders
+    ASSIGNMENT_ITEM ||--|| GOODS_RECEIPT_CASE : references
+    ASSIGNMENT_BUNDLE ||--o{ GOODS_RECEIPT_CASE : "assigned (denorm.)"
+    ASSIGNMENT_BUNDLE ||--o{ ROUTE_STOP : "pickup route"
+
+    USER {
+        string id PK
+        string employeeNo UK
+        string displayName
+        string_array bereiche "fixed, from LocationKind"
+        float productivityFactor
+        json weeklyPattern
+        boolean active
+    }
+    ROLE { string id PK
+        string name UK }
+    PERMISSION { string id PK
+        string name UK }
+    USER_ROLE { string userId FK
+        string roleId FK }
+    ROLE_PERMISSION { string roleId FK
+        string permissionId FK }
+
+    SHIFT {
+        string id PK
+        string employeeId FK
+        date date
+        datetime plannedStart
+        datetime plannedEnd
+        float netCapacityMinutes
+        enum source "seak|pattern|teamlead"
+    }
+    WORKSTATION { string id PK
+        string code UK
+        string locationId FK }
+    LOCATION {
+        string id PK
+        string code UK
+        enum kind "regal|palette_*|haengebahn|lagerplatz_d|workstation|printer|conveyor_*"
+        int sequenceIndex
+        string scanCode UK
+    }
+
+    GOODS_RECEIPT_CASE {
+        string id PK
+        enum source "prohandel_api|manual"
+        string externalRef "ProHandel idempotency"
+        string weBelegNo UK
+        string deliveryNoteNo "KOPF: Lieferschein"
+        string branchNo "KOPF: Filiale"
+        int section "KOPF: Abschnitt 1-4,7,8"
+        enum goodsTypeText "KOPF: Warenart"
+        string storageLocationId FK
+        string_array priorityFlags "prio|catman_due|overdue|..."
+        date catManDate
+        date loadPlanDate
+        enum status "ready|assigned|in_progress|completed|zst_done|..."
+        float effortPoints
+        string assignedBundleId FK
+        int version "optimistic lock"
+    }
+    WORK_INSTRUCTION_HEADER {
+        string caseId PK "FK→case (1:1)"
+        enum goodsReceiptCheckMode "quantity_only|percentage|full"
+        boolean minimumQuantityCheckAlwaysRequired
+        boolean priceLabelPrintRequired
+        boolean zstRequired
+    }
+    RECEIPT_POSITION {
+        string id PK
+        string caseId FK
+        int positionNo
+        string wgr "Warengruppe"
+        string supplierArticleNo "POS: article identity"
+        string supplierColor "POS: colour"
+        string season "POS: Saison"
+        boolean nosFlag "POS: NOS"
+        enum status "open|confirmed|issue_open|completed"
+    }
+    POSITION_INSTRUCTION {
+        string positionId PK "FK→position (1:1)"
+        boolean priceLabelRequired
+        boolean securityRequired
+        boolean onlineHandlingRequired
+    }
+    RECEIPT_SKU_LINE {
+        string id PK
+        string receiptPositionId FK
+        string ean
+        string size
+        int expectedQuantity
+        int confirmedQuantity
+        enum status "open|confirmed|deviation"
+    }
+
+    ASSIGNMENT_BUNDLE {
+        string id PK
+        string employeeId FK
+        date date
+        float plannedEffortMinutes
+        enum status "created|assigned|active|paused|completed|cancelled"
+        enum createdBy "system|teamlead"
+    }
+    ASSIGNMENT_ITEM {
+        string id PK
+        string bundleId FK
+        string caseId FK "UK: case in ≤1 bundle"
+        int sequence
+    }
+    ROUTE_STOP {
+        string id PK
+        string bundleId FK
+        int sequence
+        string locationId FK
+        string_array orderIds
+        boolean scanRequired
+        datetime scannedAt
+    }
+
+    ISSUE {
+        string id PK
+        string caseId FK
+        enum scope "case|position|sku_line|transport_box"
+        string employeeId FK
+        enum issueType "missing_quantity|damaged_goods|..."
+        enum status "open|in_review|resolved|rejected"
+    }
+    TRANSPORT_BOX {
+        string id PK
+        string caseId FK
+        int boxNo
+        string shopAreaNo
+        enum labelStatus "not_required|pending|printed|reprinted"
+        boolean sealed
+        string sealCode UK
+    }
+    ZST_RECORD {
+        string id PK
+        string idempotencyKey UK
+        string caseId FK
+        string employeeId FK
+        int completedQuantity
+        float effortPoints
+        datetime exportedAt
+    }
+
+    WORKFLOW_EVENT {
+        string id PK
+        bigint seq UK "monotonic"
+        string eventType
+        string entityType "polymorphic ref"
+        string entityId
+        enum actorType "system|employee|teamlead|admin"
+        string hash "SHA256 chain"
+        string prevHash
+    }
+    APP_CONFIG {
+        string key PK "rule_config singleton"
+        json value "Zod RuleConfig"
+    }
+    LOAD_PLAN_RULE {
+        string id PK
+        string shopAreaNo
+        int weekday
+        date validFrom
+    }
+    PRIORITY_RULE { string id PK
+        string key UK
+        int rank }
+    EFFORT_RULE { string id PK
+        string driverKey UK
+        float weight }

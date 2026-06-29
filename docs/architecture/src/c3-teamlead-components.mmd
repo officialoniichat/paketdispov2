@@ -1,0 +1,46 @@
+%% C4 Level 3 — Components: teamlead-web (React + Vite + MUI, TanStack Query)
+%% Verified against apps/teamlead-web/src/* (features/, data/, actions/, components/).
+flowchart TB
+    classDef feat fill:#16314a,stroke:#56b6ff,color:#eef1f6;
+    classDef store fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
+    classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
+    classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+
+    api["backend-api<br/>/api/teamlead/* · /api/admin/*"]:::ext
+
+    subgraph web["teamlead-web container"]
+        direction TB
+        subgraph features["features/ (routes via App.tsx)"]
+            cockpit["cockpit/CockpitPage<br/><i>§10.1 KPIs · SimulationPanel · Automatik toggle</i>"]:::feat
+            ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (7 lanes)</i>"]:::feat
+            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles</i>"]:::feat
+            belege["belege/BelegListPage + BelegDetailPage<br/><i>§10.4 table + detail</i>"]:::feat
+            split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
+            admin["admin/AdminPage<br/><i>§11: Priorität·Reserve·Bündel·Aufwand·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen</i>"]:::feat
+        end
+        store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>view-models + mutations (TanStack Query)</i>"]:::store
+        subgraph datal["data/"]
+            remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·cases</i>"]:::logic
+            belegeData["belege.ts · admin.ts · employees.ts · audit.ts"]:::logic
+            mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · reorder · pause/resume</i>"]:::logic
+            apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
+        end
+        actions["actions/caseActions.ts<br/><i>single-source action registry → ReasonDialog</i>"]:::logic
+    end
+
+    cockpit --> store
+    ablagen --> store
+    board --> store
+    belege --> store
+    split --> store
+    admin --> belegeData
+    ablagen --> actions
+    belege --> actions
+    actions --> store
+    store --> remote
+    store --> mutations
+    remote --> apiClient
+    mutations --> apiClient
+    belegeData --> apiClient
+    apiClient -->|"REST (Bearer JWT)"| api
+    api -. "SSE /api/teamlead/stream" .-> store

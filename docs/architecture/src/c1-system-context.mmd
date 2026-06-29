@@ -1,0 +1,24 @@
+%% C4 Level 1 — System Context
+%% Paketlagerdispo — Digitale Belegverteilung (L&T Logistics)
+%% Source of truth: verified against apps/* and packages/* on branch main.
+C4Context
+    title System Context — Paketlagerdispo (Digitale Belegverteilung)
+
+    Person(employee, "Mitarbeiter:in", "Warehouse worker. Collects (COLLECT) and processes (PROCESS) goods-receipt cases on a mobile PWA: scans, confirms quantities, prints labels, reports problems.")
+    Person(teamlead, "Teamlead Logistik", "Steers the daily pool: cockpit, digitale Ablagen, simulation, manual overrides, Tagesabschluss (ZST).")
+    Person(admin, "Admin / IT", "Maintains rules (Priorität/Reserve/Bündel/Aufwand), Lagerplätze, employees, integrations.")
+
+    System(paket, "Paketlagerdispo", "Modular monolith that turns goods-receipt cases into fair, deterministic daily work bundles and steers their lifecycle to Tagesabschluss.")
+
+    System_Ext(prohandel, "ProHandel ERP", "Retail ERP — intended system of record for goods-receipt cases incl. Lagerplatz. Cases carry source=prohandel_api + externalRef. NOTE: settings-configured delta-pull is concept-stage, not yet a running ingestion service.")
+    System_Ext(oidc, "OIDC Auth Provider", "Keycloak / Entra. Issues JWT access tokens (JWKS). Roles: Employee, Teamlead, Admin, IT. Dev: static RS256 key fallback.")
+
+    Rel(employee, paket, "Uses (mobile PWA)", "HTTPS / REST + SSE")
+    Rel(teamlead, paket, "Steers pool & overrides", "HTTPS / REST + SSE")
+    Rel(admin, paket, "Configures rules & master data", "HTTPS / REST")
+
+    Rel(paket, oidc, "Verifies access tokens against", "OIDC / JWKS")
+    Rel(prohandel, paket, "Goods-receipt cases (system of record)", "API pull — concept-stage")
+
+    UpdateRelStyle(prohandel, paket, $offsetY="-30", $offsetX="-40", $lineColor="grey")
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
