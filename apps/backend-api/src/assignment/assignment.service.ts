@@ -132,6 +132,20 @@ export class AssignmentService {
         include: caseEffortInclude,
       });
 
+      // 2a. Clear-before-insert (§8.3 idempotency): a case in the freed `ready` pool must
+      //     not still be a member of ANY bundle. A residual AssignmentItem — e.g. left
+      //     behind when a `partially_completed` case is reactivated to `ready` (the
+      //     §7.1 workflow transition only flips the status; it does NOT unlink the bundle
+      //     or drop the item) — would otherwise collide with this plan's freshly created
+      //     item on the @@unique([caseId]) constraint (Prisma P2002) inside persistBundle.
+      //     clearPriorPlanForDate cannot catch it: the owning bundle stays "referenced"
+      //     (and is kept), yet the case is no longer `assigned`. Dropping these stale rows
+      //     before the re-insert makes recalculate fully idempotent and re-runnable.
+      const poolCaseIds = casesRows.map((c) => c.id);
+      if (poolCaseIds.length > 0) {
+        await tx.assignmentItem.deleteMany({ where: { caseId: { in: poolCaseIds } } });
+      }
+
       const input: EngineInput = {
         date: day,
         // Resolve each case's next Verladetag from the live calendar so the engine's
