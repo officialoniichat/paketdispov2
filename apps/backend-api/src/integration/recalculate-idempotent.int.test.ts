@@ -31,6 +31,20 @@ function todayMidnightUtc(): Date {
 
 const SHIFT_NOW = new Date(`${todayMidnightUtc().toISOString().slice(0, 10)}T06:00:00.000Z`);
 
+// recalculate() materialises each active employee's shift from their weeklyPattern and
+// DELETES any shift for a pattern-less day, so a raw shift.create alone yields no capacity.
+// The seed therefore sets a full working week (mirrors the me-next-bundle/board convention).
+const WORK_DAY = { working: true, start: '08:00', end: '16:00', breakMinutes: 30, partTimePct: 100 };
+const WORKING_WEEK = {
+  sun: WORK_DAY,
+  mon: WORK_DAY,
+  tue: WORK_DAY,
+  wed: WORK_DAY,
+  thu: WORK_DAY,
+  fri: WORK_DAY,
+  sat: WORK_DAY,
+};
+
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let events: EventLogService;
@@ -38,7 +52,7 @@ let assignment: AssignmentService;
 
 async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
   const emp = await prisma.user.create({
-    data: { employeeNo: 'E100', displayName: 'Anna Beispiel' },
+    data: { employeeNo: 'E100', displayName: 'Anna Beispiel', weeklyPattern: WORKING_WEEK },
   });
   const loc = await prisma.location.create({
     data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
@@ -62,7 +76,10 @@ async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
       data: {
         source: 'manual',
         externalRef: 'recalc-set-1',
-        weBelegNo: `WE-RECALC-${i}`,
+        // weBelegNo spaced by 10: consecutive numbers (0,1,2) would be detected as a
+        // suspected T3 delivery run and WITHHELD by the production grouping config
+        // (autoDistributeSuspected=false), leaving nothing to assign.
+        weBelegNo: `WE-RECALC-${(i + 1) * 10}`,
         bookingDate: day,
         branchNo: '1',
         storageLocationId: loc.id,
@@ -147,5 +164,146 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
     // Its bundle/item must survive (not deleted by the cleanup).
     const item = await prisma.assignmentItem.findFirst({ where: { caseId: inFlight.id } });
     expect(item).not.toBeNull();
+  });
+});
+
+/**
+ * Regression for the production 500: POST /teamlead/assignments/recalculate threw
+ * `PrismaClientKnownRequestError P2002 — Unique constraint failed on (caseId)` inside
+ * AssignmentService.persistBundle.
+ *
+ * Root cause: a case can be back in the `ready` pool while STILL owning an AssignmentItem
+ * from an earlier plan. The §7.1 `partially_completed → ready` reactivation (and every
+ * other workflow transition) only flips the case status — it never unlinks the bundle or
+ * drops the item (workflow.service.transition updates `status` alone). clearPriorPlanForDate
+ * keeps that bundle because it is still "referenced" (assignedBundleId set) and never reverts
+ * the case (it is no longer `assigned`), so the stale item survives. The next recalculate
+ * re-plans the case and persistBundle creates a SECOND item for the same caseId → P2002.
+ *
+ * The dataset mirrors the live pool (≈15 free + 1 overdue, with a delivery group) and seeds
+ * exactly that stranded state. The first recalculate below threw P2002 before the fix.
+ */
+const DAY = todayMidnightUtc().toISOString().slice(0, 10);
+// now = shift start (local, matching the materialised plannedStart) so the whole pre-cutoff
+// window is auto-assignable and every seeded case lands in a bundle.
+const RECALC_NOW = new Date(`${DAY}T08:00:00`);
+
+async function resetAll(): Promise<void> {
+  await prisma.assignmentItem.deleteMany();
+  await prisma.routeStop.deleteMany();
+  await prisma.zstRecord.deleteMany();
+  await prisma.goodsReceiptCase.deleteMany();
+  await prisma.assignmentBundle.deleteMany();
+  await prisma.shift.deleteMany();
+  await prisma.location.deleteMany();
+  await prisma.workflowEvent.deleteMany();
+  await prisma.user.deleteMany();
+}
+
+interface StrandedSeed {
+  poolCaseIds: string[];
+  strandedCaseId: string;
+}
+
+async function seedStrandedPool(): Promise<StrandedSeed> {
+  const day = todayMidnightUtc();
+  const yesterday = new Date(day.getTime() - 86_400_000);
+
+  // Two employees with a working pattern; recalculate materialises their shift from it
+  // (a raw shift.create would be wiped by materializeShiftsForDate when the pattern is null).
+  const e1 = await prisma.user.create({
+    data: { employeeNo: 'SP-1', displayName: 'MA SP-1', bereiche: ['Regal'], productivityFactor: 1, weeklyPattern: WORKING_WEEK },
+  });
+  await prisma.user.create({
+    data: { employeeNo: 'SP-2', displayName: 'MA SP-2', bereiche: ['Regal'], productivityFactor: 1, weeklyPattern: WORKING_WEEK },
+  });
+  const loc = await prisma.location.create({
+    data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
+  });
+
+  const makeCase = async (i: number, extra: Record<string, unknown> = {}): Promise<string> => {
+    const c = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: 'p2002-set',
+        weBelegNo: `WE-P2002-${(i + 1) * 10}`, // numeric gap of 10 → never a T3 run group
+        bookingDate: day,
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 7,
+        totalQuantity: 10,
+        status: 'ready',
+        effortPoints: 5,
+        estimatedMinutes: 15,
+        ...extra,
+      },
+    });
+    return c.id;
+  };
+
+  const poolCaseIds: string[] = [];
+  // 3-case CONFIRMED delivery group (shared source key → distributed, not withheld).
+  for (let i = 0; i < 3; i += 1) {
+    poolCaseIds.push(await makeCase(i, { deliverySourceGroupKey: 'LS-A', deliverySourceGroupSize: 3 }));
+  }
+  // 12 further plain free cases → 15 free total.
+  for (let i = 3; i < 15; i += 1) {
+    poolCaseIds.push(await makeCase(i));
+  }
+  // 1 overdue case (booked before today → starter-package path).
+  poolCaseIds.push(await makeCase(15, { bookingDate: yesterday }));
+
+  // Strand one plain free case: it is `ready` (in the pool) yet still owns an AssignmentItem
+  // in a kept bundle — the exact residue a `partially_completed → ready` reactivation leaves.
+  const strandedCaseId = poolCaseIds[5]!;
+  const priorBundle = await prisma.assignmentBundle.create({
+    data: { employeeId: e1.id, date: day, status: 'assigned', createdBy: 'system', plannedEffortMinutes: 15 },
+  });
+  await prisma.assignmentItem.create({
+    data: { bundleId: priorBundle.id, caseId: strandedCaseId, sequence: 0 },
+  });
+  await prisma.goodsReceiptCase.update({
+    where: { id: strandedCaseId },
+    data: { assignedBundleId: priorBundle.id }, // status stays `ready`
+  });
+
+  return { poolCaseIds, strandedCaseId };
+}
+
+describe('recalculate idempotency — stranded AssignmentItem (P2002 regression)', () => {
+  let seed: StrandedSeed;
+
+  beforeAll(async () => {
+    await resetAll();
+    seed = await seedStrandedPool();
+  });
+
+  it('recalculates twice without P2002 and never assigns a caseId to two bundles', async () => {
+    // Pre-fix this FIRST call threw Prisma P2002 (unique constraint on AssignmentItem.caseId),
+    // because the stranded case is re-planned while its old item still exists.
+    const first = await assignment.recalculate(teamlead, DAY, RECALC_NOW);
+    expect(first.assignedCaseCount).toBeGreaterThan(0);
+
+    // Re-run for the same date must also succeed and stay stable (idempotent).
+    const second = await assignment.recalculate(teamlead, DAY, RECALC_NOW);
+    expect(second.assignedCaseCount).toBe(first.assignedCaseCount);
+
+    // INVARIANT: no caseId belongs to more than one AssignmentItem (never two bundles).
+    const items = await prisma.assignmentItem.findMany({ select: { caseId: true } });
+    const perCase = new Map<string, number>();
+    for (const it of items) perCase.set(it.caseId, (perCase.get(it.caseId) ?? 0) + 1);
+    const duplicated = [...perCase.entries()].filter(([, n]) => n > 1);
+    expect(duplicated).toEqual([]);
+
+    // Exactly one item per assigned case (no leaked/duplicated rows).
+    expect(items.length).toBe(second.assignedCaseCount);
+
+    // The previously-stranded case is now linked to exactly one bundle and is `assigned`.
+    expect(perCase.get(seed.strandedCaseId) ?? 0).toBe(1);
+    const strandedRow = await prisma.goodsReceiptCase.findUniqueOrThrow({
+      where: { id: seed.strandedCaseId },
+    });
+    expect(strandedRow.status).toBe('assigned');
+    expect(strandedRow.assignedBundleId).not.toBeNull();
   });
 });
