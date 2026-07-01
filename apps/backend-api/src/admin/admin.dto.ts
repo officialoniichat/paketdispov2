@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -135,19 +136,57 @@ export class EffortRuleConfigDto {
   @Type(() => CheckModeFactorsDto)
   checkModeFactors!: CheckModeFactorsDto;
   @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  @IsObject()
   handlingClassFactors!: Record<string, number>;
   @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  @IsObject()
   wgrFactors!: Record<string, number>;
   @ApiProperty() @IsNumber() @Min(0) pointsPerMinute!: number;
 }
 
-/** Delivery-Group detection (Teamlead-Anforderung Punkt 1). */
+/**
+ * Delivery-Group detection (Teamlead-Anforderung Punkt 1). Mirrors
+ * `groupingRuleConfigSchema` field-for-field: every field is REQUIRED in that Zod
+ * schema, so every field must carry a class-validator decorator here — otherwise the
+ * global `whitelist` ValidationPipe strips the undecorated ones before the service's
+ * Zod boundary sees them (the drift that caused the save-rules 400).
+ */
 export class GroupingRuleConfigDto {
-  @ApiProperty() @IsBoolean() enabled!: boolean;
+  @ApiProperty({ description: 'Master switch — when false, no groups are detected at all.' })
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({ description: 'T1: trust the source group key / „X von N" from ProHandel (bestätigt).' })
+  @IsBoolean()
+  useSourceKey!: boolean;
+
+  @ApiProperty({ description: 'T2: link Belege that share the same deliveryNoteNo (wahrscheinlich).' })
+  @IsBoolean()
+  useDeliveryNote!: boolean;
+
+  @ApiProperty({ description: 'T3: link a consecutive weBelegNo run (vermutet).' })
+  @IsBoolean()
+  useBelegRun!: boolean;
+
   @ApiProperty({ description: 'Max numeric gap between consecutive weBelegNo (1 = strict run)' })
   @IsInt()
   @Min(0)
   maxWeBelegGap!: number;
+
+  @ApiProperty({ description: 'Harden T3: a run only links Belege booked on the SAME day.' })
+  @IsBoolean()
+  runRequiresSameDay!: boolean;
+
+  @ApiProperty({ description: 'Harden T3: a run only links Belege of the SAME Bereich/section.' })
+  @IsBoolean()
+  runRequiresSameSection!: boolean;
+
+  @ApiProperty({
+    description:
+      'When false, only confirmed/likely groups auto-distribute; suspected (T3) wait for Teamlead confirm.',
+  })
+  @IsBoolean()
+  autoDistributeSuspected!: boolean;
 }
 
 export class ShiftEndRuleConfigDto {

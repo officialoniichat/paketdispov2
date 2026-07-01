@@ -1,13 +1,18 @@
+import 'reflect-metadata';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_RULE_CONFIG } from '@paket/domain-types';
+import { DEFAULT_EFFORT_RULE_CONFIG, DEFAULT_RULE_CONFIG, type RuleConfig } from '@paket/domain-types';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { AdminService } from '../admin/admin.service.js';
+import { AdminModule } from '../admin/admin.module.js';
+import { PrismaModule } from '../prisma/prisma.module.js';
 
 /**
  * §11 Admin endpoints (locations master + structured rule config).
@@ -29,6 +34,7 @@ function asDate(day: string): Date {
 let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let admin: AdminService;
+let app: NestFastifyApplication;
 
 /** Seed two locations; R7 is referenced by a case (the FK-guard target), R18 is free. */
 async function seed(): Promise<void> {
@@ -68,9 +74,32 @@ beforeAll(async () => {
   });
   prisma = new PrismaClient({ datasourceUrl: url });
   admin = new AdminService(prisma as unknown as PrismaService);
+
+  // Boot the REAL HTTP stack so the rule-config PUT runs through the global
+  // ValidationPipe from src/main.ts — the layer that (with `whitelist: true`)
+  // strips undecorated body fields and thus reproduces the production 400. Only
+  // PrismaModule + AdminModule are imported: AuthModule (which registers the
+  // global JwtAuthGuard/RolesGuard as APP_GUARDs) is left out, so the route is
+  // reachable without a token. The app's PrismaService connects via DATABASE_URL,
+  // so point it at the same container the direct `prisma` client uses.
+  process.env.DATABASE_URL = url;
+  const moduleRef = await Test.createTestingModule({
+    imports: [PrismaModule, AdminModule],
+  }).compile();
+  app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+  await app.init();
+  await app.getHttpAdapter().getInstance().ready();
 }, 180_000);
 
 afterAll(async () => {
+  await app?.close();
   await prisma?.$disconnect();
   await container?.stop();
 });
@@ -137,5 +166,61 @@ describe('admin rule config (§11)', () => {
       priority: { ...DEFAULT_RULE_CONFIG.priority, overdueLeadDays: -5 },
     };
     await expect(admin.replaceRuleConfig(bad as never)).rejects.toThrow();
+  });
+
+  /**
+   * Regression for the production 400 on any RuleConfig tab. The global
+   * ValidationPipe runs with `whitelist: true`, which STRIPS every body property
+   * that lacks a class-validator decorator on the DTO — before AdminService
+   * re-validates with the Zod schema (the trust boundary). The grouping.* booleans
+   * and the effort factor maps (handlingClassFactors/wgrFactors) had drifted out of
+   * the DTO, so a full PUT lost those 8 fields and Zod rejected the body with
+   * "Ungültige Regelkonfiguration" (HTTP 400). This drives the real endpoint through
+   * that pipe and asserts the 8 fields survive on both the PUT response and a
+   * subsequent GET. It fails (400) before the DTO fix and passes after.
+   */
+  it('PUT /api/admin/rules keeps grouping.* + effort factor maps through the whitelist pipe', async () => {
+    // A COMPLETE, valid config with the 8 previously-stripped fields set to
+    // distinctive non-default values so any silent strip is detectable.
+    const config: RuleConfig = {
+      ...DEFAULT_RULE_CONFIG,
+      grouping: {
+        enabled: true,
+        useSourceKey: false,
+        useDeliveryNote: false,
+        useBelegRun: true,
+        maxWeBelegGap: 3,
+        runRequiresSameDay: false,
+        runRequiresSameSection: true,
+        autoDistributeSuspected: true,
+      },
+      effort: {
+        ...DEFAULT_EFFORT_RULE_CONFIG,
+        handlingClassFactors: { normal: 1, bulky: 1.5, custom_class: 2.25 },
+        wgrFactors: { '999999': 1.75, default: 1 },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/rules',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify(config),
+    });
+
+    // Before the fix the whitelist pipe strips the 8 fields → Zod 400.
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as RuleConfig;
+    expect(body.grouping).toEqual(config.grouping);
+    expect(body.effort.handlingClassFactors).toEqual(config.effort.handlingClassFactors);
+    expect(body.effort.wgrFactors).toEqual(config.effort.wgrFactors);
+
+    // …and they persist: a fresh GET round-trips the exact same 8 fields.
+    const reread = await app.inject({ method: 'GET', url: '/api/admin/rules' });
+    expect(reread.statusCode).toBe(200);
+    const persisted = reread.json() as RuleConfig;
+    expect(persisted.grouping).toEqual(config.grouping);
+    expect(persisted.effort.handlingClassFactors).toEqual(config.effort.handlingClassFactors);
+    expect(persisted.effort.wgrFactors).toEqual(config.effort.wgrFactors);
   });
 });
