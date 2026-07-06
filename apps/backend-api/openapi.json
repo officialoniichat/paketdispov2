@@ -1,6 +1,40 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/auth/login": {
+      "post": {
+        "operationId": "LoginController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ungültige Anmeldedaten"
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/me/stream": {
       "get": {
         "operationId": "LiveController_meStream",
@@ -2500,6 +2534,45 @@
         ]
       }
     },
+    "/api/admin/employees/{id}/pin": {
+      "patch": {
+        "operationId": "EmployeesController_resetPin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Admin-only PIN reset (employeeNo + PIN login, Auth-Task 5).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/api/admin/integrations/prohandel/pull": {
       "post": {
         "operationId": "ProhandelController_pull",
@@ -2595,6 +2668,32 @@
       }
     },
     "schemas": {
+      "LoginRequestDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "pin"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
       "RouteStopDto": {
         "type": "object",
         "properties": {
@@ -5788,6 +5887,17 @@
             ]
           }
         }
+      },
+      "PinResetDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ]
       },
       "ProhandelPullResultDto": {
         "type": "object",

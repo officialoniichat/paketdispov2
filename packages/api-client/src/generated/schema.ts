@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LoginController_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/stream": {
         parameters: {
             query?: never;
@@ -967,6 +983,23 @@ export interface paths {
         patch: operations["EmployeesController_updateProfile"];
         trace?: never;
     };
+    "/api/admin/employees/{id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Admin-only PIN reset (employeeNo + PIN login, Auth-Task 5). */
+        patch: operations["EmployeesController_resetPin"];
+        trace?: never;
+    };
     "/api/admin/integrations/prohandel/pull": {
         parameters: {
             query?: never;
@@ -1020,6 +1053,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        LoginRequestDto: {
+            employeeNo: string;
+            pin: string;
+        };
+        LoginResponseDto: {
+            token: string;
+        };
         RouteStopDto: {
             id: string;
             sequence: number;
@@ -1993,6 +2033,9 @@ export interface components {
             workstationId?: string | null;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
         };
+        PinResetDto: {
+            pin: string;
+        };
         ProhandelPullResultDto: {
             /** @description Anzahl neu erzeugter/aufgefrischter Belege */
             pulledCases: number;
@@ -2012,6 +2055,36 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    LoginController_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponseDto"];
+                };
+            };
+            /** @description Ungültige Anmeldedaten */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     LiveController_meStream: {
         parameters: {
             query?: never;
@@ -3409,6 +3482,29 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailDto"];
                 };
+            };
+        };
+    };
+    EmployeesController_resetPin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinResetDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
