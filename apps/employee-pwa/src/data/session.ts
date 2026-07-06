@@ -31,8 +31,25 @@ export function setSession(session: Session): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
+type SessionClearedListener = () => void;
+
+/**
+ * Subscribers notified whenever the session is cleared (logout, or a 401
+ * caught by `data/apiErrorHandling.ts`). `App.tsx` is the canonical subscriber:
+ * it forces the session state back to `null` so the router falls back to
+ * `LoginScreen`, regardless of which layer triggered the clear.
+ */
+const sessionClearedListeners = new Set<SessionClearedListener>();
+
+/** Subscribe to session-cleared notifications. Returns an unsubscribe function. */
+export function onSessionCleared(listener: SessionClearedListener): () => void {
+  sessionClearedListeners.add(listener);
+  return () => sessionClearedListeners.delete(listener);
+}
+
 export function clearSession(): void {
   localStorage.removeItem(STORAGE_KEY);
+  sessionClearedListeners.forEach((listener) => listener());
 }
 
 export function isSessionExpired(session: Session): boolean {

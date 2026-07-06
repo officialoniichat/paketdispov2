@@ -10,7 +10,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import { AppHeader } from './components/AppHeader.js';
-import { getSession, isSessionExpired, type Session } from './data/session.js';
+import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
 import { LoginScreen } from './screens/LoginScreen.js';
 import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
 import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
@@ -27,6 +27,12 @@ export function App(): JSX.Element {
       setSessionState(null);
     }
   }, [session]);
+
+  // Session-cleared can originate from anywhere: an explicit logout
+  // (AppHeader → data/auth.ts) or a 401 caught by data/apiErrorHandling.ts and
+  // surfaced through the React Query cache (data/queryClient.ts). Either way,
+  // fall back to LoginScreen.
+  useEffect(() => onSessionCleared(() => setSessionState(null)), []);
 
   if (!session) {
     return <LoginScreen onLoggedIn={setSessionState} />;
