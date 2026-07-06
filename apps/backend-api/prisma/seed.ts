@@ -370,6 +370,7 @@ async function seedCaseDetails(): Promise<void> {
           'needs_review',
           'ready',
           'parked',
+          'assigned',
           'in_progress',
           'completed',
           'partially_completed',
@@ -416,6 +417,11 @@ async function seedCaseDetails(): Promise<void> {
       },
     ].slice(0, positionCount);
 
+    // Ältere Seed-Generationen hinterlassen überzählige Positionen (upsert löscht nie)
+    // — wegräumen, damit Beleg, Boxen und Warenart konsistent sind.
+    await prisma.receiptPosition.deleteMany({
+      where: { caseId: c.id, positionNo: { gt: posMeta.length } },
+    });
     const positionIdsByFloor = new Map<string, string[]>();
     for (const p of posMeta) {
       const position = await prisma.receiptPosition.upsert({
