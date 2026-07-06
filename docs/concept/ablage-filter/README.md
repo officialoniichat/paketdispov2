@@ -127,6 +127,16 @@ verwerfen oder als spätere Zusatz-Ansicht zu planen.
   `collapsed` heute schon. Zusätzlich 1–2 benannte Presets pro Nutzer („Meine Standardsicht" speichern/
   laden), damit ein TL nicht jeden Morgen neu filtert.
 
+## 5a. Filter-Ausnahme für Problemfälle/Geparkt/Weitergeleitet (umgesetzt)
+
+Diese drei Lanes sind bereits kleine Ausnahme-/Triage-Queues — ihr ganzer Zweck ist, dass nichts darin
+übersehen wird. Ein zufälliger Bereichs-/Warenart-/Teile-Filter, der genau den einen Problemfall
+außerhalb des aktuellen Filters versteckt, würde diesen Zweck aushebeln. Deshalb ignorieren diese drei
+Lanes alle einschränkenden Filter (Bereich, Warenart, Lieferungs-Gruppe, Teile-Range, „Frei", „Prio",
+„Braucht Entscheidung") vollständig und zeigen immer 100 % ihrer Karten — nur die Freitextsuche bleibt
+aktiv (Suche ist ein „Finden", kein „Einschränken", und ist auch in kleinen Lanes nützlich). Umgesetzt
+in `ablagenFilters.ts` (`isFilterExemptLane` / `filterLaneCardsForLane`).
+
 ## 6. Was zuerst am Datenmodell nachgezogen werden müsste
 
 Reihenfolge nach Aufwand, nicht nach Priorität:

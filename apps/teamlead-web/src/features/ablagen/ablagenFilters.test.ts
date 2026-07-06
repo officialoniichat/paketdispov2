@@ -7,8 +7,10 @@ import {
   cardMatchesFilter,
   cardNeedsDecision,
   filterLaneCards,
+  filterLaneCardsForLane,
   groupCards,
   isFilterActive,
+  isFilterExemptLane,
   removeFilterChip,
 } from './ablagenFilters.js';
 
@@ -171,6 +173,50 @@ describe('isFilterActive / activeFilterChips / removeFilterChip', () => {
     const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const, 'Palette' as const] };
     const next = removeFilterChip(filter, 'bereich:Regal');
     expect(next.bereiche).toEqual(['Palette']);
+  });
+});
+
+describe('isFilterExemptLane', () => {
+  it('exempts probleme, geparkt and weitergeleitet', () => {
+    expect(isFilterExemptLane('probleme')).toBe(true);
+    expect(isFilterExemptLane('geparkt')).toBe(true);
+    expect(isFilterExemptLane('weitergeleitet')).toBe(true);
+  });
+
+  it('does not exempt working lanes', () => {
+    expect(isFilterExemptLane('prio')).toBe(false);
+    expect(isFilterExemptLane('jeden_tag')).toBe(false);
+    expect(isFilterExemptLane('verladeplan_heute')).toBe(false);
+    expect(isFilterExemptLane('verladeplan_morgen')).toBe(false);
+    expect(isFilterExemptLane('sonstige')).toBe(false);
+  });
+});
+
+describe('filterLaneCardsForLane', () => {
+  it('exempt lanes ignore narrowing filters entirely', () => {
+    const cards = [
+      makeCard({ caseId: 'a', bereich: 'Regal' }),
+      makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
+    ];
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const], onlyFree: true };
+    expect(filterLaneCardsForLane(cards, filter, 'probleme').map((c) => c.caseId)).toEqual(['a', 'b']);
+    expect(filterLaneCardsForLane(cards, filter, 'geparkt').map((c) => c.caseId)).toEqual(['a', 'b']);
+    expect(filterLaneCardsForLane(cards, filter, 'weitergeleitet').map((c) => c.caseId)).toEqual(['a', 'b']);
+  });
+
+  it('exempt lanes still respect search', () => {
+    const cards = [makeCard({ caseId: 'a', weBelegNo: 'WE-1000' }), makeCard({ caseId: 'b', weBelegNo: 'WE-2000' })];
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, search: '1000' };
+    expect(filterLaneCardsForLane(cards, filter, 'probleme').map((c) => c.caseId)).toEqual(['a']);
+  });
+
+  it('working lanes apply the full filter, same as filterLaneCards', () => {
+    const cards = [
+      makeCard({ caseId: 'a', bereich: 'Regal' }),
+      makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
+    ];
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const] };
+    expect(filterLaneCardsForLane(cards, filter, 'prio')).toEqual(filterLaneCards(cards, filter));
   });
 });
 

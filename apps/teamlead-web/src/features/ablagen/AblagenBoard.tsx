@@ -52,7 +52,7 @@ import type { Lane, LaneCard, LaneId } from '../../data/types.js';
 import { AblagenFilterBar } from './AblagenFilterBar.js';
 import {
   DEFAULT_ABLAGEN_FILTER_STATE,
-  filterLaneCards,
+  filterLaneCardsForLane,
   groupCards,
   type AblagenFilterState,
   type AblagenGroupBy,
@@ -249,7 +249,7 @@ export function AblagenBoard(): JSX.Element {
           <LaneColumn
             key={lane.id}
             lane={lane}
-            filteredCards={filterLaneCards(lane.cards, view.filter)}
+            filteredCards={filterLaneCardsForLane(lane.cards, view.filter, lane.id)}
             groupBy={view.filter.groupBy}
             collapsed={view.collapsed.includes(lane.id)}
             canMoveLeft={index > 0}

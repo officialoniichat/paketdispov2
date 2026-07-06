@@ -7,7 +7,7 @@
  * the lane axis itself (status/Fachlogik stays the lane boundary).
  */
 import type { Bereich, CaseStatus, GoodsTypeText, PriorityFlag } from '@paket/domain-types';
-import type { LaneCard } from '../../data/types.js';
+import type { LaneCard, LaneId } from '../../data/types.js';
 
 export type AblagenGroupBy = 'none' | 'bereich' | 'assignedTo';
 export type DeliveryGroupFilter = 'any' | 'only_grouped' | 'only_single';
@@ -53,6 +53,20 @@ export function cardIsPrio(card: LaneCard): boolean {
   return card.priorityFlags.some((flag) => URGENT_PRIORITY_FLAGS.has(flag));
 }
 
+/**
+ * These lanes are already low-volume exception/triage queues (§4 Problemfälle,
+ * Geparkt, Weitergeleitet) — their whole purpose is that NOTHING in them goes
+ * unnoticed. A stray Bereich/Warenart/Teile-Filter silently hiding the one
+ * problem case outside the current filter would defeat that purpose, so these
+ * lanes ignore every narrowing filter and only respond to search (a "find",
+ * not a "narrow" — see docs/concept/ablage-filter/README.md §5).
+ */
+const FILTER_EXEMPT_LANES: ReadonlySet<LaneId> = new Set(['probleme', 'geparkt', 'weitergeleitet']);
+
+export function isFilterExemptLane(laneId: LaneId): boolean {
+  return FILTER_EXEMPT_LANES.has(laneId);
+}
+
 function matchesSearch(card: LaneCard, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (!needle) return true;
@@ -86,6 +100,21 @@ export function cardMatchesFilter(card: LaneCard, filter: AblagenFilterState): b
 
 export function filterLaneCards(cards: LaneCard[], filter: AblagenFilterState): LaneCard[] {
   return cards.filter((card) => cardMatchesFilter(card, filter));
+}
+
+/**
+ * Lane-aware entry point: exempt lanes (see {@link isFilterExemptLane}) only
+ * apply `search`; every other lane applies the full filter.
+ */
+export function filterLaneCardsForLane(
+  cards: LaneCard[],
+  filter: AblagenFilterState,
+  laneId: LaneId,
+): LaneCard[] {
+  if (isFilterExemptLane(laneId)) {
+    return cards.filter((card) => matchesSearch(card, filter.search));
+  }
+  return filterLaneCards(cards, filter);
 }
 
 export function isFilterActive(filter: AblagenFilterState): boolean {
