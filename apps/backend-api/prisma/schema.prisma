@@ -213,6 +213,8 @@ model User {
   skillTier            SkillTier @default(profi)
   // Arbeitsplatz/Tisch-Zuweisung des Mitarbeiters (per Admin setzbar, Dummy flexibel).
   workstationId        String?
+  // PIN-Login-Credential (gehasht, nie im Klartext) — see Task 1 of the PIN-login SDD plan.
+  pinHash              String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
