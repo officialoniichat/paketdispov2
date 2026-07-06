@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
 import {
@@ -7,6 +7,7 @@ import {
   EmployeeDetailDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
+  PinResetDto,
   WorkstationDto,
 } from './employees.dto.js';
 
@@ -68,5 +69,13 @@ export class EmployeesController {
     @Body() body: EmployeeProfileUpdateDto,
   ): Promise<EmployeeDetailDto> {
     return this.employees.updateProfile(principal, id, body);
+  }
+
+  @Patch(':id/pin')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Admin-only PIN reset (employeeNo + PIN login, Auth-Task 5).' })
+  @ApiNoContentResponse()
+  async resetPin(@Param('id') id: string, @Body() body: PinResetDto): Promise<void> {
+    await this.employees.resetPin(id, body.pin);
   }
 }

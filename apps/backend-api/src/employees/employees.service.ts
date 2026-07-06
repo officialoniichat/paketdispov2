@@ -10,6 +10,7 @@ import {
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
+import { hashPin } from '../auth/pin.js';
 import type { Principal } from '../auth/rbac.js';
 import type {
   EmployeeCreateDto,
@@ -260,6 +261,23 @@ export class EmployeesService {
     });
 
     return this.loadDetail(id, date);
+  }
+
+  /**
+   * Admin-only PIN reset (Auth-Task 5). Hashes via `hashPin` (Task 2) and stores
+   * only the hash — the plaintext PIN is never persisted, logged, or written into
+   * the audit event payload.
+   */
+  async resetPin(employeeNo: string, pin: string): Promise<void> {
+    const pinHash = await hashPin(pin);
+    await this.prisma.user.update({ where: { employeeNo }, data: { pinHash } });
+    await this.events.append({
+      eventType: 'employee.pin_reset',
+      entityType: 'User',
+      entityId: employeeNo,
+      actorType: 'admin',
+      payload: {},
+    });
   }
 
   // --- internals ------------------------------------------------------------

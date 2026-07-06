@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Length,
   Max,
   Min,
   ValidateNested,
@@ -158,6 +159,11 @@ export class EmployeeProfileUpdateDto {
   @ValidateNested()
   @Type(() => WeeklyPatternDto)
   weeklyPattern?: WeeklyPatternDto | null;
+}
+
+/** Admin-only PIN reset (Auth-Task 5). Same length constraint as `LoginRequestDto`. */
+export class PinResetDto {
+  @ApiProperty() @IsString() @Length(4, 8) pin!: string;
 }
 
 /**
