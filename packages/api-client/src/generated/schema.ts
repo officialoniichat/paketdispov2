@@ -898,6 +898,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/employees/workstations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active workstations (Tische) as Arbeitsplatz options. */
+        get: operations["EmployeesController_listWorkstations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/employees/{id}": {
         parameters: {
             query?: never;
@@ -1717,8 +1734,20 @@ export interface components {
         };
         GroupingRuleConfigDto: {
             enabled: boolean;
+            /** @description T1: trust the source group key / „X von N" from ProHandel (bestätigt) */
+            useSourceKey: boolean;
+            /** @description T2: link Belege sharing the same deliveryNoteNo (wahrscheinlich) */
+            useDeliveryNote: boolean;
+            /** @description T3: link a consecutive weBelegNo run (vermutet) */
+            useBelegRun: boolean;
             /** @description Max numeric gap between consecutive weBelegNo (1 = strict run) */
             maxWeBelegGap: number;
+            /** @description Harden T3: a run only links Belege booked on the SAME day */
+            runRequiresSameDay: boolean;
+            /** @description Harden T3: a run only links Belege of the SAME Bereich/section */
+            runRequiresSameSection: boolean;
+            /** @description When false, suspected (T3) groups wait for Teamlead confirm before auto-distribution */
+            autoDistributeSuspected: boolean;
         };
         ShiftEndRuleConfigDto: {
             /** @description Minutes before plannedEnd at which auto-distribution stops (0 = off) */
@@ -1885,6 +1914,13 @@ export interface components {
             netCapacityToday: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
             recentAudit: components["schemas"]["AuditEntryDto"][];
+        };
+        WorkstationDto: {
+            id: string;
+            /** @description Natural code, z. B. "T3" */
+            code: string;
+            name: string;
+            active: boolean;
         };
         EmployeeProfileUpdateDto: {
             active?: boolean;
@@ -3197,6 +3233,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_listWorkstations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkstationDto"][];
                 };
             };
         };

@@ -10,21 +10,38 @@ import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import MenuItem from '@mui/material/MenuItem';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import type { SkillTier } from '@paket/domain-types';
 import {
   fetchEmployee,
+  fetchWorkstations,
   updateEmployeeProfile,
   type EmployeeDetail,
   type EmployeeProfileUpdate,
+  type Workstation,
 } from '../../data/employees.js';
 import { useBereichCatalog } from '../../data/bereichCatalog.js';
 import { formatAuditAction } from '../../data/audit.js';
 import { toEventType } from '../../data/narrow.js';
 
 type ProfilePatchArgs = [string, EmployeeProfileUpdate];
+
+/** Die 5-stufige Skill-Leiter (Auswahl-Reihenfolge = Können absteigend). */
+const SKILL_TIERS: { value: SkillTier; label: string }[] = [
+  { value: 'profi', label: 'Profi' },
+  { value: 'fortgeschritten', label: 'Fortgeschritten' },
+  { value: 'basis', label: 'Basis' },
+  { value: 'starter', label: 'Starter' },
+  { value: 'dummy', label: 'Dummy' },
+];
+
+/** Sentinel value for the clearable Arbeitsplatz select ('' = kein Tisch). */
+const NO_WORKSTATION = '';
 
 interface EmployeeDetailPanelProps {
   employeeId: string;
@@ -130,6 +147,7 @@ function ProfileSection({
         Temp-Kräfte können wie alle Mitarbeiter (manuell/automatisch) Belege bekommen, zählen
         aber nicht in die Produktivitäts-/ZST-Leistung. Der Durchsatz bleibt sichtbar.
       </Typography>
+      <SkillWorkstationFields emp={emp} save={save} />
       <div>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           Bereich / Skill {emp.bereiche.length === 0 && '· Allrounder (übernimmt alles)'}
@@ -156,6 +174,70 @@ function ProfileSection({
         </Typography>
       </div>
       <SaveFeedback mutation={mutation} />
+    </Stack>
+  );
+}
+
+/** Skill-Stufe (5er-Leiter) + Arbeitsplatz/Tisch — beide direkt per PATCH gespeichert. */
+function SkillWorkstationFields({
+  emp,
+  save,
+}: {
+  emp: EmployeeDetail;
+  save: (patch: EmployeeProfileUpdate) => void;
+}): JSX.Element {
+  const workstations = useQuery<Workstation[], Error>({
+    queryKey: ['admin', 'workstations'],
+    queryFn: fetchWorkstations,
+  });
+
+  return (
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+      <Stack spacing={0.5} sx={{ flex: 1 }}>
+        <TextField
+          select
+          size="small"
+          label="Skill-Stufe"
+          value={emp.skillTier}
+          onChange={(e) => save({ skillTier: e.target.value })}
+        >
+          {SKILL_TIERS.map((t) => (
+            <MenuItem key={t.value} value={t.value}>
+              {t.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Typography variant="caption" color="text.secondary">
+          Profi = alles automatisch; Starter/Dummy = nur manuelle Zuteilung.
+        </Typography>
+      </Stack>
+      <Stack spacing={0.5} sx={{ flex: 1 }}>
+        <TextField
+          select
+          size="small"
+          label="Arbeitsplatz / Tisch"
+          value={emp.workstationId ?? NO_WORKSTATION}
+          onChange={(e) =>
+            save({ workstationId: e.target.value === NO_WORKSTATION ? null : e.target.value })
+          }
+          disabled={workstations.isLoading}
+        >
+          <MenuItem value={NO_WORKSTATION}>— kein Tisch —</MenuItem>
+          {(workstations.data ?? []).map((w) => (
+            <MenuItem key={w.id} value={w.id}>
+              {w.code} · {w.name}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Typography variant="caption" color="text.secondary">
+          Fester Tisch optional — ohne Zuweisung bleibt die Person (z. B. Dummy) flexibel.
+        </Typography>
+        {workstations.error && (
+          <Typography variant="caption" color="error">
+            Arbeitsplätze konnten nicht geladen werden: {workstations.error.message}
+          </Typography>
+        )}
+      </Stack>
     </Stack>
   );
 }

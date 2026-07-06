@@ -130,9 +130,11 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
-        Pro Shop-Bereich &amp; Etage: an welchen Wochentagen verladen wird und ab wann der Plan
-        gilt. Belege sind <strong>ab dem Verladetag fällig</strong> — es gibt keinen
-        Überfälligkeits-Vorlauf mehr.
+        Der Verladeplan legt <strong>pro Shop-Bereich &amp; Etage</strong> fest, an welchen
+        Wochentagen verladen wird und ab wann der Plan gilt. Belege werden{' '}
+        <strong>zum Verladetag fällig</strong> — es gibt keinen Überfälligkeits-Vorlauf mehr.
+        Ein <strong>Sondertag</strong> ist eine einmalige Abweichung vom Wochenrhythmus,
+        z.&nbsp;B. Feiertag Donnerstag → die Verladung wird auf Mittwoch vorgezogen.
       </Typography>
 
       {groups.length === 0 && (
@@ -280,6 +282,10 @@ function ShopAreaCard({
             variant={group.specialDay ? 'filled' : 'outlined'}
             sx={{ mt: 1.5 }}
           />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Einmalige Abweichung vom Wochenrhythmus — Beispiel: Feiertag Donnerstag →
+            Verladung wird auf Mittwoch vorgezogen.
+          </Typography>
         </Box>
 
         <Box sx={{ p: 2 }}>

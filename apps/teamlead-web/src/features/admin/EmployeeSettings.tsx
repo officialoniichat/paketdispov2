@@ -31,6 +31,8 @@ import {
   type EmployeeListItem,
   type EmployeeListResponse,
 } from '../../data/employees.js';
+import { TierChip } from '../../components/TierChip.js';
+import { toSkillTier } from '../../data/narrow.js';
 import { EmployeeDetailPanel } from './EmployeeDetailPanel.js';
 
 function todayIso(): string {
@@ -65,6 +67,10 @@ export function EmployeeSettings(): JSX.Element {
           </Button>
         </Stack>
         <TempEmployeeDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onCreated} />
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          MSP-Import folgt später — hier nur Stammmannschaft; Azubis/Aushilfen über
+          Dummy-Mitarbeiter.
+        </Typography>
         {query.data && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             Team-Kapazität: {query.data.activeCount} aktiv · Netto{' '}
@@ -88,7 +94,7 @@ export function EmployeeSettings(): JSX.Element {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Rolle</TableCell>
-                <TableCell>Bereich</TableCell>
+                <TableCell>Skill-Stufe</TableCell>
                 <TableCell align="right">Netto heute</TableCell>
                 <TableCell>Status</TableCell>
               </TableRow>
@@ -148,7 +154,9 @@ function EmployeeRow({
         </Stack>
       </TableCell>
       <TableCell>{emp.roles.join(', ')}</TableCell>
-      <TableCell>{emp.bereiche.length ? emp.bereiche.join(', ') : 'Allrounder'}</TableCell>
+      <TableCell>
+        <TierChip tier={toSkillTier(emp.skillTier)} />
+      </TableCell>
       <TableCell align="right">{emp.netCapacityToday} min</TableCell>
       <TableCell>
         <Chip size="small" label={statusLabel} color={statusColor} variant={selected ? 'filled' : 'outlined'} />

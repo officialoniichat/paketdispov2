@@ -176,7 +176,16 @@ export function AdminPage(): JSX.Element {
               )}
 
               {tab === 1 && (
-                <Grid>
+                <Stack spacing={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    Bündel werden in <strong>Teilen</strong> dimensioniert: das{' '}
+                    <strong>Starter-Pack</strong> (ca. 200–250 Teile) bekommt jeder Mitarbeiter zu
+                    Schichtbeginn, <strong>Folge-Packs</strong> (ca. 80–90 Teile) zieht er sich
+                    danach selbst. Belege ab der <strong>Monster-Beleg-Schwelle</strong> werden
+                    nicht automatisch verteilt, sondern warten auf die manuelle
+                    Teamlead-Entscheidung.
+                  </Typography>
+                  <Grid>
                   <Num
                     label="Starter-Pack min (Teile)"
                     value={draft.bundle.starterPackMinTeile}
@@ -209,7 +218,8 @@ export function AdminPage(): JSX.Element {
                     }
                     hint="Belege ab dieser Teilezahl werden NICHT automatisch verteilt, sondern warten auf die manuelle Teamlead-Entscheidung."
                   />
-                </Grid>
+                  </Grid>
+                </Stack>
               )}
 
               {tab === 2 && (
@@ -368,9 +378,28 @@ export function AdminPage(): JSX.Element {
               {tab === GROUPING_TAB && (
                 <Stack spacing={2}>
                   <Typography variant="body2" color="text.secondary">
-                    Zusammengehörige Lieferscheine erkennen: Belege einer physischen
-                    Lieferung (gleicher Lieferschein ODER fortlaufende Beleg-Nummern)
-                    werden erkannt und möglichst einem Mitarbeiter zugeteilt.
+                    Zusammengehörige Lieferscheine erkennen: Belege einer physischen Lieferung
+                    werden erkannt und möglichst einem Mitarbeiter zugeteilt. Drei Signale, vom
+                    stärksten zum schwächsten:
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" component="ol" sx={{ pl: 3, m: 0 }}>
+                    <li>
+                      <strong>Gleiche Quell-Lieferung</strong> — der Gruppenschlüssel „X von N“
+                      aus ProHandel (bestätigt).
+                    </li>
+                    <li>
+                      <strong>Gleiche Lieferscheinnummer</strong> — Belege mit identischer
+                      Lieferschein-Nr (wahrscheinlich).
+                    </li>
+                    <li>
+                      <strong>Fortlaufende WE-Belegnummern</strong> — Kartons einer Lieferung
+                      werden fortlaufend nummeriert gebucht, z.&nbsp;B. der „Brax-Fall“
+                      (vermutet).
+                    </li>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Nicht fortlaufende Belege einer Lieferung erkennt die Automatik nicht — der
+                    Teamlead kann sie manuell zu einer Lieferung gruppieren.
                   </Typography>
                   <Grid>
                     <Toggle

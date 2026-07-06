@@ -13,6 +13,7 @@ export type EmployeeDetail = components['schemas']['EmployeeDetailDto'];
 export type EmployeeProfileUpdate = components['schemas']['EmployeeProfileUpdateDto'];
 export type EmployeeCreate = components['schemas']['EmployeeCreateDto'];
 export type WeeklyPattern = components['schemas']['WeeklyPatternDto'];
+export type Workstation = components['schemas']['WorkstationDto'];
 
 /** List employees with today's (or a given day's) shift, capacity and absence. */
 export async function fetchEmployees(date?: string): Promise<EmployeeListResponse> {
@@ -28,6 +29,12 @@ export async function fetchEmployee(id: string, date?: string): Promise<Employee
     params: { path: { id }, query: date ? { date } : {} },
   });
   return unwrap<EmployeeDetail>(result, 'employee');
+}
+
+/** Active workstations (Tische) — Arbeitsplatz options for the employee detail select. */
+export async function fetchWorkstations(): Promise<Workstation[]> {
+  const result = await api.GET('/api/admin/employees/workstations');
+  return unwrap<Workstation[]>(result, 'workstations');
 }
 
 /** Create an employee — by default a temporäre Kraft (measured=false, ohne Messung). */

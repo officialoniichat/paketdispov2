@@ -2,12 +2,13 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ValidationPipe } from '@nestjs/common';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_RULE_CONFIG } from '@paket/domain-types';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { AdminService } from '../admin/admin.service.js';
+import { RuleConfigDto } from '../admin/admin.dto.js';
 
 /**
  * §11 Admin endpoints (locations master + structured rule config).
@@ -129,6 +130,42 @@ describe('admin rule config (§11)', () => {
     expect(saved.bundle.starterPackMaxTeile).toBe(300);
     const reread = await admin.getRuleConfig();
     expect(reread.bundle.starterPackMaxTeile).toBe(300);
+  });
+
+  it('round-trips all 8 grouping fields through the DTO whitelist (D3 gap)', async () => {
+    // Non-default values for EVERY groupingRuleConfigSchema field: if the DTO were
+    // still partial, the global `whitelist: true` ValidationPipe would strip the
+    // undeclared fields before the service ever sees them.
+    const grouping = {
+      enabled: true,
+      useSourceKey: false,
+      useDeliveryNote: false,
+      useBelegRun: true,
+      maxWeBelegGap: 3,
+      runRequiresSameDay: false,
+      runRequiresSameSection: false,
+      autoDistributeSuspected: true,
+    };
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const body = (await pipe.transform(
+      { ...DEFAULT_RULE_CONFIG, grouping },
+      { type: 'body', metatype: RuleConfigDto },
+    )) as RuleConfigDto;
+    expect(body.grouping).toEqual(grouping);
+    // Free-form number maps must survive the whitelist too (@Allow on the DTO).
+    expect(body.effort.wgrFactors).toEqual(DEFAULT_RULE_CONFIG.effort.wgrFactors);
+    expect(body.effort.handlingClassFactors).toEqual(
+      DEFAULT_RULE_CONFIG.effort.handlingClassFactors,
+    );
+
+    const saved = await admin.replaceRuleConfig(body as never);
+    expect(saved.grouping).toEqual(grouping);
+    const reread = await admin.getRuleConfig();
+    expect(reread.grouping).toEqual(grouping);
   });
 
   it('rejects an invalid config (Zod boundary)', async () => {

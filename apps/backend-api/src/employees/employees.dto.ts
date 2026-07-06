@@ -85,6 +85,14 @@ export class EmployeeListItemDto {
   weeklyPattern!: WeeklyPatternDto | null;
 }
 
+/** Arbeitsplatz/Tisch (Workstation-Stammdaten, A10) — options for the Admin select. */
+export class WorkstationDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'Natural code, z. B. "T3"' }) code!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() active!: boolean;
+}
+
 /** List response with the team-capacity header the cockpit/list shows. */
 export class EmployeeListResponseDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;

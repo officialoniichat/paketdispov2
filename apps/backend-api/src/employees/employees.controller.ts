@@ -7,6 +7,7 @@ import {
   EmployeeDetailDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
+  WorkstationDto,
 } from './employees.dto.js';
 
 /**
@@ -40,6 +41,14 @@ export class EmployeesController {
     @Body() body: EmployeeCreateDto,
   ): Promise<EmployeeDetailDto> {
     return this.employees.create(principal, body);
+  }
+
+  // NOTE: declared before ':id' so the static path wins over the param route.
+  @Get('workstations')
+  @ApiOperation({ summary: 'List active workstations (Tische) as Arbeitsplatz options.' })
+  @ApiOkResponse({ type: [WorkstationDto] })
+  listWorkstations(): Promise<WorkstationDto[]> {
+    return this.employees.listWorkstations();
   }
 
   @Get(':id')

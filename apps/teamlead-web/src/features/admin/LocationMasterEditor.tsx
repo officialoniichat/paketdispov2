@@ -97,6 +97,11 @@ export function LocationMasterEditor(): JSX.Element {
           Neuer Lagerplatz
         </Button>
       </Stack>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Bereiche, Icons und Handling leiten sich aus der <strong>Lagerklasse (Art)</strong> ab.
+        Das ist kein Wegeoptimierungs-Tool — chaotische Lagerhaltung ist ok; die Lagerklasse
+        bestimmt nur, welcher Arbeitsbereich/Skill den Beleg bearbeitet.
+      </Typography>
 
       {query.isLoading && (
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>

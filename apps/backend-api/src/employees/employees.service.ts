@@ -18,6 +18,7 @@ import type {
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
   TodayShiftDto,
+  WorkstationDto,
 } from './employees.dto.js';
 
 /** Fraction of net capacity counted as "morning" for the starter-package view (§4.3). */
@@ -99,6 +100,16 @@ export class EmployeesService {
 
   async get(id: string, dateStr?: string): Promise<EmployeeDetailDto> {
     return this.loadDetail(id, dateStr ?? todayIso());
+  }
+
+  /** Active workstations (Tische) — the Arbeitsplatz options the Admin select offers. */
+  async listWorkstations(): Promise<WorkstationDto[]> {
+    const rows = await this.prisma.workstation.findMany({
+      where: { active: true },
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true, active: true },
+    });
+    return rows;
   }
 
   // --- Write ----------------------------------------------------------------

@@ -2281,6 +2281,36 @@
         ]
       }
     },
+    "/api/admin/employees/workstations": {
+      "get": {
+        "operationId": "EmployeesController_listWorkstations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkstationDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List active workstations (Tische) as Arbeitsplatz options.",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/api/admin/employees/{id}": {
       "get": {
         "operationId": "EmployeesController_get",
@@ -4899,14 +4929,44 @@
           "enabled": {
             "type": "boolean"
           },
+          "useSourceKey": {
+            "type": "boolean",
+            "description": "T1: trust the source group key / „X von N\" from ProHandel (bestätigt)"
+          },
+          "useDeliveryNote": {
+            "type": "boolean",
+            "description": "T2: link Belege sharing the same deliveryNoteNo (wahrscheinlich)"
+          },
+          "useBelegRun": {
+            "type": "boolean",
+            "description": "T3: link a consecutive weBelegNo run (vermutet)"
+          },
           "maxWeBelegGap": {
             "type": "number",
             "description": "Max numeric gap between consecutive weBelegNo (1 = strict run)"
+          },
+          "runRequiresSameDay": {
+            "type": "boolean",
+            "description": "Harden T3: a run only links Belege booked on the SAME day"
+          },
+          "runRequiresSameSection": {
+            "type": "boolean",
+            "description": "Harden T3: a run only links Belege of the SAME Bereich/section"
+          },
+          "autoDistributeSuspected": {
+            "type": "boolean",
+            "description": "When false, suspected (T3) groups wait for Teamlead confirm before auto-distribution"
           }
         },
         "required": [
           "enabled",
-          "maxWeBelegGap"
+          "useSourceKey",
+          "useDeliveryNote",
+          "useBelegRun",
+          "maxWeBelegGap",
+          "runRequiresSameDay",
+          "runRequiresSameSection",
+          "autoDistributeSuspected"
         ]
       },
       "ShiftEndRuleConfigDto": {
@@ -5501,6 +5561,30 @@
           "skillTier",
           "netCapacityToday",
           "recentAudit"
+        ]
+      },
+      "WorkstationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Natural code, z. B. \"T3\""
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "active"
         ]
       },
       "EmployeeProfileUpdateDto": {
