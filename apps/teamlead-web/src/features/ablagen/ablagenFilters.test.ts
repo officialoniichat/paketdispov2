@@ -227,7 +227,7 @@ describe('groupCards', () => {
     expect(groups).toEqual([{ key: 'all', label: null, cards }]);
   });
 
-  it('groupBy bereich buckets by Bereich, unknown last-sorted alphabetically', () => {
+  it('groupBy bereich buckets by Bereich, missing Bereich sorts last as "unbekannt"', () => {
     const cards = [
       makeCard({ caseId: 'a', bereich: 'Regal' }),
       makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
@@ -235,16 +235,27 @@ describe('groupCards', () => {
       makeCard({ caseId: 'd', bereich: null }),
     ];
     const groups = groupCards(cards, 'bereich');
-    expect(groups.map((g) => g.key)).toEqual(['Hängebahn', 'Regal', 'unbekannt']);
-    expect(groups.find((g) => g.key === 'Regal')?.cards.map((c) => c.caseId)).toEqual(['a', 'c']);
+    expect(groups.map((g) => g.label)).toEqual(['Hängebahn', 'Regal', 'unbekannt']);
+    expect(groups.find((g) => g.label === 'Regal')?.cards.map((c) => c.caseId)).toEqual(['a', 'c']);
+    expect(groups.find((g) => g.label === 'unbekannt')?.cards.map((c) => c.caseId)).toEqual(['d']);
   });
 
-  it('groupBy assignedTo buckets by employee, unassigned as unbekannt', () => {
+  it('groupBy assignedTo buckets by employee; unassigned is a known state ("Frei"), not "unbekannt"', () => {
     const cards = [
       makeCard({ caseId: 'a', assignedTo: 'M. Berger' }),
       makeCard({ caseId: 'b', assignedTo: undefined }),
     ];
     const groups = groupCards(cards, 'assignedTo');
-    expect(groups.map((g) => g.key)).toEqual(['M. Berger', 'unbekannt']);
+    expect(groups.map((g) => g.label)).toEqual(['M. Berger', 'Frei']);
+    expect(groups.find((g) => g.label === 'Frei')?.cards.map((c) => c.caseId)).toEqual(['b']);
+  });
+
+  it('the fallback bucket always sorts last, even when it would alphabetically sort first', () => {
+    const cards = [
+      makeCard({ caseId: 'a', assignedTo: undefined }),
+      makeCard({ caseId: 'b', assignedTo: 'A. Anfang' }),
+    ];
+    const groups = groupCards(cards, 'assignedTo');
+    expect(groups.map((g) => g.label)).toEqual(['A. Anfang', 'Frei']);
   });
 });

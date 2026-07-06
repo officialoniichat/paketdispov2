@@ -183,17 +183,34 @@ export interface CardGroup {
   cards: LaneCard[];
 }
 
+/** Fallback bucket label per dimension — "unbekannt" only fits a genuinely unknown
+ *  Bereich; a card without an assigned employee is a known state ("Frei"), not an
+ *  unknown one, so it gets its own label rather than being called "unbekannt". */
+const FALLBACK_GROUP_LABEL: Record<Exclude<AblagenGroupBy, 'none'>, string> = {
+  bereich: 'unbekannt',
+  assignedTo: 'Frei',
+};
+const FALLBACK_GROUP_KEY = '__fallback__';
+
 /** Sub-group cards within a lane; 'none' preserves the existing single-bucket behaviour. */
 export function groupCards(cards: LaneCard[], groupBy: AblagenGroupBy): CardGroup[] {
   if (groupBy === 'none') return [{ key: 'all', label: null, cards }];
   const byKey = new Map<string, LaneCard[]>();
   for (const card of cards) {
-    const key = groupBy === 'bereich' ? (card.bereich ?? 'unbekannt') : (card.assignedTo ?? 'unbekannt');
+    const key = groupBy === 'bereich' ? (card.bereich ?? FALLBACK_GROUP_KEY) : (card.assignedTo ?? FALLBACK_GROUP_KEY);
     const bucket = byKey.get(key) ?? [];
     bucket.push(card);
     byKey.set(key, bucket);
   }
-  return [...byKey.entries()]
+  const fallbackCards = byKey.get(FALLBACK_GROUP_KEY);
+  byKey.delete(FALLBACK_GROUP_KEY);
+  const groups = [...byKey.entries()]
     .sort(([a], [b]) => a.localeCompare(b, 'de'))
     .map(([key, groupedCards]) => ({ key, label: key, cards: groupedCards }));
+  // The fallback bucket ("unbekannt"/"Frei") always sorts last — it is an
+  // exception case, not a value that should compete alphabetically with real ones.
+  if (fallbackCards) {
+    groups.push({ key: FALLBACK_GROUP_KEY, label: FALLBACK_GROUP_LABEL[groupBy], cards: fallbackCards });
+  }
+  return groups;
 }
