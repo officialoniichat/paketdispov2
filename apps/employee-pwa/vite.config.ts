@@ -2,9 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Mobile-first PWA: Workbox precache for offline shell + installable manifest.
-// The offline *data* package lives in IndexedDB (Dexie); Workbox covers the app
-// shell so the current package stays usable without network (§12.4, §E.5).
+// Mobile-first PWA: Workbox precache for the app shell + installable manifest only.
+// There is no offline data cache (Dexie was removed) and no `runtimeCaching` for
+// `/api/` — API responses are never precached or served stale as if online;
+// `globPatterns` covers app-shell assets only (verified Task 14).
 export default defineConfig({
   plugins: [
     react(),
