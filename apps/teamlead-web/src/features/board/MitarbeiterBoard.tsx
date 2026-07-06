@@ -177,13 +177,13 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           )}
           {row.cases.length > 0 && (
             <Typography variant="body2" color="text.secondary">
-              {row.effortPoints} Pkt · schwer {row.heavyCaseCount}/leicht {row.lightCaseCount}
+              {Math.round(row.effortPoints)} Pkt
             </Typography>
           )}
           {row.openIssues > 0 && (
             <ProblemChip status="open" count={row.openIssues} size="small" />
           )}
-          {row.bundleSize != null && (
+          {row.bundleSize != null && row.bundleSize > 0 && (
             <Typography variant="body2">
               Beleg {(row.currentCaseIndex ?? 0) + 1}/{row.bundleSize}
             </Typography>

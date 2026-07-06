@@ -53,8 +53,6 @@ export interface CockpitSnapshot {
   pool: PoolCase[];
 }
 
-const HEAVY_MINUTES_THRESHOLD = 30;
-
 /**
  * The §8.4 events that represent a genuine human teamlead intervention — the only
  * ones the "Letzte Teamlead-Eingriffe" feed should show. Sent to the backend as
@@ -163,9 +161,6 @@ function mapZst(dto: KpiDto): ZstProgress {
 function mapBoardRow(row: BoardRowDto): BoardRow {
   const net = row.capacityMinutes;
   const assigned = row.plannedEffortMinutes;
-  const heavyCaseCount = row.cases.filter(
-    (c) => c.estimatedMinutes >= HEAVY_MINUTES_THRESHOLD,
-  ).length;
   const currentCaseIndex = row.cases.findIndex((c) => !isDoneStatus(c.status));
   return {
     employeeId: row.employeeNo,
@@ -177,8 +172,6 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     assignedMinutes: assigned,
     netCapacityMinutes: net,
     effortPoints: row.cases.reduce((sum, c) => sum + c.effortPoints, 0),
-    heavyCaseCount,
-    lightCaseCount: row.cases.length - heavyCaseCount,
     openIssues: 0,
     currentCaseIndex: currentCaseIndex >= 0 ? currentCaseIndex : undefined,
     bundleSize: row.cases.length,
