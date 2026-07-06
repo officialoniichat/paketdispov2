@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
+import { ClockService } from '../clock/clock.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { NextBundleResultDto } from '../assignment/assignment.dto.js';
 import { CasesService } from './cases.service.js';
@@ -23,6 +24,7 @@ export class MeController {
   constructor(
     private readonly cases: CasesService,
     private readonly assignment: AssignmentService,
+    private readonly clock: ClockService,
   ) {}
 
   @Get('today')
@@ -54,8 +56,8 @@ export class MeController {
    */
   @Post('next-bundle')
   @ApiOkResponse({ type: NextBundleResultDto })
-  nextBundle(@CurrentUser() principal: Principal): Promise<NextBundleResultDto> {
-    return this.assignment.assignNextBundle(principal);
+  async nextBundle(@CurrentUser() principal: Principal): Promise<NextBundleResultDto> {
+    return this.assignment.assignNextBundle(principal, undefined, await this.clock.now());
   }
 
   /** A2 Tisch-Anmeldung: eigenen Arbeitsplatz per Tisch-Nr. oder Barcode claimen. */

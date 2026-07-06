@@ -1016,6 +1016,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dev/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DEV-ONLY: scenario catalog + active scenario + time-override state. */
+        get: operations["DevController_listScenarios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev/scenarios/{key}/load": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DEV-ONLY: reset the case graph and seed the scenario deterministically (idempotent; 404 for an unknown key). */
+        post: operations["DevController_loadScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev/scenarios/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DEV-ONLY: 'Zurücksetzen auf Standard' — load the default 'standard' scenario (recorded as the active key). */
+        post: operations["DevController_resetScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev/time-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DEV-ONLY: freeze the server "now" (persisted; recalculate/pull/dashboard/board dates follow it). */
+        post: operations["DevController_setTimeOverride"];
+        /** DEV-ONLY: clear the time override — back to real time. */
+        delete: operations["DevController_clearTimeOverride"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev/materialize-shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DEV-ONLY: materialize every active employee's shift for a date from their weekly pattern. */
+        post: operations["DevController_materializeShifts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2002,6 +2088,61 @@ export interface components {
             weBelegNos: string[];
             /** @description Buchungstag der Charge (ISO) */
             date: string;
+        };
+        ScenarioInfoDto: {
+            /** @description Stable catalog key, e.g. 'standard' */
+            key: string;
+            /** @description Short human name */
+            name: string;
+            /** @description What this scenario sets up */
+            description: string;
+            /** @description "Was man danach sehen sollte" — headline expectation */
+            expectedOutcome: string;
+        };
+        DevScenariosDto: {
+            scenarios: components["schemas"]["ScenarioInfoDto"][];
+            /** @description Key of the last loaded scenario, or null when the data is not scenario-managed */
+            activeScenarioKey?: string | null;
+            /** @description Active server time override (ISO-8601), or null for real time */
+            timeOverride?: string | null;
+        };
+        ScenarioLoadResultDto: {
+            key: string;
+            /** @description Calendar day (YYYY-MM-DD) the scenario anchored on */
+            baseDate: string;
+            users: number;
+            /** @description Active shifts on the base date */
+            shifts: number;
+            activeLocations: number;
+            readyCases: number;
+            /** @description Intake-Gate cases ("zurück an Bucher") */
+            blockedCases: number;
+            /** @description Distinct delivery notes across the ready pool */
+            deliveryGroups: number;
+            totalCases: number;
+        };
+        TimeOverrideDto: {
+            /**
+             * @description The frozen server "now" as an ISO-8601 timestamp
+             * @example 2026-07-06T09:30:00.000Z
+             */
+            now: string;
+        };
+        TimeOverrideStateDto: {
+            /** @description Active override (ISO-8601), or null for real time */
+            timeOverride?: string | null;
+        };
+        MaterializeShiftsDto: {
+            /**
+             * @description Calendar day (YYYY-MM-DD)
+             * @example 2026-07-06
+             */
+            date: string;
+        };
+        MaterializeShiftsResultDto: {
+            date: string;
+            /** @description Active shifts existing for the date after materialization */
+            shiftCount: number;
         };
     };
     responses: never;
@@ -3464,6 +3605,130 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    DevController_listScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevScenariosDto"];
+                };
+            };
+        };
+    };
+    DevController_loadScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioLoadResultDto"];
+                };
+            };
+        };
+    };
+    DevController_resetScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioLoadResultDto"];
+                };
+            };
+        };
+    };
+    DevController_setTimeOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeOverrideDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeOverrideStateDto"];
+                };
+            };
+        };
+    };
+    DevController_clearTimeOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeOverrideStateDto"];
+                };
+            };
+        };
+    };
+    DevController_materializeShifts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeShiftsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeShiftsResultDto"];
+                };
             };
         };
     };

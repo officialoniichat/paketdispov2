@@ -1,6 +1,7 @@
 import { Controller, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
+import { ClockService } from '../clock/clock.service.js';
 import { ProhandelService } from './prohandel.service.js';
 import { ProhandelPullResultDto } from './prohandel.dto.js';
 
@@ -14,14 +15,17 @@ import { ProhandelPullResultDto } from './prohandel.dto.js';
 @Roles(Role.Admin, Role.Teamlead)
 @Controller('api/admin/integrations/prohandel')
 export class ProhandelController {
-  constructor(private readonly prohandel: ProhandelService) {}
+  constructor(
+    private readonly prohandel: ProhandelService,
+    private readonly clock: ClockService,
+  ) {}
 
   @Post('pull')
   @ApiOperation({
     summary: 'Mock-ProHandel-Pull: erzeugt die nächste Beleg-Charge mit allen ERP-Feldern.',
   })
   @ApiCreatedResponse({ type: ProhandelPullResultDto })
-  pull(@CurrentUser() principal: Principal): Promise<ProhandelPullResultDto> {
-    return this.prohandel.pull(principal);
+  async pull(@CurrentUser() principal: Principal): Promise<ProhandelPullResultDto> {
+    return this.prohandel.pull(principal, await this.clock.now());
   }
 }

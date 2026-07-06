@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
+import { ClockService } from '../clock/clock.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { RecalculateDto, RecalculateResultDto } from '../assignment/assignment.dto.js';
 import { TeamleadService } from './teamlead.service.js';
@@ -51,33 +52,39 @@ export class TeamleadController {
     private readonly teamlead: TeamleadService,
     private readonly read: TeamleadReadService,
     private readonly assignment: AssignmentService,
+    private readonly clock: ClockService,
   ) {}
+
+  /** The effective "today" (YYYY-MM-DD) — honors the dev panel's time override. */
+  private async today(): Promise<string> {
+    return (await this.clock.now()).toISOString().slice(0, 10);
+  }
 
   @Get('dashboard')
   @ApiOkResponse({ type: DashboardDto })
-  dashboard(): Promise<DashboardDto> {
-    return this.read.dashboard();
+  async dashboard(): Promise<DashboardDto> {
+    return this.read.dashboard(await this.clock.now());
   }
 
   @Get('board')
   @ApiOperation({ summary: "§10.3 Mitarbeitenden-Board for the day (assigned bundles per employee)" })
   @ApiOkResponse({ type: BoardDto })
-  board(@Query('date') date: string): Promise<BoardDto> {
-    return this.read.board(date ?? new Date().toISOString().slice(0, 10));
+  async board(@Query('date') date: string): Promise<BoardDto> {
+    return this.read.board(date ?? (await this.today()));
   }
 
   @Get('capacity')
   @ApiOperation({ summary: '§10.1 Day capacity tile (net / planned / free / utilisation)' })
   @ApiOkResponse({ type: CapacityDto })
-  capacity(@Query('date') date: string): Promise<CapacityDto> {
-    return this.read.capacity(date ?? new Date().toISOString().slice(0, 10));
+  async capacity(@Query('date') date: string): Promise<CapacityDto> {
+    return this.read.capacity(date ?? (await this.today()));
   }
 
   @Get('kpis')
   @ApiOperation({ summary: '§10.1 Day ZST KPIs (computed from ZstRecord + case statuses)' })
   @ApiOkResponse({ type: KpiDto })
-  kpis(@Query('date') date: string): Promise<KpiDto> {
-    return this.read.kpis(date ?? new Date().toISOString().slice(0, 10));
+  async kpis(@Query('date') date: string): Promise<KpiDto> {
+    return this.read.kpis(date ?? (await this.today()));
   }
 
   @Get('events')
@@ -309,11 +316,11 @@ export class TeamleadController {
     summary: 'Recalculate the day assignment (§8.3 "Neu berechnen"). Deterministic, < 5 s.',
   })
   @ApiOkResponse({ type: RecalculateResultDto })
-  recalculate(
+  async recalculate(
     @CurrentUser() principal: Principal,
     @Body() dto: RecalculateDto,
   ): Promise<RecalculateResultDto> {
-    return this.assignment.recalculate(principal, dto.date);
+    return this.assignment.recalculate(principal, dto.date, await this.clock.now());
   }
 
   @Post('assignments/preview')
@@ -322,11 +329,11 @@ export class TeamleadController {
       '§E.4 Simulation/Vorschau: run the engine over the ready pool WITHOUT persisting (no bundles, no events).',
   })
   @ApiOkResponse({ type: RecalculateResultDto })
-  preview(
+  async preview(
     @CurrentUser() principal: Principal,
     @Body() dto: RecalculateDto,
   ): Promise<RecalculateResultDto> {
-    return this.assignment.preview(principal, dto.date);
+    return this.assignment.preview(principal, dto.date, await this.clock.now());
   }
 
   @Post('assignments/export-zst')
@@ -371,12 +378,12 @@ export class TeamleadController {
       '§8.4 Manuelle Zuweisung: assign a ready Beleg to an employee — appended to the day Bündel, or it is CREATED when the employee is free.',
   })
   @ApiOkResponse({ type: BundleMutationResultDto })
-  assignToEmployee(
+  async assignToEmployee(
     @CurrentUser() principal: Principal,
     @Param('employeeNo') employeeNo: string,
     @Body() dto: AssignToEmployeeDto,
   ): Promise<BundleMutationResultDto> {
-    return this.teamlead.assignToEmployee(principal, employeeNo, dto);
+    return this.teamlead.assignToEmployee(principal, employeeNo, dto, await this.clock.now());
   }
 
   @Post('employees/:employeeNo/assign-bundle')

@@ -54,6 +54,15 @@ export const config = {
     enabled: bool(process.env.SWAGGER_ENABLED, true),
     path: process.env.SWAGGER_PATH ?? 'docs',
   },
+  /**
+   * Dev/demo tooling (Szenario-Panel, Zeit-Override). Enabled by default outside
+   * production; an explicit DEV_PANEL=1 forces it on (e.g. a demo deployment) and
+   * DEV_PANEL=0 forces it off. When disabled the /api/dev surface answers 404 and
+   * the clock never consults the persisted override.
+   */
+  dev: {
+    panelEnabled: bool(process.env.DEV_PANEL, (process.env.NODE_ENV ?? 'development') !== 'production'),
+  },
 } as const;
 
 export type AppConfig = typeof config;
