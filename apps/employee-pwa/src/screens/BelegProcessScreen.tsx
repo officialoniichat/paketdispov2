@@ -1,12 +1,14 @@
 /**
  * PROCESS phase — the single per-Beleg work screen.
  *
- * One Beleg, the whole picture at a glance: the Arbeitsanweisung points, ALL
- * positions as a full list with their flags (Preisetikett / Sicherung / Online /
- * Rotpreis) and Soll/Ist, the engine's box targets as info, and finally the
- * per-Beleg erledigt → ZST. The only gates are the per-position check (every
- * position, even "Prüfung = Nein") and "no open problem". Printing is upstream
- * (vorgelagert), Karton öffnen is no work step (C4). Boxing never gates.
+ * The WE Beleg-Nr. is the hero (C1); the Kopf shows Kartons (C2 — multi-carton
+ * shipments must be searched on the cart) and the Warenart wording instead of
+ * Abschnitt numbers (C3). The Arbeitsanweisung is ordered Prüfung Wareneingang →
+ * Rotpreis → Boxzettel (C4) with the Prüfstufe explained expandably (C5 —
+ * "Nein" does NOT mean nothing is checked). Positions carry the Preisetikett
+ * placement with the Sicherungsetikett pictogram (C6). The only gates are the
+ * per-position check and "no open problem"; printing is upstream (vorgelagert),
+ * Karton öffnen is no work step (C4). Boxing never gates.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -24,8 +26,10 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import Collapse from '@mui/material/Collapse';
 import { CaseCardSkeleton } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
+import { apiBaseUrl } from '../data/api.js';
 import { db } from '../db/db.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
@@ -42,6 +46,33 @@ const ACTION_POINT_KEYS = new Set([
   'zst', // → "Beleg erledigt" sets the ZST
 ]);
 
+/**
+ * C4 display order: Prüfung Wareneingang, Rotpreis, Boxzettel first, then the
+ * remaining points (Sortieren, Sicherungsetikett, Online). Unlisted keys sort last.
+ */
+const POINT_DISPLAY_ORDER: Record<string, number> = {
+  goods_receipt_check: 0,
+  red_price: 1,
+  box_label: 2,
+  sort: 3,
+  security: 4,
+  online_handling: 5,
+};
+
+/** German labels of the Sicherungstyp pictograms (mirrors the backend assets). */
+const PICTOGRAM_LABEL: Record<string, string> = {
+  'hard-tag': 'Hartetikett',
+  'ink-tag': 'Farbetikett',
+  'spider-wrap': 'Spinnensicherung',
+  'safer-box': 'Safer-Box',
+  'cable-lock': 'Kabelschloss',
+};
+
+/** Pictogram asset URL (backend-served); undefined in offline-demo mode. */
+function pictogramUrl(code: string): string | undefined {
+  return apiBaseUrl ? `${apiBaseUrl}/static/pictograms/${code}.svg` : undefined;
+}
+
 const FLAG_CHIPS = [
   { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' as const },
   { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' as const },
@@ -55,6 +86,7 @@ export function BelegProcessScreen(): JSX.Element {
   const flow = useCaseFlow(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [inspectionOpen, setInspectionOpen] = useState(false);
 
   const openIssues = useLiveQuery(
     async () =>
@@ -77,14 +109,15 @@ export function BelegProcessScreen(): JSX.Element {
   const wi = aggregate.workInstruction;
   const gate = canCompleteCase(progress, aggregate, openIssues ?? 0);
   const checked = new Set(progress.quantityCheckedPositionIds);
-  const infoPoints = aggregate.instructionPoints.filter((p) => !ACTION_POINT_KEYS.has(p.key));
+  const infoPoints = [...aggregate.instructionPoints]
+    .filter((p) => !ACTION_POINT_KEYS.has(p.key))
+    .sort(
+      (a, b) => (POINT_DISPLAY_ORDER[a.key] ?? 99) - (POINT_DISPLAY_ORDER[b.key] ?? 99),
+    );
   const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
+  // C3: Abschnitt-Zahlen durch Warenart-Wording ersetzt (Vororder/Nachorder …).
   const c = aggregate.case;
-  const kopf = [
-    c.section != null ? `Abschnitt ${c.section}` : null,
-    c.goodsTypeText ?? null,
-    `${c.totalQuantity} Teile`,
-  ]
+  const kopf = [c.goodsTypeText ?? null, `${c.totalQuantity} Teile`]
     .filter((x): x is string => x !== null)
     .join(' · ');
 
@@ -102,9 +135,13 @@ export function BelegProcessScreen(): JSX.Element {
   return (
     <StepScaffold
       caseId={caseId}
-      where={`WE ${aggregate.case.weBelegNo} · ${aggregate.case.storageLocation?.code ?? '—'}`}
-      title="Beleg bearbeiten"
-      subtitle={`${aggregate.positions.length} Positionen`}
+      where={aggregate.case.storageLocation?.code ?? '—'}
+      title={`WE ${aggregate.case.weBelegNo}`}
+      subtitle={
+        c.inboundCartonCount != null
+          ? `📦 ${c.inboundCartonCount} Karton${c.inboundCartonCount === 1 ? '' : 's'} – alle auf dem Karren suchen!`
+          : undefined
+      }
       onBack={() => navigate(TAGESSTART)}
       primary={{ label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
       secondary={{ label: 'Teilabschluss', onClick: () => setPartialOpen(true) }}
@@ -122,24 +159,47 @@ export function BelegProcessScreen(): JSX.Element {
               Arbeitsanweisung
             </Typography>
             <Stack spacing={0.75}>
-              {infoPoints.map((point, index) => (
-                <Box key={point.key} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
-                  <Typography
-                    variant="body2"
-                    sx={{ fontWeight: 700, minWidth: 22, color: 'text.secondary' }}
-                  >
-                    {index + 1}
-                  </Typography>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {point.label}
+              {infoPoints.map((point, index) => {
+                const isInspection = point.key === 'goods_receipt_check';
+                return (
+                  <Box key={point.key} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 700, minWidth: 22, color: 'text.secondary' }}
+                    >
+                      {index + 1}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {point.value}
-                    </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {point.label}
+                        {isInspection && aggregate.inspectionLevelLabel
+                          ? ` · ${aggregate.inspectionLevelLabel}`
+                          : ''}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {point.value}
+                      </Typography>
+                      {/* C5: die Prüfstufe erklärt — „Nein“ heißt NICHT: nichts prüfen. */}
+                      {isInspection && aggregate.inspectionDescription ? (
+                        <>
+                          <Button
+                            size="small"
+                            sx={{ px: 0, minWidth: 0 }}
+                            onClick={() => setInspectionOpen((open) => !open)}
+                          >
+                            {inspectionOpen ? 'Weniger' : 'Was heißt das?'}
+                          </Button>
+                          <Collapse in={inspectionOpen}>
+                            <Typography variant="body2" color="text.secondary">
+                              {aggregate.inspectionDescription}
+                            </Typography>
+                          </Collapse>
+                        </>
+                      ) : null}
+                    </Box>
                   </Box>
-                </Box>
-              ))}
+                );
+              })}
             </Stack>
           </Paper>
         ) : null}
@@ -201,6 +261,23 @@ export function BelegProcessScreen(): JSX.Element {
                       {line}
                     </Typography>
                   ))}
+                </Stack>
+              ) : null}
+
+              {/* C6: Sicherungstyp als Piktogramm (Backend-Asset) neben der Etikett-Platzierung. */}
+              {i.securityRequired && i.securityTypeCode ? (
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                  {pictogramUrl(i.securityTypeCode) ? (
+                    <Box
+                      component="img"
+                      src={pictogramUrl(i.securityTypeCode)}
+                      alt={PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
+                      sx={{ width: 40, height: 40 }}
+                    />
+                  ) : null}
+                  <Typography variant="body2" color="text.secondary">
+                    Sicherungstyp: {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
+                  </Typography>
                 </Stack>
               ) : null}
 
