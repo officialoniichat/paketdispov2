@@ -11,6 +11,8 @@ import {
   type CapacityDto,
   type CaseDetailDto,
   type CaseLookupResultDto,
+  type CaseSearchQueryDto,
+  type CaseSearchResultDto,
   type CaseSummaryDto,
   type DashboardDto,
   type DeliveryGroupDetailDto,
@@ -28,6 +30,7 @@ import { distinctShopNos, isLabelsRequired, mapBoxTarget, mapDeliveryGroupRef, m
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
+import { assignableSearchWhere, rankCaseSearchCandidates, type CaseSearchCandidate } from './case-search.js';
 import { loadRuleConfig } from '../config/rule-config.js';
 
 /** Priority flags counted as an "open prio" case in the dashboard tile. */
@@ -357,6 +360,85 @@ export class TeamleadReadService {
       reasonCode,
       deliveryGroup,
     };
+  }
+
+  /**
+   * A1/A2/B1 assign-flow search + browse: a bounded, ranked feed over the
+   * assignable pool (ready + unassigned) behind AssignDialog. Unlike
+   * {@link listPool}, there is no lifecycle `scope` — every result is already
+   * assignable by construction. Ranking (exact WE-Nr > starts-with > contains >
+   * other-field match, bookingDate tie-break) runs in {@link rankCaseSearchCandidates}
+   * over a bounded candidate set fetched via {@link assignableSearchWhere}.
+   */
+  async searchCases(query: CaseSearchQueryDto): Promise<CaseSearchResultDto[]> {
+    const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
+    const where = assignableSearchWhere(query);
+    // Fetch a broader candidate set than `limit` so ranking has enough to work with
+    // before truncating (a plain DB `ORDER BY bookingDate` would bias toward the
+    // oldest rows regardless of match quality). Capped at 150 to keep this endpoint
+    // fast even on a large pool.
+    const candidateTake = Math.min(limit * 3, 150);
+
+    const [rows, ruleConfig] = await Promise.all([
+      this.prisma.goodsReceiptCase.findMany({
+        where,
+        include: {
+          ...caseEffortInclude,
+        },
+        orderBy: { bookingDate: 'asc' },
+        take: candidateTake,
+      }),
+      loadRuleConfig(this.prisma),
+    ]);
+
+    const candidates: (CaseSearchCandidate & { row: (typeof rows)[number] })[] = rows.map((c) => ({
+      id: c.id,
+      weBelegNo: c.weBelegNo,
+      deliveryNoteNo: c.deliveryNoteNo,
+      storageLocationCode: c.storageLocation?.code ?? null,
+      primaryShopNo: c.primaryShopNo ?? null,
+      branchNo: c.branchNo,
+      bookingDate: c.bookingDate,
+      row: c,
+    }));
+    const ranked = rankCaseSearchCandidates(candidates, query.q).slice(0, limit);
+
+    // Delivery-group detection over the ranked/returned set only — this is a
+    // discovery feed, not the full-day board, so groups need only be correct
+    // among the Belege actually shown.
+    const groups = detectDeliveryGroups(
+      ranked.map((r) => ({
+        id: r.row.id,
+        weBelegNo: r.row.weBelegNo,
+        deliveryNoteNo: r.row.deliveryNoteNo,
+        deliverySourceGroupKey: r.row.deliverySourceGroupKey,
+        deliverySourceGroupSize: r.row.deliverySourceGroupSize,
+        manualDeliveryGroupKey: r.row.manualDeliveryGroupKey,
+        bookingDate: r.row.bookingDate.toISOString().slice(0, 10),
+        section: r.row.section,
+        deliveryGroupReleased: r.row.deliveryGroupReleased,
+      })),
+      ruleConfig.grouping,
+    );
+    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+
+    return ranked.map((r) => {
+      const effort = resolveCaseEffort(r.row, ruleConfig.effort);
+      const group = groupById.get(groupIdByCaseId.get(r.row.id) ?? '');
+      return {
+        caseId: r.row.id,
+        weBelegNo: r.row.weBelegNo,
+        bereich: r.row.storageLocation
+          ? (bereichFromLocationKind(r.row.storageLocation.kind as LocationKind) ?? null)
+          : null,
+        goodsType: r.row.goodsTypeText,
+        teile: r.row.totalQuantity,
+        estimatedMinutes: effort.minutes,
+        storageLocationCode: r.row.storageLocation?.code ?? null,
+        priorityFlags: r.row.priorityFlags,
+        deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
+      };
+    });
   }
 
   async dashboard(now: Date = new Date()): Promise<DashboardDto> {
