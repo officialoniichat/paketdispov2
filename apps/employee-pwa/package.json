@@ -23,6 +23,7 @@
     "@paket/domain-types": "workspace:*",
     "@paket/test-fixtures": "workspace:*",
     "@paket/ui": "workspace:*",
+    "@tanstack/react-query": "^5.101.0",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
     "jose": "^5.10.0",
