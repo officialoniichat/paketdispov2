@@ -12,9 +12,9 @@ flowchart TB
         direction TB
         subgraph features["features/ (routes via App.tsx)"]
             cockpit["cockpit/CockpitPage<br/><i>§10.1 KPIs · SimulationPanel · Automatik toggle</i>"]:::feat
-            ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (7 lanes)</i>"]:::feat
-            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles</i>"]:::feat
-            belege["belege/BelegListPage + BelegDetailPage<br/><i>§10.4 table + detail</i>"]:::feat
+            ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
+            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · WE-Nr-Zuweisung (AssignDialog)</i>"]:::feat
+            belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list (Scopes Aktiv·Topf·Archiv·Alle,<br/>Filter/Sort/Pagination via GET /pool) + detail</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand (EffortPreview)·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen</i>"]:::feat
         end
@@ -26,6 +26,8 @@ flowchart TB
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
         actions["actions/caseActions.ts<br/><i>single-source action registry → ReasonDialog</i>"]:::logic
+        shared["components/<br/><i>AssignDialog (WE-Nr-Lookup) · ForwardMenu · TierChip ·<br/>DataTable (server-mode) · ReasonDialog · CaseActions</i>"]:::logic
+        viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen)</i>"]:::logic
     end
 
     cockpit --> store
@@ -37,6 +39,11 @@ flowchart TB
     ablagen --> actions
     belege --> actions
     actions --> store
+    board --> shared
+    ablagen --> shared
+    belege --> shared
+    ablagen --> viewState
+    belege --> viewState
     store --> remote
     store --> mutations
     remote --> apiClient

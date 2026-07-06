@@ -94,6 +94,11 @@ erDiagram
         string assignedBundleId FK
         string_array missingFields "blocked: fehlende Pflichtfelder"
         boolean deliveryGroupReleased "TL-Freigabe trotz unvollstaendiger Gruppe"
+        string docuWareUrl "Archiv: DocuWare-Deeplink (nullable)"
+        datetime completedAt "einmalig gestempelt bei completed/zst_done"
+        boolean attentionFlag "TL-Topf: besondere Aufmerksamkeit"
+        string attentionNote "Notiz zum Aufmerksamkeits-Flag"
+        enum forwardedTo "retourenabteilung|lieferscheinbucher (nullable)"
         int version "optimistic lock"
     }
     WORK_INSTRUCTION_HEADER {
