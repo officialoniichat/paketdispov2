@@ -44,6 +44,7 @@ import {
   type BelegRow,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
+import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
 import { DataTable } from '../../components/DataTable.js';
 import { LieferungChip } from '../../components/LieferungChip.js';
 import { CaseActions } from '../../components/CaseActions.js';
@@ -104,14 +105,31 @@ function useDebounced<T>(value: T, delayMs = 300): T {
   return debounced;
 }
 
+/** Persisted list view state (C2, `paket.view.belege`): scope + sorting + filters. */
+interface BelegeSavedView {
+  scope: BelegeScope;
+  sorting: SortingState;
+  filters: BelegeFilters;
+}
+
+const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
+
 export function BelegListPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [scope, setScope] = useState<BelegeScope>('aktiv');
+  // Saved view (C2): scope/sorting/filters survive reloads via localStorage.
+  const [savedView] = useState<BelegeSavedView>(() =>
+    loadViewState<BelegeSavedView>(BELEGE_VIEW_KEY, DEFAULT_SAVED_VIEW),
+  );
+  const [scope, setScope] = useState<BelegeScope>(savedView.scope);
   const [page, setPage] = useState(1);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [filters, setFilters] = useState<BelegeFilters>({});
+  const [sorting, setSorting] = useState<SortingState>(savedView.sorting);
+  const [filters, setFilters] = useState<BelegeFilters>(savedView.filters);
   const debouncedFilters = useDebounced(filters);
+
+  useEffect(() => {
+    saveViewState<BelegeSavedView>(BELEGE_VIEW_KEY, { scope, sorting, filters: debouncedFilters });
+  }, [scope, sorting, debouncedFilters]);
 
   /** Every filter change restarts on page 1 — a filtered page 4 makes no sense. */
   const updateFilters = (patch: Partial<BelegeFilters>): void => {

@@ -220,11 +220,22 @@ const LANE_META: Record<LaneId, { title: string; description: string }> = {
   },
   sonstige: { title: 'Sonstige', description: 'Übrige Ware ohne festen Verladetag' },
   geparkt: { title: 'Geparkt', description: 'Aus Automatik ausgeschlossen' },
+  weitergeleitet: {
+    title: 'Weitergeleitet',
+    description: 'An Abteilung weitergeleitet (mock-Queue)',
+  },
   probleme: { title: 'Problemfälle', description: 'Offene Issues' },
 };
 
-const LANE_ORDER: LaneId[] = [
+/**
+ * Default lane precedence (C5): probleme → weitergeleitet → geparkt → rest, so a
+ * forwarded Beleg with an OPEN issue stays visible as Problemfall (the banner
+ * covers the Weiterleitung). The user may re-order the *display* (C2, persisted),
+ * but bucketing precedence stays fixed here.
+ */
+export const LANE_ORDER: LaneId[] = [
   'probleme',
+  'weitergeleitet',
   'geparkt',
   'prio',
   'verladeplan_heute',
@@ -239,6 +250,7 @@ const JEDEN_TAG_SECTIONS = new Set([7, 4, 8]);
 /** Deterministic single-lane bucketing for a pool item (precedence = LANE_ORDER). */
 function laneForPoolItem(item: PoolItemDto): LaneId {
   if (item.status === 'issue_open') return 'probleme';
+  if (item.forwardedTo != null) return 'weitergeleitet';
   if (item.status === 'parked') return 'geparkt';
   if (
     item.priorityFlags.includes('prio') ||
@@ -266,6 +278,9 @@ const POOL_LANE_STATUSES = new Set<PoolItemDto['status']>([
 ]);
 
 function isPoolResident(item: PoolItemDto): boolean {
+  // C5: a forwarded Beleg stays visible in its lane WHATEVER its pool-resident
+  // status — forwarding is status-neutral and the lane is the mocked queue.
+  if (item.forwardedTo != null) return true;
   return POOL_LANE_STATUSES.has(item.status);
 }
 
@@ -299,6 +314,8 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     estimatedMinutes: item.estimatedMinutes,
     storageCode: item.storageLocationCode ?? '–',
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
+    openIssue: item.openIssue ? { kind: item.openIssue.kind, note: item.openIssue.note ?? null } : null,
+    forwardedTo: item.forwardedTo ?? null,
   };
 }
 

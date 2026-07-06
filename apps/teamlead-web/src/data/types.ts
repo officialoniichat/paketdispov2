@@ -61,6 +61,7 @@ export type LaneId =
   | 'verladeplan_morgen'
   | 'sonstige'
   | 'geparkt'
+  | 'weitergeleitet'
   | 'probleme';
 
 /** One card in a lane – a case projection plus its lane-relevant flags. */
@@ -77,6 +78,10 @@ export interface LaneCard {
   storageCode: string;
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];
+  /** C4: latest OPEN problem (kind + note preview); null without an open issue. */
+  openIssue: { kind: string; note: string | null } | null;
+  /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
+  forwardedTo: string | null;
 }
 
 export interface Lane {

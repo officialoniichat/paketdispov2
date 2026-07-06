@@ -447,6 +447,64 @@ export class TeamleadService {
   }
 
   /**
+   * Digitale Ablage (C5) „Weiterleiten an …": mark a Beleg as forwarded to a
+   * catalog recipient (Retourenabteilung/Lieferscheinbucher). Status-neutral —
+   * the Beleg keeps its §7.1 state; the mocked recipient queue is the cockpit's
+   * „weitergeleitet" lane. Audited `case.forwarded` event carries recipient+reason.
+   */
+  async forward(
+    principal: Principal,
+    caseId: string,
+    dto: { recipient: string; reason?: string },
+  ): Promise<TransitionResultDto> {
+    return this.setForwarded(principal, caseId, { recipient: dto.recipient, reason: dto.reason });
+  }
+
+  /** C5 „Zurückholen": clear the Weiterleitung (audited `case.forward_cleared`). */
+  async unforward(principal: Principal, caseId: string): Promise<TransitionResultDto> {
+    return this.setForwarded(principal, caseId, { recipient: null });
+  }
+
+  private async setForwarded(
+    principal: Principal,
+    caseId: string,
+    input: { recipient: string | null; reason?: string },
+  ): Promise<TransitionResultDto> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { id: true, status: true, version: true, weBelegNo: true, forwardedTo: true },
+    });
+    if (!found) throw new NotFoundException(`Case ${caseId} not found`);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.goodsReceiptCase.updateMany({
+        where: { id: found.id, version: found.version },
+        data: { forwardedTo: input.recipient, version: { increment: 1 } },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Case was modified concurrently');
+      }
+      const event = await this.events.append(
+        {
+          eventType: input.recipient !== null ? 'case.forwarded' : 'case.forward_cleared',
+          entityType: 'GoodsReceiptCase',
+          entityId: found.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: {
+            weBelegNo: found.weBelegNo,
+            recipient: input.recipient ?? found.forwardedTo,
+            reason: input.reason ?? null,
+          },
+        },
+        tx,
+      );
+      return { caseId: found.id, status: found.status, version: found.version + 1, event };
+    });
+    return this.toResult(result);
+  }
+
+  /**
    * Lieferungs-Pool-Hold (D2) „trotzdem bearbeiten": eine unvollständige Lieferung
    * („X von N") explizit freigeben — alle Mitglieder erhalten das Release-Flag und
    * verteilen sich wieder, obwohl noch Belege der Lieferung fehlen.

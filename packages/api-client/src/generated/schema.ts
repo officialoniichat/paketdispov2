@@ -455,6 +455,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/{caseId}/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** C5 Digitale Ablage: Beleg „Weiterleiten an …" (Retourenabteilung/Lieferscheinbucher, status-neutral) */
+        post: operations["TeamleadController_forward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/unforward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** C5 Digitale Ablage: Weiterleitung „Zurückholen" (Flag löschen) */
+        post: operations["TeamleadController_unforward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/delivery-groups/split": {
         parameters: {
             query?: never;
@@ -991,6 +1025,8 @@ export interface components {
             attentionFlag: boolean;
             /** @description Notiz zum Aufmerksamkeitsflag */
             attentionNote?: string | null;
+            /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
+            forwardedTo?: string | null;
         };
         MeWorkstationDto: {
             id: string;
@@ -1272,6 +1308,12 @@ export interface components {
             /** @description true = das Bündel hat bereits einen Beleg in Arbeit */
             started: boolean;
         };
+        OpenIssueRefDto: {
+            /** @description IssueType (Anhang A) of the latest open issue */
+            kind: string;
+            /** @description Issue description/note */
+            note?: string | null;
+        };
         PoolItemDto: {
             id: string;
             weBelegNo: string;
@@ -1314,6 +1356,8 @@ export interface components {
             attentionFlag: boolean;
             /** @description Notiz zum Aufmerksamkeitsflag */
             attentionNote?: string | null;
+            /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
+            forwardedTo?: string | null;
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
@@ -1322,6 +1366,8 @@ export interface components {
             bereich?: string | null;
             /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
             bundleQueue?: components["schemas"]["BundleQueueRefDto"] | null;
+            /** @description C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem */
+            openIssue?: components["schemas"]["OpenIssueRefDto"] | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1507,6 +1553,15 @@ export interface components {
         FlagAttentionDto: {
             /** @description Optionale Notiz, warum der Beleg Aufmerksamkeit braucht */
             note?: string;
+        };
+        ForwardCaseDto: {
+            /**
+             * @description Weiterleitungs-Empfänger (fester Katalog, domain-types forwardRecipientSchema)
+             * @enum {string}
+             */
+            recipient: "retourenabteilung" | "lieferscheinbucher";
+            /** @description Grund, revisionssicher im case.forwarded-Event */
+            reason?: string;
         };
         ParkDto: {
             reason?: string;
@@ -2462,6 +2517,52 @@ export interface operations {
         };
     };
     TeamleadController_unflagAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_forward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForwardCaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_unforward: {
         parameters: {
             query?: never;
             header?: never;

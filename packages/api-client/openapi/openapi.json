@@ -1143,6 +1143,88 @@
         ]
       }
     },
+    "/api/teamlead/cases/{caseId}/forward": {
+      "post": {
+        "operationId": "TeamleadController_forward",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "C5 Digitale Ablage: Beleg „Weiterleiten an …\" (Retourenabteilung/Lieferscheinbucher, status-neutral)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/unforward": {
+      "post": {
+        "operationId": "TeamleadController_unforward",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "C5 Digitale Ablage: Weiterleitung „Zurückholen\" (Flag löschen)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/delivery-groups/split": {
       "post": {
         "operationId": "TeamleadController_splitDeliveryGroup",
@@ -2549,6 +2631,11 @@
             "type": "string",
             "nullable": true,
             "description": "Notiz zum Aufmerksamkeitsflag"
+          },
+          "forwardedTo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
           }
         },
         "required": [
@@ -3535,6 +3622,23 @@
           "started"
         ]
       },
+      "OpenIssueRefDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "IssueType (Anhang A) of the latest open issue"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Issue description/note"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
       "PoolItemDto": {
         "type": "object",
         "properties": {
@@ -3645,6 +3749,11 @@
             "nullable": true,
             "description": "Notiz zum Aufmerksamkeitsflag"
           },
+          "forwardedTo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
+          },
           "assignedEmployeeNo": {
             "type": "object",
             "nullable": true
@@ -3674,6 +3783,16 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/BundleQueueRefDto"
+              }
+            ]
+          },
+          "openIssue": {
+            "nullable": true,
+            "description": "C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpenIssueRefDto"
               }
             ]
           }
@@ -4291,6 +4410,26 @@
             "description": "Optionale Notiz, warum der Beleg Aufmerksamkeit braucht"
           }
         }
+      },
+      "ForwardCaseDto": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "enum": [
+              "retourenabteilung",
+              "lieferscheinbucher"
+            ],
+            "description": "Weiterleitungs-Empfänger (fester Katalog, domain-types forwardRecipientSchema)"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Grund, revisionssicher im case.forwarded-Event"
+          }
+        },
+        "required": [
+          "recipient"
+        ]
       },
       "ParkDto": {
         "type": "object",

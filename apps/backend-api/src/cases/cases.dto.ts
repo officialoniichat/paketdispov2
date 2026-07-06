@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { FORWARD_RECIPIENTS, type ForwardRecipient } from '@paket/domain-types';
 
 // --- Responses --------------------------------------------------------------
 
@@ -80,6 +81,20 @@ export class CaseSummaryDto {
   attentionFlag!: boolean;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Notiz zum Aufmerksamkeitsflag' })
   attentionNote!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet',
+  })
+  forwardedTo!: string | null;
+}
+
+/** C4: latest OPEN problem of a Beleg — the Problemfälle-lane card preview. */
+export class OpenIssueRefDto {
+  @ApiProperty({ description: 'IssueType (Anhang A) of the latest open issue' }) kind!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Issue description/note' })
+  note!: string | null;
 }
 
 /**
@@ -358,6 +373,12 @@ export class PoolItemDto extends CaseSummaryDto {
       'A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt',
   })
   bundleQueue!: BundleQueueRefDto | null;
+  @ApiPropertyOptional({
+    type: OpenIssueRefDto,
+    nullable: true,
+    description: 'C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem',
+  })
+  openIssue!: OpenIssueRefDto | null;
 }
 
 /** Why a looked-up Beleg is not assignable (B1 WE-Nr-Zuweisung). */
@@ -804,6 +825,21 @@ export class CaseLookupQueryDto {
   @ApiProperty({ description: 'WE-Belegnummer (exakt, case-insensitive)' })
   @IsString()
   weBelegNo!: string;
+}
+
+/** Body for POST /api/teamlead/cases/:caseId/forward — Weiterleiten an … (C5). */
+export class ForwardCaseDto {
+  @ApiProperty({
+    enum: FORWARD_RECIPIENTS,
+    description: 'Weiterleitungs-Empfänger (fester Katalog, domain-types forwardRecipientSchema)',
+  })
+  @IsIn(FORWARD_RECIPIENTS)
+  recipient!: ForwardRecipient;
+
+  @ApiPropertyOptional({ description: 'Grund, revisionssicher im case.forwarded-Event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 /** Body for POST /api/teamlead/cases/:caseId/flag-attention (A7, Bucherinnen-Inlet mock). */

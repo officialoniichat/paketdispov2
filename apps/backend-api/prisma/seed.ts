@@ -548,6 +548,8 @@ interface SeedLifecycleCase {
   issue?: { issueType: 'wrong_color' | 'damaged_goods' | 'missing_quantity'; description: string };
   /** A7 TL-Topf: „Besondere Aufmerksamkeit"-Flag mit Notiz (Bucherinnen-Inlet mock). */
   attentionNote?: string;
+  /** C5 Digitale Ablage: Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher). */
+  forwardedTo?: 'retourenabteilung' | 'lieferscheinbucher';
 }
 
 /** True for completion states — these get completedAt + the DocuWare archive link (A6). */
@@ -604,6 +606,14 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     totalQuantity: 41, effortPoints: 10, estimatedMinutes: 22, status: 'in_progress',
     employeeNo: 'ma-103',
   },
+  // C5 Digitale Ablage: ein weitergeleiteter Beleg (parked, damit die Engine ihn
+  // ignoriert) — landet in der „weitergeleitet"-Lane, gruppiert nach Empfänger.
+  {
+    weBelegNo: 'WE-2026-000209', storageCode: 'B-4', section: 3, goodsTypeText: 'Nachorder',
+    totalQuantity: 22, effortPoints: 6, estimatedMinutes: 14, status: 'parked',
+    employeeNo: 'ma-102',
+    forwardedTo: 'retourenabteilung',
+  },
 ];
 
 async function seedLifecycleCases(
@@ -640,6 +650,8 @@ async function seedLifecycleCases(
       // A7 TL-Topf: Aufmerksamkeitsflag (Bucherinnen-Inlet mock).
       attentionFlag: c.attentionNote !== undefined,
       attentionNote: c.attentionNote ?? null,
+      // C5 Digitale Ablage: Weiterleitung (status-neutral).
+      forwardedTo: c.forwardedTo ?? null,
     };
     const gcase = await prisma.goodsReceiptCase.upsert({
       where: { weBelegNo: c.weBelegNo },

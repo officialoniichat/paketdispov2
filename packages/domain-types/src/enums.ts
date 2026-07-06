@@ -201,8 +201,19 @@ export const workflowEventTypeSchema = z.enum([
   'case.delivery_group_released',
   'case.attention_flagged',
   'case.attention_cleared',
+  'case.forwarded',
+  'case.forward_cleared',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
+
+/**
+ * Digitale Ablage (C5): fixed catalog of Weiterleitungs-Empfänger. A forwarded
+ * Beleg keeps its status — `forwardedTo` only marks who is expected to act
+ * (mocked queue = the „weitergeleitet" lane grouped by recipient).
+ */
+export const forwardRecipientSchema = z.enum(['retourenabteilung', 'lieferscheinbucher']);
+export type ForwardRecipient = z.infer<typeof forwardRecipientSchema>;
+export const FORWARD_RECIPIENTS = forwardRecipientSchema.options;
 
 export const actorTypeSchema = z.enum(['system', 'employee', 'teamlead', 'admin']);
 export type ActorType = z.infer<typeof actorTypeSchema>;

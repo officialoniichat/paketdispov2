@@ -371,6 +371,9 @@ model GoodsReceiptCase {
   attentionNote     String?
   // Abschlusszeitpunkt: gesetzt beim Übergang nach completed/zst_done (A6 Archiv).
   completedAt       DateTime?
+  // Digitale Ablage (C5): an wen der Beleg weitergeleitet ist (Katalog in
+  // domain-types forwardRecipientSchema); null = nicht weitergeleitet.
+  forwardedTo       String?
   // Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs.
   missingFields     String[]       @default([])
   // Lieferungs-Pool-Hold (D2): TL-Freigabe "trotzdem bearbeiten".

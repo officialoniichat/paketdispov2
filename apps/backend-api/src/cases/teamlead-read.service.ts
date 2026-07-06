@@ -36,6 +36,8 @@ const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 's
 const COMPLETED_STATUSES: CaseStatus[] = ['completed', 'zst_done'];
 /** Bundle statuses excluded from planned-effort capacity math. */
 const INACTIVE_BUNDLE_STATUSES: AssignmentStatus[] = ['cancelled', 'completed'];
+/** Issue statuses that count as "open" for the C4 card preview (mirrors resolveIssue). */
+const OPEN_ISSUE_STATUSES = ['open', 'in_review', 'waiting_external'] as const;
 
 /**
  * Lebenszyklus-Scopes der Belege-Ansicht (A2), server-seitig gemappt: aktiv =
@@ -167,6 +169,13 @@ export class TeamleadReadService {
         where,
         include: {
           ...caseEffortInclude,
+          // C4: latest OPEN problem only — the Problemfälle-lane card preview.
+          issues: {
+            where: { status: { in: [...OPEN_ISSUE_STATUSES] } },
+            orderBy: { reportedAt: 'desc' },
+            take: 1,
+            select: { issueType: true, description: true },
+          },
           assignedBundle: {
             select: {
               id: true,
@@ -245,6 +254,7 @@ export class TeamleadReadService {
         completedAt: c.completedAt ? c.completedAt.toISOString() : null,
         attentionFlag: c.attentionFlag,
         attentionNote: c.attentionNote,
+        forwardedTo: c.forwardedTo,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
         deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
@@ -252,6 +262,9 @@ export class TeamleadReadService {
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
         bundleQueue: this.toBundleQueue(c.id, c.assignedBundle),
+        openIssue: c.issues[0]
+          ? { kind: c.issues[0].issueType, note: c.issues[0].description }
+          : null,
       };
     });
 
@@ -758,6 +771,7 @@ export class TeamleadReadService {
       completedAt: found.completedAt ? found.completedAt.toISOString() : null,
       attentionFlag: found.attentionFlag,
       attentionNote: found.attentionNote,
+      forwardedTo: found.forwardedTo,
     };
 
     const history = await this.auditEvents({ entityId: caseId, limit: 200 });

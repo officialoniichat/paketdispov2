@@ -6,7 +6,7 @@
  * cockpit on success.
  */
 import { useState, type JSX, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DeliveryGroupPanel } from './DeliveryGroupPanel';
 import Alert from '@mui/material/Alert';
@@ -48,6 +48,7 @@ import {
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { EFFORT_COMPONENT_LABEL, EFFORT_COMPONENT_ORDER } from '../../lib/effort.js';
 import { CaseActions } from '../../components/CaseActions.js';
+import { ForwardMenuButton, forwardRecipientLabel } from '../../components/ForwardMenu.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
@@ -63,6 +64,14 @@ const TABS = [
   'Historie',
 ];
 
+/** Index of the Problem tab (deep-link target `?tab=problem`, C4). */
+const PROBLEM_TAB_INDEX = 6;
+
+/** Map the `?tab=` search param onto a tab index; unknown values open Kopf. */
+function initialTab(param: string | null): number {
+  return param === 'problem' ? PROBLEM_TAB_INDEX : 0;
+}
+
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
   const {
@@ -77,7 +86,9 @@ export function BelegDetailPage(): JSX.Element {
   } = useCockpitData();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState(0);
+  // C4 deep-link: /belege/:id?tab=problem opens the Problem tab directly.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => initialTab(searchParams.get('tab')));
   // A7 „Besondere Aufmerksamkeit" (Bucherinnen-Inlet mock): flag with optional note.
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [attentionNoteDraft, setAttentionNoteDraft] = useState('');
@@ -142,6 +153,8 @@ export function BelegDetailPage(): JSX.Element {
 
   // Narrowed once so the per-driver breakdown stays type-safe inside the tab callbacks.
   const effortComponents = c.effortComponents;
+  // C4: latest unresolved problem for the banner (issues arrive newest first).
+  const openIssue = c.issues.find((i) => i.status !== 'resolved' && i.status !== 'rejected') ?? null;
 
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
@@ -179,9 +192,18 @@ export function BelegDetailPage(): JSX.Element {
             {c.attentionFlag && (
               <Chip size="small" color="warning" variant="outlined" label="Besondere Aufmerksamkeit" />
             )}
+            {c.forwardedTo !== null && (
+              <Chip
+                size="small"
+                color="secondary"
+                variant="outlined"
+                label={`Weitergeleitet → ${forwardRecipientLabel(c.forwardedTo)}`}
+              />
+            )}
           </Stack>
         </Box>
         <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <ForwardMenuButton caseId={c.id} forwardedTo={c.forwardedTo} />
           <Button
             size="small"
             variant={c.attentionFlag ? 'contained' : 'outlined'}
@@ -207,6 +229,21 @@ export function BelegDetailPage(): JSX.Element {
           />
         </Stack>
       </Stack>
+
+      {/* C4: an open problem is surfaced on EVERY tab, with a jump to the Problem tab. */}
+      {c.hasOpenIssue && openIssue && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => setTab(PROBLEM_TAB_INDEX)}>
+              Zum Problem
+            </Button>
+          }
+        >
+          Offenes Problem: <strong>{openIssue.issueType}</strong>
+          {openIssue.description ? ` — „${openIssue.description}"` : ''}
+        </Alert>
+      )}
 
       {c.attentionFlag && c.attentionNote && (
         <Alert severity="warning" variant="outlined">

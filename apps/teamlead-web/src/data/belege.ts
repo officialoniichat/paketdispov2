@@ -10,6 +10,7 @@
  */
 import type {
   CaseStatus,
+  ForwardRecipient,
   PriorityFlag,
   SectionCode,
   WorkflowEventType,
@@ -294,6 +295,8 @@ export interface BelegDetail {
   /** TL-Topf (A7): „Besondere Aufmerksamkeit". */
   attentionFlag: boolean;
   attentionNote: string | null;
+  /** C5 Digitale Ablage: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
+  forwardedTo: string | null;
   hasOpenIssue: boolean;
   workInstruction: BelegWorkInstruction | null;
   positions: BelegPosition[];
@@ -406,6 +409,28 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
         }
       : null,
   };
+}
+
+/** C5 Digitale Ablage: Beleg „Weiterleiten an …" (fester Empfänger-Katalog). */
+export async function forwardCase(
+  caseId: string,
+  recipient: ForwardRecipient,
+  reason?: string,
+): Promise<void> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/forward', {
+    params: { path: { caseId } },
+    body: reason ? { recipient, reason } : { recipient },
+  });
+  unwrap(result, 'forward case');
+}
+
+/** C5 Digitale Ablage: Weiterleitung „Zurückholen" (Flag löschen). */
+export async function unforwardCase(caseId: string): Promise<void> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/unforward', {
+    params: { path: { caseId } },
+    body: undefined,
+  });
+  unwrap(result, 'unforward case');
 }
 
 /** A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet mock). */
@@ -528,6 +553,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     completedAt: dto.case.completedAt ?? null,
     attentionFlag: dto.case.attentionFlag,
     attentionNote: dto.case.attentionNote ?? null,
+    forwardedTo: dto.case.forwardedTo ?? null,
     // The dedicated issue list is not part of the case detail read; an open issue
     // is reflected by the case status itself (§7.1 issue_open).
     hasOpenIssue: status === 'issue_open',

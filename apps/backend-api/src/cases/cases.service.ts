@@ -644,6 +644,7 @@ export class CasesService {
       completedAt: Date | null;
       attentionFlag: boolean;
       attentionNote: string | null;
+      forwardedTo: string | null;
       workInstruction?: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null;
       positions?: { shopNo: string }[];
     },
@@ -673,6 +674,7 @@ export class CasesService {
       completedAt: c.completedAt ? c.completedAt.toISOString() : null,
       attentionFlag: c.attentionFlag,
       attentionNote: c.attentionNote,
+      forwardedTo: c.forwardedTo,
     };
   }
 

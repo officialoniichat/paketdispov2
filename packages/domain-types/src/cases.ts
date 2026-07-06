@@ -163,6 +163,8 @@ export const goodsReceiptCaseSchema = z.object({
   attentionNote: z.string().optional(),
   /** Abschlusszeitpunkt: gesetzt beim Übergang nach completed/zst_done (A6 Archiv). */
   completedAt: isoDateTimeSchema.optional(),
+  /** Digitale Ablage (C5): Weiterleitungs-Empfänger (forwardRecipientSchema); absent = nicht weitergeleitet. */
+  forwardedTo: z.string().optional(),
   /** Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs (z. B. Lagerplatz). */
   missingFields: z.array(z.string()).default([]),
   /** Lieferungs-Pool-Hold (D2): TL-Freigabe „trotzdem bearbeiten" für Gruppen-Mitglieder. */

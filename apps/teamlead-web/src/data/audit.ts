@@ -83,6 +83,8 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.delivery_group_released': 'Lieferung trotzdem freigegeben',
   'case.attention_flagged': 'Besondere Aufmerksamkeit markiert',
   'case.attention_cleared': 'Aufmerksamkeit entfernt',
+  'case.forwarded': 'Weitergeleitet',
+  'case.forward_cleared': 'Weiterleitung zurückgeholt',
 };
 
 /** German label for each actor, so the audit feed never shows the raw role token. */

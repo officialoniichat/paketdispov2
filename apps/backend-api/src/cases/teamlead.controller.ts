@@ -35,6 +35,7 @@ import {
   DeliveryGroupReleaseDto,
   DeliveryGroupReleaseResultDto,
   FlagAttentionDto,
+  ForwardCaseDto,
   ReturnToBucherDto,
 } from './cases.dto.js';
 
@@ -189,6 +190,30 @@ export class TeamleadController {
     @Param('caseId') caseId: string,
   ): Promise<TransitionResultDto> {
     return this.teamlead.unflagAttention(principal, caseId);
+  }
+
+  @Post('cases/:caseId/forward')
+  @ApiOperation({
+    summary:
+      'C5 Digitale Ablage: Beleg „Weiterleiten an …" (Retourenabteilung/Lieferscheinbucher, status-neutral)',
+  })
+  @ApiOkResponse({ type: TransitionResultDto })
+  forward(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ForwardCaseDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.forward(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/unforward')
+  @ApiOperation({ summary: 'C5 Digitale Ablage: Weiterleitung „Zurückholen" (Flag löschen)' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  unforward(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.unforward(principal, caseId);
   }
 
   @Post('delivery-groups/split')

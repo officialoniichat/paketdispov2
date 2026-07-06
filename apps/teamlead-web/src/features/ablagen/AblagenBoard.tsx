@@ -1,29 +1,87 @@
 /**
- * Digitale Ablagen (§10.2 / Anhang E.4 "Kanban/Queue-Lanes passend zur heutigen
- * Ablagekästen-Logik"). One column per lane (Prio, Jeden-Tag, Verladeplan
- * heute/morgen, Sonstige, Geparkt, Prüfen, Problemfälle). Each card's teamlead
- * actions come from the single-source {@link CaseActions} registry, which derives
- * the allowed buttons from the case's §7.1 status — so a parked card offers
- * Entparken, a Problemfall offers „Problem freigeben", etc., with no per-lane
- * button logic here.
+ * Digitale Ablagen (§10.2 / Anhang E.4, C1–C5). One column per lane (Problemfälle,
+ * Weitergeleitet, Geparkt, Prio, Verladeplan heute/morgen, Jeden-Tag, Sonstige).
+ *
+ * C1: every lane scrolls VERTICALLY inside itself; the lane strip scrolls
+ * horizontally at viewport height, so the horizontal scrollbar is always visible
+ * without scrolling the page. C2: lanes are movable (links/rechts) and
+ * collapsible, persisted in localStorage (`paket.view.ablagen`). C3: Geparkt
+ * cards show who/when/why via the `case.parked` audit events. C4: cards with an
+ * open problem preview its kind + note and deep-link into the Problem tab.
+ * C5: cards offer „Weiterleiten an …"; the Weitergeleitet lane groups by
+ * recipient and offers „Zurückholen".
+ *
+ * Each card's teamlead actions come from the single-source {@link CaseActions}
+ * registry (derived from the §7.1 status) — no per-lane button logic here.
  */
-import { type JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActions from '@mui/material/CardActions';
 import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import type { components } from '@paket/api-client';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
+import { api } from '../../data/api.js';
+import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
-import { formatMinutes } from '../../lib/format.js';
+import { formatDateTime, formatMinutes } from '../../lib/format.js';
+import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
 import { CaseActions } from '../../components/CaseActions.js';
+import { ForwardMenuButton, forwardRecipientLabel } from '../../components/ForwardMenu.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
-import type { Lane, LaneCard } from '../../data/types.js';
+import type { Lane, LaneCard, LaneId } from '../../data/types.js';
+
+type AuditEventDto = components['schemas']['AuditEventDto'];
+
+/** Persisted board view state (C2): display order + collapsed lanes. */
+interface AblagenViewState {
+  laneOrder: LaneId[];
+  collapsed: LaneId[];
+}
+
+/** C3: who parked a Beleg, when and why (latest `case.parked` event per case). */
+interface ParkedContext {
+  actorId: string;
+  at: string;
+  reason: string | null;
+}
+
+/**
+ * Merge the persisted lane order with the lanes the data layer actually built:
+ * unknown ids are dropped, missing lanes appended in their default position.
+ */
+function resolveLaneOrder(persisted: LaneId[], lanes: Lane[]): LaneId[] {
+  const known = new Set(lanes.map((l) => l.id));
+  const ordered = persisted.filter((id) => known.has(id));
+  for (const lane of lanes) {
+    if (!ordered.includes(lane.id)) ordered.push(lane.id);
+  }
+  return ordered;
+}
+
+/** Latest `case.parked` event per case — events arrive newest first (seq desc). */
+function indexParkedEvents(events: AuditEventDto[]): Map<string, ParkedContext> {
+  const byCase = new Map<string, ParkedContext>();
+  for (const e of events) {
+    if (!byCase.has(e.entityId)) {
+      byCase.set(e.entityId, { actorId: e.actorId, at: e.at, reason: e.reason ?? null });
+    }
+  }
+  return byCase;
+}
 
 export function AblagenBoard(): JSX.Element {
   const {
@@ -39,6 +97,52 @@ export function AblagenBoard(): JSX.Element {
   } = useCockpitData();
   const navigate = useNavigate();
 
+  // C2: display order + collapse, persisted. Bucketing precedence stays fixed in
+  // the data layer; this only re-orders/collapses the *display*.
+  const [view, setView] = useState<AblagenViewState>(() =>
+    loadViewState<AblagenViewState>(ABLAGEN_VIEW_KEY, { laneOrder: [], collapsed: [] }),
+  );
+  const updateView = (next: AblagenViewState): void => {
+    setView(next);
+    saveViewState(ABLAGEN_VIEW_KEY, next);
+  };
+
+  const orderedLanes = useMemo(() => {
+    const order = resolveLaneOrder(view.laneOrder, lanes);
+    const byId = new Map(lanes.map((l) => [l.id, l]));
+    return order.map((id) => byId.get(id)).filter((l): l is Lane => l !== undefined);
+  }, [lanes, view.laneOrder]);
+
+  const moveLane = (id: LaneId, direction: -1 | 1): void => {
+    const order = orderedLanes.map((l) => l.id);
+    const from = order.indexOf(id);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= order.length) return;
+    const next = [...order];
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    updateView({ ...view, laneOrder: next });
+  };
+
+  const toggleCollapsed = (id: LaneId): void => {
+    const collapsed = view.collapsed.includes(id)
+      ? view.collapsed.filter((c) => c !== id)
+      : [...view.collapsed, id];
+    updateView({ ...view, collapsed });
+  };
+
+  // C3: join the Geparkt context client-side from the audit feed.
+  const parkedEventsQuery = useQuery<Map<string, ParkedContext>, Error>({
+    queryKey: ['ablagen', 'parked-events'],
+    queryFn: async () => {
+      const result = await api.GET('/api/teamlead/events', {
+        params: { query: { eventType: 'case.parked', limit: 200 } },
+      });
+      return indexParkedEvents(unwrap<AuditEventDto[]>(result, 'parked events'));
+    },
+  });
+  const parkedContext = parkedEventsQuery.data ?? new Map<string, ParkedContext>();
+
   const store: CaseActionCtx['store'] = {
     prioritiseCase,
     deprioritiseCase,
@@ -51,17 +155,37 @@ export function AblagenBoard(): JSX.Element {
   };
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={1.5} sx={{ height: 'calc(100vh - 140px)', minHeight: 360 }}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
         Digitale Ablagen
       </Typography>
-      <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', pb: 2, alignItems: 'flex-start' }}>
-        {lanes.map((lane) => (
+      {/* C1: the strip scrolls horizontally at viewport height; each lane owns its
+          vertical scroll, so the horizontal scrollbar is always in view. */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 1.5,
+          overflowX: 'auto',
+          alignItems: 'stretch',
+          flex: 1,
+          minHeight: 0,
+          pb: 1,
+        }}
+      >
+        {orderedLanes.map((lane, index) => (
           <LaneColumn
             key={lane.id}
             lane={lane}
+            collapsed={view.collapsed.includes(lane.id)}
+            canMoveLeft={index > 0}
+            canMoveRight={index < orderedLanes.length - 1}
+            onMove={(direction) => moveLane(lane.id, direction)}
+            onToggleCollapsed={() => toggleCollapsed(lane.id)}
+            parkedContext={parkedContext}
             store={store}
-            onOpen={(caseId) => navigate(`/belege/${caseId}`)}
+            onOpen={(caseId, tab) =>
+              navigate(tab ? `/belege/${caseId}?tab=${tab}` : `/belege/${caseId}`)
+            }
           />
         ))}
       </Box>
@@ -71,75 +195,213 @@ export function AblagenBoard(): JSX.Element {
 
 interface LaneColumnProps {
   lane: Lane;
+  collapsed: boolean;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  onMove: (direction: -1 | 1) => void;
+  onToggleCollapsed: () => void;
+  parkedContext: Map<string, ParkedContext>;
   store: CaseActionCtx['store'];
-  onOpen: (caseId: string) => void;
+  onOpen: (caseId: string, tab?: string) => void;
 }
 
-function LaneColumn({ lane, store, onOpen }: LaneColumnProps): JSX.Element {
+function LaneColumn({
+  lane,
+  collapsed,
+  canMoveLeft,
+  canMoveRight,
+  onMove,
+  onToggleCollapsed,
+  parkedContext,
+  store,
+  onOpen,
+}: LaneColumnProps): JSX.Element {
+  if (collapsed) {
+    return (
+      <Paper
+        variant="outlined"
+        onClick={onToggleCollapsed}
+        sx={{
+          width: 44,
+          flexShrink: 0,
+          p: 1,
+          bgcolor: 'background.default',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+          cursor: 'pointer',
+        }}
+      >
+        <UnfoldMoreIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
+        <Chip size="small" label={lane.cards.length} />
+        <Typography
+          variant="caption"
+          sx={{ fontWeight: 700, writingMode: 'vertical-rl', whiteSpace: 'nowrap' }}
+        >
+          {lane.title}
+        </Typography>
+      </Paper>
+    );
+  }
+
+  // C5: the Weitergeleitet lane IS the mocked recipient queue — group by recipient.
+  const groups: { key: string; label: string | null; cards: LaneCard[] }[] =
+    lane.id === 'weitergeleitet'
+      ? groupByRecipient(lane.cards)
+      : [{ key: 'all', label: null, cards: lane.cards }];
+
   return (
     <Paper
       variant="outlined"
-      sx={{ width: 300, flexShrink: 0, p: 1.5, bgcolor: 'background.default' }}
+      sx={{
+        width: 290,
+        flexShrink: 0,
+        p: 1,
+        bgcolor: 'background.default',
+        display: 'flex',
+        flexDirection: 'column',
+        maxHeight: '100%',
+      }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="baseline">
-        <Typography sx={{ fontWeight: 700 }}>{lane.title}</Typography>
+      <Stack direction="row" alignItems="center" gap={0.5}>
+        <IconButton size="small" disabled={!canMoveLeft} onClick={() => onMove(-1)} aria-label="Lane nach links">
+          <ChevronLeftIcon fontSize="small" />
+        </IconButton>
+        <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>
+          {lane.title}
+        </Typography>
         <Chip size="small" label={lane.cards.length} />
+        <IconButton size="small" onClick={onToggleCollapsed} aria-label="Lane einklappen">
+          <UnfoldLessIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
+        </IconButton>
+        <IconButton size="small" disabled={!canMoveRight} onClick={() => onMove(1)} aria-label="Lane nach rechts">
+          <ChevronRightIcon fontSize="small" />
+        </IconButton>
       </Stack>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" color="text.secondary" noWrap>
         {lane.description} · {formatMinutes(lane.totalEffortMinutes)}
       </Typography>
-      <Stack spacing={1} sx={{ mt: 1 }}>
+      {/* C1: the card list owns the vertical scroll — the page never grows. */}
+      <Stack spacing={0.75} sx={{ mt: 0.75, overflowY: 'auto', flex: 1, minHeight: 0 }}>
         {lane.cards.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
             Leer.
           </Typography>
         )}
-        {lane.cards.map((c) => (
-          <LaneCardView key={c.caseId} card={c} store={store} onOpen={onOpen} />
+        {groups.map((group) => (
+          <Stack key={group.key} spacing={0.75}>
+            {group.label !== null && (
+              <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                {group.label} ({group.cards.length})
+              </Typography>
+            )}
+            {group.cards.map((c) => (
+              <LaneCardView
+                key={c.caseId}
+                card={c}
+                laneId={lane.id}
+                parked={parkedContext.get(c.caseId)}
+                store={store}
+                onOpen={onOpen}
+              />
+            ))}
+          </Stack>
         ))}
       </Stack>
     </Paper>
   );
 }
 
+/** Group the Weitergeleitet lane's cards by recipient (stable catalog order). */
+function groupByRecipient(
+  cards: LaneCard[],
+): { key: string; label: string; cards: LaneCard[] }[] {
+  const byRecipient = new Map<string, LaneCard[]>();
+  for (const card of cards) {
+    const key = card.forwardedTo ?? 'unbekannt';
+    const bucket = byRecipient.get(key) ?? [];
+    bucket.push(card);
+    byRecipient.set(key, bucket);
+  }
+  return [...byRecipient.entries()].map(([key, groupCards]) => ({
+    key,
+    label: forwardRecipientLabel(key),
+    cards: groupCards,
+  }));
+}
+
 function LaneCardView({
   card,
+  laneId,
+  parked,
   store,
   onOpen,
 }: {
   card: LaneCard;
+  laneId: LaneId;
+  parked: ParkedContext | undefined;
   store: CaseActionCtx['store'];
-  onOpen: (caseId: string) => void;
+  onOpen: (caseId: string, tab?: string) => void;
 }): JSX.Element {
   // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
   // so the same ctx works from every surface — incl. the Problemfälle lane card.
   const ctx: CaseActionCtx = { caseId: card.caseId, store };
+  // C3: parked context tooltip (who/when/why) on Geparkt cards.
+  const parkedTooltip =
+    card.status === 'parked'
+      ? `Aus Automatik ausgeschlossen — von TL geparkt · ${parked ? `${parked.actorId} am ${formatDateTime(parked.at)}${parked.reason ? ` — „${parked.reason}"` : ''}` : 'Kontext unbekannt'}`
+      : null;
+
+  const statusChip = <CaseStatusChip status={card.status} size="small" />;
+
   return (
     <Card variant="outlined">
-      <CardContent sx={{ pb: 0.5 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-          <Typography sx={{ fontWeight: 700 }}>{card.weBelegNo}</Typography>
+      <CardContent sx={{ p: 1, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+            {card.weBelegNo}
+          </Typography>
           <Typography variant="caption" color="text.secondary">
             {card.storageCode}
           </Typography>
         </Stack>
-        <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mb: 0.5 }}>
-          <CaseStatusChip status={card.status} size="small" />
+        <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ my: 0.25 }}>
+          {parkedTooltip ? <Tooltip title={parkedTooltip}>{statusChip}</Tooltip> : statusChip}
           {card.priorityFlags.map((f) => (
             <PriorityChip key={f} flag={f} size="small" />
           ))}
           {card.section !== null && <Chip size="small" label={`Abschnitt ${card.section}`} />}
           {card.issueStatus && <ProblemChip status={card.issueStatus} size="small" />}
+          {card.forwardedTo !== null && (
+            <Chip
+              size="small"
+              color="secondary"
+              variant="outlined"
+              label={`→ ${forwardRecipientLabel(card.forwardedTo)}`}
+            />
+          )}
         </Stack>
-        <Typography variant="caption" color="text.secondary">
+        {/* C4: open-problem preview (kind + note) directly on the card. */}
+        {card.openIssue && (
+          <Typography variant="caption" color="error.main" noWrap sx={{ display: 'block' }}>
+            {card.openIssue.kind}
+            {card.openIssue.note ? ` — „${card.openIssue.note}"` : ''}
+          </Typography>
+        )}
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
           {card.totalQuantity} Teile · {formatMinutes(card.estimatedMinutes)}
           {card.assignedTo ? ` · ${card.assignedTo}` : ''}
         </Typography>
       </CardContent>
-      <CardActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-        <Button size="small" onClick={() => onOpen(card.caseId)}>
+      <CardActions sx={{ flexWrap: 'wrap', gap: 0.25, px: 1, py: 0.5 }}>
+        <Button
+          size="small"
+          onClick={() => onOpen(card.caseId, laneId === 'probleme' ? 'problem' : undefined)}
+        >
           Details
         </Button>
+        <ForwardMenuButton caseId={card.caseId} forwardedTo={card.forwardedTo} />
         <CaseActions
           variant="card"
           case={{ status: card.status, priorityFlags: card.priorityFlags }}
