@@ -10,6 +10,7 @@ import {
   scanMatches,
   setSkuQuantity,
   togglePositionChecked,
+  totalConfirmedQuantity,
 } from './workflowModel.js';
 
 const agg = exampleAggregate;
@@ -48,6 +49,23 @@ describe('setSkuQuantity (D2 Mehr-/Mindermengen per Größe)', () => {
 
   it('never goes below zero', () => {
     expect(setSkuQuantity(p0, 'sku-1', -3, 2).confirmedQuantities).toEqual({ 'sku-1': 0 });
+  });
+});
+
+describe('totalConfirmedQuantity (what gets booked as the ZST completedQuantity)', () => {
+  it('sums every Größe at Soll when nothing was adjusted', () => {
+    // 5 skuLines across the fixture's 3 positions, each expectedQuantity 1.
+    expect(totalConfirmedQuantity(p0, agg)).toBe(5);
+  });
+
+  it('reflects a recorded Mindermenge instead of silently booking the Soll total', () => {
+    const withDeviation = setSkuQuantity(p0, 'sku-3656860-1-1', 0, 1);
+    expect(totalConfirmedQuantity(withDeviation, agg)).toBe(4);
+  });
+
+  it('reflects a recorded Mehrmenge (can exceed the Soll total)', () => {
+    const withDeviation = setSkuQuantity(p0, 'sku-3656860-1-1', 3, 1);
+    expect(totalConfirmedQuantity(withDeviation, agg)).toBe(7);
   });
 });
 

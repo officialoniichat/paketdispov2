@@ -271,9 +271,11 @@ export function BelegProcessScreen(): JSX.Element {
           </Typography>
         ) : null}
         {/* TODO(task-13+): "Position geprüft"/Mengen-Fortschritt is client-only
-            cache state (no backend endpoint yet, see useCaseFlow.ts) — it does
-            not survive a reload. Disclosed here so nobody navigates away
-            mid-Beleg expecting it to be saved. */}
+            cache state while working the Beleg (no live per-action backend
+            endpoint yet, see useCaseFlow.ts) — it does not survive a reload
+            mid-Beleg. "Beleg erledigt"/"Teilabschluss" DOES transfer the
+            recorded Mengen to the backend (completedQuantity), so this caption
+            is literally accurate, not just a disclaimer. */}
         <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
           Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" sichert
           ihn dauerhaft.

@@ -10,15 +10,20 @@
  * back on failure and surface the error (never swallowed, see `actionError`).
  *
  * TODO(task-13+): "Position geprüft" and per-Größe confirmed quantities
- * (`CaseProgress.quantityCheckedPositionIds` / `confirmedQuantities`) have no
- * backend endpoint yet (no matching path in `packages/api-client/src/generated/
- * schema.ts`) — the former per-action POST from Dexie's `useCaseFlow` never
- * existed for these two either, only the *first* action's implicit
- * start-preparation call did (see `ensureStarted` below). Until the backend
- * adds real persistence, this progress is tracked as client-only React Query
- * cache state under a `['local', 'caseProgress', caseId]` key, seeded from the
- * loaded aggregate. Unlike the old Dexie table it does not survive a full
- * reload — that matches reality: there is nowhere durable to put it yet.
+ * (`CaseProgress.quantityCheckedPositionIds` / `confirmedQuantities`) still
+ * have no live per-action backend endpoint (no matching path in
+ * `packages/api-client/src/generated/schema.ts`) — only the *first* action's
+ * implicit start-preparation call is persisted immediately (see
+ * `ensureStarted` below). Until the backend adds real per-action persistence,
+ * this progress is tracked as client-only React Query cache state under a
+ * `['local', 'caseProgress', caseId]` key, seeded from the loaded aggregate,
+ * and does not survive a full reload.
+ *
+ * The recorded quantities ARE transferred at the end, though: `complete()`/
+ * `partialComplete()` below compute `totalConfirmedQuantity()` (the D2
+ * Mehr-/Mindermengen, or the Soll where untouched) and send it as
+ * `completedQuantity` on the final POST, so the backend's ZstRecord books the
+ * employee's real counted quantity — never silently the untouched case total.
  */
 import { useCallback, useState } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -41,6 +46,7 @@ import {
   setSkuQuantity as setSkuQuantityTx,
   setZst as setZstTx,
   togglePositionChecked as togglePositionCheckedTx,
+  totalConfirmedQuantity,
 } from './workflowModel.js';
 
 type TodayResponseDto = components['schemas']['TodayResponseDto'];
@@ -148,20 +154,24 @@ export function useCaseFlow(caseId: string): CaseFlow {
   );
 
   const complete = useCallback(async (): Promise<boolean> => {
-    const ok = await runMilestone('completed', () => persistComplete(caseId));
+    const completedQuantity =
+      progress && aggregate ? totalConfirmedQuantity(progress, aggregate) : undefined;
+    const ok = await runMilestone('completed', () => persistComplete(caseId, completedQuantity));
     if (ok) applyLocal((p) => completeCaseTx(setZstTx(p)));
     return ok;
-  }, [runMilestone, applyLocal, caseId]);
+  }, [runMilestone, applyLocal, caseId, progress, aggregate]);
 
   const partialComplete = useCallback(
     async (reason: string): Promise<boolean> => {
+      const completedQuantity =
+        progress && aggregate ? totalConfirmedQuantity(progress, aggregate) : undefined;
       const ok = await runMilestone('partially_completed', () =>
-        persistPartialComplete(caseId, reason),
+        persistPartialComplete(caseId, reason, completedQuantity),
       );
       if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
       return ok;
     },
-    [runMilestone, applyLocal, caseId],
+    [runMilestone, applyLocal, caseId, progress, aggregate],
   );
 
   const reportIssue = useCallback(

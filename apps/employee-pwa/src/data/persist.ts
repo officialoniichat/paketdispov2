@@ -48,12 +48,23 @@ export async function persistStartPreparation(caseId: string): Promise<Transitio
   );
 }
 
-/** POST /api/cases/:id/complete → writes the ZstRecord. */
-export async function persistComplete(caseId: string): Promise<TransitionResultDto> {
+/**
+ * POST /api/cases/:id/complete → writes the ZstRecord.
+ *
+ * `completedQuantity` is the employee's actual counted total (incl. D2
+ * Mehr-/Mindermengen, see `workflow/workflowModel.ts`'s `totalConfirmedQuantity`)
+ * — omit it only when there is no progress state to derive it from; the
+ * backend then falls back to the case's Soll total.
+ */
+export async function persistComplete(
+  caseId: string,
+  completedQuantity?: number,
+): Promise<TransitionResultDto> {
   return unwrap(
     'Abschluss',
     await getApiClient().POST('/api/cases/{caseId}/complete', {
       params: { path: { caseId } },
+      body: { completedQuantity },
     }),
   );
 }
@@ -62,12 +73,13 @@ export async function persistComplete(caseId: string): Promise<TransitionResultD
 export async function persistPartialComplete(
   caseId: string,
   reason: string,
+  completedQuantity?: number,
 ): Promise<TransitionResultDto> {
   return unwrap(
     'Teilabschluss',
     await getApiClient().POST('/api/cases/{caseId}/partial-complete', {
       params: { path: { caseId } },
-      body: { reason },
+      body: { reason, completedQuantity },
     }),
   );
 }

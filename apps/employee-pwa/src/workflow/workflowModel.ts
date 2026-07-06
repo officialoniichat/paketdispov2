@@ -105,6 +105,25 @@ export function setSkuQuantity(
   return { ...p, confirmedQuantities: confirmed };
 }
 
+/**
+ * Total Ist-Menge across every Größe (SKU line) in the Beleg: the employee's
+ * confirmed count where they touched it (D2 Mehr-/Mindermengen), otherwise the
+ * Soll (expected) quantity for that Größe. This is what gets booked as the
+ * ZST's `completedQuantity` — never the untouched case-level total, so a
+ * recorded deviation is never silently discarded.
+ */
+export function totalConfirmedQuantity(p: CaseProgress, aggregate: CaseAggregate): number {
+  return aggregate.positions.reduce(
+    (sum, pos) =>
+      sum +
+      pos.skuLines.reduce(
+        (posSum, sku) => posSum + (p.confirmedQuantities[sku.id] ?? sku.expectedQuantity),
+        0,
+      ),
+    0,
+  );
+}
+
 export const setZst = (p: CaseProgress): CaseProgress => ({ ...p, zstDone: true });
 
 export const completeCase = (p: CaseProgress): CaseProgress => ({
