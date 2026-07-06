@@ -392,14 +392,16 @@ export function AdminPage(): JSX.Element {
                       Lieferschein-Nr (wahrscheinlich).
                     </li>
                     <li>
-                      <strong>Fortlaufende WE-Belegnummern</strong> — Kartons einer Lieferung
-                      werden fortlaufend nummeriert gebucht, z.&nbsp;B. der „Brax-Fall“
-                      (vermutet).
+                      <strong>Fortlaufende WE-Belegnummern</strong> — werden die fortlaufend
+                      abgeklebten Kartons einer Lieferung nacheinander gebucht, entstehen
+                      fortlaufende Beleg-Nummern, z.&nbsp;B. der „Brax-Fall“ (vermutet).
                     </li>
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Nicht fortlaufende Belege einer Lieferung erkennt die Automatik nicht — der
-                    Teamlead kann sie manuell zu einer Lieferung gruppieren.
+                    Die Kartonnummern selbst kennt das System nicht — der Lauf über die
+                    Beleg-Nummern ist die Näherung dafür. Wird eine Lieferung nicht am Stück
+                    gebucht, erkennt die Automatik sie nicht — der Teamlead kann sie manuell zu
+                    einer Lieferung gruppieren.
                   </Typography>
                   <Grid>
                     <Toggle
