@@ -847,6 +847,57 @@ export class CaseLookupQueryDto {
   weBelegNo!: string;
 }
 
+/** Query for GET /api/teamlead/cases/search (A1/A2/B1 assign-flow search + browse). */
+export class CaseSearchQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'Volltext: WE-Beleg-Nr / Lieferschein-Nr / Lagerplatz-Code / Shop / Filiale (contains)',
+  })
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: fester Bereich (Hängebahn|Palette|Regal)' })
+  @IsOptional()
+  @IsString()
+  bereich?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: Shop (primärer Shop, contains)' })
+  @IsOptional()
+  @IsString()
+  shopNo?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: Filiale (contains)' })
+  @IsOptional()
+  @IsString()
+  branchNo?: string;
+
+  @ApiPropertyOptional({ default: 20, description: 'Max. Ergebnisse (1-50)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+}
+
+/**
+ * One assignable Beleg in the search/browse feed behind AssignDialog. Always
+ * ready + unassigned — the endpoint's scope IS the assignability verdict, so
+ * (unlike {@link CaseLookupResultDto}) there is no status/reasonCode to render.
+ */
+export class CaseSearchResultDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty() weBelegNo!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) bereich!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) goodsType!: string | null;
+  @ApiProperty({ description: 'Teile (totalQuantity)' }) teile!: number;
+  @ApiProperty() estimatedMinutes!: number;
+  @ApiPropertyOptional({ type: String, nullable: true }) storageLocationCode!: string | null;
+  @ApiProperty({ type: [String] }) priorityFlags!: string[];
+  @ApiPropertyOptional({ type: DeliveryGroupRefDto, nullable: true })
+  deliveryGroup!: DeliveryGroupRefDto | null;
+}
+
 /** Body for POST /api/teamlead/cases/:caseId/forward — Weiterleiten an … (C5). */
 export class ForwardCaseDto {
   @ApiProperty({
