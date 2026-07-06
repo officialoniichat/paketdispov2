@@ -1,16 +1,16 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Mitarbeiter-App E2E — two-phase bundle flow (COLLECT → PROCESS → DONE).
+ * Mitarbeiter-App E2E — Ein-Screen-Flow (Dustin-Feedback 03.07.2026).
  *
- * Drives the seeded offline bundle (one Regal cart of three Belege, anchor
- * WE 3656860 with 5 positions). Verifies the redesign's load-bearing rules:
- *   1. COLLECT is a hard gate — PROCESS is locked until every pick-list stop is
- *      checked off (no scan required).
- *   2. PROCESS shows all positions at a glance; §G.2 forces price-label print
- *      before the carton opens; the minimum-quantity check is required for every
- *      position even though "Prüfung = Nein" (quantity_only); then per-Beleg
- *      erledigt → ZST.
+ * Drives the seeded offline bundle (mixed cart: Regal + Hängebahn + Palette,
+ * anchor WE 3656860 with 5 positions). Verifies the load-bearing rules:
+ *   1. Tisch-Anmeldung gates the app (A2).
+ *   2. „Ware holen" is inline on the home screen and stays the hard gate (B1);
+ *      „Rest parken" sends unfetched Belege back (B4).
+ *   3. The Beleg screen shows the WE-Nr. as hero + Kartons (C1/C2); every
+ *      position must be „Position geprüft" (toggleable, D5) before erledigt.
+ *   4. An open problem blocks erledigt (§G.5); one clear continue path (D6).
  *
  * A screenshot is captured at each phase under e2e/screenshots/.
  */
@@ -36,194 +36,212 @@ async function expectHeading(page: Page, name: string | RegExp): Promise<void> {
   }
 }
 
-async function loadSeeded(page: Page): Promise<void> {
+const GREETING = /Guten (Morgen|Tag|Abend)/;
+
+/** A2: claim the Tisch, then land on the seeded home. */
+async function loginAndLoad(page: Page): Promise<void> {
   await page.goto('/');
-  await expectHeading(page, /Guten Morgen/);
+  await expectHeading(page, 'Wo arbeitest du heute?');
+  await page.getByLabel('Tisch-Nr.').fill('T-04');
+  await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
+  await expectHeading(page, GREETING);
+}
+
+/** D5: check every position („Position geprüft") of the open Beleg. */
+async function checkAllPositions(page: Page, max = 8): Promise<void> {
+  const buttons = page.getByRole('button', { name: 'Position geprüft', exact: true });
+  for (let i = 0; i < max; i += 1) {
+    const open = await buttons.count();
+    if (open === 0) break;
+    const next = buttons.first();
+    await next.scrollIntoViewIfNeeded();
+    await next.click();
+    // Wait until the button became the ✓ chip before re-resolving the list.
+    await expect(buttons).toHaveCount(open - 1, { timeout: 5000 });
+  }
+}
+
+/** Check off every „Ware holen" stop of the default mixed bundle. */
+async function collectAll(page: Page): Promise<void> {
+  for (const code of ['HB-3', 'P-2', 'R27']) {
+    // The code appears twice (stop row + Beleg row) — the stop renders first.
+    await page.getByText(code, { exact: true }).first().click();
+  }
 }
 
 test.beforeEach(async ({ page }) => {
-  await loadSeeded(page);
+  await loginAndLoad(page);
 });
 
-test('Home zeigt den zugeteilten Karren und sperrt Bearbeiten bis gesammelt', async ({
-  page,
-}) => {
-  await expect(page.getByText(/Dein Karren · 3 Belege · Regal/)).toBeVisible();
-  await expect(page.getByText(/Arbeitsplatz: Tisch 4/)).toBeVisible();
-  // Collect not done → process is gated.
-  await expect(page.getByText('Erst alle Plätze holen, dann bearbeiten.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sammeln starten' })).toBeVisible();
+test('Tisch-Anmeldung + Home: ein Screen, Bearbeiten gesperrt bis geholt', async ({ page }) => {
+  // A2: the claimed Arbeitsplatz is shown, not demo data.
+  await expect(page.getByText('Arbeitsplatz: T-04')).toBeVisible();
+  await expect(page.getByText(/Dein Karren · 3 Belege · Gemischt/)).toBeVisible();
+  // A4: no effort-minutes estimate, no 'Heute erledigt' stat.
+  await expect(page.getByText(/ca\. \d+ Min/)).toHaveCount(0);
+  await expect(page.getByText(/Heute erledigt/)).toHaveCount(0);
+  // B1: both sections live on ONE screen.
+  await expect(page.getByText('1 · Ware holen')).toBeVisible();
+  await expect(page.getByText('2 · Bearbeiten')).toBeVisible();
+  // B3: Etiketten-Hinweis per Beleg at collect time.
+  await expect(page.getByText(/🏷️ Etiketten drucken/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Erst Ware holen/ })).toBeDisabled();
   await page.screenshot({ path: `${SHOT_DIR}/01-home-locked.png`, fullPage: true });
 
-  // Hard gate: tapping a Beleg row must NOT navigate while collect is open.
+  // Hard gate: tapping a Beleg row must NOT navigate while stops are open.
   await page.getByText('WE 3656860', { exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Guten Morgen/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
 });
 
-test('Kernfluss – COLLECT (Hard-Gate) → PROCESS → DONE', async ({ page }) => {
-  // --- Phase 1: COLLECT --------------------------------------------------
-  await page.getByRole('button', { name: 'Sammeln starten' }).click();
-  await expectHeading(page, 'Plätze abholen');
-  await expect(page.getByText('R27')).toBeVisible();
-  await expect(page.getByText('A-4')).toBeVisible();
-  // Finish is disabled until every stop is collected.
-  await expect(page.getByRole('button', { name: /Noch .* offen/ })).toBeDisabled();
-  await page.screenshot({ path: `${SHOT_DIR}/02-collect-open.png`, fullPage: true });
+test('Kernfluss – Ware holen (Hard-Gate) → Beleg → erledigt', async ({ page }) => {
+  // --- Phase 1: Ware holen inline -----------------------------------------
+  await collectAll(page);
+  await expect(page.getByText('3/3 Plätze')).toBeVisible();
+  const start = page.getByRole('button', { name: /Start Bearbeitung WE/ });
+  await expect(start).toBeEnabled();
+  await page.screenshot({ path: `${SHOT_DIR}/02-collected.png`, fullPage: true });
 
-  // Check off both stops (tap the location rows).
-  await page.getByText('R27').click();
-  await page.getByText('A-4').click();
-  const finishCollect = page.getByRole('button', { name: 'Sammeln fertig → Bearbeiten' });
-  await expect(finishCollect).toBeEnabled();
-  await page.screenshot({ path: `${SHOT_DIR}/03-collect-done.png`, fullPage: true });
-
-  // Back to the hub — PROCESS is now unlocked.
-  await finishCollect.click();
-  await expectHeading(page, /Guten Morgen/);
-  await expect(page.getByText('Alle Plätze geholt ✓')).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/04-home-unlocked.png`, fullPage: true });
-
-  // --- Phase 2: PROCESS --------------------------------------------------
+  // --- Phase 2: Beleg -------------------------------------------------------
   await page.getByText('WE 3656860', { exact: true }).click();
-  await expectHeading(page, 'Beleg bearbeiten');
-  // Beleg-Kopf (work-relevant subset): Abschnitt · Warenart · Beleg-Menge.
-  await expect(page.getByText('Abschnitt 1 · Vororder · 9 Teile')).toBeVisible();
-  // All positions visible at a glance.
-  await expect(page.getByText('Pos 1 ·')).toBeVisible();
-  await expect(page.getByText('Pos 5 ·')).toBeVisible();
-  // Warenbezeichnung = article identity (WGR + Saison) + NOS badge on position 1.
-  await expect(page.getByText('WGR 218110 · Saison NOS')).toBeVisible();
-  await expect(page.getByText('♻️ NOS')).toBeVisible();
-  // Faithful Arbeitsanweisung section + a variant (Rotpreis) render.
-  await expect(page.getByText('Arbeitsanweisung')).toBeVisible();
-  await expect(page.getByText('Rotpreis').first()).toBeVisible();
-  // Visual hint for WHERE to attach the price label (point 8 graphic).
-  await expect(page.getByText('Preisetikett – wo anbringen?')).toBeVisible();
-  await expect(page.getByText('Am Bund / Innenetikett', { exact: true })).toBeVisible();
-  // erledigt is gated (labels + min-qty open).
+  // C1: the WE-Nr. is the hero heading (no 'Beleg bearbeiten' label).
+  await expectHeading(page, 'WE 3656860');
+  await expect(page.getByText('Beleg bearbeiten')).toHaveCount(0);
+  // C2: Kartons statt Positionszahl.
+  await expect(page.getByText(/3 Kartons – alle auf dem Karren suchen!/)).toBeVisible();
+  await expect(page.getByText(/\d+ Positionen/)).toHaveCount(0);
+  // C3: Warenart wording, no Abschnitt number.
+  await expect(page.getByText('Vororder · 9 Teile')).toBeVisible();
+  // C4: printing/carton are no work steps anymore.
+  await expect(page.getByRole('button', { name: 'Preisetiketten drucken' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Karton geöffnet' })).toHaveCount(0);
+  // C5: Prüfstufe explained on demand.
+  await page.getByRole('button', { name: 'Was heißt das?' }).click();
+  await expect(page.getByText(/Keine Wareneingangsprüfung\. Nur Mindestmengen-Check/)).toBeVisible();
+  // D1: per-size lines with EAN + prices, always.
+  await expect(page.getByText('EAN 4068657016108')).toBeVisible();
+  await expect(page.getByText(/EK 14,20/).first()).toBeVisible();
+  // D4: Online-Größen-Markierung rot/grün.
+  await expect(page.getByText('Onlineartikel-Highlight').first()).toBeVisible();
+  // D3: Shop + WGR-Klartext + Catman.
+  await expect(page.getByText('Shop 2143').first()).toBeVisible();
+  await expect(page.getByText(/WGR 218110 D-Bermuda/).first()).toBeVisible();
+  await expect(page.getByText('Catman').first()).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/03-beleg-open.png`, fullPage: true });
+
+  // erledigt is gated on the position checks.
   await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toBeDisabled();
-  await page.screenshot({ path: `${SHOT_DIR}/05-process-open.png`, fullPage: true });
 
-  // §G.2: carton stays disabled until labels are printed.
-  await expect(page.getByRole('button', { name: 'Karton geöffnet' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Preisetiketten drucken' }).click();
-  await expect(page.getByText('Preisetiketten gedruckt ✓')).toBeVisible();
-  const carton = page.getByRole('button', { name: 'Karton geöffnet' });
-  await expect(carton).toBeEnabled();
-  await carton.click();
-  await expect(page.getByText('Karton geöffnet ✓')).toBeVisible();
+  // D5: 'Position geprüft' is un-checkable — toggle one off and on again.
+  await page.getByRole('button', { name: 'Position geprüft' }).first().click();
+  await page.getByText('Position geprüft ✓').first().click();
+  await expect(page.getByText('Position geprüft ✓')).toHaveCount(0);
 
-  // Minimum-quantity check for every position (required even "Prüfung = Nein").
-  for (let i = 0; i < SEED_POSITIONS; i += 1) {
-    await page.getByRole('button', { name: 'Mindestmenge geprüft' }).first().click();
-  }
-  await expect(page.getByRole('button', { name: 'Mindestmenge geprüft' })).toHaveCount(0);
-  await page.screenshot({ path: `${SHOT_DIR}/06-process-ready.png`, fullPage: true });
+  await checkAllPositions(page);
+  await page.screenshot({ path: `${SHOT_DIR}/04-beleg-ready.png`, fullPage: true });
 
-  // --- DONE: per-Beleg erledigt → ZST -----------------------------------
+  // --- DONE: per-Beleg erledigt → ZST --------------------------------------
   const erledigt = page.getByRole('button', { name: 'Beleg erledigt' });
   await expect(erledigt).toBeEnabled();
   await erledigt.click();
-  await expectHeading(page, /Guten Morgen/);
-  // The Beleg now reads as finished on the hub.
-  await expect(page.getByText('1 von 3 fertig').first()).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/07-beleg-done.png`, fullPage: true });
+  await expectHeading(page, GREETING);
+  await expect(page.getByText('Fertig', { exact: true }).first()).toBeVisible();
+  await page.screenshot({ path: `${SHOT_DIR}/05-beleg-done.png`, fullPage: true });
 });
 
-test('Demo: Belegset wechseln (anderes Szenario)', async ({ page }) => {
+test('D2 Mehr-/Mindermengen per +/- an der Größe (kein Problem-Umweg)', async ({ page }) => {
+  await collectAll(page);
+  await page.getByText('WE 3656860', { exact: true }).click();
+  await expectHeading(page, 'WE 3656860');
+
+  // Minus at the first Größe records a Mindermenge inline.
+  await page.getByRole('button', { name: 'Größe 8: Menge verringern' }).first().click();
+  await expect(page.getByText('Mindermenge').first()).toBeVisible();
+  // Plus back to Soll clears the deviation.
+  await page.getByRole('button', { name: 'Größe 8: Menge erhöhen' }).first().click();
+  await expect(page.getByText('Mindermenge')).toHaveCount(0);
+  await page.screenshot({ path: `${SHOT_DIR}/06-mengen.png`, fullPage: true });
+});
+
+test('B4 Parkposition: Rest parken schickt ungeholte Belege zurück', async ({ page }) => {
+  // Fetch only the first stop, then park the rest (2 Belege of 2 open stops).
+  await page.getByText('HB-3', { exact: true }).first().click();
+  const park = page.getByRole('button', { name: /Rest parken \(2 Belege\)/ });
+  await expect(park).toBeVisible();
+  await park.click();
+  await expect(page.getByText(/2 Belege geparkt – kommen ins nächste Bündel/)).toBeVisible();
+  // The cart shrank to the fetched Beleg; collect is complete now.
+  await expect(page.getByText(/Dein Karren · 1 Belege/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Start Bearbeitung WE/ })).toBeEnabled();
+  await page.screenshot({ path: `${SHOT_DIR}/07-geparkt.png`, fullPage: true });
+});
+
+test('D7 Teilabschluss zählt als Teilabschluss, nie als Fertig', async ({ page }) => {
+  await collectAll(page);
+  await page.getByText('WE 3656861', { exact: true }).click();
+  await expectHeading(page, 'WE 3656861');
+  await page.getByRole('button', { name: 'Teilabschluss' }).click();
+  // D7: the dialog explains what happens to the Beleg.
+  await expect(page.getByText(/kommt mit der Restware zurück in die Planung/)).toBeVisible();
+  await page.getByLabel('Grund').fill('Karton beschädigt');
+  await page.getByRole('button', { name: 'Teil abschließen' }).click();
+  await expectHeading(page, GREETING);
+  await expect(page.getByText('Teilabschluss', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Fertig', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `${SHOT_DIR}/08-teilabschluss.png`, fullPage: true });
+});
+
+test('Demo: Belegset wechseln (dev-Flag) + Continuation', async ({ page }) => {
+  // A1: the picker renders only because the e2e build sets VITE_DEMO_CONTROLS=1.
   await expect(page.getByText('Demo · Belegset')).toBeVisible();
-  await expect(page.getByText(/3 Belege · Regal/)).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/09-demo-controls.png`, fullPage: true });
-
-  // Switch to the Hängeware Belegset → the cart changes (Bereich + count).
   await page.getByLabel('Szenario').click();
   await page.getByRole('option', { name: /Hängeware/ }).click();
   await expect(page.getByText(/2 Belege · Hängebahn/)).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/10-demo-haengeware.png`, fullPage: true });
-});
+  await page.screenshot({ path: `${SHOT_DIR}/09-demo-haengeware.png`, fullPage: true });
 
-test('Continuation: Bündel fertig → Nächstes Bündel holen (Demo cycelt Belegset)', async ({
-  page,
-}) => {
-  // Switch to the small Hängeware Belegset (2 Belege) to finish a whole cart fast.
-  await page.getByLabel('Szenario').click();
-  await page.getByRole('option', { name: /Hängeware/ }).click();
-  await expect(page.getByText(/2 Belege · Hängebahn/)).toBeVisible();
-
-  // Collect both stops → unlock processing.
-  await page.getByRole('button', { name: 'Sammeln starten' }).click();
-  await expectHeading(page, 'Plätze abholen');
-  await page.getByText('HB-3').click();
-  await page.getByText('HB-5').click();
-  await page.getByRole('button', { name: 'Sammeln fertig → Bearbeiten' }).click();
-  await expectHeading(page, /Guten Morgen/);
-
-  // Process both Belege to completion.
+  // Collect both stops → process both Belege to completion.
+  await page.getByText('HB-3', { exact: true }).first().click();
+  await page.getByText('HB-5', { exact: true }).first().click();
   for (const we of ['3700101', '3700102']) {
     await page.getByText(`WE ${we}`, { exact: true }).click();
-    await expectHeading(page, 'Beleg bearbeiten');
-    await page.getByRole('button', { name: 'Preisetiketten drucken' }).click();
-    const carton = page.getByRole('button', { name: 'Karton geöffnet' });
-    await expect(carton).toBeEnabled();
-    await carton.click(); // settle the layout before the min-qty clicks (as in the Kernfluss path)
-    await expect(page.getByText('Karton geöffnet ✓')).toBeVisible();
-    // Min-qty check per position. On a short Beleg the buttons sit below the fold;
-    // scroll the target in, click, then wait for it to detach (→ chip) so the next
-    // iteration re-resolves against the settled DOM rather than the re-rendering one.
-    for (let i = 0; i < 5; i += 1) {
-      const next = page.getByRole('button', { name: 'Mindestmenge geprüft' }).first();
-      if (!(await next.isVisible().catch(() => false))) break;
-      await next.scrollIntoViewIfNeeded();
-      await next.click();
-      await next.waitFor({ state: 'detached' });
-    }
+    await expectHeading(page, `WE ${we}`);
+    await checkAllPositions(page);
     const erledigt = page.getByRole('button', { name: 'Beleg erledigt' });
     await expect(erledigt).toBeEnabled();
     await erledigt.click();
-    await expectHeading(page, /Guten Morgen/);
+    await expectHeading(page, GREETING);
   }
 
-  // Continuation panel replaces the dead-end.
+  // Continuation panel replaces the dead-end; pull cycles the demo Belegset.
   await expect(page.getByText(/Bündel fertig/)).toBeVisible();
   const holen = page.getByRole('button', { name: 'Nächstes Bündel holen' });
-  await expect(holen).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/11-continuation.png`, fullPage: true });
-
-  // Pull next → cycles to the next demo Belegset (Großbündel · 4 Belege · Regal).
   await holen.click();
   await expect(page.getByText(/4 Belege · Regal/)).toBeVisible();
-  await page.screenshot({ path: `${SHOT_DIR}/12-next-bundle.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOT_DIR}/10-continuation.png`, fullPage: true });
 });
 
 test('§G.5 erledigt bleibt gesperrt, solange ein Problem offen ist', async ({ page }) => {
-  // Collect everything first.
-  await page.getByRole('button', { name: 'Sammeln starten' }).click();
-  await expectHeading(page, 'Plätze abholen');
-  await page.getByText('R27').click();
-  await page.getByText('A-4').click();
-  await page.getByRole('button', { name: 'Sammeln fertig → Bearbeiten' }).click();
-
-  await expectHeading(page, /Guten Morgen/);
+  await collectAll(page);
   await page.getByText('WE 3656860', { exact: true }).click();
-  await expectHeading(page, 'Beleg bearbeiten');
+  await expectHeading(page, 'WE 3656860');
 
-  // Satisfy labels + min-qty so only the open problem would block.
-  await page.getByRole('button', { name: 'Preisetiketten drucken' }).click();
-  for (let i = 0; i < SEED_POSITIONS; i += 1) {
-    await page.getByRole('button', { name: 'Mindestmenge geprüft' }).first().click();
-  }
+  // Satisfy the position checks so only the open problem would block.
+  await checkAllPositions(page);
   await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toBeEnabled();
 
   // Report a problem FROM a position (per-position scope) → erledigt must lock again.
   await page.getByRole('button', { name: 'Problem', exact: true }).first().click();
   await expectHeading(page, 'Problem melden');
   await expect(page.getByText(/Position 1/)).toBeVisible(); // target pre-selected
-  await page.getByLabel('Was ist das Problem?').click();
-  await page.getByRole('option', { name: 'Minderlieferung' }).click();
+  // D6: no 'ganzer Beleg' escape, no quantity types, one continue path.
+  await expect(page.getByRole('button', { name: 'Stattdessen ganzer Beleg' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Restware weiter bearbeiten' })).toHaveCount(0);
+  await page.getByLabel('Problemart').click();
+  await expect(page.getByRole('option', { name: 'Minderlieferung' })).toHaveCount(0); // → D2 +/- statt Problem
+  await page.getByRole('option', { name: 'falscher Artikel' }).click();
   await page.getByRole('button', { name: 'An Teamlead senden' }).click();
 
-  await expectHeading(page, 'Beleg bearbeiten');
+  await expectHeading(page, 'WE 3656860');
   await expect(page.getByText(/Offenes Problem/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toBeDisabled();
-  await page.screenshot({ path: `${SHOT_DIR}/08-problem-blocks.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOT_DIR}/11-problem-blocks.png`, fullPage: true });
 });
