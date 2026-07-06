@@ -1,28 +1,30 @@
 /**
- * Binds the pure per-Beleg workflow to the local store and event log. Each
- * action applies an immutable transition, persists it under optimistic locking
- * and appends an audit event to the local log; mutating milestones also POST the
- * matching backend transition (best-effort, non-fatal). Reads are live (Dexie
- * useLiveQuery) so the UI always reflects the latest local state.
+ * Binds the pure per-Beleg workflow to the live backend (React Query).
  *
- * The flow is the collapsed PROCESS phase: „Position geprüft" per position
- * (toggleable, D5) + Mehr-/Mindermengen per Größe (D2) → erledigt (ZST) /
- * Teilabschluss. The first recorded action marks the case in_progress on the
- * backend (start-preparation).
+ * The aggregate (`case` + work instruction + positions + box targets) is
+ * `data/useCaseAggregate.ts` — the backend's single source of truth, no more
+ * Dexie mirror. Case-level milestones (start-preparation/complete/
+ * partial-complete/issue) optimistically patch the case's status in the
+ * `['me','today']` list cache, await the real POST (`data/persist.ts`), then
+ * invalidate the affected queries on success — or roll the optimistic patch
+ * back on failure and surface the error (never swallowed, see `actionError`).
+ *
+ * TODO(task-13+): "Position geprüft" and per-Größe confirmed quantities
+ * (`CaseProgress.quantityCheckedPositionIds` / `confirmedQuantities`) have no
+ * backend endpoint yet (no matching path in `packages/api-client/src/generated/
+ * schema.ts`) — the former per-action POST from Dexie's `useCaseFlow` never
+ * existed for these two either, only the *first* action's implicit
+ * start-preparation call did (see `ensureStarted` below). Until the backend
+ * adds real persistence, this progress is tracked as client-only React Query
+ * cache state under a `['local', 'caseProgress', caseId]` key, seeded from the
+ * loaded aggregate. Unlike the old Dexie table it does not survive a full
+ * reload — that matches reality: there is nowhere durable to put it yet.
  */
-import { useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import type { AppEventType } from '../events/types.js';
-import { createEventDraft } from '../events/eventDraft.js';
-import { append } from '../events/eventLog.js';
-import {
-  getAggregate,
-  getProgress,
-  OptimisticLockError,
-  reconcileVersion,
-  saveProgress,
-} from '../db/repository.js';
-import type { CaseAggregate, CaseProgress } from '../db/types.js';
+import { useCallback, useState } from 'react';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import type { components } from '@paket/api-client';
+import { useCaseAggregate } from '../data/useCaseAggregate.js';
+import { mapCaseAggregate } from '../data/caseAggregateMapper.js';
 import {
   persistComplete,
   persistIssue,
@@ -30,155 +32,156 @@ import {
   persistStartPreparation,
   type IssueInput,
 } from '../data/persist.js';
+import type { CaseAggregate, CaseProgress } from '../domain/types.js';
 import {
   completeCase as completeCaseTx,
   hasProgress,
+  initialProgress,
   partialComplete as partialCompleteTx,
   setSkuQuantity as setSkuQuantityTx,
   setZst as setZstTx,
   togglePositionChecked as togglePositionCheckedTx,
 } from './workflowModel.js';
 
+type TodayResponseDto = components['schemas']['TodayResponseDto'];
+
 export interface CaseFlow {
   loading: boolean;
+  isError: boolean;
+  error: unknown;
   aggregate?: CaseAggregate;
   progress?: CaseProgress;
-  togglePositionChecked: (positionId: string) => Promise<void>;
-  setSkuQuantity: (skuLineId: string, quantity: number, expectedQuantity: number) => Promise<void>;
-  complete: () => Promise<void>;
-  partialComplete: (reason: string) => Promise<void>;
-  reportIssue: (input: IssueInput) => Promise<void>;
+  /** Last failed milestone action's message, or undefined. Never swallowed silently. */
+  actionError?: string;
+  clearActionError: () => void;
+  togglePositionChecked: (positionId: string) => void;
+  setSkuQuantity: (skuLineId: string, quantity: number, expectedQuantity: number) => void;
+  /** Resolves `true` on success, `false` on a surfaced (non-thrown) failure. */
+  complete: () => Promise<boolean>;
+  partialComplete: (reason: string) => Promise<boolean>;
+  reportIssue: (input: IssueInput) => Promise<boolean>;
+  refetch: () => void;
 }
 
-interface EventMeta {
-  eventType: AppEventType;
-  entityType: string;
-  entityId: string;
-  payload?: unknown;
+const TODAY_KEY = ['me', 'today'] as const;
+
+function progressQueryKey(caseId: string): readonly [string, string, string] {
+  return ['local', 'caseProgress', caseId] as const;
 }
 
 export function useCaseFlow(caseId: string): CaseFlow {
-  const aggregate = useLiveQuery(() => getAggregate(caseId), [caseId]);
-  const progress = useLiveQuery(() => getProgress(caseId), [caseId]);
+  const queryClient = useQueryClient();
+  const aggregateQuery = useCaseAggregate(caseId);
+  const aggregate = aggregateQuery.data ? mapCaseAggregate(caseId, aggregateQuery.data) : undefined;
+  const [actionError, setActionError] = useState<string | undefined>(undefined);
 
-  const commit = useCallback(
-    async (
-      transition: (p: CaseProgress) => CaseProgress,
-      meta: EventMeta,
-      /**
-       * Optional backend persistence run AFTER the local write succeeds. Returns
-       * the server's authoritative version (or undefined offline), reconciled
-       * into the local row. A failing POST is non-fatal: local state and the
-       * event log are kept so the action can be retried.
-       */
-      persist?: () => Promise<number | undefined>,
-    ): Promise<void> => {
-      const current = await getProgress(caseId);
+  const key = progressQueryKey(caseId);
+  const progressQuery = useQuery({
+    queryKey: key,
+    queryFn: () => initialProgress(aggregate as CaseAggregate, new Date().toISOString()),
+    enabled: aggregate !== undefined,
+    staleTime: Infinity,
+  });
+  const progress = progressQuery.data;
+
+  const applyLocal = useCallback(
+    (transition: (p: CaseProgress) => CaseProgress): void => {
+      const current = queryClient.getQueryData<CaseProgress>(key);
       if (!current) return;
-      const next = transition(current);
-      // First recorded action → mark the case in_progress on the backend.
-      const isFirstAction = !hasProgress(current) && hasProgress(next);
-      try {
-        await saveProgress(next, current.version);
-        await append(
-          createEventDraft({
-            eventType: meta.eventType,
-            entityType: meta.entityType,
-            entityId: meta.entityId,
-            payload: meta.payload,
-          }),
-        );
-      } catch (err) {
-        // Stale base: the live query will refresh and the action can be retried.
-        if (!(err instanceof OptimisticLockError)) throw err;
-        return;
-      }
-      const persistStep = isFirstAction ? () => persistStartPreparation(caseId) : persist;
-      if (persistStep) {
-        try {
-          const serverVersion = await persistStep();
-          if (typeof serverVersion === 'number') {
-            await reconcileVersion(caseId, serverVersion);
-          }
-        } catch {
-          // Non-fatal: local state persists; surface nothing destructive.
-        }
-      }
+      queryClient.setQueryData<CaseProgress>(key, transition(current));
     },
-    [caseId],
+    [queryClient, key],
   );
 
+  /**
+   * Optimistically patch the case's status in the `['me','today']` list cache,
+   * await the real POST, invalidate on success. On failure, roll the patch
+   * back and surface the error via `actionError` — never swallow it.
+   */
+  const runMilestone = useCallback(
+    async (nextStatus: string, post: () => Promise<{ status: string }>): Promise<boolean> => {
+      const previousToday = queryClient.getQueryData<TodayResponseDto>(TODAY_KEY);
+      if (previousToday) {
+        queryClient.setQueryData<TodayResponseDto>(TODAY_KEY, {
+          ...previousToday,
+          cases: previousToday.cases.map((c) =>
+            c.id === caseId ? { ...c, status: nextStatus } : c,
+          ),
+        });
+      }
+      try {
+        await post();
+      } catch (err) {
+        if (previousToday) queryClient.setQueryData(TODAY_KEY, previousToday);
+        setActionError(err instanceof Error ? err.message : 'Aktion fehlgeschlagen');
+        return false;
+      }
+      setActionError(undefined);
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['me', 'case', caseId, 'aggregate'] });
+      return true;
+    },
+    [queryClient, caseId],
+  );
+
+  /** First recorded local action → mark the case in_progress on the backend. */
+  const ensureStarted = useCallback((): void => {
+    const current = queryClient.getQueryData<CaseProgress>(key);
+    if (!current || hasProgress(current)) return;
+    void runMilestone('in_progress', () => persistStartPreparation(caseId));
+  }, [queryClient, key, runMilestone, caseId]);
+
   const togglePositionChecked = useCallback(
-    (positionId: string) =>
-      commit((p) => togglePositionCheckedTx(p, positionId), {
-        eventType: 'position.confirmed',
-        entityType: 'position',
-        entityId: positionId,
-      }),
-    [commit],
+    (positionId: string): void => {
+      applyLocal((p) => togglePositionCheckedTx(p, positionId));
+      ensureStarted();
+    },
+    [applyLocal, ensureStarted],
   );
 
   const setSkuQuantity = useCallback(
-    (skuLineId: string, quantity: number, expectedQuantity: number) =>
-      commit((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity), {
-        eventType: 'sku.quantity_confirmed',
-        entityType: 'sku_line',
-        entityId: skuLineId,
-        payload: { confirmedQuantity: quantity, expectedQuantity },
-      }),
-    [commit],
+    (skuLineId: string, quantity: number, expectedQuantity: number): void => {
+      applyLocal((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity));
+      ensureStarted();
+    },
+    [applyLocal, ensureStarted],
   );
 
-  const complete = useCallback(
-    () =>
-      commit(
-        (p) => completeCaseTx(setZstTx(p)),
-        { eventType: 'case.completed', entityType: 'case', entityId: caseId },
-        () => persistComplete(caseId),
-      ),
-    [commit, caseId],
-  );
+  const complete = useCallback(async (): Promise<boolean> => {
+    const ok = await runMilestone('completed', () => persistComplete(caseId));
+    if (ok) applyLocal((p) => completeCaseTx(setZstTx(p)));
+    return ok;
+  }, [runMilestone, applyLocal, caseId]);
 
   const partialComplete = useCallback(
-    (reason: string) =>
-      commit(
-        (p) => partialCompleteTx(setZstTx(p)),
-        {
-          eventType: 'case.partially_completed',
-          entityType: 'case',
-          entityId: caseId,
-          payload: { reason },
-        },
-        () => persistPartialComplete(caseId, reason),
-      ),
-    [commit, caseId],
+    async (reason: string): Promise<boolean> => {
+      const ok = await runMilestone('partially_completed', () =>
+        persistPartialComplete(caseId, reason),
+      );
+      if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
+      return ok;
+    },
+    [runMilestone, applyLocal, caseId],
   );
 
-  const reportIssue = useCallback(async (input: IssueInput): Promise<void> => {
-    // Local audit record first, then best-effort server persist (non-fatal).
-    await append(
-      createEventDraft({
-        eventType: 'issue.created',
-        entityType: 'case',
-        entityId: input.caseId,
-        payload: input,
-      }),
-    );
-    try {
-      await persistIssue(input);
-    } catch {
-      // Non-fatal: the local issue record is kept.
-    }
-  }, []);
+  const reportIssue = useCallback(
+    async (input: IssueInput): Promise<boolean> => runMilestone('issue_open', () => persistIssue(input)),
+    [runMilestone],
+  );
 
   return {
-    loading: aggregate === undefined || progress === undefined,
+    loading: aggregateQuery.isLoading || (aggregate !== undefined && progressQuery.isLoading),
+    isError: aggregateQuery.isError,
+    error: aggregateQuery.error,
     aggregate,
     progress,
+    actionError,
+    clearActionError: () => setActionError(undefined),
     togglePositionChecked,
     setSkuQuantity,
     complete,
     partialComplete,
     reportIssue,
+    refetch: () => void aggregateQuery.refetch(),
   };
 }

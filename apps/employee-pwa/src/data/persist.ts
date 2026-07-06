@@ -1,17 +1,18 @@
 /**
- * Server-side persistence of case transitions for the Mitarbeiter-App.
+ * Server persistence of case transitions for the Mitarbeiter-App.
  *
- * After the local Dexie write, these helpers POST the matching backend
- * transition (§7.1 state machine) so the real ZstRecord / partial completion /
- * issue is written. They return the server's authoritative version from
- * TransitionResultDto so the caller can reconcile the local CaseProgress.
- * In offline-demo mode (no backend) they are no-ops returning undefined.
+ * Every `persist*` function here IS the write — there is no more local Dexie
+ * write happening first (that db is gone, see task-10/task-13). Each POSTs the
+ * matching backend transition (§7.1 state machine) and returns the server's
+ * authoritative `TransitionResultDto` (case id, new status, version). A failed
+ * request throws: callers (see `workflow/useCaseFlow.ts`) must handle it
+ * explicitly — nothing here swallows an error.
  */
 import type { components } from '@paket/api-client';
 import type { IssueScope, IssueType } from '@paket/domain-types';
-import { getApiClient, isBackendEnabled } from './api.js';
+import { getApiClient } from './api.js';
 
-type TransitionResultDto = components['schemas']['TransitionResultDto'];
+export type TransitionResultDto = components['schemas']['TransitionResultDto'];
 
 export interface IssueInput {
   caseId: string;
@@ -24,28 +25,22 @@ export interface IssueInput {
   photoKeys?: string[];
 }
 
-/** Authoritative server version after a transition, or undefined when offline. */
-export type ServerVersion = number | undefined;
-
-/**
- * Resolve the server version from an openapi-fetch result, distinguishing a real
- * backend failure (thrown, so {@link useCaseFlow}'s documented non-fatal retry
- * path can keep local state) from a successful response that carried no version.
- */
-function resolveVersion(
-  label: string,
-  result: { data?: TransitionResultDto; error?: unknown },
-): ServerVersion {
-  if (result.error) {
-    throw new Error(`${label} fehlgeschlagen (${JSON.stringify(result.error)})`);
-  }
-  return typeof result.data?.version === 'number' ? result.data.version : undefined;
+interface ApiResult<T> {
+  data?: T;
+  error?: unknown;
 }
 
-/** POST /api/cases/:id/start-preparation → assigned → in_progress; returns version. */
-export async function persistStartPreparation(caseId: string): Promise<ServerVersion> {
-  if (!isBackendEnabled) return undefined;
-  return resolveVersion(
+/** Unwrap an openapi-fetch result, throwing on any non-2xx/error response. */
+function unwrap(label: string, result: ApiResult<TransitionResultDto>): TransitionResultDto {
+  if (result.error || !result.data) {
+    throw new Error(`${label} fehlgeschlagen (${JSON.stringify(result.error)})`);
+  }
+  return result.data;
+}
+
+/** POST /api/cases/:id/start-preparation → assigned → in_progress. */
+export async function persistStartPreparation(caseId: string): Promise<TransitionResultDto> {
+  return unwrap(
     'Start',
     await getApiClient().POST('/api/cases/{caseId}/start-preparation', {
       params: { path: { caseId } },
@@ -53,10 +48,9 @@ export async function persistStartPreparation(caseId: string): Promise<ServerVer
   );
 }
 
-/** POST /api/cases/:id/complete → writes the ZstRecord; returns server version. */
-export async function persistComplete(caseId: string): Promise<ServerVersion> {
-  if (!isBackendEnabled) return undefined;
-  return resolveVersion(
+/** POST /api/cases/:id/complete → writes the ZstRecord. */
+export async function persistComplete(caseId: string): Promise<TransitionResultDto> {
+  return unwrap(
     'Abschluss',
     await getApiClient().POST('/api/cases/{caseId}/complete', {
       params: { path: { caseId } },
@@ -64,13 +58,12 @@ export async function persistComplete(caseId: string): Promise<ServerVersion> {
   );
 }
 
-/** POST /api/cases/:id/partial-complete → §4.6 Teilabschluss; returns version. */
+/** POST /api/cases/:id/partial-complete → §4.6 Teilabschluss. */
 export async function persistPartialComplete(
   caseId: string,
   reason: string,
-): Promise<ServerVersion> {
-  if (!isBackendEnabled) return undefined;
-  return resolveVersion(
+): Promise<TransitionResultDto> {
+  return unwrap(
     'Teilabschluss',
     await getApiClient().POST('/api/cases/{caseId}/partial-complete', {
       params: { path: { caseId } },
@@ -79,10 +72,9 @@ export async function persistPartialComplete(
   );
 }
 
-/** POST /api/issues → reports an exception against the case; returns version. */
-export async function persistIssue(input: IssueInput): Promise<ServerVersion> {
-  if (!isBackendEnabled) return undefined;
-  return resolveVersion(
+/** POST /api/issues → reports an exception against the case (§9.7). */
+export async function persistIssue(input: IssueInput): Promise<TransitionResultDto> {
+  return unwrap(
     'Problem melden',
     await getApiClient().POST('/api/issues', {
       body: {

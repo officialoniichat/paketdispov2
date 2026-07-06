@@ -1,22 +1,21 @@
 /**
- * Re-fetches the assigned bundle whenever the app regains focus.
+ * Invalidates the day's assignment (`['me', 'today']`, see `useMeToday.ts`)
+ * whenever the app regains focus.
  *
  * This is the integration point for live "new Beleg assigned" delivery: today
- * it refreshes on focus/visibility (cheap, robust, offline-safe); a future push
- * channel can call the same loader. No-op in offline-demo mode (no backend).
+ * it refreshes on focus/visibility (cheap, robust); a future push channel can
+ * invalidate the same query key. React Query re-fetches in the background and
+ * any mounted `useMeToday()` consumer picks up the result automatically.
  */
 import { useEffect } from 'react';
-import { isBackendEnabled } from './api.js';
-import { loadAssignedWork } from '../db/sync.js';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function useFocusRefresh(): void {
-  useEffect(() => {
-    if (!isBackendEnabled) return;
+  const queryClient = useQueryClient();
 
+  useEffect(() => {
     const refresh = (): void => {
-      void loadAssignedWork().catch(() => {
-        // Non-fatal: keep the cached bundle when a background refresh fails.
-      });
+      void queryClient.invalidateQueries({ queryKey: ['me', 'today'] });
     };
 
     const onVisible = (): void => {
@@ -29,5 +28,5 @@ export function useFocusRefresh(): void {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [queryClient]);
 }
