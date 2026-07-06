@@ -23,6 +23,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import type { components } from '@paket/api-client';
 import { SessionExpiredError } from '../data/apiErrorHandling.js';
 import { getSession } from '../data/session.js';
 import { useMeToday } from '../data/useMeToday.js';
@@ -32,6 +33,31 @@ import { useScanner } from '../scanner/useScanner.js';
 import { scanMatches } from '../workflow/workflowModel.js';
 import type { GoodsCategory } from '../domain/types.js';
 import { caseProcessPath } from '../routes/paths.js';
+
+type RouteStopDto = components['schemas']['RouteStopDto'];
+type CaseSummaryDto = components['schemas']['CaseSummaryDto'];
+
+export interface CollectStopView extends RouteStopDto {
+  caseIds: string[];
+}
+
+/**
+ * Route stops in pick order, each carrying the Belege booked to its
+ * Lagerplatz (matched by `storageLocationCode` — `RouteStopDto` itself has no
+ * case linkage). A stop whose only case(s) got parked survives the backend's
+ * resequencing (only renumbered, not deleted) but now matches zero cases —
+ * filtered out here so it doesn't sit in the list as an uncollectable,
+ * pointless "ghost" stop blocking `collectComplete`.
+ */
+export function deriveStops(routeStops: RouteStopDto[], cases: CaseSummaryDto[]): CollectStopView[] {
+  return [...routeStops]
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((stop) => ({
+      ...stop,
+      caseIds: cases.filter((c) => c.storageLocationCode === stop.locationCode).map((c) => c.id),
+    }))
+    .filter((stop) => stop.caseIds.length > 0);
+}
 
 /** German messaging for the backend's "no cart assigned" reasons (§continuation). */
 const PULL_REASON_MSG: Record<string, string> = {
@@ -103,7 +129,13 @@ export function BundleHomeScreen(): JSX.Element {
   // stop check-off (RouteStopDto has no scan-submit endpoint). Until one
   // exists this is a local-only echo of the pick UI, seeded from the route
   // stop's `scanned` flag whenever a *new* bundle is assigned.
-  const [collectedSequences, setCollectedSequences] = useState<Set<number>>(new Set());
+  //
+  // Tracked by the stop's own `id`, NOT its `sequence`: "Rest parken" causes
+  // the backend to resequence every remaining stop (0..n) in the same
+  // bundle — the bundle id doesn't change, so a sequence-keyed set would
+  // silently point at the wrong stop (or the wrong "geholt" state) after any
+  // park action. `id` is stable across that resequencing.
+  const [collectedStopIds, setCollectedStopIds] = useState<Set<string>>(new Set());
   const [seededBundleId, setSeededBundleId] = useState<string | undefined>(undefined);
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
   const [parkMsg, setParkMsg] = useState<string | undefined>(undefined);
@@ -113,30 +145,21 @@ export function BundleHomeScreen(): JSX.Element {
 
   useEffect(() => {
     if (bundle && bundle.bundleId !== seededBundleId) {
-      const scanned = new Set(
-        bundle.routeStops.filter((stop) => stop.scanned).map((stop) => stop.sequence),
-      );
-      setCollectedSequences(scanned);
+      const scanned = new Set(bundle.routeStops.filter((stop) => stop.scanned).map((stop) => stop.id));
+      setCollectedStopIds(scanned);
       setSeededBundleId(bundle.bundleId);
     }
   }, [bundle, seededBundleId]);
 
-  const collected = collectedSequences;
+  const collected = collectedStopIds;
 
-  // Route stops in order, each carrying the Belege booked to its Lagerplatz
-  // (matched by storageLocationCode — RouteStopDto itself has no case linkage).
-  const stops = [...(bundle?.routeStops ?? [])]
-    .sort((a, b) => a.sequence - b.sequence)
-    .map((stop) => ({
-      ...stop,
-      caseIds: cases.filter((c) => c.storageLocationCode === stop.locationCode).map((c) => c.id),
-    }));
+  const stops = deriveStops(bundle?.routeStops ?? [], cases);
 
-  const toggleStop = (sequence: number): void => {
-    setCollectedSequences((prev) => {
+  const toggleStop = (stopId: string): void => {
+    setCollectedStopIds((prev) => {
       const next = new Set(prev);
-      if (next.has(sequence)) next.delete(sequence);
-      else next.add(sequence);
+      if (next.has(stopId)) next.delete(stopId);
+      else next.add(stopId);
       return next;
     });
   };
@@ -144,13 +167,13 @@ export function BundleHomeScreen(): JSX.Element {
   // Optional scan: a scanned code that matches an unfetched stop checks it off.
   useScanner({
     onScan: (code) => {
-      const hit = stops.find((s) => !collected.has(s.sequence) && scanMatches(code, s.locationCode));
-      if (hit) toggleStop(hit.sequence);
+      const hit = stops.find((s) => !collected.has(s.id) && scanMatches(code, s.locationCode));
+      if (hit) toggleStop(hit.id);
     },
   });
 
-  const counts = { total: stops.length, collected: stops.filter((s) => collected.has(s.sequence)).length };
-  const collectComplete = stops.length === 0 || stops.every((s) => collected.has(s.sequence));
+  const counts = { total: stops.length, collected: stops.filter((s) => collected.has(s.id)).length };
+  const collectComplete = stops.length === 0 || stops.every((s) => collected.has(s.id));
 
   // Pull the next cart from the backend. The `['me','today']` query is
   // invalidated by the mutation itself on success, so the home refreshes
@@ -169,7 +192,7 @@ export function BundleHomeScreen(): JSX.Element {
 
   // B4 Parkposition: the Belege of not-yet-fetched stops go back to the pool.
   const uncollectedCaseIds = stops
-    .filter((s) => !collected.has(s.sequence))
+    .filter((s) => !collected.has(s.id))
     .flatMap((s) => s.caseIds);
 
   const handlePark = async (): Promise<void> => {
@@ -264,15 +287,15 @@ export function BundleHomeScreen(): JSX.Element {
           </Typography>
           <Stack spacing={1} sx={{ mb: 1 }}>
             {stops.map((stop, index) => {
-              const isDone = collected.has(stop.sequence);
+              const isDone = collected.has(stop.id);
               const stopBelege = stop.caseIds
                 .map((id) => cases.find((c) => c.id === id))
                 .filter((c): c is NonNullable<typeof c> => Boolean(c));
               return (
                 <Paper
-                  key={stop.sequence}
+                  key={stop.id}
                   variant="outlined"
-                  onClick={() => toggleStop(stop.sequence)}
+                  onClick={() => toggleStop(stop.id)}
                   sx={{
                     p: 1.5,
                     display: 'flex',
