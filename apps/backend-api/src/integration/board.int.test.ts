@@ -142,6 +142,11 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
       expect(row.cases.length).toBeGreaterThan(0);
       expect(row.routeStops.length).toBeGreaterThan(0);
       expect(row.capacityMinutes).toBeGreaterThan(0);
+      // B3 Teile-first: plannedTeile = Σ totalQuantity over the row's cases.
+      expect(row.plannedTeile).toBe(row.cases.reduce((s, c) => s + c.totalQuantity, 0));
+      expect(row.plannedTeile).toBeGreaterThan(0);
+      // B5: skill tier is projected from the User (seed default: profi).
+      expect(row.skillTier).toBe('profi');
       const firstStop = row.routeStops[0]!;
       expect(firstStop.locationCode).toBe('R27');
       expect(typeof firstStop.scanned).toBe('boolean');
@@ -169,6 +174,8 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     expect(idle!.cases).toEqual([]);
     expect(idle!.routeStops).toEqual([]);
     expect(idle!.plannedEffortMinutes).toBe(0);
+    expect(idle!.plannedTeile).toBe(0);
+    expect(idle!.skillTier).toBe('profi');
     expect(idle!.capacityMinutes).toBe(480);
     expect(idle!.bereiche).toEqual(['regal']);
   });

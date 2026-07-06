@@ -15,6 +15,8 @@ import {
   CancelDto,
   CapacityDto,
   CaseDetailDto,
+  CaseLookupQueryDto,
+  CaseLookupResultDto,
   DashboardDto,
   DeliveryGroupEditDto,
   DeliveryGroupEditResultDto,
@@ -87,6 +89,16 @@ export class TeamleadController {
   @ApiOkResponse({ type: PoolListDto })
   pool(@Query() query: PoolQueryDto): Promise<PoolListDto> {
     return this.read.listPool(query);
+  }
+
+  @Get('cases/lookup')
+  @ApiOperation({
+    summary:
+      'B1 WE-Nr-Zuweisung: look a Beleg up by WE-Belegnummer with an assignability verdict',
+  })
+  @ApiOkResponse({ type: CaseLookupResultDto })
+  lookupCase(@Query() query: CaseLookupQueryDto): Promise<CaseLookupResultDto> {
+    return this.read.lookupCase(query.weBelegNo);
   }
 
   @Get('cases/:caseId')

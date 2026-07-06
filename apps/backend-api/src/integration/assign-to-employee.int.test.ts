@@ -285,6 +285,32 @@ describe('§8.4 assignToEmployee — audit', () => {
   });
 });
 
+describe('§8.4 assignToEmployee — optional reason (B2)', () => {
+  it('assigns WITHOUT a reason and still writes the audit event (reason null)', async () => {
+    const beleg = await ready('WE-A4');
+    const result = await teamleadSvc.assignToEmployee(
+      teamlead,
+      'ma-201',
+      { caseId: beleg.id },
+      NOW,
+    );
+
+    expect(result.caseStatus).toBe('assigned');
+    expect(result.eventId).toBeTruthy();
+
+    const ev = await prisma.workflowEvent.findUniqueOrThrow({
+      where: { id: result.eventId! },
+    });
+    expect(ev.eventType).toBe('assignment.overridden');
+    const payload = ev.payload as Record<string, unknown>;
+    expect(payload['action']).toBe('manual_assign');
+    expect(payload['reason']).toBeNull();
+    expect(payload['caseId']).toBe(beleg.id);
+
+    expect((await events.verifyIntegrity()).ok).toBe(true);
+  });
+});
+
 describe('PoolItemDto.bereich', () => {
   it('derives bereich from the Beleg location kind (regal → Regal)', async () => {
     const pool = await read.listPool({ status: 'ready' });

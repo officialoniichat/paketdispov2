@@ -6,7 +6,7 @@
  * @paket/api-client read endpoints, mapping each DTO field-by-field so the
  * feature components stay free of transport concerns.
  */
-import type { GoodsReceiptCase, WorkIssue } from '@paket/domain-types';
+import type { GoodsReceiptCase, SkillTier, WorkIssue } from '@paket/domain-types';
 
 // ---------------------------------------------------------------------------
 // §10.1 Tagescockpit
@@ -107,6 +107,8 @@ export interface BoardCase {
   caseId: string;
   weBelegNo: string;
   status: GoodsReceiptCase['status'];
+  /** Teile of the Beleg — the primary size display (B3). */
+  totalQuantity: number;
   estimatedMinutes: number;
   effortPoints: number;
   storageCode: string;
@@ -117,6 +119,10 @@ export interface BoardCase {
 export interface BoardRow {
   employeeId: string;
   displayName: string;
+  /** Skill-Stufe (B5); starter/dummy erhalten nur manuelle Zuteilung. */
+  skillTier: SkillTier;
+  /** Σ Teile über die zugeteilten Belege — primäre Last-Anzeige (B3). */
+  plannedTeile: number;
   plannedHours: number;
   utilisationPct: number;
   assignedMinutes: number;

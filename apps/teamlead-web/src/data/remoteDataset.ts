@@ -18,6 +18,7 @@ import {
   toEventType,
   toPriorityFlags,
   toSectionCode,
+  toSkillTier,
 } from './narrow.js';
 import type {
   BoardCase,
@@ -169,6 +170,8 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
   return {
     employeeId: row.employeeNo,
     displayName: row.employeeName,
+    skillTier: toSkillTier(row.skillTier),
+    plannedTeile: row.plannedTeile,
     plannedHours: round1(net / 60),
     utilisationPct: net === 0 ? 0 : round1((assigned / net) * 100),
     assignedMinutes: assigned,
@@ -191,6 +194,7 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
     caseId: c.id,
     weBelegNo: c.weBelegNo,
     status: toCaseStatus(c.status),
+    totalQuantity: c.totalQuantity,
     estimatedMinutes: c.estimatedMinutes,
     effortPoints: c.effortPoints,
     // BoardCaseDto carries no storage code; the board caption hides it when empty.

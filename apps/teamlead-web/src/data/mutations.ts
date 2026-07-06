@@ -71,14 +71,15 @@ export async function withdrawCase(
 export interface AddToBundleArgs {
   bundleId: string;
   caseId: string;
-  reason: string;
+  /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
+  reason?: string;
 }
 
 export async function addCaseToBundle(
   api: PaketApiClient,
   { bundleId, caseId, reason }: AddToBundleArgs,
 ): Promise<BundleMutationResultDto> {
-  const body: AddToBundleDto = { caseId, reason };
+  const body: AddToBundleDto = { caseId, ...(reason ? { reason } : {}) };
   return ensure(
     'Hinzufügen',
     await api.POST('/api/teamlead/bundles/{bundleId}/add', {
@@ -91,7 +92,8 @@ export async function addCaseToBundle(
 export interface AssignToEmployeeArgs {
   employeeNo: string;
   caseId: string;
-  reason: string;
+  /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
+  reason?: string;
   /** Operational day of the board (YYYY-MM-DD); the Bündel is bound to this day. */
   date: string;
 }
@@ -106,7 +108,7 @@ export async function assignToEmployee(
   api: PaketApiClient,
   { employeeNo, caseId, reason, date }: AssignToEmployeeArgs,
 ): Promise<BundleMutationResultDto> {
-  const body: AssignToEmployeeDto = { caseId, reason, date };
+  const body: AssignToEmployeeDto = { caseId, date, ...(reason ? { reason } : {}) };
   return ensure(
     'Beleg zuweisen',
     await api.POST('/api/teamlead/employees/{employeeNo}/assign', {

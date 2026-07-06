@@ -777,6 +777,43 @@
         ]
       }
     },
+    "/api/teamlead/cases/lookup": {
+      "get": {
+        "operationId": "TeamleadController_lookupCase",
+        "parameters": [
+          {
+            "name": "weBelegNo",
+            "required": true,
+            "in": "query",
+            "description": "WE-Belegnummer (exakt, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseLookupResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "B1 WE-Nr-Zuweisung: look a Beleg up by WE-Belegnummer with an assignability verdict",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/cases/{caseId}": {
       "get": {
         "operationId": "TeamleadController_caseDetail",
@@ -3270,6 +3307,10 @@
           "employeeName": {
             "type": "string"
           },
+          "skillTier": {
+            "type": "string",
+            "description": "Skill-Stufe des Mitarbeiters (profi|fortgeschritten|basis|starter|dummy, B5); starter/dummy erhalten nur manuelle Zuteilung."
+          },
           "bundleId": {
             "type": "string",
             "nullable": true,
@@ -3281,6 +3322,10 @@
           },
           "plannedEffortMinutes": {
             "type": "number"
+          },
+          "plannedTeile": {
+            "type": "number",
+            "description": "Σ Teile (totalQuantity) über die zugeteilten Belege — die primäre Last-Anzeige (B3)."
           },
           "capacityMinutes": {
             "type": "number"
@@ -3308,8 +3353,10 @@
         "required": [
           "employeeNo",
           "employeeName",
+          "skillTier",
           "bundleStatus",
           "plannedEffortMinutes",
+          "plannedTeile",
           "capacityMinutes",
           "bereiche",
           "cases",
@@ -3671,6 +3718,69 @@
           "total",
           "page",
           "limit"
+        ]
+      },
+      "CaseLookupResultDto": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "description": "Anhang A CaseStatus"
+          },
+          "bereich": {
+            "type": "string",
+            "nullable": true,
+            "description": "Fester Bereich des Belegs (Hängebahn|Palette|Regal), aus der Lagerklasse"
+          },
+          "teile": {
+            "type": "number",
+            "nullable": true,
+            "description": "Teile (totalQuantity)"
+          },
+          "assignedEmployeeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "assignable": {
+            "type": "boolean",
+            "description": "true = ready und noch keinem Mitarbeiter zugeteilt"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "not_found",
+              "already_assigned",
+              "wrong_status",
+              "blocked"
+            ],
+            "nullable": true,
+            "description": "Warum nicht zuweisbar; null wenn assignable"
+          },
+          "deliveryGroup": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryGroupRefDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "assignable"
         ]
       },
       "EffortComponentsDto": {
@@ -4389,7 +4499,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Reason logged in the §8.4 audit event (assignment.overridden)"
+            "description": "Optional reason logged in the §8.4 audit event (assignment.overridden)"
           },
           "date": {
             "type": "string",
@@ -4397,8 +4507,7 @@
           }
         },
         "required": [
-          "caseId",
-          "reason"
+          "caseId"
         ]
       },
       "ReorderBundleDto": {

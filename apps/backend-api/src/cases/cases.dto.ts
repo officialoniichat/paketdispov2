@@ -360,6 +360,48 @@ export class PoolItemDto extends CaseSummaryDto {
   bundleQueue!: BundleQueueRefDto | null;
 }
 
+/** Why a looked-up Beleg is not assignable (B1 WE-Nr-Zuweisung). */
+export const LOOKUP_REASON_CODES = [
+  'not_found',
+  'already_assigned',
+  'wrong_status',
+  'blocked',
+] as const;
+export type LookupReasonCode = (typeof LOOKUP_REASON_CODES)[number];
+
+/**
+ * B1: result of the WE-Belegnummer lookup behind the board's Zuweisen dialog.
+ * `assignable` = the Beleg is `ready` and unassigned; otherwise `reasonCode`
+ * explains the verdict so the dialog can render an inline validation message.
+ */
+export class CaseLookupResultDto {
+  @ApiProperty() found!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true }) caseId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) weBelegNo!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Anhang A CaseStatus' })
+  status!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Fester Bereich des Belegs (Hängebahn|Palette|Regal), aus der Lagerklasse',
+  })
+  bereich!: string | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Teile (totalQuantity)' })
+  teile!: number | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  assignedEmployeeName!: string | null;
+  @ApiProperty({ description: 'true = ready und noch keinem Mitarbeiter zugeteilt' })
+  assignable!: boolean;
+  @ApiPropertyOptional({
+    enum: LOOKUP_REASON_CODES,
+    nullable: true,
+    description: 'Warum nicht zuweisbar; null wenn assignable',
+  })
+  reasonCode!: LookupReasonCode | null;
+  @ApiPropertyOptional({ type: DeliveryGroupRefDto, nullable: true })
+  deliveryGroup!: DeliveryGroupRefDto | null;
+}
+
 export class PoolListDto {
   @ApiProperty({ type: [PoolItemDto] }) items!: PoolItemDto[];
   @ApiProperty() total!: number;
@@ -409,6 +451,11 @@ export class BoardCaseDto {
 export class BoardRowDto {
   @ApiProperty() employeeNo!: string;
   @ApiProperty() employeeName!: string;
+  @ApiProperty({
+    description:
+      "Skill-Stufe des Mitarbeiters (profi|fortgeschritten|basis|starter|dummy, B5); starter/dummy erhalten nur manuelle Zuteilung.",
+  })
+  skillTier!: string;
   @ApiPropertyOptional({
     type: String,
     nullable: true,
@@ -418,6 +465,10 @@ export class BoardRowDto {
   @ApiProperty({ description: "Bundle status, or 'idle' when the employee has no Bündel." })
   bundleStatus!: string;
   @ApiProperty() plannedEffortMinutes!: number;
+  @ApiProperty({
+    description: 'Σ Teile (totalQuantity) über die zugeteilten Belege — die primäre Last-Anzeige (B3).',
+  })
+  plannedTeile!: number;
   @ApiProperty() capacityMinutes!: number;
   @ApiProperty({
     type: [String],
@@ -748,6 +799,13 @@ export class PoolQueryDto {
   limit?: number;
 }
 
+/** Query for GET /api/teamlead/cases/lookup (B1 WE-Nr-Zuweisung). */
+export class CaseLookupQueryDto {
+  @ApiProperty({ description: 'WE-Belegnummer (exakt, case-insensitive)' })
+  @IsString()
+  weBelegNo!: string;
+}
+
 /** Body for POST /api/teamlead/cases/:caseId/flag-attention (A7, Bucherinnen-Inlet mock). */
 export class FlagAttentionDto {
   @ApiPropertyOptional({ description: 'Optionale Notiz, warum der Beleg Aufmerksamkeit braucht' })
@@ -836,9 +894,12 @@ export class AssignToEmployeeDto {
   @IsString()
   caseId!: string;
 
-  @ApiProperty({ description: 'Reason logged in the §8.4 audit event (assignment.overridden)' })
+  @ApiPropertyOptional({
+    description: 'Optional reason logged in the §8.4 audit event (assignment.overridden)',
+  })
+  @IsOptional()
   @IsString()
-  reason!: string;
+  reason?: string;
 
   @ApiPropertyOptional({
     type: String,

@@ -303,6 +303,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** B1 WE-Nr-Zuweisung: look a Beleg up by WE-Belegnummer with an assignability verdict */
+        get: operations["TeamleadController_lookupCase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/cases/{caseId}": {
         parameters: {
             query?: never;
@@ -1187,11 +1204,15 @@ export interface components {
         BoardRowDto: {
             employeeNo: string;
             employeeName: string;
+            /** @description Skill-Stufe des Mitarbeiters (profi|fortgeschritten|basis|starter|dummy, B5); starter/dummy erhalten nur manuelle Zuteilung. */
+            skillTier: string;
             /** @description Assigned bundle id; null for a scheduled-but-idle employee with no Bündel. */
             bundleId?: string | null;
             /** @description Bundle status, or 'idle' when the employee has no Bündel. */
             bundleStatus: string;
             plannedEffortMinutes: number;
+            /** @description Σ Teile (totalQuantity) über die zugeteilten Belege — die primäre Last-Anzeige (B3). */
+            plannedTeile: number;
             capacityMinutes: number;
             /** @description Fixed Bereiche/skills of the employee (shown on idle rows too). */
             bereiche: string[];
@@ -1307,6 +1328,26 @@ export interface components {
             total: number;
             page: number;
             limit: number;
+        };
+        CaseLookupResultDto: {
+            found: boolean;
+            caseId?: string | null;
+            weBelegNo?: string | null;
+            /** @description Anhang A CaseStatus */
+            status?: string | null;
+            /** @description Fester Bereich des Belegs (Hängebahn|Palette|Regal), aus der Lagerklasse */
+            bereich?: string | null;
+            /** @description Teile (totalQuantity) */
+            teile?: number | null;
+            assignedEmployeeName?: string | null;
+            /** @description true = ready und noch keinem Mitarbeiter zugeteilt */
+            assignable: boolean;
+            /**
+             * @description Warum nicht zuweisbar; null wenn assignable
+             * @enum {string|null}
+             */
+            reasonCode?: "not_found" | "already_assigned" | "wrong_status" | "blocked" | null;
+            deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
         };
         EffortComponentsDto: {
             /** @description Grundzeit je Beleg */
@@ -1539,8 +1580,8 @@ export interface components {
         AssignToEmployeeDto: {
             /** @description Ready Beleg (GoodsReceiptCase) to assign to the employee */
             caseId: string;
-            /** @description Reason logged in the §8.4 audit event (assignment.overridden) */
-            reason: string;
+            /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
+            reason?: string;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
             date?: string;
         };
@@ -2227,6 +2268,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoolListDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_lookupCase: {
+        parameters: {
+            query: {
+                /** @description WE-Belegnummer (exakt, case-insensitive) */
+                weBelegNo: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseLookupResultDto"];
                 };
             };
         };

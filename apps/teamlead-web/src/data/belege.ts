@@ -22,6 +22,7 @@ import { unwrap } from './http.js';
 import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './narrow.js';
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
+type CaseLookupResultDto = components['schemas']['CaseLookupResultDto'];
 type PoolListDto = components['schemas']['PoolListDto'];
 type CaseDetailDto = components['schemas']['CaseDetailDto'];
 type PositionDetailDto = components['schemas']['PositionDetailDto'];
@@ -354,6 +355,57 @@ export async function fetchBelegeList(
   });
   const dto = unwrap<PoolListDto>(result, 'cases');
   return { rows: dto.items.map(toBelegRow), total: dto.total, page: dto.page, limit: dto.limit };
+}
+
+/** Why a looked-up Beleg is not assignable (B1). Mirrors the backend verdict codes. */
+export type BelegLookupReason = 'not_found' | 'already_assigned' | 'wrong_status' | 'blocked';
+
+/** B1: WE-Nr lookup verdict for the board's Zuweisen dialog. */
+export interface BelegLookup {
+  found: boolean;
+  caseId: string | null;
+  weBelegNo: string | null;
+  status: CaseStatus | null;
+  bereich: string | null;
+  teile: number | null;
+  assignedEmployeeName: string | null;
+  assignable: boolean;
+  reasonCode: BelegLookupReason | null;
+  deliveryGroup: DeliveryGroupRef | null;
+}
+
+/**
+ * B1 WE-Nr-Zuweisung: look a Beleg up by WE-Belegnummer. The backend judges
+ * assignability (ready + unassigned) and returns a verdict code — the dialog
+ * only displays it (Fachlogik single-source).
+ */
+export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
+  const result = await api.GET('/api/teamlead/cases/lookup', {
+    params: { query: { weBelegNo } },
+  });
+  const dto = unwrap<CaseLookupResultDto>(result, 'case lookup');
+  return {
+    found: dto.found,
+    caseId: dto.caseId ?? null,
+    weBelegNo: dto.weBelegNo ?? null,
+    status: dto.status != null ? toCaseStatus(dto.status) : null,
+    bereich: dto.bereich ?? null,
+    teile: dto.teile ?? null,
+    assignedEmployeeName: dto.assignedEmployeeName ?? null,
+    assignable: dto.assignable,
+    reasonCode: dto.reasonCode ?? null,
+    deliveryGroup: dto.deliveryGroup
+      ? {
+          id: dto.deliveryGroup.id,
+          signal: dto.deliveryGroup.signal,
+          confidence: dto.deliveryGroup.confidence,
+          presentSize: dto.deliveryGroup.presentSize,
+          expectedSize: dto.deliveryGroup.expectedSize ?? null,
+          missingCount: dto.deliveryGroup.missingCount,
+          locked: dto.deliveryGroup.locked,
+        }
+      : null,
+  };
 }
 
 /** A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet mock). */

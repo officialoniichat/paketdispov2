@@ -70,11 +70,13 @@ export function AssignFromListDialog({
   async function handleConfirm(): Promise<void> {
     if (!beleg || targetEmployeeNo === '') return;
     setError(null);
+    const trimmed = reason.trim();
     try {
+      // B2: der Grund ist optional — ein leerer Grund wird weggelassen, nicht als '' gesendet.
       await assignToEmployee.mutateAsync({
         employeeNo: targetEmployeeNo,
         caseId: beleg.id,
-        reason: reason.trim(),
+        ...(trimmed.length > 0 ? { reason: trimmed } : {}),
       });
       void queryClient.invalidateQueries({ queryKey: ['belege'] });
       onClose();

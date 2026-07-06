@@ -16,12 +16,14 @@ import {
   locationKindSchema,
   priorityFlagSchema,
   sectionCodeSchema,
+  skillTierSchema,
   workflowEventTypeSchema,
   type ActorType,
   type CaseStatus,
   type LocationKind,
   type PriorityFlag,
   type SectionCode,
+  type SkillTier,
   type WorkflowEventType,
 } from '@paket/domain-types';
 
@@ -38,6 +40,11 @@ export function toActorType(value: string): ActorType {
 /** Narrow a DTO eventType string to the domain `WorkflowEventType`, throwing on an unknown value. */
 export function toEventType(value: string): WorkflowEventType {
   return workflowEventTypeSchema.parse(value);
+}
+
+/** Narrow a DTO skillTier string to the domain `SkillTier`, throwing on an unknown value. */
+export function toSkillTier(value: string): SkillTier {
+  return skillTierSchema.parse(value);
 }
 
 /** Narrow a DTO `kind` string to the domain `LocationKind`, throwing on an unknown value. */

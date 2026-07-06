@@ -10,6 +10,7 @@ import {
   type BundleQueueRefDto,
   type CapacityDto,
   type CaseDetailDto,
+  type CaseLookupResultDto,
   type CaseSummaryDto,
   type DashboardDto,
   type DeliveryGroupDetailDto,
@@ -280,6 +281,67 @@ export class TeamleadReadService {
     };
   }
 
+  /**
+   * B1 WE-Nr-Zuweisung: look a Beleg up by its WE-Belegnummer and judge whether the
+   * teamlead may assign it manually. `assignable` = `ready` AND unassigned; every
+   * other outcome carries a `reasonCode` (not_found | already_assigned | wrong_status
+   * | blocked) so the dialog renders a precise inline validation message.
+   */
+  async lookupCase(weBelegNoRaw: string): Promise<CaseLookupResultDto> {
+    const weBelegNo = weBelegNoRaw.trim();
+    const found = weBelegNo
+      ? await this.prisma.goodsReceiptCase.findFirst({
+          where: { weBelegNo: { equals: weBelegNo, mode: 'insensitive' } },
+          include: {
+            storageLocation: { select: { kind: true } },
+            assignedBundle: { select: { employee: { select: { displayName: true } } } },
+          },
+        })
+      : null;
+    if (!found) {
+      return {
+        found: false,
+        caseId: null,
+        weBelegNo: null,
+        status: null,
+        bereich: null,
+        teile: null,
+        assignedEmployeeName: null,
+        assignable: false,
+        reasonCode: 'not_found',
+        deliveryGroup: null,
+      };
+    }
+
+    const assignedEmployeeName = found.assignedBundle?.employee?.displayName ?? null;
+    const assignable = found.status === 'ready' && found.assignedBundleId === null;
+    let reasonCode: CaseLookupResultDto['reasonCode'] = null;
+    if (!assignable) {
+      if (found.assignedBundleId !== null) reasonCode = 'already_assigned';
+      else if (found.status === 'blocked') reasonCode = 'blocked';
+      else reasonCode = 'wrong_status';
+    }
+
+    // Delivery-group context so the dialog shows the „Lieferung ×n" chip before assigning.
+    const detail = await this.deliveryGroupDetail(found.id, found.bookingDate);
+    const deliveryGroup = detail ? (({ members: _members, ...ref }) => ref)(detail) : null;
+
+    return {
+      found: true,
+      caseId: found.id,
+      weBelegNo: found.weBelegNo,
+      status: found.status,
+      bereich: found.storageLocation
+        ? (bereichFromLocationKind(found.storageLocation.kind as LocationKind) ?? null)
+        : null,
+      teile: found.totalQuantity,
+      assignedEmployeeName,
+      assignable,
+      reasonCode,
+      deliveryGroup,
+    };
+  }
+
   async dashboard(now: Date = new Date()): Promise<DashboardDto> {
     const grouped = await this.prisma.goodsReceiptCase.groupBy({
       by: ['status'],
@@ -354,7 +416,9 @@ export class TeamleadReadService {
       this.prisma.assignmentBundle.findMany({
         where: { date: day },
         include: {
-          employee: { select: { employeeNo: true, displayName: true, bereiche: true } },
+          employee: {
+            select: { employeeNo: true, displayName: true, bereiche: true, skillTier: true },
+          },
           items: {
             orderBy: { sequence: 'asc' },
             include: {
@@ -406,7 +470,11 @@ export class TeamleadReadService {
       }),
       this.prisma.shift.findMany({
         where: { date: day, active: true, netCapacityMinutes: { gt: 0 }, employee: { active: true } },
-        include: { employee: { select: { employeeNo: true, displayName: true, bereiche: true } } },
+        include: {
+          employee: {
+            select: { employeeNo: true, displayName: true, bereiche: true, skillTier: true },
+          },
+        },
       }),
       loadRuleConfig(this.prisma),
     ]);
@@ -441,9 +509,11 @@ export class TeamleadReadService {
       rowByEmployee.set(s.employeeId, {
         employeeNo: s.employee.employeeNo,
         employeeName: s.employee.displayName,
+        skillTier: s.employee.skillTier,
         bundleId: null,
         bundleStatus: 'idle',
         plannedEffortMinutes: 0,
+        plannedTeile: 0,
         capacityMinutes: capacityByEmployee.get(s.employeeId) ?? 0,
         bereiche: s.employee.bereiche,
         cases: [],
@@ -459,9 +529,11 @@ export class TeamleadReadService {
         row = {
           employeeNo: b.employee.employeeNo,
           employeeName: b.employee.displayName,
+          skillTier: b.employee.skillTier,
           bundleId: null,
           bundleStatus: 'idle',
           plannedEffortMinutes: 0,
+          plannedTeile: 0,
           capacityMinutes: capacityByEmployee.get(b.employeeId) ?? 0,
           bereiche: b.employee.bereiche,
           cases: [],
@@ -477,6 +549,7 @@ export class TeamleadReadService {
       row.plannedEffortMinutes += b.plannedEffortMinutes;
       for (const it of b.items) {
         const effort = resolveCaseEffort(it.case, ruleConfig.effort);
+        row.plannedTeile += it.case.totalQuantity;
         row.cases.push({
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,

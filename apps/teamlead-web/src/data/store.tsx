@@ -97,13 +97,15 @@ export interface WithdrawVars {
 export interface AddVars {
   caseId: string;
   bundleId: string;
-  reason: string;
+  /** Optional §8.4 audit reason (B2). */
+  reason?: string;
 }
 export interface AssignVars {
   /** employeeNo of the target (the only employee id the board exposes). */
   employeeNo: string;
   caseId: string;
-  reason: string;
+  /** Optional §8.4 audit reason (B2). */
+  reason?: string;
 }
 export interface ReorderVars {
   bundleId: string;
@@ -362,6 +364,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
             caseId,
             weBelegNo: poolCase?.weBelegNo ?? caseId,
             status: 'assigned',
+            // Optimistic placeholder; the settled refetch fills the real Teile.
+            totalQuantity: 0,
             estimatedMinutes: poolCase?.estimatedMinutes ?? 0,
             effortPoints: 0,
             storageCode: '',

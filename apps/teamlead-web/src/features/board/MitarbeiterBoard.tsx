@@ -1,10 +1,11 @@
 /**
  * Mitarbeitenden-Board (§10.3 / Anhang E.4 "Workforce dispatch board").
  *
- * Per person: current Bündel, Restkapazität, Aufwandspunkte, schwer/leicht mix
- * and Problem-Status. Teamlead actions – Beleg entziehen/zuweisen, Reihenfolge
- * neu setzen, Pause/Abwesenheit – all require a reason and are audited (§8.4),
- * and are POSTed to the real backend with an optimistic board update + rollback.
+ * Per person: current Bündel, Skill-Stufe (B5), geplante Teile (B3, Teile-first),
+ * Restkapazität, Aufwandspunkte, schwer/leicht mix and Problem-Status. Teamlead
+ * actions – Beleg entziehen/zuweisen (per WE-Nr-Eingabe, B1), Reihenfolge neu
+ * setzen, Pause/Abwesenheit – are audited (§8.4; der Grund der Zuweisung ist
+ * optional, B2) and POSTed to the real backend with optimistic update + rollback.
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,10 +17,8 @@ import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
-import MenuItem from '@mui/material/MenuItem';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -30,6 +29,7 @@ import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { AssignDialog } from '../../components/AssignDialog.js';
+import { TierChip, isManualOnlyTier } from '../../components/TierChip.js';
 import type { BoardRow } from '../../data/types.js';
 
 interface PendingAction {
@@ -109,14 +109,12 @@ interface EmployeeRowProps {
 }
 
 function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
-  const { pool, withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
+  const { withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
   const navigate = useNavigate();
   const bundleId = row.bundleId;
   const caseKey = row.cases.map((c) => c.caseId).join();
   const [draft, setDraft] = useState<string[]>(() => row.cases.map((c) => c.caseId));
-  const [addId, setAddId] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
-  const selectedPoolCase = pool.find((p) => p.caseId === addId) ?? null;
 
   // Keep the reorder draft in sync once a mutation changes the bundle.
   useEffect(() => {
@@ -151,15 +149,27 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           sx={{ width: '100%' }}
         >
           <Typography sx={{ fontWeight: 700, minWidth: 90 }}>{row.displayName}</Typography>
+          <TierChip tier={row.skillTier} />
+          {isManualOnlyTier(row.skillTier) && (
+            <Chip size="small" variant="outlined" color="warning" label="nur manuelle Zuteilung" />
+          )}
           {row.cases.length === 0 && (
             <Chip size="small" color="success" variant="outlined" label="frei" />
           )}
-          <Typography variant="body2">{row.plannedHours} h geplant</Typography>
+          {/* Teile-first (B3): die Stückzahl ist die primäre Last-Anzeige, Minuten treten zurück. */}
+          {row.cases.length > 0 && (
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {row.plannedTeile} Teile
+            </Typography>
+          )}
           <Chip
             size="small"
             label={`${formatPct(row.utilisationPct)} verplant`}
             color={row.utilisationPct > 95 ? 'warning' : 'default'}
           />
+          <Typography variant="caption" color="text.secondary">
+            {row.plannedHours} h geplant
+          </Typography>
           {row.bereiche.length > 0 && (
             <Typography variant="caption" color="text.secondary">
               {row.bereiche.join(', ')}
@@ -219,6 +229,8 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
               <CaseStatusChip status={c.status} size="small" />
               <LieferungChip group={c.deliveryGroup} />
+              {/* Teile-first (B3): Menge primär, Minuten nur noch als Neben-Caption. */}
+              <Typography variant="body2">{c.totalQuantity} Teile</Typography>
               <Typography variant="caption" color="text.secondary">
                 {c.storageCode ? `${c.storageCode} · ` : ''}
                 {formatMinutes(c.estimatedMinutes)}
@@ -247,29 +259,8 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           ))}
 
           <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" sx={{ pt: 1 }}>
-            <TextField
-              select
-              size="small"
-              label="Beleg zuweisen"
-              value={addId}
-              onChange={(e) => setAddId(e.target.value)}
-              sx={{ minWidth: 260 }}
-              disabled={pool.length === 0}
-            >
-              {pool.length === 0 && <MenuItem value="">Kein freier Beleg</MenuItem>}
-              {pool.map((c) => (
-                <MenuItem key={c.caseId} value={c.caseId}>
-                  {c.weBelegNo}
-                  {c.bereich ? ` · ${c.bereich}` : ''} · {formatMinutes(c.estimatedMinutes)}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={!addId}
-              onClick={() => setAssignOpen(true)}
-            >
+            {/* B1: WE-Nr-Zuweisung — der Dialog prüft die eingetippte Belegnummer live. */}
+            <Button size="small" variant="outlined" onClick={() => setAssignOpen(true)}>
               {bundleId ? 'Beleg zuweisen' : 'Beleg zuweisen & Bündel anlegen'}
             </Button>
 
@@ -314,21 +305,14 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           <AssignDialog
             open={assignOpen}
             row={row}
-            poolCase={selectedPoolCase}
             onClose={() => setAssignOpen(false)}
-            onConfirm={(reason) => {
-              if (!selectedPoolCase) return;
+            onConfirm={(caseId, reason) => {
               // Belegt → append to the existing Bündel; free → create it via assignToEmployee.
               if (bundleId) {
-                addToBundle.mutate({ caseId: selectedPoolCase.caseId, bundleId, reason });
+                addToBundle.mutate({ caseId, bundleId, reason });
               } else {
-                assignToEmployee.mutate({
-                  employeeNo: row.employeeId,
-                  caseId: selectedPoolCase.caseId,
-                  reason,
-                });
+                assignToEmployee.mutate({ employeeNo: row.employeeId, caseId, reason });
               }
-              setAddId('');
             }}
           />
         </Stack>
