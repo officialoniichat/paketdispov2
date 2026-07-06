@@ -12,6 +12,7 @@
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { IssueType } from '@paket/domain-types';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -58,6 +59,23 @@ export function ProblemMeldenScreen(): JSX.Element {
   const [skuId, setSkuId] = useState<string>(''); // '' = ganze Position
   const [comment, setComment] = useState('');
 
+  if (flow.isError) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={flow.refetch}>
+              Erneut versuchen
+            </Button>
+          }
+        >
+          Verbindung fehlgeschlagen. Bitte erneut versuchen.
+        </Alert>
+      </Box>
+    );
+  }
+
   if (flow.loading || !flow.aggregate) {
     return (
       <Box sx={{ p: 2 }}>
@@ -86,14 +104,14 @@ export function ProblemMeldenScreen(): JSX.Element {
       skuId !== ''
         ? { scope: 'sku_line' as const, scopeId: skuId }
         : { scope: target.scope, scopeId: target.scopeId };
-    await flow.reportIssue({
+    const ok = await flow.reportIssue({
       caseId,
       scope: scoped.scope,
       scopeId: scoped.scopeId,
       issueType,
       description: comment.trim() || undefined,
     });
-    navigate(-1);
+    if (ok) navigate(-1);
   };
 
   return (
@@ -157,6 +175,14 @@ export function ProblemMeldenScreen(): JSX.Element {
         <Typography variant="body2" color="text.secondary">
           Foto: optional
         </Typography>
+
+        {/* Sending is now a plain awaited POST that throws on failure (no more
+            best-effort/silent local-only fallback) — surfaced here (B4). */}
+        {flow.actionError ? (
+          <Alert severity="error" onClose={flow.clearActionError}>
+            {flow.actionError} – bitte erneut senden.
+          </Alert>
+        ) : null}
       </Stack>
 
       <Stack

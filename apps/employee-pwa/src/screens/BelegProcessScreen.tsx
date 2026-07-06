@@ -19,7 +19,6 @@
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -39,7 +38,6 @@ import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { apiBaseUrl } from '../data/api.js';
-import { db } from '../db/db.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
 import { TAGESSTART, problemPath } from '../routes/paths.js';
@@ -126,14 +124,22 @@ export function BelegProcessScreen(): JSX.Element {
   const [reason, setReason] = useState('');
   const [inspectionOpen, setInspectionOpen] = useState(false);
 
-  const openIssues = useLiveQuery(
-    async () =>
-      (await db.events.toArray()).filter(
-        (e) => e.eventType === 'issue.created' && e.entityId === caseId,
-      ).length,
-    [caseId],
-    0,
-  );
+  if (flow.isError) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={flow.refetch}>
+              Erneut versuchen
+            </Button>
+          }
+        >
+          Verbindung fehlgeschlagen. Bitte erneut versuchen.
+        </Alert>
+      </Box>
+    );
+  }
 
   if (flow.loading || !flow.aggregate || !flow.progress) {
     return (
@@ -145,7 +151,13 @@ export function BelegProcessScreen(): JSX.Element {
 
   const { aggregate, progress } = flow;
   const wi = aggregate.workInstruction;
-  const gate = canCompleteCase(progress, aggregate, openIssues ?? 0);
+  // TODO(task-13+): there is no dedicated open-issue count endpoint yet — the
+  // former Dexie-backed local event log this used to count `issue.created`
+  // events is gone. The case's own live status already flips to `issue_open`
+  // once a problem is reported (see persist.ts's reportIssue → §7.1), so that
+  // is used as the (0 | 1) gate signal instead.
+  const openIssues = aggregate.case.status === 'issue_open' ? 1 : 0;
+  const gate = canCompleteCase(progress, aggregate, openIssues);
   const checked = new Set(progress.quantityCheckedPositionIds);
   const infoPoints = [...aggregate.instructionPoints]
     .filter((p) => !ACTION_POINT_KEYS.has(p.key))
@@ -160,14 +172,16 @@ export function BelegProcessScreen(): JSX.Element {
     pos.nosFlag ? 'NOS' : (c.goodsTypeText ?? undefined);
 
   const finish = async (): Promise<void> => {
-    await flow.complete();
-    navigate(TAGESSTART);
+    const ok = await flow.complete();
+    if (ok) navigate(TAGESSTART);
   };
 
   const confirmPartial = async (): Promise<void> => {
-    await flow.partialComplete(reason.trim() || 'Teilabschluss');
-    setPartialOpen(false);
-    navigate(TAGESSTART);
+    const ok = await flow.partialComplete(reason.trim() || 'Teilabschluss');
+    if (ok) {
+      setPartialOpen(false);
+      navigate(TAGESSTART);
+    }
   };
 
   return (
@@ -501,6 +515,15 @@ export function BelegProcessScreen(): JSX.Element {
 
         {/* Why the close is blocked, if it is. */}
         {!gate.ok ? <Alert severity="info">Noch offen: {gate.reasons.join(' · ')}</Alert> : null}
+
+        {/* A milestone POST (Beleg erledigt/Teilabschluss/Start) failed — never
+            swallowed (B4): surfaced here. The action itself stayed unset, so
+            pressing the same button again (below) is the retry. */}
+        {flow.actionError ? (
+          <Alert severity="error" onClose={flow.clearActionError}>
+            {flow.actionError} – bitte erneut versuchen.
+          </Alert>
+        ) : null}
       </Stack>
 
       <Dialog open={partialOpen} onClose={() => setPartialOpen(false)} fullWidth>
