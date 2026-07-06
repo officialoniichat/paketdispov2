@@ -169,9 +169,7 @@ export function BundleHomeScreen(): JSX.Element {
   return (
     <Box sx={{ p: 2, pb: 18 }}>
       {!isBackendEnabled && demoControlsEnabled ? <DemoControls /> : null}
-      <Typography variant="overline" color="text.secondary">
-        Dein Karren · {belege.length} Belege{bundle?.bereich ? ` · ${bundle.bereich}` : ''}
-      </Typography>
+      {/* Feedback: „Dein Karren · N Belege · Bereich" gestrichen — kein Kopf-Overline. */}
       <Typography variant="h1" gutterBottom>
         {greetingForHour(new Date().getHours())}
         {bundle ? `, ${bundle.employeeName}` : ''}

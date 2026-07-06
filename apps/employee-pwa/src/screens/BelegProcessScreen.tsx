@@ -56,15 +56,17 @@ const ACTION_POINT_KEYS = new Set([
 ]);
 
 /**
- * C4 display order: Prüfung Wareneingang, Rotpreis, Boxzettel first, then the
- * remaining points (Sortieren, Sicherungsetikett, Online). Unlisted keys sort last.
+ * C4 display order (Feedback wörtlich: „1. Passt" = Sortieren bleibt vorn,
+ * „2. Prüfung", „3. [Boxzettel] wandert an Position 5", „4. Rotpreis",
+ * „5. Boxzettel"): Sortieren, Prüfung, Sicherungsetikett, Rotpreis, Boxzettel.
+ * Unlisted keys (Online) sort last.
  */
 const POINT_DISPLAY_ORDER: Record<string, number> = {
-  goods_receipt_check: 0,
-  red_price: 1,
-  box_label: 2,
-  sort: 3,
-  security: 4,
+  sort: 0,
+  goods_receipt_check: 1,
+  security: 2,
+  red_price: 3,
+  box_label: 4,
   online_handling: 5,
 };
 

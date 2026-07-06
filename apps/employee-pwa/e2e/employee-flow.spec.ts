@@ -76,7 +76,8 @@ test.beforeEach(async ({ page }) => {
 test('Tisch-Anmeldung + Home: ein Screen, Bearbeiten gesperrt bis geholt', async ({ page }) => {
   // A2: the claimed Arbeitsplatz is shown, not demo data.
   await expect(page.getByText('Arbeitsplatz: T-04')).toBeVisible();
-  await expect(page.getByText(/Dein Karren · 3 Belege · Gemischt/)).toBeVisible();
+  // Feedback: kein „Dein Karren · N Belege · Bereich"-Kopf mehr.
+  await expect(page.getByText(/Dein Karren/)).toHaveCount(0);
   // A4: no effort-minutes estimate, no 'Heute erledigt' stat.
   await expect(page.getByText(/ca\. \d+ Min/)).toHaveCount(0);
   await expect(page.getByText(/Heute erledigt/)).toHaveCount(0);
@@ -170,8 +171,9 @@ test('B4 Parkposition: Rest parken schickt ungeholte Belege zurück', async ({ p
   await expect(park).toBeVisible();
   await park.click();
   await expect(page.getByText(/2 Belege geparkt – kommen ins nächste Bündel/)).toBeVisible();
-  // The cart shrank to the fetched Beleg; collect is complete now.
-  await expect(page.getByText(/Dein Karren · 1 Belege/)).toBeVisible();
+  // The cart shrank to the fetched Beleg; the parked ones are gone, collect is complete.
+  await expect(page.getByText('WE 3656860', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('WE 3656861', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Start Bearbeitung WE/ })).toBeEnabled();
   await page.screenshot({ path: `${SHOT_DIR}/07-geparkt.png`, fullPage: true });
 });
@@ -196,7 +198,7 @@ test('Demo: Belegset wechseln (dev-Flag) + Continuation', async ({ page }) => {
   await expect(page.getByText('Demo · Belegset')).toBeVisible();
   await page.getByLabel('Szenario').click();
   await page.getByRole('option', { name: /Hängeware/ }).click();
-  await expect(page.getByText(/2 Belege · Hängebahn/)).toBeVisible();
+  await expect(page.getByText('HB-5', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: `${SHOT_DIR}/09-demo-haengeware.png`, fullPage: true });
 
   // Collect both stops → process both Belege to completion.
@@ -216,7 +218,8 @@ test('Demo: Belegset wechseln (dev-Flag) + Continuation', async ({ page }) => {
   await expect(page.getByText(/Bündel fertig/)).toBeVisible();
   const holen = page.getByRole('button', { name: 'Nächstes Bündel holen' });
   await holen.click();
-  await expect(page.getByText(/4 Belege · Regal/)).toBeVisible();
+  // Cycles to the Großbündel Belegset (Regal locations R3/R12/A-7).
+  await expect(page.getByText('R3', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: `${SHOT_DIR}/10-continuation.png`, fullPage: true });
 });
 
