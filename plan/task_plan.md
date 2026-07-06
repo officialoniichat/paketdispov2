@@ -113,7 +113,22 @@ reusable from integration tests. Branch: `feat/dev-panel-scenarios` (based on la
       Codes auf den echten Stamm gezogen (HB-3→HB-5/234, P-2→PA-1; Hängeware HB-6/118+HB-7/090,
       Groß R3/R11/R23), DemoControls-Gating unverändert; e2e-Spec angepasst, 7/7 grün (offline
       build), PWA unit 69/69 + typecheck grün. Gesamt: typecheck 13/13, backend unit 134 grün.
-- [ ] Phase 6: Quality gate + docs/dev/scenarios.md + C4 diagrams + prod-build verification + commits.
+- [x] Phase 6: DONE — docs/dev/scenarios.md (deutsches Operator-Handbuch: Aktivierung
+      DEV_PANEL/VITE_DEV_PANEL/dev-setup-Admin-Token, Zeit-Override-Semantik + Badge,
+      Quick-Knobs, Laden=Reset+Seed + Determinismus + loadScenario-Wiederverwendung,
+      alle 15 Szenarien mit Key/Name/Beschreibung/„Was man danach sehen sollte" aus
+      catalog.ts/definitions/*, inkl. der zwei ehrlichen Einordnungen B3 Team-Level-Mix
+      und B4 Brax-Kartonnummern-Lücke). C4-Check: c3-backend + c3-teamlead .mmd bereits
+      aktuell (DevModule/ScenarioService/DevScenariosTab/DevTimeBadge/dev.ts) — keine
+      Änderung nötig. Quality-Gate-Ergebnisse:
+      · typecheck 13/13 ✅ · engine 166 Tests (13 Dateien) ✅ unangetastet
+      · backend unit 134 ✅ · teamlead-web unit 54 ✅ · employee-pwa unit 69 ✅
+      · int smoke scenarios.int.test.ts 18/18 ✅ · lint 0 errors (55 bekannte
+      NestJS-import-type-Warnings, NICHT auto-gefixt) ✅ · pnpm build 8/8 ✅
+      · Prod-Build-Verifikation: prod dist ohne „Szenario laden"/api/dev/
+      DevScenariosTab/„Server-Zeit"; VITE_DEV_PANEL=1-Build enthält alle 4; dist danach
+      auf prod zurückgebaut (dist/ gitignored) ✅ · Backend-Env-Guard DEV_PANEL=0→404:
+      in Phase 2 per HTTP-Smoke verifiziert (zitiert, kein Re-Boot nötig).
 
 ## Integration protocol (harness instruction — execute at END of task)
 1. Commit all pending task changes on this worktree's branch (feat/dev-panel-scenarios).
@@ -142,4 +157,5 @@ Forbidden: git reset --hard, git clean -fdx, git worktree remove, rm/mv on repo 
   branch itself intact). Resolved via rebase + relaunch.
 
 ## Status
-**Phase 3+4 running in parallel** (scenario library agent + dev-panel UI agent, post-rebase).
+**done** — all phases 0–6 complete on feat/dev-panel-scenarios; full quality gate green
+(see Phase 6 for the recorded results). Ready for the integration protocol.
