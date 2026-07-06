@@ -280,7 +280,7 @@ export class AssignmentService {
       // Enrich (priority + effort fallback) and keep only this employee's Bereiche.
       const enriched: EnrichedCase[] = cases
         .map((c) => {
-          const kind = kindByCode.get(c.storageLocation.code);
+          const kind = c.storageLocation ? kindByCode.get(c.storageLocation.code) : undefined;
           const vector = effortVectors.get(c.id);
           const effort = vector
             ? computeEffort(vector, engineConfig.effort)
@@ -332,9 +332,10 @@ export class AssignmentService {
         status: 'created',
         createdBy: 'system',
       });
+      // Intake-Gate-Invariante (D1): Pool-Belege haben immer einen Lagerplatz.
       const pickupCases: PickupCase[] = cart.caseIds.map((id) => ({
         caseId: id,
-        location: caseById.get(id)!.storageLocation,
+        location: caseById.get(id)!.storageLocation!,
       }));
       const sequence = buildPickupSequence(
         bundleSkeleton.id,

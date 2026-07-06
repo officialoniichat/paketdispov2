@@ -64,7 +64,8 @@ export interface GeneratedBeleg {
   primaryShopAreaNo: string;
   primaryShopNo: string;
   primaryFloor: string;
-  storageCode: string;
+  /** null = Buchung ohne Lagerplatz (Intake-Gate D1 → blocked, „zurück an Bucher"). */
+  storageCode: string | null;
   section: number | null;
   goodsTypeText:
     | 'Vororder'
@@ -213,16 +214,25 @@ export function generateBelege(options: GenerateOptions): GeneratedBeleg[] {
       });
     }
 
+    // Intake-Gate-Futter (D1): ein kleiner Anteil der Buchungen kommt unvollständig
+    // aus dem ERP — ohne Lagerplatz oder ohne Lieferschein-Nr („zurück an Bucher").
+    const missingStorage = !inGroup && rng() < 0.1;
+    const missingDeliveryNote = !inGroup && !missingStorage && rng() < 0.08;
+
     belege.push({
       weBelegNo,
       externalRef: `prohandel:${weBelegNo}`,
-      deliveryNoteNo: inGroup ? groupNote : `LS-2026-${String(no).padStart(6, '0')}`,
+      deliveryNoteNo: missingDeliveryNote
+        ? null
+        : inGroup
+          ? groupNote
+          : `LS-2026-${String(no).padStart(6, '0')}`,
       bookingDate: options.bookingDate,
       branchNo: '001',
       primaryShopAreaNo: shopAreaNo,
       primaryShopNo: shopNo,
       primaryFloor: floor,
-      storageCode: pick(rng, options.storageCodes),
+      storageCode: missingStorage ? null : pick(rng, options.storageCodes),
       section,
       goodsTypeText,
       priorityFlags: rng() < 0.08 ? ['prio'] : [],

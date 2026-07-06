@@ -76,6 +76,10 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'employee.shift_overridden': 'Schicht geändert',
   'employee.workstation_assigned': 'Arbeitsplatz zugewiesen',
   'integration.pull_completed': 'ProHandel-Pull abgeschlossen',
+  'case.intake_blocked': 'Intake blockiert (zurück an Bucher)',
+  'case.returned_to_bucher': 'An Bucher gemeldet',
+  'case.intake_released': 'Intake freigegeben',
+  'case.delivery_group_released': 'Lieferung trotzdem freigegeben',
 };
 
 /** German label for each actor, so the audit feed never shows the raw role token. */

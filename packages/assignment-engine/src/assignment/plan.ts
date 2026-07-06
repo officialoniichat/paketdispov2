@@ -85,9 +85,10 @@ function resolvePickup(
 ): BundlePickupSequence {
   const startLocationId = workstationByEmployee.get(bundle.employeeId) ?? `ws-${bundle.employeeId}`;
   const profile = profileByStart.get(startLocationId);
+  // Intake-Gate-Invariante (D1): ein verteilbarer Beleg hat immer einen Lagerplatz.
   const pickupCases: PickupCase[] = bundle.caseIds.map((id) => ({
     caseId: id,
-    location: caseById.get(id)!.storageLocation,
+    location: caseById.get(id)!.storageLocation!,
   }));
   return buildPickupSequence(bundle.id, bundle.employeeId, startLocationId, pickupCases, {
     mode: profile?.mode ?? 'numeric_fallback',
@@ -131,7 +132,7 @@ export function assignWork(
   const kindByLocationCode = new Map(input.locations.map((l) => [l.code, l.kind]));
   const enriched = input.cases.map((c) => {
     const e = enrichCase(c, input, config);
-    const kind = kindByLocationCode.get(c.storageLocation.code);
+    const kind = c.storageLocation ? kindByLocationCode.get(c.storageLocation.code) : undefined;
     e.bereich = kind ? bereichFromLocationKind(kind) : undefined;
     return e;
   });

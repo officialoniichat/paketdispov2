@@ -7,6 +7,7 @@
  * projections so the two services don't carry byte-identical private copies.
  */
 import type { DeliveryGroup } from '@paket/assignment-engine';
+import { DEFAULT_INSPECTION_LEVELS, DEFAULT_WGR_CATALOG } from '@paket/domain-types';
 import type {
   DeliveryGroupRefDto,
   PositionInstructionDto,
@@ -35,12 +36,24 @@ export function mapDeliveryGroupRef(group: DeliveryGroup): DeliveryGroupRefDto {
   };
 }
 
+/**
+ * WGR-Klartext (A2). Aufgelöst über die Mock-Stammdaten aus domain-types — der
+ * DB-Katalog (WgrCatalog) wird aus DENSELBEN Konstanten geseedet; sobald die echte
+ * ProHandel-Anbindung Kataloge liefert, wandert die Auflösung in eine DB-Query.
+ */
+const WGR_DESCRIPTION_BY_CODE = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
+
+export function wgrDescription(wgr: string): string | null {
+  return WGR_DESCRIPTION_BY_CODE.get(wgr) ?? null;
+}
+
 /** Persistence shape of a work-instruction header (the fields both views expose). */
 export interface WorkInstructionRow {
   priceLabelPrintRequired: boolean;
   sortByArticleColorSizeRequired: boolean;
   goodsReceiptCheckMode: string;
   goodsReceiptCheckPercentage: number | null;
+  inspectionLevelCode: string | null;
   minimumQuantityCheckAlwaysRequired: boolean;
   boxLabelRequired: boolean;
   zstRequired: boolean;
@@ -48,11 +61,16 @@ export interface WorkInstructionRow {
 
 /** Project a work-instruction header row onto its response DTO. */
 export function mapWorkInstruction(wi: WorkInstructionRow): WorkInstructionHeaderDto {
+  // Prüfstufe (A5): Label + Aufgabentext aus dem Katalog auflösen (mock-Stammdaten).
+  const level = DEFAULT_INSPECTION_LEVELS.find((l) => l.code === wi.inspectionLevelCode) ?? null;
   return {
     priceLabelPrintRequired: wi.priceLabelPrintRequired,
     sortByArticleColorSizeRequired: wi.sortByArticleColorSizeRequired,
     goodsReceiptCheckMode: wi.goodsReceiptCheckMode,
     goodsReceiptCheckPercentage: wi.goodsReceiptCheckPercentage,
+    inspectionLevelCode: wi.inspectionLevelCode,
+    inspectionLevelLabel: level?.label ?? null,
+    inspectionDescription: level?.description ?? null,
     minimumQuantityCheckAlwaysRequired: wi.minimumQuantityCheckAlwaysRequired,
     boxLabelRequired: wi.boxLabelRequired,
     zstRequired: wi.zstRequired,
@@ -100,6 +118,9 @@ export interface SkuLineRow {
   size: string;
   expectedQuantity: number;
   confirmedQuantity: number | null;
+  ekPrice: number | null;
+  vkPrice: number | null;
+  vkLabelPrice: number | null;
   status: string;
 }
 
@@ -111,6 +132,9 @@ export function mapSkuLine(s: SkuLineRow): SkuLineDto {
     size: s.size,
     expectedQuantity: s.expectedQuantity,
     confirmedQuantity: s.confirmedQuantity,
+    ekPrice: s.ekPrice,
+    vkPrice: s.vkPrice,
+    vkLabelPrice: s.vkLabelPrice,
     status: s.status,
   };
 }
@@ -122,6 +146,7 @@ export interface PositionInstructionRow {
   priceLabelAttachLocation: string | null;
   securityRequired: boolean;
   securityLocation: string | null;
+  securityTypeCode: string | null;
   onlineHandlingRequired: boolean;
   onlineHandlingLocation: string | null;
   redPriceRequired: boolean | null;
@@ -136,6 +161,7 @@ export function mapPositionInstruction(i: PositionInstructionRow): PositionInstr
     priceLabelAttachLocation: i.priceLabelAttachLocation,
     securityRequired: i.securityRequired,
     securityLocation: i.securityLocation,
+    securityTypeCode: i.securityTypeCode,
     onlineHandlingRequired: i.onlineHandlingRequired,
     onlineHandlingLocation: i.onlineHandlingLocation,
     redPriceRequired: i.redPriceRequired,

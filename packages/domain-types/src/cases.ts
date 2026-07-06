@@ -139,7 +139,12 @@ export const goodsReceiptCaseSchema = z.object({
   primaryFloor: z.string().optional(),
   /** Anzahl der Kartons, aus denen die Anlieferung besteht (WE-Beleg-Kopf, mock-ERP). */
   inboundCartonCount: z.number().int().positive().optional(),
-  storageLocation: storageLocationSchema,
+  /**
+   * Lagerplatz des Belegs. Optional NUR für `blocked`-Belege (Intake-Gate D1):
+   * ein plan-/verteilbarer Beleg (ready & Co.) hat IMMER einen Lagerplatz — das
+   * Gate garantiert es, die Engine verlässt sich darauf.
+   */
+  storageLocation: storageLocationSchema.optional(),
   section: sectionCodeSchema.nullable(),
   goodsTypeText: goodsTypeTextSchema.optional(),
   priorityFlags: z.array(priorityFlagSchema),
@@ -150,6 +155,10 @@ export const goodsReceiptCaseSchema = z.object({
   effortPoints: z.number().nonnegative(),
   estimatedMinutes: z.number().nonnegative(),
   assignedBundleId: idSchema.optional(),
+  /** Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs (z. B. Lagerplatz). */
+  missingFields: z.array(z.string()).default([]),
+  /** Lieferungs-Pool-Hold (D2): TL-Freigabe „trotzdem bearbeiten" für Gruppen-Mitglieder. */
+  deliveryGroupReleased: z.boolean().default(false),
   version: z.number().int().nonnegative(),
 });
 export type GoodsReceiptCase = z.infer<typeof goodsReceiptCaseSchema>;

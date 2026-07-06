@@ -118,7 +118,7 @@ export function BelegProcessScreen(): JSX.Element {
   return (
     <StepScaffold
       caseId={caseId}
-      where={`WE ${aggregate.case.weBelegNo} · ${aggregate.case.storageLocation.code}`}
+      where={`WE ${aggregate.case.weBelegNo} · ${aggregate.case.storageLocation?.code ?? '—'}`}
       title="Beleg bearbeiten"
       subtitle={`${aggregate.positions.length} Positionen`}
       onBack={() => navigate(TAGESSTART)}

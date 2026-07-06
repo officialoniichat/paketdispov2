@@ -110,10 +110,10 @@ function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
     bookingDate: summary.bookingDate,
     branchNo: '1',
     storageLocation: {
-      id: `loc-${summary.storageLocationCode}`,
+      id: `loc-${summary.storageLocationCode ?? 'unbekannt'}`,
       type: 'regal',
-      code: summary.storageLocationCode,
-      barcode: summary.storageLocationCode,
+      code: summary.storageLocationCode ?? 'unbekannt',
+      barcode: summary.storageLocationCode ?? undefined,
       active: true,
     },
     section: caseSection(summary.section),
@@ -123,6 +123,8 @@ function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
     status: caseStatus(summary.status),
     effortPoints: 0,
     estimatedMinutes: summary.estimatedMinutes,
+    missingFields: summary.missingFields ?? [],
+    deliveryGroupReleased: false,
     version: 0,
   };
 }
@@ -272,7 +274,7 @@ function toBelegList(cases: CaseSummaryDto[]): BelegListItem[] {
     caseId: c.id,
     weBelegNo: c.weBelegNo,
     order: index,
-    storageLocationCode: c.storageLocationCode,
+    storageLocationCode: c.storageLocationCode ?? 'unbekannt',
     goodsType: goodsCategory(c.goodsType),
     totalQuantity: c.totalQuantity,
   }));
@@ -330,7 +332,7 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
 
   const stops = buildCollectStops(
     today.bundle?.routeStops ?? [],
-    today.cases.map((c) => ({ caseId: c.id, storageLocationCode: c.storageLocationCode })),
+    today.cases.map((c) => ({ caseId: c.id, storageLocationCode: c.storageLocationCode ?? 'unbekannt' })),
   );
   await putCollectStops(stops, db);
 

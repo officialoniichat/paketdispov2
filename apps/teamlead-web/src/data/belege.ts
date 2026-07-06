@@ -62,6 +62,8 @@ export type CasePhase = 'eingang' | 'pool' | 'arbeit' | 'abgeschlossen' | 'erled
 
 const PHASE_BY_STATUS: Record<CaseStatus, CasePhase> = {
   needs_review: 'eingang',
+  // Intake-Gate (D1): blockierte Belege gehören in den Eingangs-Scope.
+  blocked: 'eingang',
   ready: 'pool',
   parked: 'pool',
   assigned: 'arbeit',
@@ -257,7 +259,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     quantity: item.totalQuantity,
     effortPoints: item.effortPoints,
     minutes: item.estimatedMinutes,
-    storageCode: item.storageLocationCode,
+    storageCode: item.storageLocationCode ?? '–',
     assignedTo: item.assignedEmployeeName ?? '–',
     priorityFlags: toPriorityFlags(item.priorityFlags),
   };
@@ -273,7 +275,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     priorityFlags: toPriorityFlags(dto.case.priorityFlags),
     deliveryNoteNo: dto.deliveryNoteNo ?? null,
     bookingDate: dto.case.bookingDate,
-    storageCode: dto.case.storageLocationCode,
+    storageCode: dto.case.storageLocationCode ?? '–',
     primaryShopAreaNo: dto.primaryShopAreaNo ?? null,
     primaryFloor: dto.primaryFloor ?? null,
     totalQuantity: dto.case.totalQuantity,

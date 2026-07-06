@@ -710,6 +710,78 @@ async function seedGeneratedBelege(locationIds: Record<string, string>): Promise
   }
 }
 
+// --- Intake-Gate + Lieferungs-Hold demo fixtures (D1/D2) ---------------------
+// Zwei blockierte Belege („zurück an Bucher": ohne Lagerplatz bzw. ohne
+// Lieferschein) und eine UNVOLLSTÄNDIGE bestätigte Lieferung (2 von 3 da) —
+// deren Mitglieder hält die Engine zurück, bis der dritte Beleg gebucht ist
+// oder der Teamlead „trotzdem bearbeiten" freigibt.
+
+async function seedIntakeGateFixtures(locationIds: Record<string, string>): Promise<void> {
+  const base = {
+    source: 'prohandel_api' as const,
+    bookingDate: asDate(SEED_DATE),
+    weDate: asDate(SEED_DATE),
+    branchNo: '001',
+    primaryShopAreaNo: '22',
+    primaryShopNo: '22',
+    primaryFloor: 'EG',
+    section: 2,
+    goodsTypeText: 'Nachorder' as const,
+    priorityFlags: [] as PriorityFlag[],
+    totalQuantity: 30,
+    inboundCartonCount: 2,
+    effortPoints: 8,
+    estimatedMinutes: 8,
+  };
+
+  // D1: ohne Lagerplatz.
+  await prisma.goodsReceiptCase.upsert({
+    where: { weBelegNo: 'WE-2026-000401' },
+    update: { status: 'blocked', missingFields: ['Lagerplatz'], storageLocationId: null },
+    create: {
+      weBelegNo: 'WE-2026-000401',
+      externalRef: 'prohandel:WE-2026-000401',
+      deliveryNoteNo: 'LS-2026-000401',
+      ...base,
+      storageLocationId: null,
+      status: 'blocked',
+      missingFields: ['Lagerplatz'],
+    },
+  });
+  // D1: ohne Lieferschein.
+  await prisma.goodsReceiptCase.upsert({
+    where: { weBelegNo: 'WE-2026-000402' },
+    update: { status: 'blocked', missingFields: ['Lieferschein'], deliveryNoteNo: null },
+    create: {
+      weBelegNo: 'WE-2026-000402',
+      externalRef: 'prohandel:WE-2026-000402',
+      deliveryNoteNo: null,
+      ...base,
+      storageLocationId: requireId(locationIds, 'R7', 'location'),
+      status: 'blocked',
+      missingFields: ['Lieferschein'],
+    },
+  });
+  // D2: bestätigte Lieferung „2 von 3" — Mitglieder ready, aber im Pool-Hold.
+  for (const [i, no] of (['WE-2026-000403', 'WE-2026-000404'] as const).entries()) {
+    await prisma.goodsReceiptCase.upsert({
+      where: { weBelegNo: no },
+      update: { status: 'ready', assignedBundleId: null, deliveryGroupReleased: false },
+      create: {
+        weBelegNo: no,
+        externalRef: `prohandel:${no}`,
+        deliveryNoteNo: 'LS-2026-000403',
+        deliverySourceGroupKey: 'PH-LFG-403',
+        deliverySourceGroupSize: 3,
+        ...base,
+        totalQuantity: 24 + i * 6,
+        storageLocationId: requireId(locationIds, 'R18', 'location'),
+        status: 'ready',
+      },
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const roleIds = await seedRoles();
   const workstationIds = await seedWorkstations();
@@ -725,6 +797,7 @@ async function main(): Promise<void> {
   // Generated mock-ProHandel batch ON TOP of the handcrafted fixtures (runs after
   // seedCaseDetails so its richer positions/boxes are not overwritten).
   await seedGeneratedBelege(locationIds);
+  await seedIntakeGateFixtures(locationIds);
   await seedRuleConfig();
 
   const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =

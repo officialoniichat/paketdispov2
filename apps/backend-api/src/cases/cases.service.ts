@@ -19,6 +19,7 @@ import {
   type TransitionResultDto,
 } from './cases.dto.js';
 import {
+  wgrDescription,
   mapBoxTarget,
   mapPositionInstruction,
   mapSkuLine,
@@ -174,6 +175,7 @@ export class CasesService {
     shopNo: string;
     floor: string | null;
     status: string;
+    catMan?: boolean | null;
     instruction: PositionInstructionRow | null;
     skuLines: SkuLineRow[];
   }): ReceiptPositionDto {
@@ -181,6 +183,8 @@ export class CasesService {
       id: p.id,
       positionNo: p.positionNo,
       wgr: p.wgr,
+      wgrDescription: wgrDescription(p.wgr),
+      catMan: p.catMan ?? null,
       supplierArticleNo: p.supplierArticleNo,
       supplierColor: p.supplierColor,
       season: p.season,
@@ -455,7 +459,10 @@ export class CasesService {
       estimatedMinutes: number;
       bookingDate: Date;
       goodsTypeText: string | null;
-      storageLocation: { code: string };
+      storageLocation: { code: string } | null;
+      primaryShopNo?: string | null;
+      inboundCartonCount?: number | null;
+      missingFields?: string[];
     },
     assignedEmployeeName: string | null,
   ): CaseSummaryDto {
@@ -467,7 +474,10 @@ export class CasesService {
       priorityFlags: c.priorityFlags,
       totalQuantity: c.totalQuantity,
       estimatedMinutes: c.estimatedMinutes,
-      storageLocationCode: c.storageLocation.code,
+      storageLocationCode: c.storageLocation?.code ?? null,
+      primaryShopNo: c.primaryShopNo ?? null,
+      inboundCartonCount: c.inboundCartonCount ?? null,
+      missingFields: c.missingFields ?? [],
       bookingDate: isoDay(c.bookingDate),
       goodsType: c.goodsTypeText,
       assignedEmployeeName,

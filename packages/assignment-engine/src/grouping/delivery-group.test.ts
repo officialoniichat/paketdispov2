@@ -198,6 +198,64 @@ describe('withheldCaseIds — suspected groups wait for confirmation', () => {
   });
 });
 
+describe('withheldCaseIds — Lieferungs-Pool-Hold für unvollständige Gruppen (D2)', () => {
+  const incomplete = () =>
+    detectDeliveryGroups([
+      input('a', '100', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+      input('b', '101', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+    ]);
+
+  it('withholds ALL members of a confirmed group with missing members (2 von 3 da)', () => {
+    const withheld = withheldCaseIds(incomplete(), cfg({ autoDistributeSuspected: true }));
+    expect([...withheld].sort()).toEqual(['a', 'b']);
+  });
+
+  it('releases the hold once every expected member is present (3 von 3)', () => {
+    const groups = detectDeliveryGroups([
+      input('a', '100', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+      input('b', '101', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+      input('c', '102', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+    ]);
+    expect(withheldCaseIds(groups, cfg()).size).toBe(0);
+  });
+
+  it('TL-Freigabe „trotzdem bearbeiten": released members distribute despite the gap', () => {
+    const groups = detectDeliveryGroups([
+      input('a', '100', {
+        deliverySourceGroupKey: 'K',
+        deliverySourceGroupSize: 3,
+        deliveryGroupReleased: true,
+      }),
+      input('b', '101', {
+        deliverySourceGroupKey: 'K',
+        deliverySourceGroupSize: 3,
+        deliveryGroupReleased: true,
+      }),
+    ]);
+    expect(withheldCaseIds(groups, cfg()).size).toBe(0);
+  });
+
+  it('a single released member is not enough — the whole group stays held', () => {
+    const groups = detectDeliveryGroups([
+      input('a', '100', {
+        deliverySourceGroupKey: 'K',
+        deliverySourceGroupSize: 3,
+        deliveryGroupReleased: true,
+      }),
+      input('b', '101', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
+    ]);
+    expect([...withheldCaseIds(groups, cfg())].sort()).toEqual(['a', 'b']);
+  });
+
+  it('a TL-locked (manually merged) group is never held back', () => {
+    const groups = detectDeliveryGroups([
+      input('a', '100', { manualDeliveryGroupKey: 'grp:X', deliverySourceGroupSize: 3 }),
+      input('b', '101', { manualDeliveryGroupKey: 'grp:X', deliverySourceGroupSize: 3 }),
+    ]);
+    expect(withheldCaseIds(groups, cfg()).size).toBe(0);
+  });
+});
+
 describe('indexDeliveryGroups', () => {
   it('maps every member case to its group id and records the size + group', () => {
     const groups = detectDeliveryGroups([input('a', '119'), input('b', '120'), input('c', '121')]);

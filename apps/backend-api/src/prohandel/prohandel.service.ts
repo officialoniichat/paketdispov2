@@ -31,7 +31,7 @@ export class ProhandelService {
       select: { id: true, code: true },
     });
     if (locations.length === 0) {
-      return { pulledCases: 0, weBelegNos: [], date: day };
+      return { pulledCases: 0, blockedCases: 0, weBelegNos: [], date: day };
     }
     const locationIdByCode = new Map(locations.map((l) => [l.code, l.id]));
 
@@ -52,10 +52,26 @@ export class ProhandelService {
       storageCodes: locations.map((l) => l.code),
     });
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const ids: string[] = [];
+    const persisted = await this.prisma.$transaction(async (tx) => {
+      const results = [];
       for (const beleg of belege) {
-        ids.push(await persistGeneratedBeleg(tx, beleg, locationIdByCode));
+        const result = await persistGeneratedBeleg(tx, beleg, locationIdByCode);
+        results.push({ ...result, weBelegNo: beleg.weBelegNo });
+        // Intake-Gate (D1): unvollständige Buchungen landen als `blocked` in der
+        // „zurück an Bucher"-Queue — sichtbar im Audit-Log.
+        if (result.blocked) {
+          await this.events.append(
+            {
+              eventType: 'case.intake_blocked',
+              entityType: 'GoodsReceiptCase',
+              entityId: result.id,
+              actorType: 'system',
+              actorId: principal.sub,
+              payload: { weBelegNo: beleg.weBelegNo, missingFields: result.missingFields },
+            },
+            tx,
+          );
+        }
       }
       await this.events.append(
         {
@@ -64,15 +80,20 @@ export class ProhandelService {
           entityId: 'prohandel',
           actorType: 'system',
           actorId: principal.sub,
-          payload: { pulledCases: ids.length, weBelegNos: belege.map((b) => b.weBelegNo) },
+          payload: {
+            pulledCases: results.length,
+            blockedCases: results.filter((r) => r.blocked).length,
+            weBelegNos: belege.map((b) => b.weBelegNo),
+          },
         },
         tx,
       );
-      return ids;
+      return results;
     });
 
     return {
-      pulledCases: created.length,
+      pulledCases: persisted.length,
+      blockedCases: persisted.filter((r) => r.blocked).length,
       weBelegNos: belege.map((b) => b.weBelegNo),
       date: day,
     };

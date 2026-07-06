@@ -289,6 +289,143 @@ export class TeamleadService {
     return { manualGroupKey: null, affectedCaseIds: caseIds };
   }
 
+  /**
+   * Intake-Gate (D1) „Zurück an Bucher": mock Queue/Benachrichtigung für einen
+   * blocked-Beleg — es wird nichts nach ProHandel geschrieben, nur ein revisions-
+   * sicheres Ereignis erzeugt, das die (gemockte) Bucher-Queue speist.
+   */
+  async returnToBucher(
+    principal: Principal,
+    caseId: string,
+    dto: { note?: string },
+  ): Promise<TransitionResultDto> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({ where: { id: caseId } });
+    if (!found) throw new NotFoundException(`Case ${caseId} not found`);
+    if (found.status !== 'blocked') {
+      throw new ConflictException('Nur blockierte Belege können an den Bucher zurückgehen.');
+    }
+    const eventId = await this.prisma.$transaction(async (tx) => {
+      const event = await this.events.append(
+        {
+          eventType: 'case.returned_to_bucher',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseId,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: {
+            weBelegNo: found.weBelegNo,
+            missingFields: found.missingFields,
+            note: dto.note,
+          },
+        },
+        tx,
+      );
+      return event.id;
+    });
+    return { caseId, status: found.status, version: found.version, eventId };
+  }
+
+  /**
+   * Intake-Gate (D1) Freigabe: fehlende Pflichtfelder nachtragen (mock: der Bucher
+   * hat in ProHandel vervollständigt bzw. der TL trägt nach). Sind alle Pflicht-
+   * felder da, wechselt der Beleg blocked → ready und geht zurück in den Pool.
+   */
+  async completeIntake(
+    principal: Principal,
+    caseId: string,
+    dto: { storageLocationId?: string; deliveryNoteNo?: string },
+  ): Promise<TransitionResultDto> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({ where: { id: caseId } });
+    if (!found) throw new NotFoundException(`Case ${caseId} not found`);
+    if (found.status !== 'blocked') {
+      throw new ConflictException('Nur blockierte Belege können vervollständigt werden.');
+    }
+    if (dto.storageLocationId) {
+      const location = await this.prisma.location.findUnique({
+        where: { id: dto.storageLocationId },
+      });
+      if (!location) throw new BadRequestException('Unbekannter Lagerplatz.');
+    }
+
+    const storageLocationId = dto.storageLocationId ?? found.storageLocationId;
+    const deliveryNoteNo = dto.deliveryNoteNo ?? found.deliveryNoteNo;
+    const missingFields: string[] = [];
+    if (!storageLocationId) missingFields.push('Lagerplatz');
+    if (!deliveryNoteNo) missingFields.push('Lieferschein');
+    const released = missingFields.length === 0;
+    if (released) assertTransition('blocked', 'ready');
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.goodsReceiptCase.update({
+        where: { id: caseId },
+        data: {
+          storageLocationId,
+          deliveryNoteNo,
+          missingFields,
+          ...(released ? { status: 'ready' as const } : {}),
+          version: { increment: 1 },
+        },
+      });
+      const event = released
+        ? await this.events.append(
+            {
+              eventType: 'case.intake_released',
+              entityType: 'GoodsReceiptCase',
+              entityId: caseId,
+              actorType: 'teamlead',
+              actorId: principal.sub,
+              payload: { weBelegNo: found.weBelegNo },
+            },
+            tx,
+          )
+        : null;
+      return {
+        caseId,
+        status: updated.status,
+        version: updated.version,
+        eventId: event?.id ?? null,
+      };
+    });
+  }
+
+  /**
+   * Lieferungs-Pool-Hold (D2) „trotzdem bearbeiten": eine unvollständige Lieferung
+   * („X von N") explizit freigeben — alle Mitglieder erhalten das Release-Flag und
+   * verteilen sich wieder, obwohl noch Belege der Lieferung fehlen.
+   */
+  async releaseDeliveryGroup(
+    principal: Principal,
+    dto: { caseIds: string[]; reason?: string },
+  ): Promise<{ affectedCaseIds: string[] }> {
+    const caseIds = [...new Set(dto.caseIds)];
+    if (caseIds.length === 0) throw new BadRequestException('Keine Belege angegeben.');
+    const found = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: caseIds } },
+      select: { id: true },
+    });
+    if (found.length !== caseIds.length) {
+      throw new NotFoundException('Mindestens ein Beleg wurde nicht gefunden.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.goodsReceiptCase.updateMany({
+        where: { id: { in: caseIds } },
+        data: { deliveryGroupReleased: true, version: { increment: 1 } },
+      });
+      await this.events.append(
+        {
+          eventType: 'case.delivery_group_released',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseIds[0]!,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { caseIds, reason: dto.reason },
+        },
+        tx,
+      );
+    });
+    return { affectedCaseIds: caseIds };
+  }
+
   async deprioritize(
     principal: Principal,
     caseId: string,

@@ -21,7 +21,9 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction } from './mappers.js';
+import { mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction,
+  wgrDescription,
+} from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
 import { loadRuleConfig } from '../config/rule-config.js';
@@ -142,14 +144,19 @@ export class TeamleadReadService {
         priorityFlags: c.priorityFlags,
         totalQuantity: c.totalQuantity,
         estimatedMinutes: effort.minutes,
-        storageLocationCode: c.storageLocation.code,
+        storageLocationCode: c.storageLocation?.code ?? null,
+        primaryShopNo: c.primaryShopNo ?? null,
+        inboundCartonCount: c.inboundCartonCount ?? null,
+        missingFields: c.missingFields,
         bookingDate: c.bookingDate.toISOString().slice(0, 10),
         goodsType: c.goodsTypeText,
         assignedEmployeeName: c.assignedBundle?.employee?.displayName ?? null,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
         deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
-        bereich: bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null,
+        bereich: c.storageLocation
+          ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
+          : null,
       };
     });
 
@@ -547,7 +554,10 @@ export class TeamleadReadService {
       priorityFlags: found.priorityFlags,
       totalQuantity: found.totalQuantity,
       estimatedMinutes: effort.minutes,
-      storageLocationCode: found.storageLocation.code,
+      storageLocationCode: found.storageLocation?.code ?? null,
+      primaryShopNo: found.primaryShopNo ?? null,
+      inboundCartonCount: found.inboundCartonCount ?? null,
+      missingFields: found.missingFields,
       bookingDate: found.bookingDate.toISOString().slice(0, 10),
       goodsType: found.goodsTypeText,
       assignedEmployeeName: found.assignedBundle?.employee?.displayName ?? null,
@@ -684,12 +694,16 @@ export class TeamleadReadService {
       securityRequired: boolean;
       onlineHandlingRequired: boolean;
     } | null;
+    catMan?: boolean | null;
     skuLines: Array<{
       id: string;
       ean: string;
       size: string;
       expectedQuantity: number;
       confirmedQuantity: number | null;
+      ekPrice: number | null;
+      vkPrice: number | null;
+      vkLabelPrice: number | null;
       status: string;
     }>;
   }): PositionDetailDto {
@@ -699,6 +713,9 @@ export class TeamleadReadService {
       size: s.size,
       expectedQuantity: s.expectedQuantity,
       confirmedQuantity: s.confirmedQuantity,
+      ekPrice: s.ekPrice,
+      vkPrice: s.vkPrice,
+      vkLabelPrice: s.vkLabelPrice,
       status: s.status,
     }));
     const expectedQuantity = skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
@@ -711,6 +728,8 @@ export class TeamleadReadService {
       id: p.id,
       positionNo: p.positionNo,
       wgr: p.wgr,
+      wgrDescription: wgrDescription(p.wgr),
+      catMan: p.catMan ?? null,
       supplierColor: p.supplierColor,
       expectedQuantity,
       confirmedQuantity,

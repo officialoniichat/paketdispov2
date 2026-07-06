@@ -16,7 +16,18 @@ export class CaseSummaryDto {
   @ApiProperty({ type: [String] }) priorityFlags!: string[];
   @ApiProperty() totalQuantity!: number;
   @ApiProperty() estimatedMinutes!: number;
-  @ApiProperty() storageLocationCode!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)',
+  })
+  storageLocationCode!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
+  primaryShopNo!: string | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Kartons der Anlieferung (A6)' })
+  inboundCartonCount!: number | null;
+  @ApiProperty({ type: [String], description: 'Intake-Gate: fehlende Pflichtfelder (blocked)' })
+  missingFields!: string[];
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) bookingDate!: string;
   @ApiPropertyOptional({
     type: String,
@@ -99,6 +110,16 @@ export class WorkInstructionHeaderDto {
   @ApiProperty({ description: 'CheckMode: quantity_only|percentage_check|full_check' })
   goodsReceiptCheckMode!: string;
   @ApiPropertyOptional({ type: Number, nullable: true }) goodsReceiptCheckPercentage!: number | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Prüfstufe: none|p10|p20|full (A5)' })
+  inspectionLevelCode!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Prüfstufen-Label, z. B. "20 %"' })
+  inspectionLevelLabel!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Aufgabentext der Prüfstufe (welche Todos sie bedeutet)',
+  })
+  inspectionDescription!: string | null;
   @ApiProperty() minimumQuantityCheckAlwaysRequired!: boolean;
   @ApiProperty() boxLabelRequired!: boolean;
   @ApiProperty() zstRequired!: boolean;
@@ -111,6 +132,12 @@ export class SkuLineDto {
   @ApiProperty() size!: string;
   @ApiProperty() expectedQuantity!: number;
   @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'EK-Preis (A1)' })
+  ekPrice!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'VK-Preis (A1)' })
+  vkPrice!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'VK-Etikett-Preis (A1)' })
+  vkLabelPrice!: number | null;
   @ApiProperty({ description: 'SkuLineStatus: open|confirmed|deviation' }) status!: string;
 }
 
@@ -121,6 +148,12 @@ export class PositionInstructionDto {
   @ApiPropertyOptional({ type: String, nullable: true }) priceLabelAttachLocation!: string | null;
   @ApiProperty() securityRequired!: boolean;
   @ApiPropertyOptional({ type: String, nullable: true }) securityLocation!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Sicherungstyp-Piktogramm: /static/pictograms/<code>.svg (A4)',
+  })
+  securityTypeCode!: string | null;
   @ApiProperty() onlineHandlingRequired!: boolean;
   @ApiPropertyOptional({ type: String, nullable: true }) onlineHandlingLocation!: string | null;
   @ApiPropertyOptional({ type: Boolean, nullable: true }) redPriceRequired!: boolean | null;
@@ -147,6 +180,10 @@ export class ReceiptPositionDto {
   @ApiProperty() id!: string;
   @ApiProperty() positionNo!: number;
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)' })
+  wgrDescription!: string | null;
+  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
+  catMan!: boolean | null;
   @ApiProperty() supplierArticleNo!: string;
   @ApiProperty() supplierColor!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) season!: string | null;
@@ -338,6 +375,10 @@ export class PositionDetailDto {
   @ApiProperty() id!: string;
   @ApiProperty() positionNo!: number;
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)' })
+  wgrDescription!: string | null;
+  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
+  catMan!: boolean | null;
   @ApiProperty() supplierColor!: string;
   @ApiProperty({ description: 'Σ expected over the position SKU lines' }) expectedQuantity!: number;
   @ApiPropertyOptional({
@@ -458,6 +499,39 @@ export class TransitionResultDto {
     description: 'Audit event id, if a milestone was recorded',
   })
   eventId!: string | null;
+}
+
+// --- Intake-Gate (Teamlead-Feedback D1) + Lieferungs-Freigabe (D2) -----------
+
+/** „Zurück an Bucher": mock Queue/Benachrichtigung für einen blocked-Beleg. */
+export class ReturnToBucherDto {
+  @ApiPropertyOptional({ description: 'Hinweis an den Bucher' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+/** Fehlende Pflichtfelder nachtragen; sind alle da, wird der Beleg ready. */
+export class CompleteIntakeDto {
+  @ApiPropertyOptional({ description: 'Lagerplatz-Id (Location)' })
+  @IsOptional()
+  @IsString()
+  storageLocationId?: string;
+
+  @ApiPropertyOptional({ description: 'Lieferschein-Nr' })
+  @IsOptional()
+  @IsString()
+  deliveryNoteNo?: string;
+}
+
+/** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben. */
+export class DeliveryGroupReleaseDto {
+  @ApiProperty({ type: [String] }) @IsArray() @IsString({ each: true }) caseIds!: string[];
+  @ApiPropertyOptional() @IsOptional() @IsString() reason?: string;
+}
+
+export class DeliveryGroupReleaseResultDto {
+  @ApiProperty({ type: [String] }) affectedCaseIds!: string[];
 }
 
 // --- Requests ---------------------------------------------------------------

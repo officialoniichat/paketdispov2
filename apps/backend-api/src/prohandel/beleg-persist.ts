@@ -31,13 +31,37 @@ function asDate(day: string): Date {
   return new Date(`${day}T00:00:00.000Z`);
 }
 
+/**
+ * Intake-Gate (Teamlead-Feedback D1): Pflichtfelder, ohne die ein Beleg NICHT
+ * verteilbar ist. Fehlt eines, wird der Beleg `blocked` angelegt („zurück an
+ * Bucher") und erst nach Vervollständigung freigegeben.
+ */
+export function missingIntakeFields(beleg: {
+  storageCode: string | null;
+  deliveryNoteNo: string | null;
+}): string[] {
+  const missing: string[] = [];
+  if (!beleg.storageCode) missing.push('Lagerplatz');
+  if (!beleg.deliveryNoteNo) missing.push('Lieferschein');
+  return missing;
+}
+
+export interface PersistedBeleg {
+  id: string;
+  /** True when the intake gate blocked the Beleg (zurück an Bucher). */
+  blocked: boolean;
+  missingFields: string[];
+}
+
 export async function persistGeneratedBeleg(
   db: Db,
   beleg: GeneratedBeleg,
   locationIdByCode: ReadonlyMap<string, string>,
-): Promise<string> {
-  const storageLocationId = locationIdByCode.get(beleg.storageCode);
-  if (storageLocationId === undefined) {
+): Promise<PersistedBeleg> {
+  const missingFields = missingIntakeFields(beleg);
+  const blocked = missingFields.length > 0;
+  const storageLocationId = beleg.storageCode ? locationIdByCode.get(beleg.storageCode) : null;
+  if (beleg.storageCode && storageLocationId === undefined) {
     throw new Error(`[prohandel-mock] unknown storage code "${beleg.storageCode}"`);
   }
 
@@ -53,13 +77,15 @@ export async function persistGeneratedBeleg(
     primaryShopAreaNo: beleg.primaryShopAreaNo,
     primaryShopNo: beleg.primaryShopNo,
     primaryFloor: beleg.primaryFloor,
-    storageLocationId,
+    storageLocationId: storageLocationId ?? null,
     section: beleg.section,
     goodsTypeText: beleg.goodsTypeText,
     priorityFlags: beleg.priorityFlags,
     totalQuantity: beleg.totalQuantity,
     inboundCartonCount: beleg.inboundCartonCount,
-    status: 'ready' as const,
+    // Intake-Gate (D1): unvollständige Buchungen werden NIE ready.
+    status: blocked ? ('blocked' as const) : ('ready' as const),
+    missingFields,
     // Interne Aufwandsschätzung (nur verdeckte KPI-Hilfe, kein Steuerungsmodell).
     effortPoints: Math.round(beleg.totalQuantity * 0.25 * 100) / 100,
     estimatedMinutes: Math.round(beleg.totalQuantity * 0.25 * 100) / 100,
@@ -165,5 +191,5 @@ export async function persistGeneratedBeleg(
     });
   }
 
-  return created.id;
+  return { id: created.id, blocked, missingFields };
 }

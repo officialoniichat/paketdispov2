@@ -10,6 +10,7 @@ import type { CaseStatus } from '@paket/domain-types';
  *   needs_review → ready → assigned → in_progress → completed → zst_done
  *
  * Sonderpfade (special paths):
+ *   blocked → ready                             (Intake-Gate D1: Daten vervollständigt)
  *   ready ↔ parked                              (deliberately held back)
  *   assigned → ready                            (unassigned_by_teamlead override)
  *   in_progress → issue_open → in_progress      (issue raised then resolved)
@@ -19,6 +20,8 @@ import type { CaseStatus } from '@paket/domain-types';
  */
 export const CASE_TRANSITIONS: Record<CaseStatus, readonly CaseStatus[]> = {
   needs_review: ['ready', 'cancelled'],
+  // Intake-Gate (D1): fehlende Pflichtdaten. Freigabe erst nach Vervollständigung.
+  blocked: ['ready', 'cancelled'],
   ready: ['assigned', 'parked', 'cancelled'],
   parked: ['ready', 'cancelled'],
   assigned: ['in_progress', 'ready', 'cancelled'],

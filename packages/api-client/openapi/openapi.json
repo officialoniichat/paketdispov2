@@ -694,6 +694,135 @@
         ]
       }
     },
+    "/api/teamlead/delivery-groups/release": {
+      "post": {
+        "operationId": "TeamleadController_releaseDeliveryGroup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryGroupReleaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryGroupReleaseResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "D2 „trotzdem bearbeiten\": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/return-to-bucher": {
+      "post": {
+        "operationId": "TeamleadController_returnToBucher",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnToBucherDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "D1 „Zurück an Bucher\": blockierten Beleg an den Bucher melden (mock Queue)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/complete-intake": {
+      "post": {
+        "operationId": "TeamleadController_completeIntake",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteIntakeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "D1 Freigabe: fehlende Pflichtfelder nachtragen; vollständig → blocked → ready",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/delivery-groups/split": {
       "post": {
         "operationId": "TeamleadController_splitDeliveryGroup",
@@ -2022,7 +2151,26 @@
             "type": "number"
           },
           "storageLocationCode": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)"
+          },
+          "primaryShopNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Primärer Shop (A7)"
+          },
+          "inboundCartonCount": {
+            "type": "number",
+            "nullable": true,
+            "description": "Kartons der Anlieferung (A6)"
+          },
+          "missingFields": {
+            "description": "Intake-Gate: fehlende Pflichtfelder (blocked)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "bookingDate": {
             "type": "string",
@@ -2046,7 +2194,7 @@
           "priorityFlags",
           "totalQuantity",
           "estimatedMinutes",
-          "storageLocationCode",
+          "missingFields",
           "bookingDate"
         ]
       },
@@ -2095,6 +2243,21 @@
             "type": "number",
             "nullable": true
           },
+          "inspectionLevelCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Prüfstufe: none|p10|p20|full (A5)"
+          },
+          "inspectionLevelLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Prüfstufen-Label, z. B. \"20 %\""
+          },
+          "inspectionDescription": {
+            "type": "string",
+            "nullable": true,
+            "description": "Aufgabentext der Prüfstufe (welche Todos sie bedeutet)"
+          },
           "minimumQuantityCheckAlwaysRequired": {
             "type": "boolean"
           },
@@ -2133,6 +2296,11 @@
           "securityLocation": {
             "type": "string",
             "nullable": true
+          },
+          "securityTypeCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Sicherungstyp-Piktogramm: /static/pictograms/<code>.svg (A4)"
           },
           "onlineHandlingRequired": {
             "type": "boolean"
@@ -2176,6 +2344,21 @@
             "type": "number",
             "nullable": true
           },
+          "ekPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "EK-Preis (A1)"
+          },
+          "vkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "VK-Preis (A1)"
+          },
+          "vkLabelPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "VK-Etikett-Preis (A1)"
+          },
           "status": {
             "type": "string",
             "description": "SkuLineStatus: open|confirmed|deviation"
@@ -2201,6 +2384,16 @@
           "wgr": {
             "type": "string",
             "description": "Warengruppe"
+          },
+          "wgrDescription": {
+            "type": "string",
+            "nullable": true,
+            "description": "WGR-Klartext, z. B. \"D-Bermuda\" (A2)"
+          },
+          "catMan": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "CatMan-Kennzeichen (Anzeige, A3)"
           },
           "supplierArticleNo": {
             "type": "string"
@@ -2874,7 +3067,26 @@
             "type": "number"
           },
           "storageLocationCode": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)"
+          },
+          "primaryShopNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Primärer Shop (A7)"
+          },
+          "inboundCartonCount": {
+            "type": "number",
+            "nullable": true,
+            "description": "Kartons der Anlieferung (A6)"
+          },
+          "missingFields": {
+            "description": "Intake-Gate: fehlende Pflichtfelder (blocked)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "bookingDate": {
             "type": "string",
@@ -2920,7 +3132,7 @@
           "priorityFlags",
           "totalQuantity",
           "estimatedMinutes",
-          "storageLocationCode",
+          "missingFields",
           "bookingDate",
           "effortPoints"
         ]
@@ -3015,6 +3227,16 @@
           "wgr": {
             "type": "string",
             "description": "Warengruppe"
+          },
+          "wgrDescription": {
+            "type": "string",
+            "nullable": true,
+            "description": "WGR-Klartext, z. B. \"D-Bermuda\" (A2)"
+          },
+          "catMan": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "CatMan-Kennzeichen (Anzeige, A3)"
           },
           "supplierColor": {
             "type": "string"
@@ -3387,6 +3609,59 @@
         "required": [
           "affectedCaseIds"
         ]
+      },
+      "DeliveryGroupReleaseDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "caseIds"
+        ]
+      },
+      "DeliveryGroupReleaseResultDto": {
+        "type": "object",
+        "properties": {
+          "affectedCaseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "affectedCaseIds"
+        ]
+      },
+      "ReturnToBucherDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Hinweis an den Bucher"
+          }
+        }
+      },
+      "CompleteIntakeDto": {
+        "type": "object",
+        "properties": {
+          "storageLocationId": {
+            "type": "string",
+            "description": "Lagerplatz-Id (Location)"
+          },
+          "deliveryNoteNo": {
+            "type": "string",
+            "description": "Lieferschein-Nr"
+          }
+        }
       },
       "ParkDto": {
         "type": "object",
@@ -4512,6 +4787,10 @@
             "type": "number",
             "description": "Anzahl neu erzeugter/aufgefrischter Belege"
           },
+          "blockedCases": {
+            "type": "number",
+            "description": "Davon vom Intake-Gate geblockt (zurück an Bucher, D1)"
+          },
           "weBelegNos": {
             "description": "WE-Belegnummern der Charge",
             "type": "array",
@@ -4526,6 +4805,7 @@
         },
         "required": [
           "pulledCases",
+          "blockedCases",
           "weBelegNos",
           "date"
         ]

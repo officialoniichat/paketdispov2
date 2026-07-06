@@ -74,6 +74,9 @@ export type InspectionSource = z.infer<typeof inspectionSourceSchema>;
  */
 export const caseStatusSchema = z.enum([
   'needs_review',
+  // Intake-Gate (Teamlead-Feedback D1): Pflichtdaten fehlen (Lagerplatz/Lieferschein)
+  // → „zurück an Bucher". Nie im Verteil-Pool; Freigabe erst nach Vervollständigung.
+  'blocked',
   'ready',
   'parked',
   'assigned',
@@ -191,6 +194,10 @@ export const workflowEventTypeSchema = z.enum([
   'employee.shift_overridden',
   'employee.workstation_assigned',
   'integration.pull_completed',
+  'case.intake_blocked',
+  'case.returned_to_bucher',
+  'case.intake_released',
+  'case.delivery_group_released',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
 

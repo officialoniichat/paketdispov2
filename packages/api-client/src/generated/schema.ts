@@ -321,6 +321,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/delivery-groups/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben) */
+        post: operations["TeamleadController_releaseDeliveryGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/return-to-bucher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** D1 „Zurück an Bucher": blockierten Beleg an den Bucher melden (mock Queue) */
+        post: operations["TeamleadController_returnToBucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/complete-intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** D1 Freigabe: fehlende Pflichtfelder nachtragen; vollständig → blocked → ready */
+        post: operations["TeamleadController_completeIntake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/delivery-groups/split": {
         parameters: {
             query?: never;
@@ -825,7 +876,14 @@ export interface components {
             priorityFlags: string[];
             totalQuantity: number;
             estimatedMinutes: number;
-            storageLocationCode: string;
+            /** @description null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt) */
+            storageLocationCode?: string | null;
+            /** @description Primärer Shop (A7) */
+            primaryShopNo?: string | null;
+            /** @description Kartons der Anlieferung (A6) */
+            inboundCartonCount?: number | null;
+            /** @description Intake-Gate: fehlende Pflichtfelder (blocked) */
+            missingFields: string[];
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
             /** @description GoodsTypeText (Warenart), null if unknown */
@@ -845,6 +903,12 @@ export interface components {
             /** @description CheckMode: quantity_only|percentage_check|full_check */
             goodsReceiptCheckMode: string;
             goodsReceiptCheckPercentage?: number | null;
+            /** @description Prüfstufe: none|p10|p20|full (A5) */
+            inspectionLevelCode?: string | null;
+            /** @description Prüfstufen-Label, z. B. "20 %" */
+            inspectionLevelLabel?: string | null;
+            /** @description Aufgabentext der Prüfstufe (welche Todos sie bedeutet) */
+            inspectionDescription?: string | null;
             minimumQuantityCheckAlwaysRequired: boolean;
             boxLabelRequired: boolean;
             zstRequired: boolean;
@@ -855,6 +919,8 @@ export interface components {
             priceLabelAttachLocation?: string | null;
             securityRequired: boolean;
             securityLocation?: string | null;
+            /** @description Sicherungstyp-Piktogramm: /static/pictograms/<code>.svg (A4) */
+            securityTypeCode?: string | null;
             onlineHandlingRequired: boolean;
             onlineHandlingLocation?: string | null;
             redPriceRequired?: boolean | null;
@@ -866,6 +932,12 @@ export interface components {
             size: string;
             expectedQuantity: number;
             confirmedQuantity?: number | null;
+            /** @description EK-Preis (A1) */
+            ekPrice?: number | null;
+            /** @description VK-Preis (A1) */
+            vkPrice?: number | null;
+            /** @description VK-Etikett-Preis (A1) */
+            vkLabelPrice?: number | null;
             /** @description SkuLineStatus: open|confirmed|deviation */
             status: string;
         };
@@ -874,6 +946,10 @@ export interface components {
             positionNo: number;
             /** @description Warengruppe */
             wgr: string;
+            /** @description WGR-Klartext, z. B. "D-Bermuda" (A2) */
+            wgrDescription?: string | null;
+            /** @description CatMan-Kennzeichen (Anzeige, A3) */
+            catMan?: boolean | null;
             supplierArticleNo: string;
             supplierColor: string;
             season?: string | null;
@@ -1065,7 +1141,14 @@ export interface components {
             priorityFlags: string[];
             totalQuantity: number;
             estimatedMinutes: number;
-            storageLocationCode: string;
+            /** @description null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt) */
+            storageLocationCode?: string | null;
+            /** @description Primärer Shop (A7) */
+            primaryShopNo?: string | null;
+            /** @description Kartons der Anlieferung (A6) */
+            inboundCartonCount?: number | null;
+            /** @description Intake-Gate: fehlende Pflichtfelder (blocked) */
+            missingFields: string[];
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
             /** @description GoodsTypeText (Warenart), null if unknown */
@@ -1110,6 +1193,10 @@ export interface components {
             positionNo: number;
             /** @description Warengruppe */
             wgr: string;
+            /** @description WGR-Klartext, z. B. "D-Bermuda" (A2) */
+            wgrDescription?: string | null;
+            /** @description CatMan-Kennzeichen (Anzeige, A3) */
+            catMan?: boolean | null;
             supplierColor: string;
             /** @description Σ expected over the position SKU lines */
             expectedQuantity: number;
@@ -1218,6 +1305,23 @@ export interface components {
             manualGroupKey?: string | null;
             /** @description Cases whose grouping was changed */
             affectedCaseIds: string[];
+        };
+        DeliveryGroupReleaseDto: {
+            caseIds: string[];
+            reason?: string;
+        };
+        DeliveryGroupReleaseResultDto: {
+            affectedCaseIds: string[];
+        };
+        ReturnToBucherDto: {
+            /** @description Hinweis an den Bucher */
+            note?: string;
+        };
+        CompleteIntakeDto: {
+            /** @description Lagerplatz-Id (Location) */
+            storageLocationId?: string;
+            /** @description Lieferschein-Nr */
+            deliveryNoteNo?: string;
         };
         ParkDto: {
             reason?: string;
@@ -1560,6 +1664,8 @@ export interface components {
         ProhandelPullResultDto: {
             /** @description Anzahl neu erzeugter/aufgefrischter Belege */
             pulledCases: number;
+            /** @description Davon vom Intake-Gate geblockt (zurück an Bucher, D1) */
+            blockedCases: number;
             /** @description WE-Belegnummern der Charge */
             weBelegNos: string[];
             /** @description Buchungstag der Charge (ISO) */
@@ -1979,6 +2085,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeliveryGroupEditResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_releaseDeliveryGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliveryGroupReleaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryGroupReleaseResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_returnToBucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnToBucherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_completeIntake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteIntakeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
                 };
             };
         };

@@ -31,7 +31,7 @@ import type {
 export interface EffortVectorCaseRow {
   id: string;
   totalQuantity: number;
-  storageLocation: { kind: LocationKind };
+  storageLocation: { kind: LocationKind } | null;
   workInstruction: {
     priceLabelPrintRequired: boolean;
     goodsReceiptCheckMode: GoodsReceiptCheckMode;
@@ -69,7 +69,9 @@ export function buildEffortVector(row: EffortVectorCaseRow): EffortInputVector |
     redPriceRequired: row.positions.some((p) => p.instruction?.redPriceRequired === true),
     goodsReceiptCheckMode: wi.goodsReceiptCheckMode,
     goodsReceiptCheckPercentage: wi.goodsReceiptCheckPercentage ?? undefined,
-    handlingClass: handlingClassFromLocationKind(row.storageLocation.kind),
+    handlingClass: row.storageLocation
+      ? handlingClassFromLocationKind(row.storageLocation.kind)
+      : 'unknown',
   });
 }
 

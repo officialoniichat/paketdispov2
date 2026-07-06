@@ -81,7 +81,9 @@ export function toEmployeeShift(
 }
 
 /** Map a pool case (with its storage Location joined) to the engine's domain case. */
-export function toGoodsReceiptCase(c: PrismaCase & { storageLocation: Location }): GoodsReceiptCase {
+export function toGoodsReceiptCase(
+  c: PrismaCase & { storageLocation: Location | null },
+): GoodsReceiptCase {
   return {
     id: c.id,
     source: c.source,
@@ -96,7 +98,9 @@ export function toGoodsReceiptCase(c: PrismaCase & { storageLocation: Location }
     branchNo: c.branchNo,
     primaryShopAreaNo: c.primaryShopAreaNo ?? undefined,
     primaryFloor: c.primaryFloor ?? undefined,
-    storageLocation: toStorageLocation(c.storageLocation),
+    // Intake-Gate-Invariante (D1): verteilbare Belege (Pool-Status) haben immer einen
+    // Lagerplatz; nur blocked-Belege dürfen ohne auftreten.
+    storageLocation: c.storageLocation ? toStorageLocation(c.storageLocation) : undefined,
     section: c.section as SectionCode | null,
     goodsTypeText: toGoodsType(c.goodsTypeText),
     priorityFlags: c.priorityFlags,
@@ -109,6 +113,8 @@ export function toGoodsReceiptCase(c: PrismaCase & { storageLocation: Location }
     effortPoints: c.effortPoints,
     estimatedMinutes: c.estimatedMinutes,
     assignedBundleId: c.assignedBundleId ?? undefined,
+    missingFields: c.missingFields,
+    deliveryGroupReleased: c.deliveryGroupReleased,
     version: c.version,
   };
 }

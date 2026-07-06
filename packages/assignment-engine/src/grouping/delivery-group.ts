@@ -70,6 +70,8 @@ export interface DeliveryGroupInput {
   bookingDate?: string | null;
   /** Bereich/section for the T3 same-section guard (numeric section code or string). */
   section?: string | number | null;
+  /** D2: TL-Freigabe „trotzdem bearbeiten" — Mitglied trotz unvollständiger Gruppe verteilen. */
+  deliveryGroupReleased?: boolean | null;
 }
 
 /** Which signal linked a group; `mixed` = more than one tier contributed. */
@@ -92,6 +94,8 @@ export interface DeliveryGroup {
   presentSize: number;
   /** True for Teamlead-confirmed/merged groups — frozen against re-detection. */
   locked: boolean;
+  /** D2: true wenn ALLE anwesenden Mitglieder TL-freigegeben sind („trotzdem bearbeiten"). */
+  released: boolean;
 }
 
 /** Reverse lookups built from groups. */
@@ -138,6 +142,7 @@ function buildGroup(
     .map((i) => cases[i]!.deliverySourceGroupSize ?? null)
     .filter((n): n is number => typeof n === 'number' && n > 0);
   const expectedSize = expected.length > 0 ? Math.max(...expected) : undefined;
+  const released = indices.every((i) => cases[i]!.deliveryGroupReleased === true);
   return {
     id: idOverride ?? `dg-${sorted[0]!.num ?? sorted[0]!.id}`,
     caseIds: sorted.map((s) => s.id),
@@ -146,6 +151,7 @@ function buildGroup(
     expectedSize,
     presentSize: sorted.length,
     locked,
+    released,
   };
 }
 
@@ -313,17 +319,25 @@ export function indexDeliveryGroups(groups: readonly DeliveryGroup[]): DeliveryG
 }
 
 /**
- * Case ids the engine must WITHHOLD from auto-distribution: members of suspected (T3-only)
- * groups when `autoDistributeSuspected` is off. They wait in the pool for a Teamlead confirm.
+ * Case ids the engine must WITHHOLD from auto-distribution:
+ *   - members of suspected (T3-only) groups when `autoDistributeSuspected` is off —
+ *     they wait in the pool for a Teamlead confirm;
+ *   - D2 Lieferungs-Pool-Hold: members of an UNVOLLSTÄNDIGEN Gruppe („X von N" mit
+ *     presentSize < N) — ALLE Mitglieder warten, bis jedes gebucht ist ODER der
+ *     Teamlead explizit freigibt („trotzdem bearbeiten", `released`). TL-gelockte
+ *     (manuell bestätigte) Gruppen gelten als freigegeben.
  */
 export function withheldCaseIds(
   groups: readonly DeliveryGroup[],
   config: GroupingConfig,
 ): Set<Id> {
   const withheld = new Set<Id>();
-  if (config.autoDistributeSuspected) return withheld;
   for (const group of groups) {
-    if (group.confidence === 'suspected') {
+    if (group.released || group.locked) continue;
+    const suspectedHold = !config.autoDistributeSuspected && group.confidence === 'suspected';
+    const incompleteHold =
+      group.expectedSize !== undefined && group.presentSize < group.expectedSize;
+    if (suspectedHold || incompleteHold) {
       for (const caseId of group.caseIds) withheld.add(caseId);
     }
   }

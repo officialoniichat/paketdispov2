@@ -50,7 +50,7 @@ function isNosCase(goodsCase: GoodsReceiptCase): boolean {
 
 /** Hängeware: der Bereich ist durch die Lagerklasse des Lagerplatzes fixiert. */
 function isHaengeware(goodsCase: GoodsReceiptCase): boolean {
-  return goodsCase.storageLocation.type === 'haengebahn';
+  return goodsCase.storageLocation?.type === 'haengebahn';
 }
 
 /** Classify one case against the §8.1 ladder (B2). */

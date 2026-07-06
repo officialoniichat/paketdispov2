@@ -18,6 +18,8 @@ describe('case state machine (§7.1)', () => {
   it('matches the expected transition graph (§7.1)', () => {
     const expected: Record<CaseStatus, CaseStatus[]> = {
       needs_review: ['ready', 'cancelled'],
+      // Intake-Gate (D1): blocked -> ready erst nach Vervollständigung.
+      blocked: ['ready', 'cancelled'],
       ready: ['assigned', 'parked', 'cancelled'],
       parked: ['ready', 'cancelled'],
       assigned: ['in_progress', 'ready', 'cancelled'],

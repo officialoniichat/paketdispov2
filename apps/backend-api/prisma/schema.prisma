@@ -17,6 +17,8 @@ datasource db {
 
 enum CaseStatus {
   needs_review
+  // Intake-Gate (D1): Pflichtdaten fehlen -> "zurueck an Bucher", nie im Pool.
+  blocked
   ready
   parked
   assigned
@@ -349,7 +351,9 @@ model GoodsReceiptCase {
   primaryFloor      String?
   // Anzahl der Kartons der Anlieferung (WE-Beleg-Kopf, mock-ERP, A6).
   inboundCartonCount Int?
-  storageLocationId String
+  // Optional NUR fuer blocked-Belege (Intake-Gate D1) — plan-/verteilbare Belege
+  // haben immer einen Lagerplatz (das Gate garantiert es).
+  storageLocationId String?
   section           Int? // SectionCode 1|2|3|4|7|8, null for prio-only
   goodsTypeText     GoodsTypeText?
   priorityFlags     PriorityFlag[] @default([])
@@ -360,11 +364,15 @@ model GoodsReceiptCase {
   effortPoints      Float          @default(0)
   estimatedMinutes  Float          @default(0)
   assignedBundleId  String?
+  // Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs.
+  missingFields     String[]       @default([])
+  // Lieferungs-Pool-Hold (D2): TL-Freigabe "trotzdem bearbeiten".
+  deliveryGroupReleased Boolean    @default(false)
   version           Int            @default(0) // optimistic locking
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  storageLocation Location                @relation(fields: [storageLocationId], references: [id])
+  storageLocation Location?               @relation(fields: [storageLocationId], references: [id])
   assignedBundle  AssignmentBundle?       @relation(fields: [assignedBundleId], references: [id])
   positions       ReceiptPosition[]
   workInstruction WorkInstructionHeader?

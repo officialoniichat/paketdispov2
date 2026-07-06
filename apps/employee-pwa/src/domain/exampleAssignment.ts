@@ -309,7 +309,7 @@ export const exampleBelegList: BelegListItem[] = exampleAggregates.map((a, order
   caseId: a.caseId,
   weBelegNo: a.case.weBelegNo,
   order,
-  storageLocationCode: a.case.storageLocation.code,
+  storageLocationCode: a.case.storageLocation?.code ?? 'unbekannt',
   goodsType: 'regal',
   totalQuantity: a.case.totalQuantity,
 }));
@@ -390,7 +390,7 @@ export function assembleScenario(input: ScenarioInput): AssembledScenario {
     caseId: a.caseId,
     weBelegNo: a.case.weBelegNo,
     order,
-    storageLocationCode: a.case.storageLocation.code,
+    storageLocationCode: a.case.storageLocation?.code ?? 'unbekannt',
     goodsType: input.cases[order]?.goodsType ?? 'regal',
     totalQuantity: a.case.totalQuantity,
   }));
@@ -398,7 +398,7 @@ export function assembleScenario(input: ScenarioInput): AssembledScenario {
     [],
     aggregates.map((a) => ({
       caseId: a.caseId,
-      storageLocationCode: a.case.storageLocation.code,
+      storageLocationCode: a.case.storageLocation?.code ?? 'unbekannt',
     })),
   );
   const bundle: BundleContext = {

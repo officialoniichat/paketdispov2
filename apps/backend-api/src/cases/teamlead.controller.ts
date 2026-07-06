@@ -29,6 +29,10 @@ import {
   TransitionResultDto,
   WithdrawDto,
   ZstExportResultDto,
+  CompleteIntakeDto,
+  DeliveryGroupReleaseDto,
+  DeliveryGroupReleaseResultDto,
+  ReturnToBucherDto,
 } from './cases.dto.js';
 
 /** Teamlead pool steering & issue resolution (§14.2). Full operational visibility. */
@@ -109,6 +113,45 @@ export class TeamleadController {
     @Body() dto: DeliveryGroupEditDto,
   ): Promise<DeliveryGroupEditResultDto> {
     return this.teamlead.mergeDeliveryGroup(principal, dto);
+  }
+
+  @Post('delivery-groups/release')
+  @ApiOperation({
+    summary:
+      'D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben)',
+  })
+  @ApiOkResponse({ type: DeliveryGroupReleaseResultDto })
+  releaseDeliveryGroup(
+    @CurrentUser() principal: Principal,
+    @Body() dto: DeliveryGroupReleaseDto,
+  ): Promise<DeliveryGroupReleaseResultDto> {
+    return this.teamlead.releaseDeliveryGroup(principal, dto);
+  }
+
+  @Post('cases/:caseId/return-to-bucher')
+  @ApiOperation({
+    summary: 'D1 „Zurück an Bucher": blockierten Beleg an den Bucher melden (mock Queue)',
+  })
+  @ApiOkResponse({ type: TransitionResultDto })
+  returnToBucher(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: ReturnToBucherDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.returnToBucher(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/complete-intake')
+  @ApiOperation({
+    summary: 'D1 Freigabe: fehlende Pflichtfelder nachtragen; vollständig → blocked → ready',
+  })
+  @ApiOkResponse({ type: TransitionResultDto })
+  completeIntake(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: CompleteIntakeDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.completeIntake(principal, caseId, dto);
   }
 
   @Post('delivery-groups/split')

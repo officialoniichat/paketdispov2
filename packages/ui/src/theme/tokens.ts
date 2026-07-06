@@ -66,6 +66,8 @@ export type ChipIconKey =
 /** Belegstatus chips covering the full case lifecycle (Anhang A / §7). */
 export const caseStatusMeta: Record<CaseStatus, ChipMeta> = {
   needs_review: { label: 'Prüfung nötig', bg: ltColors.warning, fg: '#ffffff', icon: 'warning' },
+  // Intake-Gate (D1): Pflichtdaten fehlen — „zurück an Bucher".
+  blocked: { label: 'Zurück an Bucher', bg: '#8e3b46', fg: '#ffffff', icon: 'error' },
   ready: { label: 'Bereit', bg: ltColors.success, fg: '#ffffff', icon: 'check' },
   parked: { label: 'Geparkt', bg: '#6b6b6b', fg: '#ffffff', icon: 'pause' },
   assigned: { label: 'Zugewiesen', bg: ltColors.info, fg: '#ffffff', icon: 'play' },

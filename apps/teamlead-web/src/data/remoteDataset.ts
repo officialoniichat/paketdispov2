@@ -293,7 +293,7 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     totalQuantity: item.totalQuantity,
     effortPoints: item.effortPoints,
     estimatedMinutes: item.estimatedMinutes,
-    storageCode: item.storageLocationCode,
+    storageCode: item.storageLocationCode ?? '–',
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
   };
 }
