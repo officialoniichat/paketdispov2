@@ -5,7 +5,9 @@
  * scopeId arrive as query params, are validated against the aggregate
  * (`resolveIssueTarget`) and can be narrowed from a position down to a single SKU
  * line. The issue is recorded as an `issue.created` event (local log → Teamlead
- * inbox); the worker can keep going with "Restware weiter bearbeiten".
+ * inbox). ONE clear continue path (D6): senden geht zurück zum Beleg, wo mit der
+ * Restware weitergearbeitet wird. Mengenabweichungen (Mehr-/Minderlieferung)
+ * werden NICHT hier gemeldet, sondern per +/- an der Position erfasst (D2).
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -20,7 +22,6 @@ import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { parseScope, resolveIssueTarget } from '../workflow/issueTarget.js';
-import { problemPath } from '../routes/paths.js';
 
 /** German labels for every domain IssueType (exhaustive — compile error if one is added). */
 const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
@@ -37,7 +38,15 @@ const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
   other: 'Sonstiges',
 };
 
-const ISSUE_TYPES = Object.keys(ISSUE_TYPE_LABELS) as IssueType[];
+/**
+ * D2: Mengenabweichungen laufen über die +/- Erfassung an der Position — sie
+ * sind hier bewusst nicht wählbar (kein Problem-Umweg für Mengen).
+ */
+const QUANTITY_TYPES: ReadonlySet<IssueType> = new Set(['missing_quantity', 'overdelivery']);
+
+const ISSUE_TYPES = (Object.keys(ISSUE_TYPE_LABELS) as IssueType[]).filter(
+  (t) => !QUANTITY_TYPES.has(t),
+);
 
 export function ProblemMeldenScreen(): JSX.Element {
   const { caseId = '' } = useParams();
@@ -106,11 +115,6 @@ export function ProblemMeldenScreen(): JSX.Element {
             Betrifft:
           </Typography>
           <Chip color="primary" label={target.label} sx={{ maxWidth: '100%' }} />
-          {target.scope !== 'case' ? (
-            <Button size="small" sx={{ ml: 1 }} onClick={() => navigate(problemPath(caseId))}>
-              Stattdessen ganzer Beleg
-            </Button>
-          ) : null}
         </Box>
 
         {/* Optional: narrow a position down to one SKU line. */}
@@ -132,7 +136,7 @@ export function ProblemMeldenScreen(): JSX.Element {
 
         <TextField
           select
-          label="Was ist das Problem?"
+          label="Problemart"
           value={issueType}
           onChange={(e) => setIssueType(e.target.value as IssueType)}
         >
@@ -167,12 +171,12 @@ export function ProblemMeldenScreen(): JSX.Element {
           boxShadow: 8,
         }}
       >
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+          Nach dem Senden arbeitest du direkt mit der Restware weiter.
+        </Typography>
         <TouchButton emphasis="primary" onClick={send} disabled={!issueType}>
           An Teamlead senden
         </TouchButton>
-        <Button variant="outlined" size="large" fullWidth onClick={() => navigate(-1)}>
-          Restware weiter bearbeiten
-        </Button>
       </Stack>
     </Box>
   );

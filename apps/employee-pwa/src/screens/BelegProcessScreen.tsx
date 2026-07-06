@@ -9,6 +9,13 @@
  * placement with the Sicherungsetikett pictogram (C6). The only gates are the
  * per-position check and "no open problem"; printing is upstream (vorgelagert),
  * Karton öffnen is no work step (C4). Boxing never gates.
+ *
+ * Positions show every Größe as its own line — EAN, EK/VK/VK-Etikett + Menge
+ * like the WE-Beleg paper (D1) — with +/- Mehr-/Mindermengen capture per Größe
+ * (D2, no Problem-screen detour for quantity deviations), Shop/WGR-Klartext/
+ * Catman (D3) and the Online-Größen-Markierung rot/grün (D4). „Position
+ * geprüft" is un-checkable (D5); the Teilabschluss dialog explains what happens
+ * to the Beleg afterwards (D7).
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -27,6 +34,8 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Collapse from '@mui/material/Collapse';
+import IconButton from '@mui/material/IconButton';
+import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { apiBaseUrl } from '../data/api.js';
@@ -66,6 +75,22 @@ const PICTOGRAM_LABEL: Record<string, string> = {
   'spider-wrap': 'Spinnensicherung',
   'safer-box': 'Safer-Box',
   'cable-lock': 'Kabelschloss',
+};
+
+/** WGR-Klartext (D3) — resolved from the same mock master data the backend uses. */
+const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
+
+const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+
+/** Format a price, or empty when the mock ERP did not deliver one. */
+function price(value: number | undefined): string | null {
+  return typeof value === 'number' ? EUR.format(value) : null;
+}
+
+/** D4: chip colour + wording of the Online-Größen-Markierung. */
+const ONLINE_MARK: Record<OnlineSizeMark, { label: string; color: 'success' | 'error' }> = {
+  green: { label: 'Onlineartikel-Highlight', color: 'success' },
+  red: { label: 'Onlineartikel', color: 'error' },
 };
 
 /** Pictogram asset URL (backend-served); undefined in offline-demo mode. */
@@ -208,7 +233,7 @@ export function BelegProcessScreen(): JSX.Element {
         <Typography variant="subtitle2">Positionen</Typography>
         {wi.goodsReceiptCheckMode === 'quantity_only' ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
-            Mindestmenge immer zählen – auch bei Prüfung Wareneingang = „Nein“.
+            Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein“.
           </Typography>
         ) : null}
         {aggregate.positions.map((pos) => {
@@ -230,24 +255,27 @@ export function BelegProcessScreen(): JSX.Element {
             <Paper key={pos.id} variant="outlined" sx={{ p: 1.5 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                 <Box sx={{ minWidth: 0, pr: 1 }}>
-                  <Typography sx={{ fontWeight: 700 }}>
-                    Pos {pos.positionNo} · {pos.supplierArticleNo}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    {pos.supplierColor}
-                  </Typography>
-                  {/* Warenbezeichnung = Artikel-Identität: WGR (+ Saison). */}
+                  <Typography sx={{ fontWeight: 700 }}>Pos {pos.positionNo}</Typography>
+                  {/* D3: Artikel-Nr. direkt unter 'Pos N'; Farbe in derselben Schriftgröße. */}
+                  <Typography noWrap>{pos.supplierArticleNo}</Typography>
+                  <Typography noWrap>{pos.supplierColor}</Typography>
+                  {/* Warenbezeichnung = Artikel-Identität: WGR mit Klartext (+ Saison) + Shop. */}
                   <Typography variant="body2" color="text.secondary" noWrap>
                     WGR {pos.wgr}
+                    {WGR_DESCRIPTION.get(pos.wgr) ? ` ${WGR_DESCRIPTION.get(pos.wgr)}` : ''}
                     {pos.season ? ` · Saison ${pos.season}` : ''}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    Shop {pos.shopNo}
                   </Typography>
                 </Box>
                 <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Soll {soll}</Typography>
               </Stack>
 
-              {flags.length > 0 || pos.nosFlag ? (
+              {flags.length > 0 || pos.nosFlag || pos.catMan ? (
                 <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                   {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
+                  {pos.catMan ? <Chip size="small" variant="outlined" label="Catman" /> : null}
                   {flags.map((f) => (
                     <Chip key={f.key} size="small" color={f.color} label={f.label} />
                   ))}
@@ -281,22 +309,88 @@ export function BelegProcessScreen(): JSX.Element {
                 </Stack>
               ) : null}
 
-              {pos.skuLines.length > 1 ? (
-                <Stack spacing={0.25} sx={{ mt: 1 }}>
-                  {pos.skuLines.map((s) => (
-                    <Typography key={s.id} variant="body2" color="text.secondary">
-                      Größe {s.size} · {s.expectedQuantity} Stk
-                    </Typography>
-                  ))}
-                </Stack>
-              ) : null}
+              {/* D1: jede Größe als eigene Zeile — EAN, EK/VK/VK-Etikett + Menge wie
+                  auf dem WE-Beleg-Papier. D2: +/- Mehr-/Mindermengen direkt hier.
+                  D4: Rot/Grün-Markierung der Online-Größen. */}
+              <Stack spacing={0.75} sx={{ mt: 1 }}>
+                {pos.skuLines.map((s) => {
+                  const ist = progress.confirmedQuantities[s.id] ?? s.expectedQuantity;
+                  const deviates = ist !== s.expectedQuantity;
+                  const mark = aggregate.onlineMarks[s.id];
+                  const prices = [
+                    price(s.ekPrice) ? `EK ${price(s.ekPrice)}` : null,
+                    price(s.vkPrice) ? `VK ${price(s.vkPrice)}` : null,
+                    price(s.vkLabelPrice) ? `VK-Etikett ${price(s.vkLabelPrice)}` : null,
+                  ]
+                    .filter((x): x is string => x !== null)
+                    .join(' · ');
+                  return (
+                    <Box
+                      key={s.id}
+                      sx={{ borderTop: '1px dashed', borderColor: 'divider', pt: 0.75 }}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          Größe {s.size}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          EAN {s.ean}
+                        </Typography>
+                        {mark ? (
+                          <Chip size="small" color={ONLINE_MARK[mark].color} label={ONLINE_MARK[mark].label} />
+                        ) : null}
+                      </Stack>
+                      {prices ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {prices}
+                        </Typography>
+                      ) : null}
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
+                        <Typography variant="body2">Soll {s.expectedQuantity}</Typography>
+                        <IconButton
+                          size="small"
+                          aria-label={`Größe ${s.size}: Menge verringern`}
+                          onClick={() =>
+                            void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
+                          }
+                        >
+                          −
+                        </IconButton>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 700, color: deviates ? 'error.main' : 'text.primary' }}
+                        >
+                          Ist {ist}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          aria-label={`Größe ${s.size}: Menge erhöhen`}
+                          onClick={() =>
+                            void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
+                          }
+                        >
+                          +
+                        </IconButton>
+                        {deviates ? (
+                          <Chip
+                            size="small"
+                            color="warning"
+                            label={ist > s.expectedQuantity ? 'Mehrmenge' : 'Mindermenge'}
+                          />
+                        ) : null}
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Stack>
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                {/* D5: 'Position geprüft' — wieder abwählbar (Toggle). */}
                 {isChecked ? (
                   <Chip
                     color="success"
                     size="small"
-                    label="Mindestmenge geprüft ✓"
+                    label="Position geprüft ✓"
                     onClick={() => void flow.togglePositionChecked(pos.id)}
                   />
                 ) : (
@@ -305,7 +399,7 @@ export function BelegProcessScreen(): JSX.Element {
                     size="small"
                     onClick={() => void flow.togglePositionChecked(pos.id)}
                   >
-                    Mindestmenge geprüft
+                    Position geprüft
                   </Button>
                 )}
                 <Box sx={{ flex: 1 }} />
@@ -373,6 +467,13 @@ export function BelegProcessScreen(): JSX.Element {
       <Dialog open={partialOpen} onClose={() => setPartialOpen(false)} fullWidth>
         <DialogTitle>Teilabschluss</DialogTitle>
         <DialogContent>
+          {/* D7: erklären, was der Teilabschluss tut und was mit dem Beleg passiert. */}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Du schließt nur den bearbeiteten Teil ab. Der Beleg geht mit deinem Grund an die
+            Teamleitung und kommt mit der Restware zurück in die Planung (in der Regel am
+            nächsten Tag). In deiner Liste zählt er nicht als „Fertig“, sondern als
+            „Teilabschluss“.
+          </Typography>
           <TextField
             autoFocus
             fullWidth
