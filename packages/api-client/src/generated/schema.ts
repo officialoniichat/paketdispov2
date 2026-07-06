@@ -1356,6 +1356,9 @@ export interface components {
             /** @description Audit event id, if a milestone was recorded */
             eventId?: Record<string, never> | null;
         };
+        CompleteDto: {
+            completedQuantity?: number;
+        };
         PartialCompleteDto: {
             reason?: string;
             completedQuantity?: number;
@@ -2416,7 +2419,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

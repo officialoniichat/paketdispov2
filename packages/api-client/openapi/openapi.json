@@ -310,6 +310,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -3610,6 +3620,14 @@
           "status",
           "version"
         ]
+      },
+      "CompleteDto": {
+        "type": "object",
+        "properties": {
+          "completedQuantity": {
+            "type": "number"
+          }
+        }
       },
       "PartialCompleteDto": {
         "type": "object",
