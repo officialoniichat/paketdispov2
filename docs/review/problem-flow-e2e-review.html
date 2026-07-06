@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Problem-Flow — End-to-End Review (Vorher / Nachher)</title>
+    <style>
+      :root {
+        --bg:#0f1115; --panel:#161a22; --panel-2:#1d222c; --ink:#eef1f6; --muted:#98a2b3;
+        --line:#2a313d; --radius:14px; --bad:#ff6b6b; --ok:#3fd07f; --warn:#f5b955; --accent:#8b7cf6;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      @media (prefers-color-scheme: light) {
+        :root { --bg:#f6f7f9; --panel:#fff; --panel-2:#eef1f5; --ink:#1a1f28; --muted:#5b6472; --line:#dfe3ea; }
+      }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.6; }
+      header { padding:40px 40px 8px; max-width:1500px; margin:0 auto; }
+      header .eyebrow { letter-spacing:.2em; text-transform:uppercase; font-size:11px; color:var(--muted); font-weight:700; }
+      header h1 { margin:8px 0 4px; font-size:30px; font-weight:800; letter-spacing:-.02em; }
+      header p { margin:0; color:var(--muted); font-size:15px; max-width:90ch; }
+      main { max-width:1500px; margin:0 auto; padding:20px 40px 100px; }
+      h2.sec { font-size:22px; font-weight:800; margin:38px 0 4px; }
+      p.secsub { color:var(--muted); font-size:14px; margin:0 0 16px; max-width:95ch; }
+      .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+      @media (max-width:1080px){ .grid { grid-template-columns:1fr; } }
+      .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; }
+      .card.before { border-top:3px solid var(--bad); }
+      .card.after  { border-top:3px solid var(--ok); }
+      .card h3 { margin:0 0 2px; font-size:18px; font-weight:800; }
+      .card .sub { color:var(--muted); font-size:13px; margin:0 0 12px; }
+      .mermaid { background:var(--panel-2); border-radius:10px; padding:14px; overflow-x:auto; text-align:center; }
+      .legend { margin-top:12px; font-size:12.5px; color:var(--muted); }
+      .legend b.bad { color:var(--bad); } .legend b.ok { color:var(--ok); }
+      table { border-collapse:collapse; width:100%; margin-top:12px; font-size:13.5px; }
+      th,td { border:1px solid var(--line); padding:9px 11px; text-align:left; vertical-align:top; }
+      th { background:var(--panel-2); font-weight:700; }
+      .sev { font-weight:800; white-space:nowrap; }
+      .sev.c { color:var(--bad); } .sev.h { color:var(--warn); } .sev.m { color:var(--muted); } .sev.g { color:var(--ok); }
+      code { background:var(--panel-2); padding:1px 6px; border-radius:5px; font-size:.86em; }
+      .foot { margin-top:26px; color:var(--muted); font-size:12.5px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">Paketlagerdispo · End-to-End Review</div>
+      <h1>Problem-Flow — Vorher / Nachher</h1>
+      <p>Zwei Ebenen sind unfertig: der <b>Lebenszyklus</b> (Problemfälle &amp; Weiterleitung sind
+      keine echten Zustände mit Abschluss) und die <b>Tier-Benachrichtigung</b> (Live-Kanal ohne
+      Empfänger, Events mit <code>employeeNo = null</code>). Beide unten, jeweils Vorher/Nachher.</p>
+    </header>
+    <main>
+
+      <h2 class="sec">1 · Lebenszyklus — „Problemfälle" &amp; „Weiterleitung" haben keinen Endzustand</h2>
+      <p class="secsub">Heute kann ein Problem nur „behoben" (zurück in Arbeit) oder „storniert" werden.
+      Für die echten Problemarten (Paket fehlt → Nachbuchung, beschädigt → Retoure + Gutteil-Split)
+      gibt es keinen Ausgang. Weiterleitung ist nur ein Etikett (<code>forwardedTo</code>): der Status
+      bleibt gleich, und wegen der Lane-Reihenfolge bleibt ein weitergeleitetes Problem in
+      „Problemfälle" hängen — Retouren/Bucher sind Mock-Queues ohne Rückweg.</p>
+      <div class="grid">
+        <div class="card before">
+          <h3>❌ Vorher — Statusautomat</h3>
+          <p class="sub">Sackgassen: kein Retouren-/Bucher-Abschluss, kein Gutteil-Split, Weiterleitung ohne Zustand.</p>
+          <div class="mermaid">
+stateDiagram-v2
+    [*] --> ready
+    ready --> assigned
+    assigned --> in_progress
+    in_progress --> issue_open: Problem gemeldet
+    issue_open --> in_progress: Freigeben
+    issue_open --> cancelled: Stornieren
+    in_progress --> partially_completed
+    partially_completed --> ready
+    in_progress --> completed
+    completed --> zst_done
+    zst_done --> [*]
+    cancelled --> [*]
+    note right of issue_open
+      Weiterleitung = nur Etikett (forwardedTo)
+      Status bleibt issue_open
+      -> bleibt in Lane Problemfaelle
+      Retouren/Bucher: kein Rueckweg
+      Kein Gutteil/Defekt-Split
+    end note
+          </div>
+          <p class="legend"><b class="bad">Nur 2 Ausgänge</b> aus <code>issue_open</code>: zurück in Arbeit
+          oder Totalstorno. Weiterleitung ist kein Zustand → nie „erledigt".</p>
+        </div>
+        <div class="card after">
+          <h3>✅ Nachher — Statusautomat mit echten Ausgängen</h3>
+          <p class="sub">Weiterleitung = echter Warte-Zustand mit Owner + Abschluss; Split als Problem-Ausgang.</p>
+          <div class="mermaid">
+stateDiagram-v2
+    [*] --> ready
+    ready --> assigned
+    assigned --> in_progress
+    in_progress --> issue_open: Problem gemeldet
+    issue_open --> in_progress: Freigeben (behoben)
+    issue_open --> awaiting_booking: An Lieferscheinbucher
+    issue_open --> awaiting_returns: An Retouren
+    issue_open --> splitting: Aufteilen gut/defekt
+    issue_open --> cancelled: Stornieren
+    awaiting_booking --> in_progress: Nachgebucht
+    awaiting_booking --> ready: Nachgebucht (zurueck Pool)
+    awaiting_booking --> cancelled: Nicht auffindbar
+    awaiting_returns --> partially_completed: Gutteil weiter
+    awaiting_returns --> cancelled: Komplett Retoure
+    splitting --> in_progress: Gutteil weiter
+    splitting --> awaiting_returns: Defektteil
+    in_progress --> completed
+    partially_completed --> ready
+    completed --> zst_done
+    zst_done --> [*]
+    cancelled --> [*]
+          </div>
+          <p class="legend"><b class="ok">Jeder Weg endet definiert:</b> Warte-Zustände
+          <code>awaiting_booking</code>/<code>awaiting_returns</code> sind eigene Lanes (aus Automatik
+          raus), haben einen Owner (Bucher/Retouren) und einen Rückweg. „Problemfälle" leert sich,
+          sobald weitergeleitet wird.</p>
+        </div>
+      </div>
+
+      <div class="card after" style="margin-top:18px;border-top:3px solid var(--accent)">
+        <h3>🎯 Empfohlenes Zielmodell (schlank, Industrie-Standard)</h3>
+        <p class="sub" style="margin-bottom:8px">Kein Over-Engineering — kein separates Retouren/Bucher-Programm für den Piloten.</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px">
+          <li><b>Weiterleitung = echter „wartet auf Dritte"-Status</b> (wie „Waiting on Vendor/Customer" in Ticket-Systemen): Beleg verlässt Pool <em>und</em> Problemfälle-Lane, liegt in „Weitergeleitet" nach Owner gruppiert.</li>
+          <li><b>Abschluss durch den Teamlead</b> mit Ergebnis: <em>nachgebucht → zurück in Arbeit</em> · <em>Gutteil-Split → Rest an Retoure</em> · <em>Storno</em>. Die Abteilung meldet sich, der Teamlead schließt ab.</li>
+          <li><b>Ein Bucher-Pfad:</b> ein <code>awaiting_booking</code> für fehlende Stammdaten (heute <code>blocked</code>) <em>und</em> Buchungsfehler bei der Arbeit — gleicher Zustand, gleiche Lane, gleicher Abschluss. Der Operator lernt es einmal.</li>
+        </ul>
+      </div>
+
+      <h2 class="sec">2 · Tier-Benachrichtigung — Aktionen erreichen die andere Seite nicht</h2>
+      <p class="secsub">Live-Kanal (<code>/api/me/stream</code>) hat keinen Consumer; Teamlead-Events
+      tragen <code>employeeNo = null</code>; das Fertig-Gate zählt einen lokalen Event-Log statt des
+      Backend-Status. Freigabe/Entzug erreichen das Gerät nie.</p>
+      <div class="grid">
+        <div class="card before">
+          <h3>❌ Vorher — Melden &amp; Freigeben</h3>
+          <p class="sub">Drei Hand-offs sterben unterwegs.</p>
+          <div class="mermaid">
+flowchart TD
+    A["Problem melden -> senden"] --> B["lokales issue.created (Dexie)"]
+    B --> C["Gate 'Beleg erledigt' = Anzahl lokaler Events &gt; 0"]
+    B --> D["best-effort POST ohne start-preparation"]
+    C --> E["Ausweg: Teilabschluss"]
+    D --> F{"Case-Status?"}
+    F -- "assigned (vor Arbeitsbeginn)" --> G["assigned to issue_open ILLEGAL, 500 verschluckt"]
+    F -- "in_progress" --> H["issue_open, Issue gespeichert"]
+    E --> I["issue_open to partially_completed ILLEGAL, 500 verschluckt"]
+    H --> J["Teamlead Freigeben -> in_progress"]
+    J --> K["Event employeeNo = null"]
+    K -.->|"kein SSE-Consumer + null"| O["Freigabe erreicht Geraet nie -> Dauer-Block"]
+    G -.-> M["Issue nie in DB"]
+    I -.-> N["App 'fertig', Backend issue_open, nie zurueck in Pool"]
+    style G fill:#7f1d1d,color:#fff
+    style I fill:#7f1d1d,color:#fff
+    style K fill:#7f1d1d,color:#fff
+    style M fill:#7f1d1d,color:#fff
+    style N fill:#7f1d1d,color:#fff
+    style O fill:#7f1d1d,color:#fff
+          </div>
+        </div>
+        <div class="card after">
+          <h3>✅ Nachher — durchgängig verdrahtet</h3>
+          <p class="sub">Status-getriebenes Gate + SSE-Empfänger + echter <code>employeeNo</code>.</p>
+          <div class="mermaid">
+flowchart TD
+    A["Problem melden -> senden"] --> B["reportIssue ueber start-preparation"]
+    B --> D["POST /api/issues + Outbox/Retry"]
+    D --> Dok{"Erfolg?"}
+    Dok -- "ja" --> T1["Bestaetigung 'gesendet'"]
+    Dok -- "nein" --> T2["sichtbarer Fehler + Retry"]
+    C["Gate 'Beleg erledigt' = Backend-Status issue_open"]
+    F["assigned -> in_progress -> issue_open (legal)"]
+    D --> F
+    F --> J["Teamlead Freigeben -> in_progress"]
+    J --> K["Event employeeNo = Besitzer"]
+    K -->|"SSE /api/me/stream aktiv"| R["PWA laedt Status neu"]
+    R --> C
+    J --> U["Status in_progress -> Gate offen"]
+    U --> C
+    style T1 fill:#14532d,color:#fff
+    style U fill:#14532d,color:#fff
+    style K fill:#14532d,color:#fff
+    style R fill:#14532d,color:#fff
+          </div>
+        </div>
+      </div>
+
+      <h2 class="sec">Verifizierte Befunde</h2>
+      <table>
+        <thead><tr><th>#</th><th>Ebene</th><th>Schwere</th><th>Was tatsächlich passiert</th></tr></thead>
+        <tbody>
+          <tr><td>L1</td><td>Lebenszyklus</td><td class="sev c">Kritisch</td><td><code>issue_open</code> hat nur die Ausgänge <code>in_progress</code> / <code>cancelled</code> (<code>case-status.ts:29</code>). Für „Paket fehlt", „beschädigt", „Mehrmenge" gibt es keinen echten Abschluss — nur „so tun als ob behoben" oder Totalstorno.</td></tr>
+          <tr><td>L2</td><td>Lebenszyklus</td><td class="sev c">Kritisch</td><td>Weiterleitung ist orphan-Metadaten: <code>forward</code> setzt nur <code>forwardedTo</code>, Status bleibt (<code>teamlead.service.ts:479</code>). Retouren/Bucher sind „mock-Queue" ohne Rückweg → kein Endzustand.</td></tr>
+          <tr><td>L3</td><td>Lebenszyklus</td><td class="sev h">Hoch</td><td>Lane-Reihenfolge <code>probleme → weitergeleitet</code> (<code>remoteDataset.ts:245</code>): ein weitergeleitetes Problem bleibt in „Problemfälle" sichtbar, nicht in „Weitergeleitet". Die Weiterleitung ist optisch verdeckt.</td></tr>
+          <tr><td>L4</td><td>Lebenszyklus</td><td class="sev h">Hoch</td><td>„Zurück an Bucher" existiert doppelt und unverbunden: als Intake-Status <code>blocked</code> (fehlende Stammdaten) und als Weiterleitung <code>lieferscheinbucher</code> (Buchungsfehler bei Arbeit) — gleiche Abteilung, zwei Mechanismen, kein gemeinsamer Abschluss.</td></tr>
+          <tr><td>P1</td><td>Benachrichtigung</td><td class="sev c">Kritisch</td><td>Freigabe hebt die Sperre nie auf: Fertig-Gate zählt einen lokalen, nie geleerten Event-Log → Beleg dauerhaft auf dem Gerät blockiert.</td></tr>
+          <tr><td>P2</td><td>Benachrichtigung</td><td class="sev c">Kritisch</td><td>Teilabschluss als Ausweg scheitert still: <code>issue_open → partially_completed</code> illegal, 500 verschluckt → App „fertig", Backend stuck.</td></tr>
+          <tr><td>P3</td><td>Benachrichtigung</td><td class="sev c">Kritisch</td><td>Problem vor Arbeitsbeginn: <code>assigned → issue_open</code> illegal → nie in DB, Teamlead sieht nichts.</td></tr>
+          <tr><td>W1</td><td>Nachbar-Flow</td><td class="sev c">Kritisch</td><td>„Beleg entziehen" published nie → Phantom-Beleg: Mitarbeitender sammelt entzogene Ware weiter.</td></tr>
+          <tr><td>W2</td><td>Nachbar-Flow</td><td class="sev h">Hoch</td><td>Weitergeleiteter <code>ready</code>-Beleg bleibt <code>ready</code> → Engine plant ihn weiter ein (Weiterleitung entfernt nicht aus der Automatik).</td></tr>
+          <tr><td>—</td><td>OK</td><td class="sev g">OK</td><td>Park/Unpark, ZST-Export, Pool-Wiedereintritt bei „Rest parken" sind solide.</td></tr>
+        </tbody>
+      </table>
+
+      <p class="foot">Gegen echten Code auf <code>main</code> (fd9d67a) verifiziert:
+      <code>workflow/case-status.ts</code>, <code>cases/teamlead.service.ts</code> (<code>forward</code>,
+      <code>withdraw</code>, <code>employeeNo:null</code>), <code>data/remoteDataset.ts</code>
+      (Lane-Reihenfolge), <code>domain-types/src/enums.ts</code> (kein <code>awaiting_*</code>-Status,
+      <code>forwardRecipient</code> = mock-Queue), kein <code>EventSource</code> in beiden Frontends.</p>
+    </main>
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+      const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });
+    </script>
+  </body>
+</html>
