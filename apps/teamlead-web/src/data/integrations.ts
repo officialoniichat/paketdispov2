@@ -9,6 +9,8 @@
  * environment variable; the UI just reflects whether it is present.
  */
 
+import { api } from './api.js';
+
 /** Connection settings the admin edits. Secret is intentionally absent. */
 export interface ProhandelConfig {
   enabled: boolean;
@@ -123,6 +125,32 @@ export function testProhandelConnection(): Promise<ConnectionTestResult> {
     ok: state.config.secretConfigured && state.config.baseUrl.length > 0,
     message: `API v2 erreichbar · ${visible} Filiale${visible === 1 ? '' : 'n'} sichtbar · 240 ms`,
   });
+}
+
+/**
+ * „Jetzt pullen" — ECHTER Backend-Call (A9): der Mock-ProHandel-Connector erzeugt
+ * die nächste Beleg-Charge mit allen ERP-Feldern in der Datenbank. Nur die
+ * Status-Anzeige (lastPull/Cursor/newCases) bleibt Teil dieses UI-Mocks.
+ */
+export async function pullProhandelNow(): Promise<ProhandelIntegration> {
+  const { data, error } = await api.POST('/api/admin/integrations/prohandel/pull');
+  if (error !== undefined || data === undefined) {
+    throw new Error('ProHandel-Pull fehlgeschlagen');
+  }
+  const lastBeleg = data.weBelegNos[data.weBelegNos.length - 1];
+  state = {
+    ...state,
+    status: {
+      ...state.status,
+      connected: true,
+      lastPullAt: new Date().toLocaleTimeString('de-DE'),
+      lastPullOk: true,
+      cursorLabel: lastBeleg ?? state.status.cursorLabel,
+      newCases: data.pulledCases,
+      nextPullInSeconds: state.config.pollIntervalSeconds,
+    },
+  };
+  return snapshot();
 }
 
 export function retryQuarantineItem(weBelegNo: string): Promise<ProhandelIntegration> {

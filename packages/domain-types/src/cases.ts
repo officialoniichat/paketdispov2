@@ -5,6 +5,7 @@ import {
   caseStatusSchema,
   checkModeSchema,
   goodsTypeTextSchema,
+  inspectionLevelCodeSchema,
   locationTypeSchema,
   priorityFlagSchema,
   sectionCodeSchema,
@@ -29,6 +30,12 @@ export const positionInstructionSchema = z.object({
   priceLabelAttachLocation: z.string().optional(),
   securityRequired: z.boolean(),
   securityLocation: z.string().optional(),
+  /**
+   * Sicherungstyp als Piktogramm-Referenz (Teamlead-Feedback: „Piktogramme liegen auf
+   * dem Server"). Code eines Bild-Assets, das das Backend unter
+   * `/static/pictograms/<code>.svg` ausliefert (z. B. `hard-tag`, `spider-wrap`).
+   */
+  securityTypeCode: z.string().optional(),
   onlineHandlingRequired: z.boolean(),
   onlineHandlingLocation: z.string().optional(),
   redPriceRequired: z.boolean().optional(),
@@ -68,6 +75,11 @@ export const receiptPositionSchema = z.object({
   onlineRelevant: z.boolean().optional(),
   sustainabilityFlag: z.string().optional(),
   labelType: z.string().optional(),
+  /**
+   * CatMan-Kennzeichen (Anzeige-Daten aus dem ERP). Bewusst KEIN Prioritätstreiber —
+   * die CatMan-Gewichtung bleibt deaktiviert; die UIs zeigen das Feld nur an.
+   */
+  catMan: z.boolean().optional(),
   instruction: positionInstructionSchema,
   skuLines: z.array(receiptSkuLineSchema),
   status: z.enum(['open', 'confirmed', 'issue_open', 'completed']),
@@ -81,6 +93,12 @@ export const workInstructionHeaderSchema = z.object({
   sortByArticleColorSizeRequired: z.boolean(),
   goodsReceiptCheckMode: checkModeSchema,
   goodsReceiptCheckPercentage: z.number().min(0).max(100).optional(),
+  /**
+   * Prüfstufe aus dem Katalog (Teamlead-Feedback: Nein/10 %/20 %/Voll statt ja/nein).
+   * `goodsReceiptCheckMode`/`goodsReceiptCheckPercentage` werden aus der Stufe
+   * abgeleitet; der Katalog liefert den erklärenden Aufgabentext.
+   */
+  inspectionLevelCode: inspectionLevelCodeSchema.optional(),
   minimumQuantityCheckAlwaysRequired: z.literal(true),
   boxLabelRequired: z.boolean(),
   zstRequired: z.boolean(),
@@ -112,7 +130,15 @@ export const goodsReceiptCaseSchema = z.object({
   weDate: isoDateSchema.optional(),
   branchNo: z.string(),
   primaryShopAreaNo: z.string().optional(),
+  /**
+   * Primärer Shop auf dem Beleg-Kopf (Teamlead-Feedback A7). Mehr-Shop-Belege sind
+   * über die Positionen/Transportboxen abgebildet (vollständige Liste); dieses Feld
+   * trägt den Haupt-Shop für Listen/Kopf-Anzeige.
+   */
+  primaryShopNo: z.string().optional(),
   primaryFloor: z.string().optional(),
+  /** Anzahl der Kartons, aus denen die Anlieferung besteht (WE-Beleg-Kopf, mock-ERP). */
+  inboundCartonCount: z.number().int().positive().optional(),
   storageLocation: storageLocationSchema,
   section: sectionCodeSchema.nullable(),
   goodsTypeText: goodsTypeTextSchema.optional(),

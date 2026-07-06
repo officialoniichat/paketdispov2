@@ -644,6 +644,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/catalogs/wgr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A2 WGR-Katalog: Warengruppen mit Klartext (z. B. 218110 D-Bermuda). */
+        get: operations["AdminController_wgrCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalogs/inspection-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A5 Prüfstufen-Katalog: Nein/10 %/20 %/Voll mit erklärendem Aufgabentext. */
+        get: operations["AdminController_inspectionLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/online-size-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A8 Online-Größen-Präferenzen (Rot/Grün-Hervorhebung der PWA). */
+        get: operations["AdminController_onlineSizePreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/online-size-preferences/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A8 CSV-Upload der Online-Größen-Präferenzen (wgr;sizeVariant;preferredSize;alternativeSize). */
+        post: operations["AdminController_uploadOnlineSizePreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/employees": {
         parameters: {
             query?: never;
@@ -678,6 +746,23 @@ export interface paths {
         head?: never;
         /** Update profile (active, area tags, productivity, overtime, pattern). */
         patch: operations["EmployeesController_updateProfile"];
+        trace?: never;
+    };
+    "/api/admin/integrations/prohandel/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mock-ProHandel-Pull: erzeugt die nächste Beleg-Charge mit allen ERP-Feldern. */
+        post: operations["ProhandelController_pull"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/healthz": {
@@ -1298,6 +1383,10 @@ export interface components {
             /** @description Minutes before plannedEnd at which auto-distribution stops (0 = off) */
             autoCutoffMinutes: number;
         };
+        InspectionRuleConfigDto: {
+            /** @description prohandel | dashboard */
+            source: string;
+        };
         LoadPlanRowDto: {
             id: string;
             shopAreaNo: string;
@@ -1315,7 +1404,39 @@ export interface components {
             effort: components["schemas"]["EffortRuleConfigDto"];
             grouping: components["schemas"]["GroupingRuleConfigDto"];
             shiftEnd: components["schemas"]["ShiftEndRuleConfigDto"];
+            inspection: components["schemas"]["InspectionRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
+        };
+        WgrCatalogEntryDto: {
+            wgr: string;
+            description: string;
+        };
+        InspectionLevelDto: {
+            /** @description none | p10 | p20 | full */
+            code: string;
+            label: string;
+            /** @description Prüfanteil in Prozent (0..100) */
+            percentage: number;
+            /** @description Welche Todos diese Prüfstufe bedeutet */
+            description: string;
+        };
+        OnlineSizePreferenceDto: {
+            id: string;
+            wgr: string;
+            /** @description Größenvariante, z. B. konfektion | jeans-inch | schuhe */
+            sizeVariant: string;
+            preferredSize: string;
+            alternativeSize?: string | null;
+        };
+        OnlineSizePreferenceUploadDto: {
+            /** @description CSV-Inhalt (Semikolon-getrennt, mit Kopfzeile) */
+            csv: string;
+        };
+        OnlineSizePreferenceUploadResultDto: {
+            upserted: number;
+            /** @description Abgelehnte Zeilen mit Grund */
+            rejectedRows: string[];
+            preferences: components["schemas"]["OnlineSizePreferenceDto"][];
         };
         TodayShiftDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -1361,6 +1482,12 @@ export interface components {
             bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
+            /** @description Skill-Stufe: profi | fortgeschritten | basis | starter | dummy — starter/dummy nur manuelle Zuteilung */
+            skillTier: string;
+            /** @description Arbeitsplatz/Tisch (Workstation-Id) */
+            workstationId?: string | null;
+            /** @description Arbeitsplatz-Code, z. B. "T3" */
+            workstationCode?: string | null;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
             /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
@@ -1383,6 +1510,10 @@ export interface components {
             bereiche?: string[];
             /** @description 0,5…1,2 */
             productivityFactor?: number;
+            /** @description profi | fortgeschritten | basis | starter | dummy (Standard beim Anlegen: dummy) */
+            skillTier?: string;
+            /** @description Arbeitsplatz/Tisch (Workstation-Id) */
+            workstationId?: string | null;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
         };
         AuditEntryDto: {
@@ -1402,6 +1533,12 @@ export interface components {
             bereiche: string[];
             productivityFactor: number;
             overtimeTolerancePct: number;
+            /** @description Skill-Stufe: profi | fortgeschritten | basis | starter | dummy — starter/dummy nur manuelle Zuteilung */
+            skillTier: string;
+            /** @description Arbeitsplatz/Tisch (Workstation-Id) */
+            workstationId?: string | null;
+            /** @description Arbeitsplatz-Code, z. B. "T3" */
+            workstationCode?: string | null;
             todayShift?: components["schemas"]["TodayShiftDto"] | null;
             /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
@@ -1417,7 +1554,19 @@ export interface components {
             productivityFactor?: number;
             /** @description 0…25 */
             overtimeTolerancePct?: number;
+            /** @description profi | fortgeschritten | basis | starter | dummy */
+            skillTier?: string;
+            /** @description Arbeitsplatz/Tisch (Workstation-Id); null löst die Zuweisung */
+            workstationId?: string | null;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+        };
+        ProhandelPullResultDto: {
+            /** @description Anzahl neu erzeugter/aufgefrischter Belege */
+            pulledCases: number;
+            /** @description WE-Belegnummern der Charge */
+            weBelegNos: string[];
+            /** @description Buchungstag der Charge (ISO) */
+            date: string;
         };
     };
     responses: never;
@@ -2330,6 +2479,86 @@ export interface operations {
             };
         };
     };
+    AdminController_wgrCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WgrCatalogEntryDto"][];
+                };
+            };
+        };
+    };
+    AdminController_inspectionLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionLevelDto"][];
+                };
+            };
+        };
+    };
+    AdminController_onlineSizePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineSizePreferenceDto"][];
+                };
+            };
+        };
+    };
+    AdminController_uploadOnlineSizePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnlineSizePreferenceUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineSizePreferenceUploadResultDto"];
+                };
+            };
+        };
+    };
     EmployeesController_list: {
         parameters: {
             query?: {
@@ -2420,6 +2649,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    ProhandelController_pull: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProhandelPullResultDto"];
                 };
             };
         };

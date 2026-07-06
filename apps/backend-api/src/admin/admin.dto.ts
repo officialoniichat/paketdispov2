@@ -157,6 +157,11 @@ export class ShiftEndRuleConfigDto {
   autoCutoffMinutes!: number;
 }
 
+/** Prüfstufen-Steuerung (A5): Quelle der Beleg-Prüfstufe (prohandel | dashboard). */
+export class InspectionRuleConfigDto {
+  @ApiProperty({ description: 'prohandel | dashboard' }) @IsString() source!: string;
+}
+
 export class LoadPlanRowDto {
   @ApiProperty() @IsString() id!: string;
   @ApiProperty() @IsString() shopAreaNo!: string;
@@ -201,9 +206,58 @@ export class RuleConfigDto {
   @Type(() => ShiftEndRuleConfigDto)
   shiftEnd!: ShiftEndRuleConfigDto;
 
+  @ApiProperty({ type: InspectionRuleConfigDto })
+  @ValidateNested()
+  @Type(() => InspectionRuleConfigDto)
+  inspection!: InspectionRuleConfigDto;
+
   @ApiProperty({ type: [LoadPlanRowDto] })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LoadPlanRowDto)
   loadPlan!: LoadPlanRowDto[];
+}
+
+// --- Mock-ERP catalogs (Teamlead-Feedback A2/A5/A8) ---------------------------
+
+/** WGR-Klartext, z. B. `218110` → „D-Bermuda" (A2). */
+export class WgrCatalogEntryDto {
+  @ApiProperty() wgr!: string;
+  @ApiProperty() description!: string;
+}
+
+/** Prüfstufe mit erklärendem Aufgabentext (A5). */
+export class InspectionLevelDto {
+  @ApiProperty({ description: 'none | p10 | p20 | full' }) code!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty({ description: 'Prüfanteil in Prozent (0..100)' }) percentage!: number;
+  @ApiProperty({ description: 'Welche Todos diese Prüfstufe bedeutet' }) description!: string;
+}
+
+/** Online-Größen-Präferenz je WGR + Größenvariante (A8). */
+export class OnlineSizePreferenceDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() wgr!: string;
+  @ApiProperty({ description: 'Größenvariante, z. B. konfektion | jeans-inch | schuhe' })
+  sizeVariant!: string;
+  @ApiProperty() preferredSize!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) alternativeSize!: string | null;
+}
+
+/**
+ * CSV-Upload der Online-Größen-Präferenzen (A8). Semikolon-getrennt mit Kopfzeile
+ * `wgr;sizeVariant;preferredSize;alternativeSize`; Upsert-Schlüssel [wgr, sizeVariant].
+ */
+export class OnlineSizePreferenceUploadDto {
+  @ApiProperty({ description: 'CSV-Inhalt (Semikolon-getrennt, mit Kopfzeile)' })
+  @IsString()
+  csv!: string;
+}
+
+export class OnlineSizePreferenceUploadResultDto {
+  @ApiProperty() upserted!: number;
+  @ApiProperty({ type: [String], description: 'Abgelehnte Zeilen mit Grund' })
+  rejectedRows!: string[];
+  @ApiProperty({ type: [OnlineSizePreferenceDto] })
+  preferences!: OnlineSizePreferenceDto[];
 }

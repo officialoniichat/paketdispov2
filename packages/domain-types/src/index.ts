@@ -11,6 +11,7 @@ export * from './work-instruction.js';
 export * from './workforce.js';
 export * from './location.js';
 export * from './admin-config.js';
+export * from './erp-catalog.js';
 export * from './assignment.js';
 export * from './transport.js';
 export * from './issues.js';

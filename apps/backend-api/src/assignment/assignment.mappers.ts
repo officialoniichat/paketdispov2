@@ -58,7 +58,11 @@ function toGoodsType(value: PrismaCase['goodsTypeText']): GoodsTypeText | undefi
   return (value === 'NOS_Nachorder' ? 'NOS-Nachorder' : value) as GoodsTypeText;
 }
 
-export function toEmployeeShift(shift: Shift, bereiche?: string[]): EmployeeShift {
+export function toEmployeeShift(
+  shift: Shift,
+  bereiche?: string[],
+  skillTier?: EmployeeShift['skillTier'],
+): EmployeeShift {
   return {
     id: shift.id,
     employeeId: shift.employeeId,
@@ -71,6 +75,8 @@ export function toEmployeeShift(shift: Shift, bereiche?: string[]): EmployeeShif
     workstationId: shift.workstationId ?? undefined,
     active: shift.active,
     bereiche: bereiche ?? [],
+    // Skill-Stufe (A10): starter/dummy werden von der Engine nicht auto-beplant.
+    skillTier: skillTier ?? 'profi',
   };
 }
 

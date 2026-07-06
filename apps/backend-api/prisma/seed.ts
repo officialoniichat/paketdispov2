@@ -13,7 +13,14 @@
 // Run from apps/backend-api so prisma.config.ts loads DATABASE_URL:
 //   pnpm --filter @paket/backend-api exec prisma db seed
 import { PrismaClient, type LocationKind, type PriorityFlag, type Prisma } from '@prisma/client';
-import { DEFAULT_RULE_CONFIG, RULE_CONFIG_KEY } from '@paket/domain-types';
+import {
+  DEFAULT_INSPECTION_LEVELS,
+  DEFAULT_RULE_CONFIG,
+  DEFAULT_WGR_CATALOG,
+  RULE_CONFIG_KEY,
+} from '@paket/domain-types';
+import { generateBelege } from '../src/prohandel/beleg-generator.js';
+import { persistGeneratedBeleg } from '../src/prohandel/beleg-persist.js';
 
 const prisma = new PrismaClient();
 
@@ -66,11 +73,17 @@ interface ShiftModel {
   breakMinutes: number;
 }
 
+type SeedSkillTier = 'profi' | 'fortgeschritten' | 'basis' | 'starter' | 'dummy';
+
 interface SeedUser {
   employeeNo: string;
   displayName: string;
   email: string;
   role: 'teamlead' | 'employee';
+  /** Skill-Stufe (A10): starter/dummy = nur manuelle Zuteilung. */
+  skillTier?: SeedSkillTier;
+  /** Arbeitsplatz/Tisch (Workstation-Code, A10). */
+  workstationCode?: string;
   /** Mitarbeiter-Einstellungen demo fields (concept employee-settings-ux). */
   bereiche?: string[];
   productivityFactor?: number;
@@ -83,10 +96,35 @@ const SPAET: ShiftModel = { model: 'Spätschicht', start: '10:00', end: '18:00',
 
 const USERS: SeedUser[] = [
   { employeeNo: 'tl-001', displayName: 'TL Logistik', email: 'tl-001@dev.local', role: 'teamlead' },
-  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', bereiche: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH },
-  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', bereiche: ['Palette'], productivityFactor: 0.9, pattern: SPAET },
-  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', productivityFactor: 1.0, pattern: FRUEH },
+  { employeeNo: 'ma-101', displayName: 'Anna', email: 'ma-101@dev.local', role: 'employee', bereiche: ['Hängebahn'], productivityFactor: 1.0, pattern: FRUEH, skillTier: 'profi', workstationCode: 'T1' },
+  { employeeNo: 'ma-102', displayName: 'Bernd', email: 'ma-102@dev.local', role: 'employee', bereiche: ['Palette'], productivityFactor: 0.9, pattern: SPAET, skillTier: 'fortgeschritten', workstationCode: 'T2' },
+  { employeeNo: 'ma-103', displayName: 'Claudia', email: 'ma-103@dev.local', role: 'employee', productivityFactor: 1.0, pattern: FRUEH, skillTier: 'basis', workstationCode: 'T3' },
+  // Starter/Dummy (A10): sichtbar auf dem Board, aber NIE auto-beplant — nur manuell.
+  { employeeNo: 'ma-104', displayName: 'Deniz (Starter)', email: 'ma-104@dev.local', role: 'employee', productivityFactor: 0.8, pattern: FRUEH, skillTier: 'starter', workstationCode: 'T4' },
+  { employeeNo: 'tmp-201', displayName: 'Aushilfe Timo', email: 'tmp-201@dev.local', role: 'employee', productivityFactor: 0.7, pattern: SPAET, skillTier: 'dummy' },
 ];
+
+// --- Workstations (Tische, A10) ---------------------------------------------
+
+const WORKSTATIONS = [
+  { code: 'T1', name: 'Tisch 1' },
+  { code: 'T2', name: 'Tisch 2' },
+  { code: 'T3', name: 'Tisch 3' },
+  { code: 'T4', name: 'Tisch 4' },
+];
+
+async function seedWorkstations(): Promise<Record<string, string>> {
+  const idByCode: Record<string, string> = {};
+  for (const w of WORKSTATIONS) {
+    const ws = await prisma.workstation.upsert({
+      where: { code: w.code },
+      update: { name: w.name, active: true },
+      create: { code: w.code, name: w.name, active: true },
+    });
+    idByCode[w.code] = ws.id;
+  }
+  return idByCode;
+}
 
 /** Mo–Fr working with the model, weekend frei — matches weeklyPatternSchema. */
 function buildWeeklyPattern(m?: ShiftModel): Record<string, unknown> | null {
@@ -96,13 +134,18 @@ function buildWeeklyPattern(m?: ShiftModel): Record<string, unknown> | null {
   return { mon: work, tue: work, wed: work, thu: work, fri: work, sat: frei, sun: frei };
 }
 
-async function seedUsers(roleIds: Record<string, string>): Promise<Record<string, string>> {
+async function seedUsers(
+  roleIds: Record<string, string>,
+  workstationIds: Record<string, string>,
+): Promise<Record<string, string>> {
   const idByEmployeeNo: Record<string, string> = {};
   for (const u of USERS) {
     const weeklyPattern = buildWeeklyPattern(u.pattern);
     const profile = {
       bereiche: u.bereiche ?? [],
       productivityFactor: u.productivityFactor ?? 1,
+      skillTier: u.skillTier ?? ('profi' as const),
+      workstationId: u.workstationCode ? requireId(workstationIds, u.workstationCode, 'workstation') : null,
       ...(weeklyPattern ? { weeklyPattern } : {}),
     };
     const user = await prisma.user.upsert({
@@ -254,6 +297,7 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
       weDate: asDate(c.bookingDate),
       branchNo: '001',
       primaryShopAreaNo: '21',
+      primaryShopNo: '21',
       primaryFloor: 'EG',
       storageLocationId,
       section: c.section,
@@ -261,6 +305,8 @@ async function seedCases(locationIds: Record<string, string>): Promise<void> {
       priorityFlags: c.priorityFlags,
       catManDate: c.priorityFlags.includes('catman_due') ? asDate(SEED_DATE) : null,
       totalQuantity: c.totalQuantity,
+      // A6: Kartonanzahl der Anlieferung (~25 Teile je Karton).
+      inboundCartonCount: Math.max(1, Math.ceil(c.totalQuantity / 25)),
       status: 'ready' as const,
       effortPoints: c.effortPoints,
       estimatedMinutes: c.estimatedMinutes,
@@ -300,6 +346,9 @@ async function seedCaseDetails(): Promise<void> {
   // empty). Cancelled cases get no detail — there is nothing to show.
   const cases = await prisma.goodsReceiptCase.findMany({
     where: {
+      // Only the handcrafted fixtures — generated mock-ProHandel Belege carry their
+      // own richer positions/boxes and must not be clobbered on re-runs.
+      externalRef: { startsWith: 'dev-seed:' },
       status: {
         in: [
           'needs_review',
@@ -316,23 +365,19 @@ async function seedCaseDetails(): Promise<void> {
   });
 
   for (const c of cases) {
+    const headerData = {
+      priceLabelPrintRequired: true,
+      goodsReceiptCheckMode: 'percentage_check' as const,
+      goodsReceiptCheckPercentage: 20,
+      // A5: Prüfstufe aus dem Katalog; 20 % entspricht dem bisherigen Demo-Verhalten.
+      inspectionLevelCode: 'p20' as const,
+      boxLabelRequired: true,
+      zstRequired: true,
+    };
     await prisma.workInstructionHeader.upsert({
       where: { caseId: c.id },
-      update: {
-        priceLabelPrintRequired: true,
-        goodsReceiptCheckMode: 'percentage_check',
-        goodsReceiptCheckPercentage: 20,
-        boxLabelRequired: true,
-        zstRequired: true,
-      },
-      create: {
-        caseId: c.id,
-        priceLabelPrintRequired: true,
-        goodsReceiptCheckMode: 'percentage_check',
-        goodsReceiptCheckPercentage: 20,
-        boxLabelRequired: true,
-        zstRequired: true,
-      },
+      update: headerData,
+      create: { caseId: c.id, ...headerData },
     });
 
     // Positions carry a destination: Filiale 1 / Shopbereich 21 / Etage. Most Belege
@@ -344,12 +389,14 @@ async function seedCaseDetails(): Promise<void> {
     const secondQty = Math.floor(c.totalQuantity / positionCount);
     const posMeta = [
       {
-        positionNo: 1, wgr: '4711', supplierArticleNo: 'ART-001', supplierColor: 'schwarz',
+        positionNo: 1, wgr: '218110', supplierArticleNo: 'ART-001', supplierColor: 'schwarz',
         floor: 'EG', qty: c.totalQuantity - secondQty * (positionCount - 1),
+        catMan: true, securityTypeCode: 'hard-tag',
       },
       {
-        positionNo: 2, wgr: '4712', supplierArticleNo: 'ART-002', supplierColor: 'blau',
+        positionNo: 2, wgr: '111130', supplierArticleNo: 'ART-002', supplierColor: 'blau',
         floor: splitAcrossEtagen ? '1.OG' : 'EG', qty: secondQty,
+        catMan: false, securityTypeCode: null,
       },
     ].slice(0, positionCount);
 
@@ -358,7 +405,7 @@ async function seedCaseDetails(): Promise<void> {
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
         update: {
           wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor,
-          floor: p.floor,
+          floor: p.floor, catMan: p.catMan,
         },
         create: {
           caseId: c.id,
@@ -369,7 +416,22 @@ async function seedCaseDetails(): Promise<void> {
           branchNo: '001',
           shopNo: '21',
           floor: p.floor,
+          catMan: p.catMan,
         },
+      });
+
+      // Positionsanweisung inkl. Sicherungstyp-Piktogramm (A4).
+      const instruction = {
+        priceLabelRequired: true,
+        priceLabelAttachRequired: p.positionNo === 1,
+        securityRequired: p.securityTypeCode !== null,
+        securityTypeCode: p.securityTypeCode,
+        onlineHandlingRequired: false,
+      };
+      await prisma.positionInstruction.upsert({
+        where: { positionId: position.id },
+        update: instruction,
+        create: { positionId: position.id, ...instruction },
       });
 
       // Two EAN/size lines per position so the Belegdetail "Positionen" SKU table
@@ -380,10 +442,14 @@ async function seedCaseDetails(): Promise<void> {
       for (const [skuIndex, expectedQuantity] of skuQuantities.entries()) {
         const size = sizes[skuIndex] ?? String(40 + skuIndex * 2);
         const ean = `40123${p.positionNo}${skuIndex}${c.weBelegNo.slice(-5)}`;
+        // A1: EK/VK/VK-Etikett je EAN/Größen-Zeile — wie auf dem WE-Beleg-Papier.
+        const ekPrice = 12.5 + p.positionNo * 2;
+        const vkPrice = round2(ekPrice * 2.4);
+        const prices = { ekPrice, vkPrice, vkLabelPrice: vkPrice };
         await prisma.receiptSkuLine.upsert({
           where: { sku_position_ean_size: { receiptPositionId: position.id, ean, size } },
-          update: { expectedQuantity },
-          create: { receiptPositionId: position.id, ean, size, expectedQuantity },
+          update: { expectedQuantity, ...prices },
+          create: { receiptPositionId: position.id, ean, size, expectedQuantity, ...prices },
         });
       }
     }
@@ -511,6 +577,7 @@ async function seedLifecycleCases(
       weDate: asDate(SEED_DATE),
       branchNo: '001',
       primaryShopAreaNo: '21',
+      primaryShopNo: '21',
       primaryFloor: 'EG',
       storageLocationId,
       section: c.section,
@@ -518,6 +585,7 @@ async function seedLifecycleCases(
       priorityFlags: [],
       catManDate: null,
       totalQuantity: c.totalQuantity,
+      inboundCartonCount: Math.max(1, Math.ceil(c.totalQuantity / 25)),
       status: c.status,
       effortPoints: c.effortPoints,
       estimatedMinutes: c.estimatedMinutes,
@@ -590,16 +658,73 @@ async function seedRuleConfig(): Promise<void> {
   });
 }
 
+// --- Mock-ERP catalogs (A2/A5/A8) -------------------------------------------
+
+async function seedCatalogs(): Promise<void> {
+  for (const entry of DEFAULT_WGR_CATALOG) {
+    await prisma.wgrCatalog.upsert({
+      where: { wgr: entry.wgr },
+      update: { description: entry.description },
+      create: entry,
+    });
+  }
+  for (const level of DEFAULT_INSPECTION_LEVELS) {
+    await prisma.inspectionLevel.upsert({
+      where: { code: level.code },
+      update: { label: level.label, percentage: level.percentage, description: level.description },
+      create: level,
+    });
+  }
+  // A8: Beispiel-Präferenzen für die Rot/Grün-Hervorhebung (per Admin-CSV erweiterbar).
+  const preferences = [
+    { wgr: '218110', sizeVariant: 'konfektion', preferredSize: '38', alternativeSize: '40' },
+    { wgr: '312400', sizeVariant: 'jeans-inch', preferredSize: '32/32', alternativeSize: '31/32' },
+    { wgr: '511100', sizeVariant: 'konfektion', preferredSize: '40', alternativeSize: null },
+  ];
+  for (const pref of preferences) {
+    await prisma.onlineSizePreference.upsert({
+      where: { online_size_wgr_variant: { wgr: pref.wgr, sizeVariant: pref.sizeVariant } },
+      update: { preferredSize: pref.preferredSize, alternativeSize: pref.alternativeSize },
+      create: pref,
+    });
+  }
+}
+
+// --- Generated mock-ProHandel batch (A9) -------------------------------------
+// Same generator + persistence sink as the "Jetzt pullen" connector, so the seed pool
+// carries every ERP field (prices, WGR, CatMan, Sicherungstyp, Prüfstufe, Kartons,
+// Shops, Liefergruppen). Deterministic: fixed seed + fixed number range.
+
+async function seedGeneratedBelege(locationIds: Record<string, string>): Promise<void> {
+  const storageCodes = LOCATIONS.map((l) => l.code);
+  const belege = generateBelege({
+    seed: 42,
+    count: 16,
+    startNo: 300,
+    bookingDate: SEED_DATE,
+    storageCodes,
+  });
+  const locationIdByCode = new Map(Object.entries(locationIds));
+  for (const beleg of belege) {
+    await persistGeneratedBeleg(prisma, beleg, locationIdByCode);
+  }
+}
+
 async function main(): Promise<void> {
   const roleIds = await seedRoles();
-  const userIds = await seedUsers(roleIds);
+  const workstationIds = await seedWorkstations();
+  const userIds = await seedUsers(roleIds, workstationIds);
   await seedShifts(userIds);
   const locationIds = await seedLocations();
+  await seedCatalogs();
   await seedCases(locationIds);
   await seedLifecycleCases(locationIds, userIds);
   // After both case sets exist, attach detail (positions/boxes/SKU) to every case
   // that should show it — ready pool + lifecycle cases.
   await seedCaseDetails();
+  // Generated mock-ProHandel batch ON TOP of the handcrafted fixtures (runs after
+  // seedCaseDetails so its richer positions/boxes are not overwritten).
+  await seedGeneratedBelege(locationIds);
   await seedRuleConfig();
 
   const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =

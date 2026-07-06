@@ -1,13 +1,24 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import type { LocationKind, Prisma } from '@prisma/client';
 import {
+  DEFAULT_INSPECTION_LEVELS,
   DEFAULT_RULE_CONFIG,
+  DEFAULT_WGR_CATALOG,
   RULE_CONFIG_KEY,
+  onlineSizePreferenceUploadRowSchema,
   ruleConfigSchema,
   type RuleConfig,
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { LocationDto, LocationUpsertDto, RuleConfigDto } from './admin.dto.js';
+import type {
+  InspectionLevelDto,
+  LocationDto,
+  LocationUpsertDto,
+  OnlineSizePreferenceDto,
+  OnlineSizePreferenceUploadResultDto,
+  RuleConfigDto,
+  WgrCatalogEntryDto,
+} from './admin.dto.js';
 
 /** Scalar write columns for a location upsert (shared by create + update). */
 interface LocationWriteData {
@@ -136,6 +147,95 @@ export class AdminService {
       update: { value },
       create: { key: RULE_CONFIG_KEY, value },
     });
+  }
+
+  // --- Mock-ERP catalogs (A2/A5/A8) ------------------------------------------
+
+  /** WGR-Klartexte; DB-Katalog, leerer Bestand fällt auf die Mock-Defaults zurück. */
+  async listWgrCatalog(): Promise<WgrCatalogEntryDto[]> {
+    const rows = await this.prisma.wgrCatalog.findMany({ orderBy: { wgr: 'asc' } });
+    if (rows.length === 0) return [...DEFAULT_WGR_CATALOG];
+    return rows.map((r) => ({ wgr: r.wgr, description: r.description }));
+  }
+
+  /** Prüfstufen-Katalog (Nein/10 %/20 %/Voll) inkl. Aufgabentext. */
+  async listInspectionLevels(): Promise<InspectionLevelDto[]> {
+    const rows = await this.prisma.inspectionLevel.findMany({ orderBy: { percentage: 'asc' } });
+    if (rows.length === 0) return [...DEFAULT_INSPECTION_LEVELS];
+    return rows.map((r) => ({
+      code: r.code,
+      label: r.label,
+      percentage: r.percentage,
+      description: r.description,
+    }));
+  }
+
+  async listOnlineSizePreferences(): Promise<OnlineSizePreferenceDto[]> {
+    const rows = await this.prisma.onlineSizePreference.findMany({
+      orderBy: [{ wgr: 'asc' }, { sizeVariant: 'asc' }],
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      wgr: r.wgr,
+      sizeVariant: r.sizeVariant,
+      preferredSize: r.preferredSize,
+      alternativeSize: r.alternativeSize,
+    }));
+  }
+
+  /**
+   * CSV-Upload der Online-Größen-Präferenzen (A8). Semikolon-getrennt mit Kopfzeile
+   * `wgr;sizeVariant;preferredSize;alternativeSize`. Zeilen werden per Zod validiert
+   * und über den natürlichen Schlüssel [wgr, sizeVariant] upserted; fehlerhafte
+   * Zeilen werden gesammelt zurückgemeldet statt den ganzen Upload zu verwerfen.
+   */
+  async uploadOnlineSizePreferences(csv: string): Promise<OnlineSizePreferenceUploadResultDto> {
+    const lines = csv
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (lines.length === 0) {
+      throw new BadRequestException('CSV ist leer');
+    }
+    // Tolerate an optional header row (detected by the literal column name).
+    const dataLines = lines[0]!.toLowerCase().startsWith('wgr') ? lines.slice(1) : lines;
+
+    const rejectedRows: string[] = [];
+    const rows: { wgr: string; sizeVariant: string; preferredSize: string; alternativeSize?: string }[] = [];
+    for (const line of dataLines) {
+      const [wgr, sizeVariant, preferredSize, alternativeSize] = line
+        .split(';')
+        .map((c) => c.trim());
+      const parsed = onlineSizePreferenceUploadRowSchema.safeParse({
+        wgr,
+        sizeVariant,
+        preferredSize,
+        alternativeSize: alternativeSize || undefined,
+      });
+      if (parsed.success) rows.push(parsed.data);
+      else rejectedRows.push(`${line} — ${parsed.error.issues[0]?.message ?? 'ungültig'}`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of rows) {
+        await tx.onlineSizePreference.upsert({
+          where: { online_size_wgr_variant: { wgr: row.wgr, sizeVariant: row.sizeVariant } },
+          update: { preferredSize: row.preferredSize, alternativeSize: row.alternativeSize ?? null },
+          create: {
+            wgr: row.wgr,
+            sizeVariant: row.sizeVariant,
+            preferredSize: row.preferredSize,
+            alternativeSize: row.alternativeSize ?? null,
+          },
+        });
+      }
+    });
+
+    return {
+      upserted: rows.length,
+      rejectedRows,
+      preferences: await this.listOnlineSizePreferences(),
+    };
   }
 
   // --- mappers --------------------------------------------------------------

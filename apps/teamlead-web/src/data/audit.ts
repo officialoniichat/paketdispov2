@@ -74,6 +74,8 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'employee.created': 'Mitarbeiter angelegt',
   'employee.profile_updated': 'Stammdaten geändert',
   'employee.shift_overridden': 'Schicht geändert',
+  'employee.workstation_assigned': 'Arbeitsplatz zugewiesen',
+  'integration.pull_completed': 'ProHandel-Pull abgeschlossen',
 };
 
 /** German label for each actor, so the audit feed never shows the raw role token. */

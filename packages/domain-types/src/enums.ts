@@ -38,6 +38,35 @@ export const caseSourceSchema = z.enum(['prohandel_api', 'manual']);
 export type CaseSource = z.infer<typeof caseSourceSchema>;
 
 /**
+ * Skill-Stufe eines Mitarbeiters (Teamlead-Feedback 03.07.2026). Steuert die
+ * AUTO-Verteilungs-Berechtigung der Engine: `starter` und `dummy` erhalten NUR
+ * manuell zugeteilte Belege (keine Auto-Verteilung, kein Self-Pull); die mittleren
+ * Stufen erhalten Starter-Packs; `profi` alles. Anzeige-/Gating-Feld — die
+ * Leistungsmessung bleibt separat über `measured` gesteuert.
+ */
+export const skillTierSchema = z.enum(['profi', 'fortgeschritten', 'basis', 'starter', 'dummy']);
+export type SkillTier = z.infer<typeof skillTierSchema>;
+
+/** Skill-Stufen, die die Engine automatisch beplanen darf (Rest = nur manuell). */
+export const AUTO_ASSIGNABLE_SKILL_TIERS: readonly SkillTier[] = [
+  'profi',
+  'fortgeschritten',
+  'basis',
+];
+
+/**
+ * Prüfstufen-Katalog-Codes (Teamlead-Feedback: Prüfung Wareneingang ist nicht ja/nein,
+ * sondern Prozentstufen mit erklärendem Aufgabentext). Quelle der Stufe ist konfigurierbar
+ * (ProHandel vs. Dashboard, RuleConfig.inspection.source).
+ */
+export const inspectionLevelCodeSchema = z.enum(['none', 'p10', 'p20', 'full']);
+export type InspectionLevelCode = z.infer<typeof inspectionLevelCodeSchema>;
+
+/** Woher die Prüfstufe eines Belegs stammt (mock: beide Quellen liefern den Katalog-Code). */
+export const inspectionSourceSchema = z.enum(['prohandel', 'dashboard']);
+export type InspectionSource = z.infer<typeof inspectionSourceSchema>;
+
+/**
  * Case lifecycle (§7.1) — 10 meaningful statuses. The granular employee work steps
  * (scan → print → confirm → box → ZST) are local PWA progress over real position/box
  * data, not top-level case statuses. A case is created directly from a ProHandel
@@ -160,6 +189,8 @@ export const workflowEventTypeSchema = z.enum([
   'employee.created',
   'employee.profile_updated',
   'employee.shift_overridden',
+  'employee.workstation_assigned',
+  'integration.pull_completed',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
 

@@ -1551,6 +1551,133 @@
         ]
       }
     },
+    "/api/admin/catalogs/wgr": {
+      "get": {
+        "operationId": "AdminController_wgrCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WgrCatalogEntryDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A2 WGR-Katalog: Warengruppen mit Klartext (z. B. 218110 D-Bermuda).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/catalogs/inspection-levels": {
+      "get": {
+        "operationId": "AdminController_inspectionLevels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InspectionLevelDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A5 Prüfstufen-Katalog: Nein/10 %/20 %/Voll mit erklärendem Aufgabentext.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/online-size-preferences": {
+      "get": {
+        "operationId": "AdminController_onlineSizePreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OnlineSizePreferenceDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A8 Online-Größen-Präferenzen (Rot/Grün-Hervorhebung der PWA).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/online-size-preferences/upload": {
+      "post": {
+        "operationId": "AdminController_uploadOnlineSizePreferences",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlineSizePreferenceUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineSizePreferenceUploadResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A8 CSV-Upload der Online-Größen-Präferenzen (wgr;sizeVariant;preferredSize;alternativeSize).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/employees": {
       "get": {
         "operationId": "EmployeesController_list",
@@ -1709,6 +1836,33 @@
         "summary": "Update profile (active, area tags, productivity, overtime, pattern).",
         "tags": [
           "employees"
+        ]
+      }
+    },
+    "/api/admin/integrations/prohandel/pull": {
+      "post": {
+        "operationId": "ProhandelController_pull",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProhandelPullResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mock-ProHandel-Pull: erzeugt die nächste Beleg-Charge mit allen ERP-Feldern.",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -3740,6 +3894,18 @@
           "autoCutoffMinutes"
         ]
       },
+      "InspectionRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "prohandel | dashboard"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
       "LoadPlanRowDto": {
         "type": "object",
         "properties": {
@@ -3794,6 +3960,9 @@
           "shiftEnd": {
             "$ref": "#/components/schemas/ShiftEndRuleConfigDto"
           },
+          "inspection": {
+            "$ref": "#/components/schemas/InspectionRuleConfigDto"
+          },
           "loadPlan": {
             "type": "array",
             "items": {
@@ -3807,7 +3976,115 @@
           "effort",
           "grouping",
           "shiftEnd",
+          "inspection",
           "loadPlan"
+        ]
+      },
+      "WgrCatalogEntryDto": {
+        "type": "object",
+        "properties": {
+          "wgr": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wgr",
+          "description"
+        ]
+      },
+      "InspectionLevelDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "none | p10 | p20 | full"
+          },
+          "label": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": "number",
+            "description": "Prüfanteil in Prozent (0..100)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Welche Todos diese Prüfstufe bedeutet"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "percentage",
+          "description"
+        ]
+      },
+      "OnlineSizePreferenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "wgr": {
+            "type": "string"
+          },
+          "sizeVariant": {
+            "type": "string",
+            "description": "Größenvariante, z. B. konfektion | jeans-inch | schuhe"
+          },
+          "preferredSize": {
+            "type": "string"
+          },
+          "alternativeSize": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "wgr",
+          "sizeVariant",
+          "preferredSize"
+        ]
+      },
+      "OnlineSizePreferenceUploadDto": {
+        "type": "object",
+        "properties": {
+          "csv": {
+            "type": "string",
+            "description": "CSV-Inhalt (Semikolon-getrennt, mit Kopfzeile)"
+          }
+        },
+        "required": [
+          "csv"
+        ]
+      },
+      "OnlineSizePreferenceUploadResultDto": {
+        "type": "object",
+        "properties": {
+          "upserted": {
+            "type": "number"
+          },
+          "rejectedRows": {
+            "description": "Abgelehnte Zeilen mit Grund",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OnlineSizePreferenceDto"
+            }
+          }
+        },
+        "required": [
+          "upserted",
+          "rejectedRows",
+          "preferences"
         ]
       },
       "TodayShiftDto": {
@@ -3952,6 +4229,20 @@
           "overtimeTolerancePct": {
             "type": "number"
           },
+          "skillTier": {
+            "type": "string",
+            "description": "Skill-Stufe: profi | fortgeschritten | basis | starter | dummy — starter/dummy nur manuelle Zuteilung"
+          },
+          "workstationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz/Tisch (Workstation-Id)"
+          },
+          "workstationCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz-Code, z. B. \"T3\""
+          },
           "todayShift": {
             "nullable": true,
             "type": "object",
@@ -3985,6 +4276,7 @@
           "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
+          "skillTier",
           "netCapacityToday"
         ]
       },
@@ -4042,6 +4334,15 @@
           "productivityFactor": {
             "type": "number",
             "description": "0,5…1,2"
+          },
+          "skillTier": {
+            "type": "string",
+            "description": "profi | fortgeschritten | basis | starter | dummy (Standard beim Anlegen: dummy)"
+          },
+          "workstationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz/Tisch (Workstation-Id)"
           },
           "weeklyPattern": {
             "nullable": true,
@@ -4117,6 +4418,20 @@
           "overtimeTolerancePct": {
             "type": "number"
           },
+          "skillTier": {
+            "type": "string",
+            "description": "Skill-Stufe: profi | fortgeschritten | basis | starter | dummy — starter/dummy nur manuelle Zuteilung"
+          },
+          "workstationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz/Tisch (Workstation-Id)"
+          },
+          "workstationCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz-Code, z. B. \"T3\""
+          },
           "todayShift": {
             "nullable": true,
             "type": "object",
@@ -4156,6 +4471,7 @@
           "bereiche",
           "productivityFactor",
           "overtimeTolerancePct",
+          "skillTier",
           "netCapacityToday",
           "recentAudit"
         ]
@@ -4184,6 +4500,15 @@
             "type": "number",
             "description": "0…25"
           },
+          "skillTier": {
+            "type": "string",
+            "description": "profi | fortgeschritten | basis | starter | dummy"
+          },
+          "workstationId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Arbeitsplatz/Tisch (Workstation-Id); null löst die Zuweisung"
+          },
           "weeklyPattern": {
             "nullable": true,
             "type": "object",
@@ -4194,6 +4519,31 @@
             ]
           }
         }
+      },
+      "ProhandelPullResultDto": {
+        "type": "object",
+        "properties": {
+          "pulledCases": {
+            "type": "number",
+            "description": "Anzahl neu erzeugter/aufgefrischter Belege"
+          },
+          "weBelegNos": {
+            "description": "WE-Belegnummern der Charge",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "date": {
+            "type": "string",
+            "description": "Buchungstag der Charge (ISO)"
+          }
+        },
+        "required": [
+          "pulledCases",
+          "weBelegNos",
+          "date"
+        ]
       }
     }
   }

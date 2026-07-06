@@ -26,6 +26,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import {
   fetchProhandelIntegration,
+  pullProhandelNow,
   retryQuarantineItem,
   saveProhandelConfig,
   testProhandelConnection,
@@ -58,6 +59,14 @@ export function IntegrationenTab(): JSX.Element {
 
   const save = useMutation({ mutationFn: saveProhandelConfig, onSuccess: onSaved });
   const retry = useMutation({ mutationFn: retryQuarantineItem, onSuccess: onSaved });
+  const pull = useMutation({
+    mutationFn: pullProhandelNow,
+    onSuccess: (data) => {
+      onSaved(data);
+      // Der Pull erzeugt echte Belege — Pool-/Board-Ansichten neu laden.
+      void queryClient.invalidateQueries();
+    },
+  });
   const test = useMutation({
     mutationFn: testProhandelConnection,
     onSuccess: (r) => setTestResult(r),
@@ -213,8 +222,12 @@ export function IntegrationenTab(): JSX.Element {
             <Button variant="outlined" onClick={() => test.mutate()} disabled={test.isPending}>
               Verbindung testen
             </Button>
-            <Button variant="contained" color="inherit" disabled>
-              Jetzt pullen
+            <Button
+              variant="contained"
+              onClick={() => pull.mutate()}
+              disabled={pull.isPending || !draft.enabled}
+            >
+              {pull.isPending ? 'Pull läuft…' : 'Jetzt pullen'}
             </Button>
             <Button
               variant="contained"
@@ -225,6 +238,16 @@ export function IntegrationenTab(): JSX.Element {
             </Button>
           </Stack>
 
+          {pull.isSuccess && (
+            <Alert severity="success" onClose={() => pull.reset()}>
+              Pull abgeschlossen · {query.data.status.newCases} neue Belege übernommen.
+            </Alert>
+          )}
+          {pull.isError && (
+            <Alert severity="error" onClose={() => pull.reset()}>
+              ProHandel-Pull fehlgeschlagen — Backend erreichbar?
+            </Alert>
+          )}
           {save.isSuccess && (
             <Alert severity="success" onClose={() => save.reset()}>
               Einstellungen gespeichert.

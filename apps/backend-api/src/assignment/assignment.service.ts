@@ -92,7 +92,7 @@ export class AssignmentService {
     const [shiftRows, locationRows, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
-        include: { employee: { select: { bereiche: true } } },
+        include: { employee: { select: { bereiche: true, skillTier: true } } },
       }),
       this.prisma.location.findMany({ where: { active: true } }),
       this.readRuleConfig(),
@@ -125,7 +125,7 @@ export class AssignmentService {
           ruleConfig.loadPlan,
           day,
         ),
-        shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
+        shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier)),
         locations: locationRows.map(toLocationMaster),
         // §8.2 LIVE wiring: for every case that has a work instruction, recompute its
         // effort from the cockpit-edited parameters (engineConfig.effort) via the pure
@@ -178,16 +178,21 @@ export class AssignmentService {
     if (!principal.employeeNo) throw new ForbiddenException('Token has no employee number claim');
     const employee = await this.prisma.user.findUnique({
       where: { employeeNo: principal.employeeNo },
-      select: { id: true, active: true, bereiche: true },
+      select: { id: true, active: true, bereiche: true, skillTier: true },
     });
     if (!employee || !employee.active) {
       throw new ForbiddenException('Employee not provisioned or inactive');
+    }
+    // Skill-Stufen-Gate (A10): starter/dummy erhalten nur manuell zugeteilte Belege —
+    // kein Self-Pull über die Engine.
+    if (employee.skillTier === 'starter' || employee.skillTier === 'dummy') {
+      return { assigned: false, reason: 'skill_tier' };
     }
 
     await this.materializeShiftsForDate(day, dayStart);
     const shift = await this.prisma.shift.findFirst({
       where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd }, active: true },
-      include: { employee: { select: { bereiche: true } } },
+      include: { employee: { select: { bereiche: true, skillTier: true } } },
     });
     if (!shift || shift.netCapacityMinutes <= 0) return { assigned: false, reason: 'no_shift' };
 
@@ -215,7 +220,7 @@ export class AssignmentService {
     // ends. The cart budget is the smaller of the remaining net capacity and the real
     // wall-clock time left until plannedEnd. Once that is 0 the worker is at shift end —
     // they get nothing more so nothing stays open over night.
-    const shiftDomain = toEmployeeShift(shift, shift.employee.bereiche);
+    const shiftDomain = toEmployeeShift(shift, shift.employee.bereiche, shift.employee.skillTier);
     const finishableBudget = finishableBudgetMinutes(remainingCapacity, shiftDomain, now.toISOString());
     if (finishableBudget <= 0) return { assigned: false, reason: 'shift_ending' };
 
@@ -371,7 +376,7 @@ export class AssignmentService {
     const [shiftRows, locationRows, casesRows, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
-        include: { employee: { select: { bereiche: true } } },
+        include: { employee: { select: { bereiche: true, skillTier: true } } },
       }),
       this.prisma.location.findMany({ where: { active: true } }),
       this.prisma.goodsReceiptCase.findMany({
@@ -392,7 +397,7 @@ export class AssignmentService {
     const input: EngineInput = {
       date: day,
       cases: applyResolvedLoadPlanDates(normalizedCases, ruleConfig.loadPlan, day),
-      shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche)),
+      shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier)),
       locations: locationRows.map(toLocationMaster),
       // §8.2 LIVE wiring: same effort recomputation as recalculate (see there).
       effortVectors: buildEffortVectors(casesRows),

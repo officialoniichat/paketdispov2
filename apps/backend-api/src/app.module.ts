@@ -7,6 +7,7 @@ import { LiveModule } from './live/live.module.js';
 import { CasesModule } from './cases/cases.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
+import { ProhandelModule } from './prohandel/prohandel.module.js';
 import { HealthModule } from './health/health.module.js';
 
 /**
@@ -23,6 +24,7 @@ import { HealthModule } from './health/health.module.js';
     CasesModule,
     AdminModule,
     EmployeesModule,
+    ProhandelModule,
     HealthModule,
   ],
 })

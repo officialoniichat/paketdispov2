@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema, isoDateTimeSchema } from './primitives.js';
+import { skillTierSchema } from './enums.js';
 
 /** Time of day HH:MM (24h), used for shift windows in the weekly pattern. */
 export const timeOfDaySchema = z
@@ -34,6 +35,12 @@ export const employeeShiftSchema = z.object({
    * Allrounder (no preference). Consumed by distribute() — not a persistence field.
    */
   bereiche: z.array(z.string()).optional(),
+  /**
+   * Skill-Stufe des Mitarbeiters (Teamlead-Feedback). Die Engine schließt
+   * `starter`/`dummy` von der AUTO-Verteilung aus — sie erhalten nur manuell
+   * zugeteilte Belege. Absent = `profi` (volle Berechtigung, rückwärtsneutral).
+   */
+  skillTier: skillTierSchema.optional(),
 });
 export type EmployeeShift = z.infer<typeof employeeShiftSchema>;
 
@@ -126,6 +133,16 @@ export const employeeProfileSchema = z.object({
   productivityFactor: z.number().min(0.5).max(1.2).default(1),
   /** Allowed overload before the load ⚠ warning fires, in percent (0…25). */
   overtimeTolerancePct: z.number().min(0).max(25).default(0),
+  /**
+   * Skill-Stufe (Teamlead-Feedback): profi = alles; fortgeschritten/basis =
+   * Starter-Packs; starter/dummy = nur manuell zugeteilte Belege (kein Auto).
+   */
+  skillTier: skillTierSchema.default('profi'),
+  /**
+   * Arbeitsplatz/Tisch des Mitarbeiters (per Admin zuweisbar; Dummy-Mitarbeiter
+   * flexibel umsetzbar). Referenziert die Workstation-Stammdaten.
+   */
+  workstationId: idSchema.nullish(),
   weeklyPattern: weeklyPatternSchema.nullish(),
 });
 export type EmployeeProfile = z.infer<typeof employeeProfileSchema>;

@@ -167,6 +167,24 @@ enum ShiftSource {
   teamlead
 }
 
+// Skill-Stufe (Teamlead-Feedback 03.07.2026): starter/dummy erhalten nur manuell
+// zugeteilte Belege — die Engine schließt sie von der Auto-Verteilung aus.
+enum SkillTier {
+  profi
+  fortgeschritten
+  basis
+  starter
+  dummy
+}
+
+// Prüfstufen-Katalog-Code (Teamlead-Feedback A5): Nein/10%/20%/Voll.
+enum InspectionLevelCode {
+  none
+  p10
+  p20
+  full
+}
+
 
 // ---------------------------------------------------------------------------
 // Identity & RBAC
@@ -188,9 +206,15 @@ model User {
   productivityFactor   Float    @default(1)
   overtimeTolerancePct Float    @default(0)
   weeklyPattern        Json?
+  // Skill-Stufe (Teamlead-Feedback): profi=alles, mittlere Stufen=Starter-Packs,
+  // starter/dummy=nur manuell zugeteilte Belege (kein Auto, kein Self-Pull).
+  skillTier            SkillTier @default(profi)
+  // Arbeitsplatz/Tisch-Zuweisung des Mitarbeiters (per Admin setzbar, Dummy flexibel).
+  workstationId        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  workstation     Workstation?       @relation(fields: [workstationId], references: [id])
   roles           UserRole[]
   shifts          Shift[]
   bundles         AssignmentBundle[]
@@ -274,6 +298,7 @@ model Workstation {
 
   location Location? @relation(fields: [locationId], references: [id])
   shifts   Shift[]
+  users    User[]
 
   @@map("workstations")
 }
@@ -319,7 +344,11 @@ model GoodsReceiptCase {
   weDate            DateTime?      @db.Date
   branchNo          String
   primaryShopAreaNo String?
+  // Primärer Shop auf dem Beleg-Kopf (A7); Mehr-Shop über Positionen/Boxen.
+  primaryShopNo     String?
   primaryFloor      String?
+  // Anzahl der Kartons der Anlieferung (WE-Beleg-Kopf, mock-ERP, A6).
+  inboundCartonCount Int?
   storageLocationId String
   section           Int? // SectionCode 1|2|3|4|7|8, null for prio-only
   goodsTypeText     GoodsTypeText?
@@ -356,6 +385,8 @@ model WorkInstructionHeader {
   sortByArticleColorSizeRequired  Boolean   @default(false)
   goodsReceiptCheckMode           CheckMode @default(quantity_only)
   goodsReceiptCheckPercentage     Float?
+  // Prüfstufe aus dem Katalog (A5); mode/percentage werden daraus abgeleitet.
+  inspectionLevelCode             InspectionLevelCode?
   minimumQuantityCheckAlwaysRequired Boolean @default(true)
   boxLabelRequired                Boolean   @default(false)
   zstRequired                     Boolean   @default(false)
@@ -381,6 +412,8 @@ model ReceiptPosition {
   onlineRelevant     Boolean?
   sustainabilityFlag String?
   labelType          String?
+  // CatMan-Kennzeichen (A3, Anzeige-Daten — KEIN Prioritätstreiber).
+  catMan             Boolean?
   status             PositionStatus @default(open)
 
   case        GoodsReceiptCase     @relation(fields: [caseId], references: [id], onDelete: Cascade)
@@ -399,6 +432,8 @@ model PositionInstruction {
   priceLabelAttachLocation String?
   securityRequired         Boolean @default(false)
   securityLocation         String?
+  // Sicherungstyp als Piktogramm-Referenz (A4): /static/pictograms/<code>.svg
+  securityTypeCode         String?
   onlineHandlingRequired   Boolean @default(false)
   onlineHandlingLocation   String?
   redPriceRequired         Boolean?
@@ -426,6 +461,40 @@ model ReceiptSkuLine {
   @@unique([receiptPositionId, ean, size], name: "sku_position_ean_size")
   @@index([receiptPositionId])
   @@map("receipt_sku_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Mock-ERP catalogs (Teamlead-Feedback 03.07.2026)
+// ---------------------------------------------------------------------------
+
+// Warengruppen-Klartexte, z. B. 218110 → "D-Bermuda" (A2).
+model WgrCatalog {
+  wgr         String @id
+  description String
+
+  @@map("wgr_catalog")
+}
+
+// Prüfstufen-Katalog (A5): Prozentstufe + erklärender Aufgabentext.
+model InspectionLevel {
+  code        InspectionLevelCode @id
+  label       String
+  percentage  Float
+  description String
+
+  @@map("inspection_levels")
+}
+
+// Online-Größen-Präferenz je WGR + Größenvariante (A8, Admin-CSV-Upload).
+model OnlineSizePreference {
+  id              String  @id @default(cuid())
+  wgr             String
+  sizeVariant     String
+  preferredSize   String
+  alternativeSize String?
+
+  @@unique([wgr, sizeVariant], name: "online_size_wgr_variant")
+  @@map("online_size_preferences")
 }
 
 // ---------------------------------------------------------------------------

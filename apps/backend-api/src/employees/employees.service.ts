@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import {
   employeeRoleSchema,
+  skillTierSchema,
   weeklyPatternSchema,
   type EmployeeRole,
   type WeeklyDayPlan,
@@ -36,6 +37,9 @@ interface UserWithRelations {
   bereiche: string[];
   productivityFactor: number;
   overtimeTolerancePct: number;
+  skillTier: string;
+  workstationId: string | null;
+  workstation: { code: string } | null;
   weeklyPattern: Prisma.JsonValue;
   roles: { role: { name: string } }[];
   shifts: {
@@ -49,7 +53,10 @@ interface UserWithRelations {
   }[];
 }
 
-const USER_INCLUDE = { roles: { include: { role: true } } } as const;
+const USER_INCLUDE = {
+  roles: { include: { role: true } },
+  workstation: { select: { code: true } },
+} as const;
 
 /**
  * Mitarbeiter-Einstellungen service (concept employee-settings-ux). Clean separation:
@@ -122,6 +129,9 @@ export class EmployeesService {
       weeklyPattern = parsed.data as unknown as Prisma.InputJsonValue;
     }
 
+    const skillTier = parseSkillTier(dto.skillTier, 'dummy');
+    const workstationId = await this.resolveWorkstationId(dto.workstationId);
+
     const date = todayIso();
     const id = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -129,8 +139,11 @@ export class EmployeesService {
           employeeNo,
           displayName,
           active: true,
-          // Temp workers are the default for this path — excluded from KPIs.
+          // Temp workers are the default for this path — excluded from KPIs and,
+          // as `dummy` tier, from the engine's auto-distribution (manual assign only).
           measured: dto.measured ?? false,
+          skillTier,
+          ...(workstationId !== undefined ? { workstationId } : {}),
           bereiche: dto.bereiche ?? [],
           ...(dto.productivityFactor !== undefined
             ? { productivityFactor: dto.productivityFactor }
@@ -180,6 +193,13 @@ export class EmployeesService {
     if (dto.bereiche !== undefined) data.bereiche = dto.bereiche;
     if (dto.overtimeTolerancePct !== undefined) data.overtimeTolerancePct = dto.overtimeTolerancePct;
     if (dto.productivityFactor !== undefined) data.productivityFactor = dto.productivityFactor;
+    if (dto.skillTier !== undefined) data.skillTier = parseSkillTier(dto.skillTier, 'profi');
+    const workstationId = await this.resolveWorkstationId(dto.workstationId);
+    const workstationChanged = workstationId !== undefined && workstationId !== user.workstationId;
+    if (workstationId !== undefined) {
+      data.workstation =
+        workstationId === null ? { disconnect: true } : { connect: { id: workstationId } };
+    }
     if (dto.weeklyPattern !== undefined) {
       if (dto.weeklyPattern === null) {
         data.weeklyPattern = Prisma.JsonNull;
@@ -212,12 +232,39 @@ export class EmployeesService {
         },
         tx,
       );
+      // Arbeitsplatz-/Tisch-Zuweisung ist ein eigener, sichtbarer Vorgang (A10).
+      if (workstationChanged) {
+        await this.events.append(
+          {
+            eventType: 'employee.workstation_assigned',
+            entityType: 'User',
+            entityId: id,
+            actorType: 'teamlead',
+            actorId: principal.sub,
+            payload: { workstationId },
+          },
+          tx,
+        );
+      }
     });
 
     return this.loadDetail(id, date);
   }
 
   // --- internals ------------------------------------------------------------
+
+  /**
+   * Validate a workstation reference. `undefined` = keep as-is, `null` = detach,
+   * otherwise the Workstation must exist (Tisch-Stammdaten).
+   */
+  private async resolveWorkstationId(
+    workstationId: string | null | undefined,
+  ): Promise<string | null | undefined> {
+    if (workstationId === undefined || workstationId === null) return workstationId;
+    const ws = await this.prisma.workstation.findUnique({ where: { id: workstationId } });
+    if (!ws) throw new BadRequestException(`Arbeitsplatz ${workstationId} existiert nicht`);
+    return ws.id;
+  }
 
   /**
    * Derive the concrete Shift for `date` from the employee's weekly pattern and
@@ -326,6 +373,9 @@ export class EmployeesService {
       bereiche: u.bereiche,
       productivityFactor: u.productivityFactor,
       overtimeTolerancePct: u.overtimeTolerancePct,
+      skillTier: u.skillTier,
+      workstationId: u.workstationId,
+      workstationCode: u.workstation?.code ?? null,
       todayShift,
       netCapacityToday,
       weeklyPattern: parseWeeklyPattern(u.weeklyPattern),
@@ -339,6 +389,21 @@ function parseWeeklyPattern(value: Prisma.JsonValue): WeeklyPattern | null {
 }
 
 // --- pure helpers -----------------------------------------------------------
+
+/** Skill-Stufe validieren (400 statt Prisma-Fehler bei unbekanntem Wert). */
+function parseSkillTier(
+  value: string | undefined,
+  fallback: 'profi' | 'dummy',
+): 'profi' | 'fortgeschritten' | 'basis' | 'starter' | 'dummy' {
+  if (value === undefined) return fallback;
+  const parsed = skillTierSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new BadRequestException(
+      `Ungültige Skill-Stufe "${value}" (erlaubt: profi, fortgeschritten, basis, starter, dummy)`,
+    );
+  }
+  return parsed.data;
+}
 
 function normalizeRole(name: string): EmployeeRole {
   const parsed = employeeRoleSchema.safeParse(name.trim().toLowerCase());

@@ -1,4 +1,5 @@
 import {
+  AUTO_ASSIGNABLE_SKILL_TIERS,
   assignmentBundleSchema,
   bereichFromLocationKind,
   type AssignmentBundle,
@@ -98,6 +99,13 @@ export function assignWork(
 ): AssignmentPlan {
   const now = options.now ?? new Date().toISOString();
 
+  // Skill-Stufen-Gate (Teamlead-Feedback A10): starter/dummy erhalten NUR manuell
+  // zugeteilte Belege — ihre Schichten werden von der Auto-Verteilung ausgenommen
+  // (Kapazität zählt nicht mit). Absent = profi (rückwärtsneutral).
+  const autoShifts = input.shifts.filter((shift) =>
+    AUTO_ASSIGNABLE_SKILL_TIERS.includes(shift.skillTier ?? 'profi'),
+  );
+
   // Schichtende-Cutoff (ZIEL A, Punkt 5): the batch auto-distribution may only fill each
   // shift up to its cutoff point (plannedEnd − autoCutoffMinutes). We model this as an
   // effective shift whose netCapacityMinutes is the still-auto-assignable share at `now`,
@@ -105,7 +113,7 @@ export function assignWork(
   // cutoff is honoured everywhere with no downstream change. With the engine default
   // (autoCutoffMinutes = 0) this is a no-op (effective === net). A shift that is fully
   // inside its cutoff window drops to 0 and falls out of distribution automatically.
-  const effectiveShifts = input.shifts.map((shift) => {
+  const effectiveShifts = autoShifts.map((shift) => {
     const effective = autoAssignableCapacityMinutes(shift, now, config.shiftEnd);
     return effective === shift.netCapacityMinutes
       ? shift

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema } from './primitives.js';
-import { sectionCodeSchema } from './enums.js';
+import { inspectionSourceSchema, sectionCodeSchema } from './enums.js';
 
 /**
  * §11 Admin / Regelpflege — the one cohesive, structured rule configuration the
@@ -164,6 +164,16 @@ export const DEFAULT_EFFORT_RULE_CONFIG: EffortRuleConfig = {
   pointsPerMinute: 1,
 };
 
+/**
+ * Prüfstufen-Steuerung (Teamlead-Feedback A5). Die Prüfstufe eines Belegs kommt aus
+ * dem Katalog (Nein/10 %/20 %/Voll); `source` legt fest, ob der Wert aus ProHandel
+ * übernommen oder im Dashboard gepflegt wird (beides mock, aber konfigurierbar).
+ */
+export const inspectionRuleConfigSchema = z.object({
+  source: inspectionSourceSchema,
+});
+export type InspectionRuleConfig = z.infer<typeof inspectionRuleConfigSchema>;
+
 /** One Verladeplan row (read-only in the cockpit). */
 export const loadPlanRowSchema = z.object({
   id: idSchema,
@@ -183,6 +193,7 @@ export const ruleConfigSchema = z.object({
   effort: effortRuleConfigSchema,
   grouping: groupingRuleConfigSchema,
   shiftEnd: shiftEndRuleConfigSchema,
+  inspection: inspectionRuleConfigSchema,
   loadPlan: z.array(loadPlanRowSchema),
 });
 export type RuleConfig = z.infer<typeof ruleConfigSchema>;
@@ -221,6 +232,9 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
   },
   shiftEnd: {
     autoCutoffMinutes: 120,
+  },
+  inspection: {
+    source: 'prohandel',
   },
   loadPlan: [
     {

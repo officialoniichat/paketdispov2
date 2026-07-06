@@ -68,6 +68,15 @@ export class EmployeeListItemDto {
   @ApiProperty({ type: [String] }) bereiche!: string[];
   @ApiProperty() productivityFactor!: number;
   @ApiProperty() overtimeTolerancePct!: number;
+  @ApiProperty({
+    description:
+      'Skill-Stufe: profi | fortgeschritten | basis | starter | dummy — starter/dummy nur manuelle Zuteilung',
+  })
+  skillTier!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Arbeitsplatz/Tisch (Workstation-Id)' })
+  workstationId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Arbeitsplatz-Code, z. B. "T3"' })
+  workstationCode!: string | null;
   @ApiPropertyOptional({ type: TodayShiftDto, nullable: true })
   todayShift!: TodayShiftDto | null;
   @ApiProperty({ description: 'Net capacity counted today (0 if inactive/frei)' })
@@ -122,6 +131,20 @@ export class EmployeeProfileUpdateDto {
   @Min(0)
   @Max(25)
   overtimeTolerancePct?: number;
+  @ApiPropertyOptional({
+    description: 'profi | fortgeschritten | basis | starter | dummy',
+  })
+  @IsOptional()
+  @IsString()
+  skillTier?: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Arbeitsplatz/Tisch (Workstation-Id); null löst die Zuweisung',
+  })
+  @IsOptional()
+  @IsString()
+  workstationId?: string | null;
   @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
   @IsOptional()
   @ValidateNested()
@@ -157,6 +180,20 @@ export class EmployeeCreateDto {
   @Min(0.5)
   @Max(1.2)
   productivityFactor?: number;
+  @ApiPropertyOptional({
+    description: 'profi | fortgeschritten | basis | starter | dummy (Standard beim Anlegen: dummy)',
+  })
+  @IsOptional()
+  @IsString()
+  skillTier?: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Arbeitsplatz/Tisch (Workstation-Id)',
+  })
+  @IsOptional()
+  @IsString()
+  workstationId?: string | null;
   @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
   @IsOptional()
   @ValidateNested()
