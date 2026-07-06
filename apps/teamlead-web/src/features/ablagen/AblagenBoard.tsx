@@ -503,6 +503,11 @@ function LaneCardView({
           ))}
           {card.section !== null && <Chip size="small" label={`Abschnitt ${card.section}`} />}
           {card.issueStatus && <ProblemChip status={card.issueStatus} size="small" />}
+          {card.attentionFlag && (
+            <Tooltip title={card.attentionNote ?? ''}>
+              <Chip size="small" color="warning" variant="outlined" label="Aufmerksamkeit" />
+            </Tooltip>
+          )}
           {card.forwardedTo !== null && (
             <Chip
               size="small"
