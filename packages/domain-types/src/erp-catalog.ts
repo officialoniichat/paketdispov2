@@ -75,7 +75,7 @@ export const DEFAULT_INSPECTION_LEVELS: readonly InspectionLevel[] = [
     label: '20 %',
     percentage: 20,
     description:
-      'Stichprobe 20 %: jede fünfte Position vollständig auszählen, zusätzlich Größenlauf und Farbe gegen die Arbeitsanweisung prüfen.',
+      'Stichprobe 20 %: jede fünfte Position vollständig auszählen, zusätzlich Größenlauf und Farbe mit den Solldaten des WE-Belegs abgleichen.',
   },
   {
     code: 'full',
