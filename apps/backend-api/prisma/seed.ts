@@ -339,6 +339,22 @@ function splitQuantity(total: number): number[] {
   return [first, total - first];
 }
 
+/** Beleg-Kopf-Warenart → Boxzettel-Warenart (Box trägt die Warenart ihres Belegs). */
+function boxGoodsTypeFromCase(
+  text: import('@prisma/client').GoodsTypeText | null,
+): import('@prisma/client').BoxGoodsType | null {
+  switch (text) {
+    case 'Vororder': return 'vororder';
+    case 'Nachorder': return 'nachorder';
+    case 'Sonderposten': return 'sopo';
+    case 'NOS': case 'NOOS': return 'nos';
+    case 'Extrabestellung': return 'extrabestellung';
+    case 'NOS_Nachorder': return 'nos_nachorder';
+    case 'Prio': return 'prio';
+    default: return null;
+  }
+}
+
 async function seedCaseDetails(): Promise<void> {
   // Cover every case that benefits from a detail aggregate: the ready pool (so any
   // engine-assigned case is completable in the PWA) AND the terminal/issue
@@ -400,12 +416,13 @@ async function seedCaseDetails(): Promise<void> {
       },
     ].slice(0, positionCount);
 
+    const positionIdsByFloor = new Map<string, string[]>();
     for (const p of posMeta) {
       const position = await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
         update: {
           wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor,
-          floor: p.floor, catMan: p.catMan,
+          floor: p.floor, catMan: p.catMan, shopNo: '21', branchNo: '001',
         },
         create: {
           caseId: c.id,
@@ -419,6 +436,8 @@ async function seedCaseDetails(): Promise<void> {
           catMan: p.catMan,
         },
       });
+
+      positionIdsByFloor.set(p.floor, [...(positionIdsByFloor.get(p.floor) ?? []), position.id]);
 
       // Positionsanweisung inkl. Sicherungstyp-Piktogramm (A4).
       const instruction = {
@@ -475,6 +494,11 @@ async function seedCaseDetails(): Promise<void> {
           shopNo: '21',
           floor,
           plannedQuantity,
+          // Boxzettel vollständig: Positionen der Box + Warenart des Belegs (nie
+          // nichtssagendes „Gemischt" ohne Aufschlüsselung).
+          positionIds: positionIdsByFloor.get(floor) ?? [],
+          goodsType: boxGoodsTypeFromCase(c.goodsTypeText),
+          goodsTypeText: c.goodsTypeText,
         },
       });
     }

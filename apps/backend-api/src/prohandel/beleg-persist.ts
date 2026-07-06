@@ -1,5 +1,28 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { BoxGoodsType, GoodsTypeText, Prisma, PrismaClient } from '@prisma/client';
 import type { GeneratedBeleg } from './beleg-generator.js';
+
+/** Beleg-Kopf-Warenart → Boxzettel-Warenart (eine Box trägt die Warenart ihres Belegs). */
+function boxGoodsTypeFromText(text: GoodsTypeText | null | undefined): BoxGoodsType | null {
+  switch (text) {
+    case 'Vororder':
+      return 'vororder';
+    case 'Nachorder':
+      return 'nachorder';
+    case 'Sonderposten':
+      return 'sopo';
+    case 'NOS':
+    case 'NOOS':
+      return 'nos';
+    case 'Extrabestellung':
+      return 'extrabestellung';
+    case 'NOS_Nachorder':
+      return 'nos_nachorder';
+    case 'Prio':
+      return 'prio';
+    default:
+      return null;
+  }
+}
 
 /**
  * Persist ONE generierten Mock-ProHandel-Beleg (Kopf + Arbeitsanweisung + Positionen +
@@ -112,6 +135,7 @@ export async function persistGeneratedBeleg(
     create: { caseId: created.id, ...header },
   });
 
+  const positionIdByNo = new Map<number, string>();
   for (const p of beleg.positions) {
     const positionData = {
       wgr: p.wgr,
@@ -130,6 +154,7 @@ export async function persistGeneratedBeleg(
       update: positionData,
       create: { caseId: created.id, positionNo: p.positionNo, ...positionData },
     });
+    positionIdByNo.set(p.positionNo, position.id);
 
     const instruction = {
       priceLabelRequired: p.instruction.priceLabelRequired,
@@ -166,14 +191,29 @@ export async function persistGeneratedBeleg(
   }
 
   // Transportboxen je Ziel (Shop + Etage) — bildet Mehr-Shop-Belege vollständig ab (A7).
+  // Jede Box kennt ihre Positionen (positionIds) und trägt die Warenart des Belegs —
+  // der Boxzettel zeigt nie ein nichtssagendes „Gemischt" ohne Aufschlüsselung.
   await db.transportBox.deleteMany({ where: { caseId: created.id } });
-  const qtyByDestination = new Map<string, { shopNo: string; floor: string; qty: number }>();
+  const qtyByDestination = new Map<
+    string,
+    { shopNo: string; floor: string; qty: number; positionIds: string[] }
+  >();
   for (const p of beleg.positions) {
     const key = `${p.shopNo}|${p.floor}`;
     const posQty = p.skuLines.reduce((sum, l) => sum + l.expectedQuantity, 0);
+    const positionId = positionIdByNo.get(p.positionNo);
     const entry = qtyByDestination.get(key);
-    if (entry) entry.qty += posQty;
-    else qtyByDestination.set(key, { shopNo: p.shopNo, floor: p.floor, qty: posQty });
+    if (entry) {
+      entry.qty += posQty;
+      if (positionId) entry.positionIds.push(positionId);
+    } else {
+      qtyByDestination.set(key, {
+        shopNo: p.shopNo,
+        floor: p.floor,
+        qty: posQty,
+        positionIds: positionId ? [positionId] : [],
+      });
+    }
   }
   let boxNo = 0;
   for (const dest of qtyByDestination.values()) {
@@ -187,6 +227,9 @@ export async function persistGeneratedBeleg(
         shopNo: dest.shopNo,
         floor: dest.floor,
         plannedQuantity: dest.qty,
+        positionIds: dest.positionIds,
+        goodsType: boxGoodsTypeFromText(beleg.goodsTypeText),
+        goodsTypeText: beleg.goodsTypeText,
       },
     });
   }

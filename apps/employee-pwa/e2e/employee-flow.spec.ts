@@ -109,8 +109,9 @@ test('Kernfluss – Ware holen (Hard-Gate) → Beleg → erledigt', async ({ pag
   // C2: Kartons statt Positionszahl.
   await expect(page.getByText(/3 Kartons – alle auf dem Karren suchen!/)).toBeVisible();
   await expect(page.getByText(/\d+ Positionen/)).toHaveCount(0);
-  // C3: Warenart wording, no Abschnitt number.
-  await expect(page.getByText('Vororder · 9 Teile')).toBeVisible();
+  // C3: Warenart wording PROMINENT (chip) + Teile, no Abschnitt number.
+  await expect(page.getByText('Vororder', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('9 Teile', { exact: true }).first()).toBeVisible();
   // C4: printing/carton are no work steps anymore.
   await expect(page.getByRole('button', { name: 'Preisetiketten drucken' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Karton geöffnet' })).toHaveCount(0);

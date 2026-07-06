@@ -77,6 +77,17 @@ const PICTOGRAM_LABEL: Record<string, string> = {
   'cable-lock': 'Kabelschloss',
 };
 
+/** Boxzettel-Warenart in Klartext (interne Enum-Werte nie roh anzeigen). */
+const BOX_GOODS_TYPE_LABEL: Record<string, string> = {
+  vororder: 'Vororder',
+  nachorder: 'Nachorder',
+  sopo: 'Sonderposten',
+  nos: 'NOS',
+  extrabestellung: 'Extrabestellung',
+  nos_nachorder: 'NOS-Nachorder',
+  prio: 'Prio',
+};
+
 /** WGR-Klartext (D3) — resolved from the same mock master data the backend uses. */
 const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
 
@@ -142,9 +153,9 @@ export function BelegProcessScreen(): JSX.Element {
   const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
   // C3: Abschnitt-Zahlen durch Warenart-Wording ersetzt (Vororder/Nachorder …).
   const c = aggregate.case;
-  const kopf = [c.goodsTypeText ?? null, `${c.totalQuantity} Teile`]
-    .filter((x): x is string => x !== null)
-    .join(' · ');
+  // Warenart je Position: NOS ist positions-getrieben (nosFlag), sonst gilt der Beleg-Kopf.
+  const positionWarenart = (pos: (typeof aggregate.positions)[number]): string | undefined =>
+    pos.nosFlag ? 'NOS' : (c.goodsTypeText ?? undefined);
 
   const finish = async (): Promise<void> => {
     await flow.complete();
@@ -172,10 +183,14 @@ export function BelegProcessScreen(): JSX.Element {
       secondary={{ label: 'Teilabschluss', onClick: () => setPartialOpen(true) }}
     >
       <Stack spacing={2}>
-        {/* Beleg-Kopf (Abschnitt · Warenart · Beleg-Menge) — work-relevant subset. */}
-        <Typography variant="body2" color="text.secondary">
-          {kopf}
-        </Typography>
+        {/* Beleg-Kopf: Warenart PROMINENT (Selbst-Priorisierung, leicht zu übersehen war
+            gestern das Feedback) + Beleg-Menge. */}
+        <Stack direction="row" spacing={1} alignItems="center">
+          {c.goodsTypeText ? (
+            <Chip color="secondary" sx={{ fontWeight: 700 }} label={c.goodsTypeText} />
+          ) : null}
+          <Typography sx={{ fontWeight: 600 }}>{c.totalQuantity} Teile</Typography>
+        </Stack>
 
         {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
         {infoPoints.length > 0 ? (
@@ -201,9 +216,12 @@ export function BelegProcessScreen(): JSX.Element {
                           ? ` · ${aggregate.inspectionLevelLabel}`
                           : ''}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {point.value}
-                      </Typography>
+                      {/* Wert nicht doppeln, wenn er bereits im Titel steht (Prüfstufe). */}
+                      {!(isInspection && aggregate.inspectionLevelLabel === point.value) ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {point.value}
+                        </Typography>
+                      ) : null}
                       {/* C5: die Prüfstufe erklärt — „Nein“ heißt NICHT: nichts prüfen. */}
                       {isInspection && aggregate.inspectionDescription ? (
                         <>
@@ -272,9 +290,13 @@ export function BelegProcessScreen(): JSX.Element {
                 <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Soll {soll}</Typography>
               </Stack>
 
-              {flags.length > 0 || pos.nosFlag || pos.catMan ? (
+              {flags.length > 0 || pos.nosFlag || pos.catMan || positionWarenart(pos) ? (
                 <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                   {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
+                  {/* Warenart je Position (NOS hat schon sein Badge). */}
+                  {!pos.nosFlag && positionWarenart(pos) ? (
+                    <Chip size="small" color="secondary" variant="outlined" label={positionWarenart(pos)} />
+                  ) : null}
                   {pos.catMan ? <Chip size="small" variant="outlined" label="Catman" /> : null}
                   {flags.map((f) => (
                     <Chip key={f.key} size="small" color={f.color} label={f.label} />
@@ -424,11 +446,26 @@ export function BelegProcessScreen(): JSX.Element {
             <Divider />
             <Typography variant="subtitle2">Boxzettel</Typography>
             {aggregate.boxTargets.map((t, i) => {
-              const posNos = t.positionIds
-                .map((id) => positionsById.get(id)?.positionNo)
-                .filter((n): n is number => typeof n === 'number')
-                .sort((a, b) => a - b);
+              const boxPositions = t.positionIds
+                .map((id) => positionsById.get(id))
+                .filter((p): p is (typeof aggregate.positions)[number] => Boolean(p));
+              const posNos = boxPositions.map((p) => p.positionNo).sort((a, b) => a - b);
+              // Warenart nie als rohes 'mixed'/„Gemischt“ verkürzen: bei gemischten Boxen
+              // die enthaltenen Warenarten aufschlüsseln (aus den Positionen der Box).
+              const warenartLabel = (() => {
+                if (!t.goodsType) return null;
+                if (t.goodsType !== 'mixed') return BOX_GOODS_TYPE_LABEL[t.goodsType] ?? t.goodsType;
+                const parts = [
+                  ...new Set(
+                    boxPositions
+                      .map((p) => positionWarenart(p))
+                      .filter((w): w is string => Boolean(w)),
+                  ),
+                ];
+                return parts.length > 0 ? `Gemischt: ${parts.join(' + ')}` : 'Gemischt';
+              })();
               const shopLine = [
+                `Filiale ${t.branchNo}`,
                 `Shopbereich ${t.shopAreaNo}`,
                 t.shopNo ? `Shop ${t.shopNo}` : null,
                 t.floor ? `Etage ${t.floor}` : null,
@@ -443,9 +480,9 @@ export function BelegProcessScreen(): JSX.Element {
                   </Stack>
                   <Stack spacing={0.25} sx={{ mt: 0.5 }}>
                     <Typography variant="body2">{shopLine}</Typography>
-                    {t.goodsType ? (
+                    {warenartLabel ? (
                       <Typography variant="body2" color="text.secondary">
-                        Warenart: {t.goodsType}
+                        Warenart: {warenartLabel}
                       </Typography>
                     ) : null}
                     {posNos.length > 0 ? (
