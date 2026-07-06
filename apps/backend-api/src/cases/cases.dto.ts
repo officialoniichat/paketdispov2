@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { FORWARD_RECIPIENTS, type ForwardRecipient } from '@paket/domain-types';
 
 // --- Responses --------------------------------------------------------------
@@ -413,6 +423,12 @@ export class CaseLookupResultDto {
   bereich!: string | null;
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Teile (totalQuantity)' })
   teile!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Geschätzte Bearbeitungsminuten — für die Bündel-Kapazitätsprüfung (A1).',
+  })
+  estimatedMinutes!: number | null;
   @ApiPropertyOptional({ type: String, nullable: true })
   assignedEmployeeName!: string | null;
   @ApiProperty({ description: 'true = ready und noch keinem Mitarbeiter zugeteilt' })
@@ -944,6 +960,71 @@ export class AssignToEmployeeDto {
   @ApiPropertyOptional({
     type: String,
     description: 'Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day.',
+  })
+  @IsOptional()
+  @IsString()
+  date?: string;
+}
+
+/** Max Belege per manual multi-assign call — abuse guard, not a business rule. */
+export const ASSIGN_BUNDLE_MAX_CASES = 100;
+
+/**
+ * Body for POST /api/teamlead/employees/:employeeNo/assign-bundle — manually assign
+ * SEVERAL ready Belege to an employee in one atomic call ("Bündel anlegen"). Same
+ * find-or-create semantics as {@link AssignToEmployeeDto}: appended to the day's
+ * Bündel if the employee already has one, otherwise the Bündel is created and the
+ * Belege become its first members, in the given order. All-or-nothing: if ANY
+ * caseId fails validation (not found / not ready / already assigned), the whole
+ * batch is rolled back and no case is touched — this keeps the manual-assign audit
+ * trail meaningful and avoids leaving a Bündel half-built from a batch with a typo.
+ */
+export class AssignBundleDto {
+  @ApiProperty({
+    type: [String],
+    description: 'Ready Belege to assign, in pickup order (first item = first in a new Bündel)',
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(ASSIGN_BUNDLE_MAX_CASES)
+  @IsString({ each: true })
+  caseIds!: string[];
+
+  @ApiPropertyOptional({
+    description: 'Optional reason logged in the §8.4 audit event (assignment.overridden)',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day.',
+  })
+  @IsOptional()
+  @IsString()
+  date?: string;
+}
+
+/**
+ * Body for POST /api/teamlead/bundles/:bundleId/cases/:caseId/move — move one Beleg
+ * from its current Bündel straight into another employee's Bündel (find-or-create,
+ * same as {@link AssignToEmployeeDto}) in a single atomic step. Only an `assigned`
+ * (not yet started) case may be moved — same §7.1 guard as withdraw.
+ */
+export class MoveCaseDto {
+  @ApiProperty({ description: 'employeeNo of the destination employee' })
+  @IsString()
+  targetEmployeeNo!: string;
+
+  @ApiPropertyOptional({ description: 'Optional reason logged in the §8.4 audit event' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day.',
   })
   @IsOptional()
   @IsString()

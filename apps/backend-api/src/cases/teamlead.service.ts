@@ -17,12 +17,14 @@ import type { Principal } from '../auth/rbac.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
 import {
   type AddToBundleDto,
+  type AssignBundleDto,
   type AssignToEmployeeDto,
   type BundleMutationResultDto,
   type BundlePauseDto,
   type CancelDto,
   type DeliveryGroupEditDto,
   type DeliveryGroupEditResultDto,
+  type MoveCaseDto,
   type ParkDto,
   type ZstExportResultDto,
   type PrioritizeDto,
@@ -720,39 +722,7 @@ export class TeamleadService {
   ): Promise<BundleMutationResultDto> {
     const day = resolveDay(dto.date, now);
     return this.prisma.$transaction(async (tx) => {
-      const employee = await tx.user.findUnique({
-        where: { employeeNo },
-        select: { id: true, active: true },
-      });
-      if (!employee) throw new NotFoundException(`Employee ${employeeNo} not found`);
-      if (!employee.active) throw new ConflictException(`Employee ${employeeNo} is inactive`);
-
-      // The board folds the earliest non-terminal Bündel of the day; find that one
-      // (or create it). There is no @@unique([employeeId, date]) — find-then-create.
-      const existing = await tx.assignmentBundle.findFirst({
-        where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
-        orderBy: { createdAt: 'asc' },
-        include: { items: { orderBy: { sequence: 'asc' }, select: { id: true, caseId: true } } },
-      });
-
-      let bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] };
-      let bundleCreated = false;
-      if (existing) {
-        bundle = { id: existing.id, status: existing.status, items: existing.items };
-      } else {
-        const created = await tx.assignmentBundle.create({
-          data: {
-            employeeId: employee.id,
-            date: day,
-            status: 'assigned',
-            createdBy: 'teamlead',
-            plannedEffortMinutes: 0,
-          },
-          select: { id: true, status: true },
-        });
-        bundle = { id: created.id, status: created.status, items: [] };
-        bundleCreated = true;
-      }
+      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(tx, employeeNo, day);
 
       const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(
         tx,
@@ -778,6 +748,173 @@ export class TeamleadService {
   }
 
   /**
+   * A1/A2 „Bündel anlegen": manually assign SEVERAL ready Belege to an employee in
+   * one atomic call. Same find-or-create target as {@link assignToEmployee}; the
+   * batch itself is all-or-nothing ({@link addCasesToBundleTx}). One §8.4 audit
+   * event covers the whole batch (payload carries every caseId).
+   */
+  async assignBundleToEmployee(
+    principal: Principal,
+    employeeNo: string,
+    dto: AssignBundleDto,
+    now: Date = new Date(),
+  ): Promise<BundleMutationResultDto> {
+    const day = resolveDay(dto.date, now);
+    return this.prisma.$transaction(async (tx) => {
+      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(tx, employeeNo, day);
+
+      const { plannedEffortMinutes, caseIds } = await this.addCasesToBundleTx(
+        tx,
+        bundle,
+        dto.caseIds,
+      );
+      const eventId = await this.auditOverride(tx, principal, bundle.id, 'manual_assign', dto.reason, {
+        caseIds: dto.caseIds,
+        employeeNo,
+        bundleCreated,
+      });
+      return {
+        bundleId: bundle.id,
+        bundleStatus: bundle.status,
+        plannedEffortMinutes,
+        caseIds,
+        caseId: null,
+        caseStatus: null,
+        eventId,
+        bundleCreated,
+      };
+    });
+  }
+
+  /**
+   * B2 „Beleg verschieben": move one `assigned`, not-yet-started case out of its
+   * current Bündel straight into another employee's Bündel (find-or-create target,
+   * same semantics as {@link assignToEmployee}) — one atomic transaction, one audit
+   * event. Guard mirrors {@link withdraw}: only a case still `assigned` may move.
+   */
+  async moveCase(
+    principal: Principal,
+    sourceBundleId: string,
+    caseId: string,
+    dto: MoveCaseDto,
+    now: Date = new Date(),
+  ): Promise<BundleMutationResultDto> {
+    const day = resolveDay(dto.date, now);
+    return this.prisma.$transaction(async (tx) => {
+      const sourceBundle = await this.loadBundle(tx, sourceBundleId);
+      const item = sourceBundle.items.find((i) => i.caseId === caseId);
+      if (!item) throw new NotFoundException(`Case ${caseId} is not in bundle ${sourceBundleId}`);
+
+      const theCase = await tx.goodsReceiptCase.findUniqueOrThrow({
+        where: { id: caseId },
+        select: { id: true, status: true },
+      });
+      if (theCase.status !== 'assigned') {
+        throw new ConflictException(
+          `Only an assigned case can be moved (case is ${theCase.status})`,
+        );
+      }
+
+      const { bundle: targetBundle, bundleCreated } = await this.findOrCreateBundleTx(
+        tx,
+        dto.targetEmployeeNo,
+        day,
+      );
+      if (targetBundle.id === sourceBundleId) {
+        throw new ConflictException('Ziel-Bündel ist identisch mit dem Quell-Bündel.');
+      }
+      if (TERMINAL_BUNDLE_STATUSES.includes(targetBundle.status)) {
+        throw new ConflictException(
+          `Bundle ${targetBundle.id} is ${targetBundle.status} and cannot take cases`,
+        );
+      }
+
+      // Remove from the source bundle first (mirrors withdraw's resequencing).
+      await tx.assignmentItem.delete({ where: { id: item.id } });
+      const remaining = sourceBundle.items.filter((i) => i.caseId !== caseId).map((i) => i.caseId);
+      await resequenceItems(tx, sourceBundleId, remaining);
+      await resequenceRouteStops(tx, sourceBundleId, remaining);
+      const sourcePlannedEffortMinutes = await recomputeEffort(tx, remaining);
+      await tx.assignmentBundle.update({
+        where: { id: sourceBundleId },
+        data: { plannedEffortMinutes: sourcePlannedEffortMinutes },
+      });
+
+      // Append to the target bundle (case stays `assigned`, only the link moves —
+      // the ready-only validation in addCasesToBundleTx does not apply to a move).
+      const { plannedEffortMinutes, caseIds } = await this.appendCasesTx(tx, targetBundle, [
+        caseId,
+      ]);
+
+      const eventId = await this.auditOverride(tx, principal, targetBundle.id, 'moved', dto.reason, {
+        caseId,
+        fromBundleId: sourceBundleId,
+        toEmployeeNo: dto.targetEmployeeNo,
+        bundleCreated,
+      });
+      return {
+        bundleId: targetBundle.id,
+        bundleStatus: targetBundle.status,
+        plannedEffortMinutes,
+        caseIds,
+        caseId,
+        caseStatus: 'assigned',
+        eventId,
+        bundleCreated,
+      };
+    });
+  }
+
+  /**
+   * Find the employee's earliest non-terminal Bündel for `day`, or create it
+   * (`createdBy=teamlead`, `status=assigned`). Shared by every manual-assign path
+   * that targets "the employee's Bündel for the day" — there is no
+   * `@@unique([employeeId, date])`, so this is always find-then-create.
+   */
+  private async findOrCreateBundleTx(
+    tx: PrismaTx,
+    employeeNo: string,
+    day: Date,
+  ): Promise<{
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] };
+    bundleCreated: boolean;
+  }> {
+    const employee = await tx.user.findUnique({
+      where: { employeeNo },
+      select: { id: true, active: true },
+    });
+    if (!employee) throw new NotFoundException(`Employee ${employeeNo} not found`);
+    if (!employee.active) throw new ConflictException(`Employee ${employeeNo} is inactive`);
+
+    const existing = await tx.assignmentBundle.findFirst({
+      where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
+      orderBy: { createdAt: 'asc' },
+      include: { items: { orderBy: { sequence: 'asc' }, select: { id: true, caseId: true } } },
+    });
+    if (existing) {
+      return {
+        bundle: { id: existing.id, status: existing.status, items: existing.items },
+        bundleCreated: false,
+      };
+    }
+
+    const created = await tx.assignmentBundle.create({
+      data: {
+        employeeId: employee.id,
+        date: day,
+        status: 'assigned',
+        createdBy: 'teamlead',
+        plannedEffortMinutes: 0,
+      },
+      select: { id: true, status: true },
+    });
+    return {
+      bundle: { id: created.id, status: created.status, items: [] },
+      bundleCreated: true,
+    };
+  }
+
+  /**
    * Shared §8.4 append used by {@link addToBundle} (existing Bündel) and
    * {@link assignToEmployee} (free head): validate the Bündel is non-terminal and the
    * Beleg is `ready`, create the item at the tail, move the case to `assigned`, link
@@ -788,32 +925,84 @@ export class TeamleadService {
     bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
     caseId: string,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
+    return this.addCasesToBundleTx(tx, bundle, [caseId]);
+  }
+
+  /**
+   * Bulk form of {@link addCaseToBundleTx} — used by manual multi-Beleg Bündel
+   * creation ({@link assignBundleToEmployee}). ALL-OR-NOTHING: every caseId is
+   * validated (exists, `ready`, not a duplicate) BEFORE any write; if one fails the
+   * whole request throws (and the surrounding `$transaction` rolls back), so a typo
+   * in a batch of WE-Nrn never leaves a half-built Bündel or a partial audit trail.
+   * On success, items are appended in the given order starting at the current tail.
+   */
+  private async addCasesToBundleTx(
+    tx: PrismaTx,
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    caseIds: string[],
+  ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
     if (TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) {
       throw new ConflictException(`Bundle ${bundle.id} is ${bundle.status} and cannot take cases`);
     }
-    const theCase = await tx.goodsReceiptCase.findUnique({
-      where: { id: caseId },
-      select: { id: true, status: true },
-    });
-    if (!theCase) throw new NotFoundException(`Case ${caseId} not found`);
-    if (theCase.status !== 'ready') {
-      throw new ConflictException(`Only a ready case can be assigned (case is ${theCase.status})`);
+    const uniqueIds = [...new Set(caseIds)];
+    if (uniqueIds.length !== caseIds.length) {
+      throw new BadRequestException('Doppelte caseIds in derselben Zuweisung.');
     }
 
-    const nextSeq = bundle.items.length;
-    await tx.assignmentItem.create({ data: { bundleId: bundle.id, caseId, sequence: nextSeq } });
-    await tx.goodsReceiptCase.update({
-      where: { id: caseId },
-      data: { status: 'assigned', assignedBundleId: bundle.id, version: { increment: 1 } },
+    const found = await tx.goodsReceiptCase.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, weBelegNo: true, status: true },
     });
+    const byId = new Map(found.map((c) => [c.id, c]));
+    const failedCases: { caseId: string; weBelegNo: string | null; reason: string }[] = [];
+    for (const caseId of uniqueIds) {
+      const theCase = byId.get(caseId);
+      if (!theCase) {
+        failedCases.push({ caseId, weBelegNo: null, reason: 'not_found' });
+      } else if (theCase.status !== 'ready') {
+        failedCases.push({ caseId, weBelegNo: theCase.weBelegNo, reason: `wrong_status:${theCase.status}` });
+      }
+    }
+    if (failedCases.length > 0) {
+      throw new ConflictException({
+        message:
+          'Ein oder mehrere Belege sind nicht ready / nicht gefunden — nur ein ready Beleg kann zugewiesen werden. Die gesamte Zuweisung wurde zurückgenommen (kein Beleg wurde geändert).',
+        failedCases,
+      });
+    }
 
-    const caseIds = [...bundle.items.map((i) => i.caseId), caseId];
-    const plannedEffortMinutes = await recomputeEffort(tx, caseIds);
+    return this.appendCasesTx(tx, bundle, uniqueIds);
+  }
+
+  /**
+   * Low-level tail-append shared by {@link addCasesToBundleTx} (validates `ready`
+   * first) and {@link moveCase} (the case is already `assigned` — a move only
+   * relinks it, it never needs the ready→assigned transition or its validation).
+   * Assumes the caller already checked the bundle is non-terminal and every caseId
+   * is assignable; only inserts items, relinks cases, and recomputes effort.
+   */
+  private async appendCasesTx(
+    tx: PrismaTx,
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    caseIds: string[],
+  ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
+    let nextSeq = bundle.items.length;
+    for (const caseId of caseIds) {
+      await tx.assignmentItem.create({ data: { bundleId: bundle.id, caseId, sequence: nextSeq } });
+      await tx.goodsReceiptCase.update({
+        where: { id: caseId },
+        data: { status: 'assigned', assignedBundleId: bundle.id, version: { increment: 1 } },
+      });
+      nextSeq += 1;
+    }
+
+    const caseIdsResult = [...bundle.items.map((i) => i.caseId), ...caseIds];
+    const plannedEffortMinutes = await recomputeEffort(tx, caseIdsResult);
     await tx.assignmentBundle.update({
       where: { id: bundle.id },
       data: { plannedEffortMinutes },
     });
-    return { plannedEffortMinutes, caseIds };
+    return { plannedEffortMinutes, caseIds: caseIdsResult };
   }
 
   /**

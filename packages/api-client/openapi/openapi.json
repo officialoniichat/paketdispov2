@@ -1811,6 +1811,106 @@
         ]
       }
     },
+    "/api/teamlead/employees/{employeeNo}/assign-bundle": {
+      "post": {
+        "operationId": "TeamleadController_assignBundleToEmployee",
+        "parameters": [
+          {
+            "name": "employeeNo",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignBundleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A1/A2 „Bündel anlegen\": assign SEVERAL ready Belege to an employee in one atomic call — appended to the day Bündel, or it is CREATED when the employee is free. All-or-nothing (409 if any Beleg fails validation).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/bundles/{bundleId}/cases/{caseId}/move": {
+      "post": {
+        "operationId": "TeamleadController_moveCase",
+        "parameters": [
+          {
+            "name": "bundleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleMutationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "B2 „Beleg verschieben\": move one assigned case from this bundle straight into another employee's Bündel (find-or-create target).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/bundles/{bundleId}/reorder": {
       "post": {
         "operationId": "TeamleadController_reorder",
@@ -3903,6 +4003,11 @@
             "nullable": true,
             "description": "Teile (totalQuantity)"
           },
+          "estimatedMinutes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Geschätzte Bearbeitungsminuten — für die Bündel-Kapazitätsprüfung (A1)."
+          },
           "assignedEmployeeName": {
             "type": "string",
             "nullable": true
@@ -4687,6 +4792,49 @@
         },
         "required": [
           "caseId"
+        ]
+      },
+      "AssignBundleDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Ready Belege to assign, in pickup order (first item = first in a new Bündel)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional reason logged in the §8.4 audit event (assignment.overridden)"
+          },
+          "date": {
+            "type": "string",
+            "description": "Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day."
+          }
+        },
+        "required": [
+          "caseIds"
+        ]
+      },
+      "MoveCaseDto": {
+        "type": "object",
+        "properties": {
+          "targetEmployeeNo": {
+            "type": "string",
+            "description": "employeeNo of the destination employee"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional reason logged in the §8.4 audit event"
+          },
+          "date": {
+            "type": "string",
+            "description": "Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day."
+          }
+        },
+        "required": [
+          "targetEmployeeNo"
         ]
       },
       "ReorderBundleDto": {

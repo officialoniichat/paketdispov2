@@ -32,8 +32,10 @@ import { api, CURRENT_TEAMLEAD_ID } from './api.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
 import {
   addCaseToBundle as addCaseToBundleRequest,
+  assignBundleToEmployee as assignBundleToEmployeeRequest,
   assignToEmployee as assignToEmployeeRequest,
   commitAssignment,
+  moveCase as moveCaseRequest,
   pauseBundle as pauseBundleRequest,
   previewAssignment,
   reorderBundle as reorderBundleRequest,
@@ -107,6 +109,21 @@ export interface AssignVars {
   /** Optional §8.4 audit reason (B2). */
   reason?: string;
 }
+export interface AssignBundleVars {
+  /** employeeNo of the target (the only employee id the board exposes). */
+  employeeNo: string;
+  /** Belege in pickup order — first item becomes the first member of a new Bündel. */
+  caseIds: string[];
+  /** Optional §8.4 audit reason (B2). */
+  reason?: string;
+}
+export interface MoveCaseVars {
+  bundleId: string;
+  caseId: string;
+  targetEmployeeNo: string;
+  /** Optional §8.4 audit reason (B2). */
+  reason?: string;
+}
 export interface ReorderVars {
   bundleId: string;
   caseIds: string[];
@@ -156,6 +173,10 @@ export interface CockpitApi {
   addToBundle: BundleMutation<AddVars>;
   /** §8.4 manual assign: append the Beleg to the employee's Bündel, or create it if free. */
   assignToEmployee: BundleMutation<AssignVars>;
+  /** A1/A2 „Bündel anlegen": assign several Belege in one atomic call. */
+  assignBundle: BundleMutation<AssignBundleVars>;
+  /** B2 „Beleg verschieben": move one assigned Beleg into another employee's Bündel. */
+  moveCase: BundleMutation<MoveCaseVars>;
   reorder: BundleMutation<ReorderVars>;
   pauseResume: BundleMutation<PauseVars>;
 }
@@ -388,6 +409,24 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpit,
   });
 
+  // A1/A2 manual multi-Beleg Bündel creation. Same reasoning as assignToEmployee:
+  // the target may be a free employee (create) or one who already has a Bündel
+  // (append) — the backend decides, so a plain invalidate-on-settle is correct.
+  const assignBundle = useMutation<unknown, Error, AssignBundleVars>({
+    mutationFn: ({ employeeNo, caseIds, reason }) =>
+      assignBundleToEmployeeRequest(api, { employeeNo, caseIds, reason, date }),
+    onSettled: invalidateCockpit,
+  });
+
+  // B2 move a Beleg between two employees' Bündel. Touches two board rows at once,
+  // so (like assignToEmployee) this settles via a plain invalidate rather than an
+  // optimistic patch.
+  const moveCase = useMutation<unknown, Error, MoveCaseVars>({
+    mutationFn: ({ bundleId, caseId, targetEmployeeNo, reason }) =>
+      moveCaseRequest(api, { bundleId, caseId, targetEmployeeNo, reason, date }),
+    onSettled: invalidateCockpit,
+  });
+
   const reorder = useMutation<unknown, Error, ReorderVars, { previous: CockpitSnapshot | undefined }>({
     mutationFn: ({ bundleId, caseIds, reason }) =>
       reorderBundleRequest(api, { bundleId, caseIds, reason }),
@@ -446,6 +485,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       withdraw,
       addToBundle,
       assignToEmployee,
+      assignBundle,
+      moveCase,
       reorder,
       pauseResume,
     }),
@@ -465,6 +506,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       withdraw,
       addToBundle,
       assignToEmployee,
+      assignBundle,
+      moveCase,
       reorder,
       pauseResume,
       date,

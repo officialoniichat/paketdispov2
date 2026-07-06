@@ -28,9 +28,9 @@ flowchart TB
         subgraph cases["CasesModule"]
             meCtrl["MeController<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle<br/>· POST park (B4) · POST workstation (A2)"]:::ctrl
             casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation<br/>· complete · partial-complete · /api/issues"]:::ctrl
-            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward"]:::ctrl
+            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
             casesSvc["CasesService<br/><i>getToday · aggregate · start · complete<br/>· parkRemaining · claimWorkstation</i>"]:::svc
-            tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst</i>"]:::svc
+            tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>assignToEmployee/assignBundleToEmployee (find-or-create) · moveCase</i>"]:::svc
             tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool (server-filter/sort/pagination) · lookup · detail</i>"]:::svc
         end
 

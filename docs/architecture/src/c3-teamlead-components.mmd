@@ -13,7 +13,7 @@ flowchart TB
         subgraph features["features/ (routes via App.tsx)"]
             cockpit["cockpit/CockpitPage<br/><i>§10.1 KPIs · SimulationPanel · Automatik toggle</i>"]:::feat
             ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
-            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · WE-Nr-Zuweisung (AssignDialog)</i>"]:::feat
+            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · Bündel anlegen (AssignDialog, A1/A2 multi-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
             belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list (Scopes Aktiv·Topf·Archiv·Alle,<br/>Filter/Sort/Pagination via GET /pool) + detail</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand (EffortPreview)·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen</i>"]:::feat
@@ -22,11 +22,11 @@ flowchart TB
         subgraph datal["data/"]
             remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·cases</i>"]:::logic
             belegeData["belege.ts · admin.ts · employees.ts · audit.ts"]:::logic
-            mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · reorder · pause/resume</i>"]:::logic
+            mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · assignToEmployee ·<br/>assignBundleToEmployee (A1/A2) · moveCase (B2) · reorder · pause/resume</i>"]:::logic
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
         actions["actions/caseActions.ts<br/><i>single-source action registry → ReasonDialog</i>"]:::logic
-        shared["components/<br/><i>AssignDialog (WE-Nr-Lookup) · ForwardMenu · TierChip ·<br/>DataTable (server-mode) · ReasonDialog · CaseActions</i>"]:::logic
+        shared["components/<br/><i>AssignDialog (WE-Nr-Lookup + Auswahl-Warenkorb, A1/A2) · MoveCaseDialog (B2) ·<br/>ForwardMenu · TierChip · DataTable (server-mode) · ReasonDialog · CaseActions</i>"]:::logic
         viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen)</i>"]:::logic
     end
 

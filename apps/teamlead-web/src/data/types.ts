@@ -139,6 +139,8 @@ export interface BoardRow {
   currentCaseIndex?: number;
   bundleSize?: number;
   bundleId?: string;
+  /** AssignmentStatus of the current Bündel (created/assigned/accepted/active/paused/…); undefined if free. */
+  bundleStatus?: string;
   paused: boolean;
   /** Fixed Bereiche/skills of the employee (shown on idle rows too). */
   bereiche: string[];

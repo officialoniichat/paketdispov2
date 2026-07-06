@@ -12,6 +12,8 @@ import type { PreviewResult } from './types.js';
 type WithdrawDto = components['schemas']['WithdrawDto'];
 type AddToBundleDto = components['schemas']['AddToBundleDto'];
 type AssignToEmployeeDto = components['schemas']['AssignToEmployeeDto'];
+type AssignBundleDto = components['schemas']['AssignBundleDto'];
+type MoveCaseDto = components['schemas']['MoveCaseDto'];
 type ReorderBundleDto = components['schemas']['ReorderBundleDto'];
 type BundlePauseDto = components['schemas']['BundlePauseDto'];
 type RecalculateDto = components['schemas']['RecalculateDto'];
@@ -113,6 +115,64 @@ export async function assignToEmployee(
     'Beleg zuweisen',
     await api.POST('/api/teamlead/employees/{employeeNo}/assign', {
       params: { path: { employeeNo } },
+      body,
+    }),
+  );
+}
+
+export interface AssignBundleArgs {
+  employeeNo: string;
+  /** Belege in pickup order — first item becomes the first member of a new Bündel. */
+  caseIds: string[];
+  /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
+  reason?: string;
+  /** Operational day of the board (YYYY-MM-DD); the Bündel is bound to this day. */
+  date: string;
+}
+
+/**
+ * A1/A2 §8.4 audited manual override: assign SEVERAL ready Belege to an employee in
+ * one atomic call ("Bündel anlegen"). Same find-or-create target as
+ * {@link assignToEmployee}; all-or-nothing — if any Beleg fails validation the whole
+ * batch is rejected and none of them are touched.
+ */
+export async function assignBundleToEmployee(
+  api: PaketApiClient,
+  { employeeNo, caseIds, reason, date }: AssignBundleArgs,
+): Promise<BundleMutationResultDto> {
+  const body: AssignBundleDto = { caseIds, date, ...(reason ? { reason } : {}) };
+  return ensure(
+    'Bündel zuweisen',
+    await api.POST('/api/teamlead/employees/{employeeNo}/assign-bundle', {
+      params: { path: { employeeNo } },
+      body,
+    }),
+  );
+}
+
+export interface MoveCaseArgs {
+  bundleId: string;
+  caseId: string;
+  targetEmployeeNo: string;
+  /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
+  reason?: string;
+  /** Operational day of the board (YYYY-MM-DD); the destination Bündel is bound to this day. */
+  date: string;
+}
+
+/**
+ * B2 §8.4 audited manual override: move one assigned Beleg straight from its
+ * current Bündel into another employee's Bündel (find-or-create target).
+ */
+export async function moveCase(
+  api: PaketApiClient,
+  { bundleId, caseId, targetEmployeeNo, reason, date }: MoveCaseArgs,
+): Promise<BundleMutationResultDto> {
+  const body: MoveCaseDto = { targetEmployeeNo, date, ...(reason ? { reason } : {}) };
+  return ensure(
+    'Beleg verschieben',
+    await api.POST('/api/teamlead/bundles/{bundleId}/cases/{caseId}/move', {
+      params: { path: { bundleId, caseId } },
       body,
     }),
   );

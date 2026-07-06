@@ -29,6 +29,7 @@ import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { AssignDialog } from '../../components/AssignDialog.js';
+import { MoveCaseDialog, type MoveCaseTarget } from '../../components/MoveCaseDialog.js';
 import { TierChip, isManualOnlyTier } from '../../components/TierChip.js';
 import type { BoardRow } from '../../data/types.js';
 
@@ -39,12 +40,22 @@ interface PendingAction {
   run: (reason: string) => void;
 }
 
+/** B2 „Beleg verschieben": the Beleg + its current Bündel, picked from a case row. */
+interface MovingCase {
+  bundleId: string;
+  caseId: string;
+  weBelegNo: string;
+  employeeId: string;
+}
+
 export function MitarbeiterBoard(): JSX.Element {
-  const { board, withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
+  const { board, withdraw, addToBundle, assignToEmployee, assignBundle, moveCase, reorder, pauseResume } =
+    useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [movingCase, setMovingCase] = useState<MovingCase | null>(null);
 
   // First failing intervention drives the error snackbar.
-  const failed = [withdraw, addToBundle, assignToEmployee, reorder, pauseResume].find(
+  const failed = [withdraw, addToBundle, assignToEmployee, assignBundle, moveCase, reorder, pauseResume].find(
     (m) => m.isError,
   );
 
@@ -76,7 +87,12 @@ export function MitarbeiterBoard(): JSX.Element {
       )}
       <Stack spacing={1}>
         {board.map((row) => (
-          <EmployeeRow key={row.employeeId} row={row} requestReason={setPending} />
+          <EmployeeRow
+            key={row.employeeId}
+            row={row}
+            requestReason={setPending}
+            requestMove={setMovingCase}
+          />
         ))}
       </Stack>
 
@@ -87,6 +103,30 @@ export function MitarbeiterBoard(): JSX.Element {
         suggestions={pending?.suggestions}
         onConfirm={(reason) => pending?.run(reason)}
         onClose={() => setPending(null)}
+      />
+
+      <MoveCaseDialog
+        open={movingCase !== null}
+        weBelegNo={movingCase?.weBelegNo ?? null}
+        sourceEmployeeId={movingCase?.employeeId ?? null}
+        board={board}
+        onClose={() => setMovingCase(null)}
+        onSelect={(target: MoveCaseTarget) => {
+          const mc = movingCase;
+          if (!mc) return;
+          setPending({
+            title: `${mc.weBelegNo} zu ${target.displayName} verschieben`,
+            description: `Der Beleg wird aus dem aktuellen Bündel entfernt und ${target.displayName} zugeteilt.`,
+            suggestions: ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+            run: (reason) =>
+              moveCase.mutate({
+                bundleId: mc.bundleId,
+                caseId: mc.caseId,
+                targetEmployeeNo: target.employeeId,
+                reason,
+              }),
+          });
+        }}
       />
 
       <Snackbar
@@ -103,13 +143,25 @@ export function MitarbeiterBoard(): JSX.Element {
   );
 }
 
+/** German label for a Bündel's AssignmentStatus (B1 — status at a glance). */
+const BUNDLE_STATUS_LABELS: Record<string, string> = {
+  created: 'Neu',
+  assigned: 'Zugeteilt',
+  accepted: 'Angenommen',
+  active: 'In Bearbeitung',
+  paused: 'Pausiert',
+  completed: 'Abgeschlossen',
+  cancelled: 'Storniert',
+};
+
 interface EmployeeRowProps {
   row: BoardRow;
   requestReason: (a: PendingAction) => void;
+  requestMove: (m: MovingCase) => void;
 }
 
-function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
-  const { withdraw, addToBundle, assignToEmployee, reorder, pauseResume } = useCockpitData();
+function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX.Element {
+  const { withdraw, assignBundle, reorder, pauseResume } = useCockpitData();
   const navigate = useNavigate();
   const bundleId = row.bundleId;
   const caseKey = row.cases.map((c) => c.caseId).join();
@@ -155,6 +207,14 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
           )}
           {row.cases.length === 0 && (
             <Chip size="small" color="success" variant="outlined" label="frei" />
+          )}
+          {/* B1: Bündel-Status auf einen Blick (Sammeln/Bearbeitung/Pausiert/…). */}
+          {row.bundleStatus != null && !row.paused && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={BUNDLE_STATUS_LABELS[row.bundleStatus] ?? row.bundleStatus}
+            />
           )}
           {/* Teile-first (B3): die Stückzahl ist die primäre Last-Anzeige, Minuten treten zurück. */}
           {row.cases.length > 0 && (
@@ -255,13 +315,26 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
               >
                 Entziehen
               </Button>
+              {/* B2: Beleg direkt in das Bündel eines anderen Mitarbeiters verschieben. */}
+              <Button
+                size="small"
+                disabled={!bundleId}
+                onClick={() => {
+                  if (bundleId) {
+                    requestMove({ bundleId, caseId: c.caseId, weBelegNo: c.weBelegNo, employeeId: row.employeeId });
+                  }
+                }}
+              >
+                Verschieben
+              </Button>
             </Stack>
           ))}
 
           <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" sx={{ pt: 1 }}>
-            {/* B1: WE-Nr-Zuweisung — der Dialog prüft die eingetippte Belegnummer live. */}
+            {/* A1/A2: WE-Nr-Zuweisung — der Dialog prüft jede Belegnummer live und
+                erlaubt, mehrere Belege vor dem Bestätigen zu sammeln (Bündel anlegen). */}
             <Button size="small" variant="outlined" onClick={() => setAssignOpen(true)}>
-              {bundleId ? 'Beleg zuweisen' : 'Beleg zuweisen & Bündel anlegen'}
+              {bundleId ? 'Beleg(e) zuweisen' : 'Bündel anlegen'}
             </Button>
 
             <Button
@@ -306,13 +379,10 @@ function EmployeeRow({ row, requestReason }: EmployeeRowProps): JSX.Element {
             open={assignOpen}
             row={row}
             onClose={() => setAssignOpen(false)}
-            onConfirm={(caseId, reason) => {
-              // Belegt → append to the existing Bündel; free → create it via assignToEmployee.
-              if (bundleId) {
-                addToBundle.mutate({ caseId, bundleId, reason });
-              } else {
-                assignToEmployee.mutate({ employeeNo: row.employeeId, caseId, reason });
-              }
+            onConfirm={(caseIds, reason) => {
+              // A1/A2: one atomic call for N Belege — the backend finds-or-creates
+              // the Bündel exactly as the single-case path used to.
+              assignBundle.mutate({ employeeNo: row.employeeId, caseIds, reason });
             }}
           />
         </Stack>

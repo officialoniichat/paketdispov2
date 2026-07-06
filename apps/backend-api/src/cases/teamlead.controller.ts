@@ -7,6 +7,7 @@ import { TeamleadService } from './teamlead.service.js';
 import { TeamleadReadService } from './teamlead-read.service.js';
 import {
   AddToBundleDto,
+  AssignBundleDto,
   AssignToEmployeeDto,
   AuditEventDto,
   BoardDto,
@@ -22,6 +23,7 @@ import {
   DeliveryGroupEditResultDto,
   EventQueryDto,
   KpiDto,
+  MoveCaseDto,
   ParkDto,
   PoolListDto,
   PoolQueryDto,
@@ -375,6 +377,35 @@ export class TeamleadController {
     @Body() dto: AssignToEmployeeDto,
   ): Promise<BundleMutationResultDto> {
     return this.teamlead.assignToEmployee(principal, employeeNo, dto);
+  }
+
+  @Post('employees/:employeeNo/assign-bundle')
+  @ApiOperation({
+    summary:
+      'A1/A2 „Bündel anlegen": assign SEVERAL ready Belege to an employee in one atomic call — appended to the day Bündel, or it is CREATED when the employee is free. All-or-nothing (409 if any Beleg fails validation).',
+  })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  assignBundleToEmployee(
+    @CurrentUser() principal: Principal,
+    @Param('employeeNo') employeeNo: string,
+    @Body() dto: AssignBundleDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.assignBundleToEmployee(principal, employeeNo, dto);
+  }
+
+  @Post('bundles/:bundleId/cases/:caseId/move')
+  @ApiOperation({
+    summary:
+      'B2 „Beleg verschieben": move one assigned case from this bundle straight into another employee\'s Bündel (find-or-create target).',
+  })
+  @ApiOkResponse({ type: BundleMutationResultDto })
+  moveCase(
+    @CurrentUser() principal: Principal,
+    @Param('bundleId') bundleId: string,
+    @Param('caseId') caseId: string,
+    @Body() dto: MoveCaseDto,
+  ): Promise<BundleMutationResultDto> {
+    return this.teamlead.moveCase(principal, bundleId, caseId, dto);
   }
 
   @Post('bundles/:bundleId/reorder')

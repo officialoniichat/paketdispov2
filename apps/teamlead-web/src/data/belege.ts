@@ -379,6 +379,8 @@ export interface BelegLookup {
   status: CaseStatus | null;
   bereich: string | null;
   teile: number | null;
+  /** Geschätzte Bearbeitungsminuten — für die Bündel-Kapazitätsprüfung (A1). */
+  estimatedMinutes: number | null;
   assignedEmployeeName: string | null;
   assignable: boolean;
   reasonCode: BelegLookupReason | null;
@@ -402,6 +404,7 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
     status: dto.status != null ? toCaseStatus(dto.status) : null,
     bereich: dto.bereich ?? null,
     teile: dto.teile ?? null,
+    estimatedMinutes: dto.estimatedMinutes ?? null,
     assignedEmployeeName: dto.assignedEmployeeName ?? null,
     assignable: dto.assignable,
     reasonCode: dto.reasonCode ?? null,

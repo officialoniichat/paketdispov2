@@ -176,6 +176,7 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     currentCaseIndex: currentCaseIndex >= 0 ? currentCaseIndex : undefined,
     bundleSize: row.cases.length,
     bundleId: row.bundleId ?? undefined,
+    bundleStatus: row.bundleId != null ? row.bundleStatus : undefined,
     paused: row.bundleStatus === 'paused',
     bereiche: row.bereiche,
     cases: row.cases.map(toBoardCase),

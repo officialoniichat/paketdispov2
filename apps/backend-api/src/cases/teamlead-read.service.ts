@@ -321,6 +321,7 @@ export class TeamleadReadService {
         status: null,
         bereich: null,
         teile: null,
+        estimatedMinutes: null,
         assignedEmployeeName: null,
         assignable: false,
         reasonCode: 'not_found',
@@ -350,6 +351,7 @@ export class TeamleadReadService {
         ? (bereichFromLocationKind(found.storageLocation.kind as LocationKind) ?? null)
         : null,
       teile: found.totalQuantity,
+      estimatedMinutes: found.estimatedMinutes,
       assignedEmployeeName,
       assignable,
       reasonCode,

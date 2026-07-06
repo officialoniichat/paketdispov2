@@ -725,6 +725,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/employees/{employeeNo}/assign-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A1/A2 „Bündel anlegen": assign SEVERAL ready Belege to an employee in one atomic call — appended to the day Bündel, or it is CREATED when the employee is free. All-or-nothing (409 if any Beleg fails validation). */
+        post: operations["TeamleadController_assignBundleToEmployee"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/bundles/{bundleId}/cases/{caseId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B2 „Beleg verschieben": move one assigned case from this bundle straight into another employee's Bündel (find-or-create target). */
+        post: operations["TeamleadController_moveCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/bundles/{bundleId}/reorder": {
         parameters: {
             query?: never;
@@ -1404,6 +1438,8 @@ export interface components {
             bereich?: string | null;
             /** @description Teile (totalQuantity) */
             teile?: number | null;
+            /** @description Geschätzte Bearbeitungsminuten — für die Bündel-Kapazitätsprüfung (A1). */
+            estimatedMinutes?: number | null;
             assignedEmployeeName?: string | null;
             /** @description true = ready und noch keinem Mitarbeiter zugeteilt */
             assignable: boolean;
@@ -1659,6 +1695,22 @@ export interface components {
             /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
             reason?: string;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
+            date?: string;
+        };
+        AssignBundleDto: {
+            /** @description Ready Belege to assign, in pickup order (first item = first in a new Bündel) */
+            caseIds: string[];
+            /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
+            reason?: string;
+            /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
+            date?: string;
+        };
+        MoveCaseDto: {
+            /** @description employeeNo of the destination employee */
+            targetEmployeeNo: string;
+            /** @description Optional reason logged in the §8.4 audit event */
+            reason?: string;
+            /** @description Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day. */
             date?: string;
         };
         ReorderBundleDto: {
@@ -2944,6 +2996,57 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssignToEmployeeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_assignBundleToEmployee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employeeNo: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignBundleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_moveCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundleId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveCaseDto"];
             };
         };
         responses: {
