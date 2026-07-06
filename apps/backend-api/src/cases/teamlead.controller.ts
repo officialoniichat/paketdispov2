@@ -19,6 +19,8 @@ import {
   CaseDetailDto,
   CaseLookupQueryDto,
   CaseLookupResultDto,
+  CaseSearchQueryDto,
+  CaseSearchResultDto,
   DashboardDto,
   DeliveryGroupEditDto,
   DeliveryGroupEditResultDto,
@@ -109,6 +111,16 @@ export class TeamleadController {
   @ApiOkResponse({ type: CaseLookupResultDto })
   lookupCase(@Query() query: CaseLookupQueryDto): Promise<CaseLookupResultDto> {
     return this.read.lookupCase(query.weBelegNo);
+  }
+
+  @Get('cases/search')
+  @ApiOperation({
+    summary:
+      'A1/A2/B1: bounded, ranked search + browse over the assignable pool (ready + unassigned) for AssignDialog',
+  })
+  @ApiOkResponse({ type: [CaseSearchResultDto] })
+  searchCases(@Query() query: CaseSearchQueryDto): Promise<CaseSearchResultDto[]> {
+    return this.read.searchCases(query);
   }
 
   @Get('cases/:caseId')
