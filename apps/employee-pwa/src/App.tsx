@@ -12,6 +12,7 @@ import Box from '@mui/material/Box';
 import { AppHeader } from './components/AppHeader.js';
 import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
 import { useFocusRefresh } from './data/useFocusRefresh.js';
+import { useLiveUpdates } from './data/useLiveUpdates.js';
 import { LoginScreen } from './screens/LoginScreen.js';
 import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
 import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
@@ -38,6 +39,11 @@ export function App(): JSX.Element {
   // Refresh the day's assignment whenever the app regains focus (cheap,
   // offline-safe stand-in for a future push channel — see useFocusRefresh.ts).
   useFocusRefresh();
+
+  // Live push channel: SSE subscription against /api/me/stream. No-ops until
+  // a session exists (see useLiveUpdates.ts), so it is safe to call
+  // unconditionally here alongside the other top-level hooks.
+  useLiveUpdates();
 
   if (!session) {
     return <LoginScreen onLoggedIn={setSessionState} />;
