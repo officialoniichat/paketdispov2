@@ -84,6 +84,8 @@ export class EmployeeListItemDto {
   netCapacityToday!: number;
   @ApiPropertyOptional({ type: WeeklyPatternDto, nullable: true })
   weeklyPattern!: WeeklyPatternDto | null;
+  @ApiProperty({ description: 'Employee-App-Login: ob bereits eine PIN gesetzt ist (nie die PIN selbst)' })
+  hasPinSet!: boolean;
 }
 
 /** Arbeitsplatz/Tisch (Workstation-Stammdaten, A10) — options for the Admin select. */

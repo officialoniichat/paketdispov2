@@ -23,6 +23,53 @@ function buildEventsStub(): EventLogService {
   } as unknown as EventLogService;
 }
 
+function buildFullUser(pinHash: string | null): Record<string, unknown> {
+  return {
+    id: 'user-abc123',
+    employeeNo: 'ma-101',
+    displayName: 'Anna Berger',
+    active: true,
+    measured: true,
+    bereiche: [],
+    productivityFactor: 1,
+    overtimeTolerancePct: 0,
+    skillTier: 'profi',
+    workstationId: null,
+    workstation: null,
+    weeklyPattern: null,
+    roles: [],
+    shifts: [],
+    pinHash,
+  };
+}
+
+describe('EmployeesService.get — hasPinSet derivation', () => {
+  it('reports hasPinSet true when the user has a pinHash, without ever exposing it', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(buildFullUser('$2b$12$somehash')) },
+      workflowEvent: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const service = new EmployeesService(prisma, buildEventsStub());
+
+    const detail = await service.get('user-abc123');
+
+    expect(detail.hasPinSet).toBe(true);
+    expect(JSON.stringify(detail)).not.toContain('$2b$12$somehash');
+  });
+
+  it('reports hasPinSet false when no PIN has been set yet', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(buildFullUser(null)) },
+      workflowEvent: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const service = new EmployeesService(prisma, buildEventsStub());
+
+    const detail = await service.get('user-abc123');
+
+    expect(detail.hasPinSet).toBe(false);
+  });
+});
+
 describe('EmployeesService.resetPin', () => {
   it('hashes the PIN and stores it via the Prisma id, without emitting the plaintext PIN', async () => {
     const prisma = buildPrismaStub();

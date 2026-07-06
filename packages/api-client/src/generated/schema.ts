@@ -2047,6 +2047,8 @@ export interface components {
             /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+            /** @description Employee-App-Login: ob bereits eine PIN gesetzt ist (nie die PIN selbst) */
+            hasPinSet: boolean;
         };
         EmployeeListResponseDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -2098,6 +2100,8 @@ export interface components {
             /** @description Net capacity counted today (0 if inactive/frei) */
             netCapacityToday: number;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+            /** @description Employee-App-Login: ob bereits eine PIN gesetzt ist (nie die PIN selbst) */
+            hasPinSet: boolean;
             recentAudit: components["schemas"]["AuditEntryDto"][];
         };
         WorkstationDto: {

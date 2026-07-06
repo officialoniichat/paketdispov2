@@ -43,6 +43,7 @@ interface UserWithRelations {
   workstationId: string | null;
   workstation: { code: string } | null;
   weeklyPattern: Prisma.JsonValue;
+  pinHash: string | null;
   roles: { role: { name: string } }[];
   shifts: {
     date: Date;
@@ -414,6 +415,7 @@ export class EmployeesService {
       todayShift,
       netCapacityToday,
       weeklyPattern: parseWeeklyPattern(u.weeklyPattern),
+      hasPinSet: u.pinHash != null,
     };
   }
 }

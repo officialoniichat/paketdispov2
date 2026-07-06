@@ -5819,6 +5819,10 @@
                 "$ref": "#/components/schemas/WeeklyPatternDto"
               }
             ]
+          },
+          "hasPinSet": {
+            "type": "boolean",
+            "description": "Employee-App-Login: ob bereits eine PIN gesetzt ist (nie die PIN selbst)"
           }
         },
         "required": [
@@ -5832,7 +5836,8 @@
           "productivityFactor",
           "overtimeTolerancePct",
           "skillTier",
-          "netCapacityToday"
+          "netCapacityToday",
+          "hasPinSet"
         ]
       },
       "EmployeeListResponseDto": {
@@ -6009,6 +6014,10 @@
               }
             ]
           },
+          "hasPinSet": {
+            "type": "boolean",
+            "description": "Employee-App-Login: ob bereits eine PIN gesetzt ist (nie die PIN selbst)"
+          },
           "recentAudit": {
             "type": "array",
             "items": {
@@ -6028,6 +6037,7 @@
           "overtimeTolerancePct",
           "skillTier",
           "netCapacityToday",
+          "hasPinSet",
           "recentAudit"
         ]
       },
