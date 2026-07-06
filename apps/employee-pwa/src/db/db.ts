@@ -41,6 +41,27 @@ export class PaketDb extends Dexie {
       progress: 'caseId, step',
       events: 'id, createdAt',
     });
+    // v5 (Dustin-Feedback 03.07.2026): CaseProgress verliert die §G.2 Schritte
+    // (labelsPrinted/cartonOpened) und gewinnt confirmedQuantities; BelegListItem
+    // trägt Lagerplatz-Art/Warenart/Etiketten-Flag. Alte Zeilen passen nicht mehr
+    // aufs neue Modell → Arbeitsdaten leeren; der nächste Sync/Seed füllt frisch.
+    this.version(5)
+      .stores({
+        bundle: 'id',
+        collectStops: 'sequence',
+        bundleProgress: 'id',
+        belege: 'caseId, order',
+        aggregates: 'caseId',
+        progress: 'caseId, step',
+        events: 'id, createdAt',
+      })
+      .upgrade(async (tx) => {
+        await Promise.all(
+          ['bundle', 'collectStops', 'bundleProgress', 'belege', 'aggregates', 'progress'].map(
+            (table) => tx.table(table).clear(),
+          ),
+        );
+      });
   }
 }
 

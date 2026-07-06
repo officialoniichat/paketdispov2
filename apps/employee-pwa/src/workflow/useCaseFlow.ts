@@ -5,8 +5,10 @@
  * matching backend transition (best-effort, non-fatal). Reads are live (Dexie
  * useLiveQuery) so the UI always reflects the latest local state.
  *
- * The flow is the collapsed PROCESS phase: print labels (§G.2) → open carton →
- * confirm minimum quantity per position → erledigt (ZST) / Teilabschluss.
+ * The flow is the collapsed PROCESS phase: „Position geprüft" per position
+ * (toggleable, D5) + Mehr-/Mindermengen per Größe (D2) → erledigt (ZST) /
+ * Teilabschluss. The first recorded action marks the case in_progress on the
+ * backend (start-preparation).
  */
 import { useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -29,21 +31,20 @@ import {
   type IssueInput,
 } from '../data/persist.js';
 import {
-  checkQuantity as checkQuantityTx,
   completeCase as completeCaseTx,
-  markLabelsPrinted as markLabelsPrintedTx,
-  openCarton as openCartonTx,
+  hasProgress,
   partialComplete as partialCompleteTx,
+  setSkuQuantity as setSkuQuantityTx,
   setZst as setZstTx,
+  togglePositionChecked as togglePositionCheckedTx,
 } from './workflowModel.js';
 
 export interface CaseFlow {
   loading: boolean;
   aggregate?: CaseAggregate;
   progress?: CaseProgress;
-  printLabels: () => Promise<void>;
-  openCarton: () => Promise<void>;
-  checkQuantity: (positionId: string) => Promise<void>;
+  togglePositionChecked: (positionId: string) => Promise<void>;
+  setSkuQuantity: (skuLineId: string, quantity: number, expectedQuantity: number) => Promise<void>;
   complete: () => Promise<void>;
   partialComplete: (reason: string) => Promise<void>;
   reportIssue: (input: IssueInput) => Promise<void>;
@@ -75,6 +76,8 @@ export function useCaseFlow(caseId: string): CaseFlow {
       const current = await getProgress(caseId);
       if (!current) return;
       const next = transition(current);
+      // First recorded action → mark the case in_progress on the backend.
+      const isFirstAction = !hasProgress(current) && hasProgress(next);
       try {
         await saveProgress(next, current.version);
         await append(
@@ -90,9 +93,10 @@ export function useCaseFlow(caseId: string): CaseFlow {
         if (!(err instanceof OptimisticLockError)) throw err;
         return;
       }
-      if (persist) {
+      const persistStep = isFirstAction ? () => persistStartPreparation(caseId) : persist;
+      if (persistStep) {
         try {
-          const serverVersion = await persist();
+          const serverVersion = await persistStep();
           if (typeof serverVersion === 'number') {
             await reconcileVersion(caseId, serverVersion);
           }
@@ -104,41 +108,25 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [caseId],
   );
 
-  const printLabels = useCallback(
-    () =>
-      commit(
-        markLabelsPrintedTx,
-        {
-          eventType: 'print.job_created',
-          entityType: 'case',
-          entityId: caseId,
-          payload: { jobType: 'price_label' },
-        },
-        // First PROCESS action → mark the case in_progress on the backend.
-        () => persistStartPreparation(caseId),
-      ),
-    [commit, caseId],
-  );
-
-  const openCarton = useCallback(
-    () =>
-      commit(openCartonTx, {
-        eventType: 'case.started',
-        entityType: 'case',
-        entityId: caseId,
-        payload: { step: 'carton_opened' },
-      }),
-    [commit, caseId],
-  );
-
-  const checkQuantity = useCallback(
+  const togglePositionChecked = useCallback(
     (positionId: string) =>
-      commit((p) => checkQuantityTx(p, positionId), {
-        eventType: 'sku.quantity_confirmed',
+      commit((p) => togglePositionCheckedTx(p, positionId), {
+        eventType: 'position.confirmed',
         entityType: 'position',
         entityId: positionId,
       }),
-    [commit, caseId],
+    [commit],
+  );
+
+  const setSkuQuantity = useCallback(
+    (skuLineId: string, quantity: number, expectedQuantity: number) =>
+      commit((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity), {
+        eventType: 'sku.quantity_confirmed',
+        entityType: 'sku_line',
+        entityId: skuLineId,
+        payload: { confirmedQuantity: quantity, expectedQuantity },
+      }),
+    [commit],
   );
 
   const complete = useCallback(
@@ -187,9 +175,8 @@ export function useCaseFlow(caseId: string): CaseFlow {
     loading: aggregate === undefined || progress === undefined,
     aggregate,
     progress,
-    printLabels,
-    openCarton,
-    checkQuantity,
+    togglePositionChecked,
+    setSkuQuantity,
     complete,
     partialComplete,
     reportIssue,

@@ -22,6 +22,13 @@ export const devToken: string | undefined = resolveEnv('VITE_DEV_TOKEN');
 /** True when a backend is configured and the app should load live work. */
 export const isBackendEnabled = Boolean(apiBaseUrl);
 
+/**
+ * Explicit dev flag for the demo/scenario picker (A1). Employees must never see
+ * it — it renders ONLY when VITE_DEMO_CONTROLS=1 (e2e/dev builds), never by the
+ * mere absence of a backend URL.
+ */
+export const demoControlsEnabled = resolveEnv('VITE_DEMO_CONTROLS') === '1';
+
 let client: PaketApiClient | undefined;
 
 /** Singleton typed client against the configured backend. */

@@ -23,6 +23,8 @@ const todayResponse = {
       totalQuantity: 9,
       estimatedMinutes: 14,
       storageLocationCode: 'R27',
+      storageLocationKind: 'regal',
+      priceLabelPrintRequired: true,
       bookingDate: '2026-06-15',
       goodsType: 'Vororder',
     },
@@ -35,10 +37,13 @@ const todayResponse = {
       totalQuantity: 4,
       estimatedMinutes: 8,
       storageLocationCode: 'A-4',
+      storageLocationKind: 'haengebahn',
+      priceLabelPrintRequired: false,
       bookingDate: '2026-06-15',
       goodsType: null,
     },
   ],
+  workstation: { id: 'ws-1', code: 'T-04', name: 'Tisch 4' },
 };
 
 const aggregateFor = (id: string) => ({
@@ -82,6 +87,10 @@ const aggregateFor = (id: string) => ({
           size: 'M',
           expectedQuantity: 2,
           confirmedQuantity: null,
+          ekPrice: 12.5,
+          vkPrice: 29.99,
+          vkLabelPrice: 29.99,
+          onlineMark: 'green',
           status: 'open',
         },
         {
@@ -90,6 +99,10 @@ const aggregateFor = (id: string) => ({
           size: 'L',
           expectedQuantity: 1,
           confirmedQuantity: null,
+          ekPrice: 12.5,
+          vkPrice: 29.99,
+          vkLabelPrice: 29.99,
+          onlineMark: 'red',
           status: 'open',
         },
       ],
@@ -135,7 +148,7 @@ vi.mock('../data/session.js', () => ({
 }));
 
 import { PaketDb } from './db.js';
-import { loadAssignedWork, pullNextBundle } from './sync.js';
+import { goodsCategoryFromKind, loadAssignedWork, parkRemainingBelege, pullNextBundle } from './sync.js';
 import {
   getBelege,
   getBundle,
@@ -218,6 +231,55 @@ describe('loadAssignedWork', () => {
     await loadAssignedWork(db);
     const agg = await getAggregate('c1', db);
     expect(agg?.case.goodsTypeText).toBe('Vororder');
+  });
+});
+
+describe('foundation field mapping (Dustin-Feedback)', () => {
+  it('derives the GoodsCategory (icon) from the Lagerplatz-Art — no hardcoded regal (B6)', async () => {
+    await loadAssignedWork(db);
+    const belege = (await getBelege(db)).sort((a, b) => a.order - b.order);
+    expect(belege.map((b) => b.goodsType)).toEqual(['regal', 'haengeware']);
+    expect(goodsCategoryFromKind('palette_b')).toBe('palette');
+    expect(goodsCategoryFromKind(undefined)).toBe('mixed');
+  });
+
+  it('carries the Etiketten-Hinweis flag per Beleg (B3)', async () => {
+    await loadAssignedWork(db);
+    const belege = (await getBelege(db)).sort((a, b) => a.order - b.order);
+    expect(belege.map((b) => b.priceLabelPrintRequired)).toEqual([true, false]);
+  });
+
+  it('maps EK/VK prices and the Online-Größen-Markierung (A8/D1/D4)', async () => {
+    await loadAssignedWork(db);
+    const agg = await getAggregate('c1', db);
+    expect(agg?.positions[0]?.skuLines[0]).toMatchObject({ ekPrice: 12.5, vkPrice: 29.99 });
+    expect(agg?.onlineMarks).toEqual({ 'c1-p1-s1': 'green', 'c1-p1-s2': 'red' });
+  });
+});
+
+describe('parkRemainingBelege (B4 Parkposition)', () => {
+  it('POSTs the park and drops the parked Belege from the local bundle scope', async () => {
+    await loadAssignedWork(db);
+    apiPost.mockResolvedValueOnce({
+      data: { bundleId: 'b', parkedCaseIds: ['c2'], remainingCaseIds: ['c1'], plannedEffortMinutes: 14 },
+      error: undefined,
+    } as never);
+    const result = await parkRemainingBelege(['c2'], db, true);
+    expect(result.parkedCount).toBe(1);
+    expect(apiPost).toHaveBeenCalledWith('/api/me/park', { body: { caseIds: ['c2'] } });
+    expect((await getBelege(db)).map((b) => b.caseId)).toEqual(['c1']);
+    expect((await getBundle(db))?.caseIds).toEqual(['c1']);
+    expect((await getCollectStops(db)).map((s) => s.locationCode)).toEqual(['R27']);
+    const events = await db.events.toArray();
+    expect(events.some((e) => e.eventType === 'case.parked_by_employee' && e.entityId === 'c2')).toBe(true);
+  });
+
+  it('works offline without a POST (demo mode)', async () => {
+    await loadAssignedWork(db);
+    apiPost.mockClear();
+    const result = await parkRemainingBelege(['c2'], db, false);
+    expect(result.parkedCount).toBe(1);
+    expect(apiPost).not.toHaveBeenCalled();
   });
 });
 

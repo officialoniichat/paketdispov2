@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BelegListItem, BelegStatus, CaseProgress } from '../db/types.js';
-import { deriveBelegStatus, nextOpenBeleg, orderBelege } from './belegList.js';
+import { deriveBelegStatus, isBelegClosed, nextOpenBeleg, orderBelege } from './belegList.js';
 
 const item = (over: Partial<BelegListItem>): BelegListItem => ({
   caseId: 'c1',
@@ -9,15 +9,15 @@ const item = (over: Partial<BelegListItem>): BelegListItem => ({
   storageLocationCode: 'R27',
   goodsType: 'regal',
   totalQuantity: 10,
+  priceLabelPrintRequired: false,
   ...over,
 });
 
 const progress = (over: Partial<CaseProgress>): CaseProgress => ({
   caseId: 'c1',
   step: 'process',
-  labelsPrinted: false,
-  cartonOpened: false,
   quantityCheckedPositionIds: [],
+  confirmedQuantities: {},
   zstDone: false,
   partial: false,
   version: 0,
@@ -43,15 +43,19 @@ describe('deriveBelegStatus', () => {
     expect(deriveBelegStatus(progress({ step: 'done' }), 0)).toBe('done');
   });
 
+  it('is partial (NOT Fertig) for a Teilabschluss — D7', () => {
+    expect(deriveBelegStatus(progress({ step: 'done', partial: true }), 0)).toBe('partial');
+  });
+
   it('is issue when an open problem exists and the case is not done', () => {
     expect(deriveBelegStatus(progress({}), 1)).toBe('issue');
   });
 
   it('is in_progress once any work has started', () => {
-    expect(deriveBelegStatus(progress({ labelsPrinted: true }), 0)).toBe('in_progress');
     expect(deriveBelegStatus(progress({ quantityCheckedPositionIds: ['p1'] }), 0)).toBe(
       'in_progress',
     );
+    expect(deriveBelegStatus(progress({ confirmedQuantities: { s1: 1 } }), 0)).toBe('in_progress');
   });
 
   it('is open before any action', () => {
@@ -60,11 +64,30 @@ describe('deriveBelegStatus', () => {
   });
 });
 
+describe('isBelegClosed', () => {
+  it('treats done and partial as closed for today, everything else as open work', () => {
+    expect(isBelegClosed('done')).toBe(true);
+    expect(isBelegClosed('partial')).toBe(true);
+    expect(isBelegClosed('open')).toBe(false);
+    expect(isBelegClosed('in_progress')).toBe(false);
+    expect(isBelegClosed('issue')).toBe(false);
+  });
+});
+
 describe('nextOpenBeleg', () => {
-  it('returns the first Beleg in bundle order that is not done', () => {
+  it('returns the first Beleg in bundle order that is still open', () => {
     const belege = [item({ caseId: 'a', order: 0 }), item({ caseId: 'b', order: 1 })];
     const statuses = new Map<string, BelegStatus>([
       ['a', 'done'],
+      ['b', 'open'],
+    ]);
+    expect(nextOpenBeleg(belege, statuses)?.caseId).toBe('b');
+  });
+
+  it('skips a partially completed Beleg (needs no more work today)', () => {
+    const belege = [item({ caseId: 'a', order: 0 }), item({ caseId: 'b', order: 1 })];
+    const statuses = new Map<string, BelegStatus>([
+      ['a', 'partial'],
       ['b', 'open'],
     ]);
     expect(nextOpenBeleg(belege, statuses)?.caseId).toBe('b');

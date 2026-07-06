@@ -1,12 +1,12 @@
 /**
  * PROCESS phase — the single per-Beleg work screen.
  *
- * One Beleg, the whole picture at a glance: a Beleg-level §G.2 guardrail (print
- * price labels → open carton), then ALL positions as a full list with their
- * Arbeitsanweisung flags (Preisetikett / Sicherung / Online / Rotpreis) and
- * Soll/Ist, the engine's box targets as info, and finally the per-Beleg erledigt
- * → ZST. The only gates are §G.2, the minimum-quantity check (every position,
- * even "Prüfung = Nein") and "no open problem". Boxing never gates.
+ * One Beleg, the whole picture at a glance: the Arbeitsanweisung points, ALL
+ * positions as a full list with their flags (Preisetikett / Sicherung / Online /
+ * Rotpreis) and Soll/Ist, the engine's box targets as info, and finally the
+ * per-Beleg erledigt → ZST. The only gates are the per-position check (every
+ * position, even "Prüfung = Nein") and "no open problem". Printing is upstream
+ * (vorgelagert), Karton öffnen is no work step (C4). Boxing never gates.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -24,22 +24,21 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { CaseCardSkeleton } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
-import { LabelPlacementHint } from '../components/LabelPlacementHint.js';
 import { db } from '../db/db.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
-import { canCompleteCase, canOpenCarton } from '../workflow/workflowModel.js';
+import { canCompleteCase } from '../workflow/workflowModel.js';
 import { TAGESSTART, problemPath } from '../routes/paths.js';
 
 /**
  * Arbeitsanweisung points that are already performed via dedicated controls
- * (print button, placement card, "Beleg erledigt") — hidden from the read-only
- * Arbeitsanweisung list so it stays informational, not a duplicate to-do.
+ * ("Beleg erledigt" sets the ZST) or are upstream (printing is vorgelagert, C4)
+ * — hidden from the read-only Arbeitsanweisung list.
  */
 const ACTION_POINT_KEYS = new Set([
-  'price_label_print', // → "Preisetiketten drucken" button
-  'price_label_attach', // → placement card below
+  'price_label_print', // upstream (vorgelagert) — no work step here (C4)
+  'price_label_attach', // → per-position placement line
   'zst', // → "Beleg erledigt" sets the ZST
 ]);
 
@@ -76,25 +75,10 @@ export function BelegProcessScreen(): JSX.Element {
 
   const { aggregate, progress } = flow;
   const wi = aggregate.workInstruction;
-  const cartonAllowed = canOpenCarton(progress, wi);
-  const attachPositions = aggregate.positions.filter((p) => p.instruction.priceLabelAttachRequired);
-  const attachLocations = [
-    ...new Set(
-      attachPositions
-        .map((p) => p.instruction.priceLabelAttachLocation)
-        .filter((loc): loc is string => Boolean(loc)),
-    ),
-  ];
   const gate = canCompleteCase(progress, aggregate, openIssues ?? 0);
   const checked = new Set(progress.quantityCheckedPositionIds);
-  // Read-only Arbeitsanweisung points (action points hidden). The "Prüfung
-  // Wareneingang" depth lives there (point 6); the per-position control below is
-  // the always-on Mindestmengen-count — kept distinct to avoid confusion.
   const infoPoints = aggregate.instructionPoints.filter((p) => !ACTION_POINT_KEYS.has(p.key));
   const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
-  // Beleg-Kopf, work-relevant subset (§Warenbezeichnung-Konzept): Abschnitt ·
-  // Warenart · Beleg-Menge. Filiale/Lieferschein/Shopbereich are header data that
-  // matter at boxing/ZST, not here.
   const c = aggregate.case;
   const kopf = [
     c.section != null ? `Abschnitt ${c.section}` : null,
@@ -131,8 +115,7 @@ export function BelegProcessScreen(): JSX.Element {
           {kopf}
         </Typography>
 
-        {/* Arbeitsanweisung — faithful ordered points (printed numbers kept),
-            minus the ones already done via buttons (print/attach/ZST). */}
+        {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
         {infoPoints.length > 0 ? (
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
@@ -161,39 +144,7 @@ export function BelegProcessScreen(): JSX.Element {
           </Paper>
         ) : null}
 
-        {/* §G.2 guardrail: print labels BEFORE opening the carton (Beleg-level). */}
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Vorbereitung: erst Etiketten, dann Karton
-          </Typography>
-          <Stack spacing={1}>
-            {progress.labelsPrinted ? (
-              <Chip color="success" label="Preisetiketten gedruckt ✓" />
-            ) : (
-              <TouchButton emphasis="primary" onClick={() => void flow.printLabels()}>
-                Preisetiketten drucken
-              </TouchButton>
-            )}
-            {progress.cartonOpened ? (
-              <Chip color="success" label="Karton geöffnet ✓" />
-            ) : (
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                disabled={!cartonAllowed}
-                onClick={() => void flow.openCarton()}
-              >
-                Karton geöffnet
-              </Button>
-            )}
-          </Stack>
-        </Paper>
-
-        {/* §G.1 Punkt 8: visual hint WHERE to attach the price label. */}
-        {attachPositions.length > 0 ? <LabelPlacementHint locations={attachLocations} /> : null}
-
-        {/* Full position list at a glance with flags + Soll/Ist + min-qty check. */}
+        {/* Full position list at a glance with flags + Soll/Ist + position check. */}
         <Typography variant="subtitle2">Positionen</Typography>
         {wi.goodsReceiptCheckMode === 'quantity_only' ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
@@ -265,12 +216,17 @@ export function BelegProcessScreen(): JSX.Element {
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                 {isChecked ? (
-                  <Chip color="success" size="small" label="Mindestmenge geprüft ✓" />
+                  <Chip
+                    color="success"
+                    size="small"
+                    label="Mindestmenge geprüft ✓"
+                    onClick={() => void flow.togglePositionChecked(pos.id)}
+                  />
                 ) : (
                   <Button
                     variant="contained"
                     size="small"
-                    onClick={() => void flow.checkQuantity(pos.id)}
+                    onClick={() => void flow.togglePositionChecked(pos.id)}
                   >
                     Mindestmenge geprüft
                   </Button>

@@ -1,9 +1,10 @@
 /**
- * Mitarbeiter-App router shell. Bootstraps the local store once — from the
- * backend when VITE_API_BASE_URL is set (loadAssignedWork), otherwise from the
- * offline-demo seed — and routes the two-phase bundle flow: hub → collect →
- * Beleg → problem. Navigation is flat (§E.6); back-navigation lives in the
- * screens. The bundle is re-fetched on focus (notification integration point).
+ * Mitarbeiter-App router shell. Gates on the Tisch-Anmeldung (A2), bootstraps
+ * the local store once — from the backend when VITE_API_BASE_URL is set
+ * (loadAssignedWork), otherwise from the offline-demo seed — and routes the
+ * one-screen bundle flow: hub (Ware holen + Bearbeiten) → Beleg → problem.
+ * Navigation is flat (§E.6); back-navigation lives in the screens. The bundle
+ * is re-fetched on focus (notification integration point).
  */
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
@@ -14,17 +15,23 @@ import { loadAssignedWork } from './db/sync.js';
 import { isBackendEnabled } from './data/api.js';
 import { useFocusRefresh } from './data/useFocusRefresh.js';
 import { BootstrapProvider } from './data/bootstrapContext.js';
+import { getWorkstation, type WorkstationClaim } from './data/workstation.js';
 import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
-import { CollectScreen } from './screens/CollectScreen.js';
 import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
 import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
+import { TischLoginScreen } from './screens/TischLoginScreen.js';
 
 export function App(): JSX.Element {
+  // A2: no work without a claimed Arbeitsplatz — the Tisch login gates the app.
+  const [workstation, setWorkstation] = useState<WorkstationClaim | undefined>(() =>
+    getWorkstation(),
+  );
   // Backend mode loads the engine-assigned bundle; demo mode seeds the example.
   const [loading, setLoading] = useState<boolean>(isBackendEnabled);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    if (!workstation) return;
     let cancelled = false;
     async function bootstrap(): Promise<void> {
       if (!isBackendEnabled) {
@@ -47,7 +54,7 @@ export function App(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [workstation]);
 
   // Notification integration point: re-fetch the bundle when the app regains focus.
   useFocusRefresh();
@@ -56,13 +63,16 @@ export function App(): JSX.Element {
     <BootstrapProvider value={{ loading, error }}>
       <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
         <AppHeader />
-        <Routes>
-          <Route path="/" element={<BundleHomeScreen />} />
-          <Route path="/collect" element={<CollectScreen />} />
-          <Route path="/case/:caseId" element={<BelegProcessScreen />} />
-          <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        {!workstation ? (
+          <TischLoginScreen onClaimed={setWorkstation} />
+        ) : (
+          <Routes>
+            <Route path="/" element={<BundleHomeScreen />} />
+            <Route path="/case/:caseId" element={<BelegProcessScreen />} />
+            <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        )}
       </Box>
     </BootstrapProvider>
   );

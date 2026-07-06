@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { PaketDb } from './db.js';
 import { getProgress, OptimisticLockError, putProgress, saveProgress } from './repository.js';
-import { initialProgress, markLabelsPrinted } from '../workflow/workflowModel.js';
+import { initialProgress, togglePositionChecked } from '../workflow/workflowModel.js';
 import { exampleAggregate } from '../domain/exampleAssignment.js';
 
 let counter = 0;
@@ -15,21 +15,21 @@ describe('saveProgress optimistic locking', () => {
     const p0 = baseProgress();
     await putProgress(p0, db);
 
-    const saved = await saveProgress(markLabelsPrinted(p0), p0.version, db);
+    const saved = await saveProgress(togglePositionChecked(p0, 'pos-1'), p0.version, db);
     expect(saved.version).toBe(1);
 
     const reread = await getProgress(p0.caseId, db);
     expect(reread?.version).toBe(1);
-    expect(reread?.labelsPrinted).toBe(true);
+    expect(reread?.quantityCheckedPositionIds).toEqual(['pos-1']);
   });
 
   it('rejects a write based on a stale version', async () => {
     const db = newDb();
     const p0 = baseProgress();
     await putProgress(p0, db);
-    await saveProgress(markLabelsPrinted(p0), 0, db); // store now at version 1
+    await saveProgress(togglePositionChecked(p0, 'pos-1'), 0, db); // store now at version 1
 
-    await expect(saveProgress(markLabelsPrinted(p0), 0, db)).rejects.toBeInstanceOf(
+    await expect(saveProgress(togglePositionChecked(p0, 'pos-1'), 0, db)).rejects.toBeInstanceOf(
       OptimisticLockError,
     );
   });

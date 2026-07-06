@@ -1,11 +1,8 @@
-/** Central route helpers for the two-phase bundle flow (hub → collect / Beleg). */
+/** Central route helpers for the one-screen bundle flow (hub → Beleg). */
 import type { IssueScope } from '@paket/domain-types';
 
-/** Home hub: bundle overview + COLLECT summary + PROCESS Beleg list. */
+/** Home hub: „1 · Ware holen" pick list + „2 · Bearbeiten" Beleg list, one screen. */
 export const TAGESSTART = '/';
-
-/** Consolidated COLLECT pick list for the whole bundle. */
-export const COLLECT = '/collect';
 
 /** The single per-Beleg PROCESS screen. */
 export function caseProcessPath(caseId: string): string {

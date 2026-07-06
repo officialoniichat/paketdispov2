@@ -1,30 +1,37 @@
 /**
- * Home hub for the two-phase bundle flow.
+ * Home hub — ONE screen for the whole bundle flow (Dustin B1).
  *
- * Shows the assigned bundle (cart) header, the COLLECT summary (→ /collect) and
- * the PROCESS Beleg list. COLLECT is a hard gate: until every pick-list stop is
- * checked off, the Beleg rows are locked. Assignment is system-only — the worker
- * never self-assigns; he works the cart the engine gave him.
+ * Section „1 · Ware holen" lists the route-ordered pick stops inline; checking
+ * off (Paket geholt) happens right here — no extra window. Section
+ * „2 · Bearbeiten" lists the Belege directly below. Collecting stays the hard
+ * gate; once fetched, the worker freely picks which Beleg to work first
+ * (Warenart labels like NOS/EB support self-prioritisation — no system
+ * recommendation). „Rest parken" (B4) sends the Belege of not-yet-fetched
+ * stops back to the pool when the cart is full.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
 import { DemoControls } from '../components/DemoControls.js';
-import { isBackendEnabled } from '../data/api.js';
+import { demoControlsEnabled, isBackendEnabled } from '../data/api.js';
+import { getWorkstation } from '../data/workstation.js';
 import { db } from '../db/db.js';
 import { useBundle } from '../workflow/useBundle.js';
-import { deriveBelegStatus, nextOpenBeleg, orderBelege } from '../workflow/belegList.js';
-import type { BelegStatus, GoodsCategory } from '../db/types.js';
-import { pullNextBundle } from '../db/sync.js';
+import { useScanner } from '../scanner/useScanner.js';
+import { deriveBelegStatus, isBelegClosed, nextOpenBeleg, orderBelege } from '../workflow/belegList.js';
+import { scanMatches } from '../workflow/workflowModel.js';
+import type { BelegListItem, BelegStatus, GoodsCategory } from '../db/types.js';
+import { parkRemainingBelege, pullNextBundle } from '../db/sync.js';
 import { cycleDemoScenario } from '../db/seed.js';
-import { COLLECT, caseProcessPath } from '../routes/paths.js';
+import { caseProcessPath } from '../routes/paths.js';
 
 /** German messaging for the backend's "no cart assigned" reasons (§continuation). */
 const PULL_REASON_MSG: Record<string, string> = {
@@ -38,28 +45,50 @@ const PULL_REASON_MSG: Record<string, string> = {
 
 const STATUS_CHIP: Record<
   BelegStatus,
-  { label: string; color: 'default' | 'primary' | 'success' | 'error' }
+  { label: string; color: 'default' | 'primary' | 'success' | 'warning' | 'error' }
 > = {
   open: { label: 'Offen', color: 'default' },
   in_progress: { label: 'In Arbeit', color: 'primary' },
   done: { label: 'Fertig', color: 'success' },
+  partial: { label: 'Teilabschluss', color: 'warning' },
   issue: { label: 'Problem', color: 'error' },
 };
 
+/** B6: Icon je Lagerplatz-Art (LocationKind-abgeleitet): Regal / Palette / Kleiderbügel. */
 const ICON: Record<GoodsCategory, string> = {
-  regal: '📦',
+  regal: '🗄️',
   palette: '🟧',
-  haengeware: '👕',
+  haengeware: '🧥',
   mixed: '📦',
 };
 
+/** A3: greeting adapts to the time of day. */
+export function greetingForHour(hour: number): string {
+  if (hour < 11) return 'Guten Morgen';
+  if (hour < 17) return 'Guten Tag';
+  return 'Guten Abend';
+}
+
 export function BundleHomeScreen(): JSX.Element {
   const navigate = useNavigate();
-  const { loading, bundle, belege, counts, collectComplete } = useBundle();
+  const { loading, bundle, stops, collectProgress, belege, counts, collectComplete, toggleStop } =
+    useBundle();
   const progressRows = useLiveQuery(() => db.progress.toArray(), []);
   const events = useLiveQuery(() => db.events.toArray(), []);
   const [pulling, setPulling] = useState(false);
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
+  const [parking, setParking] = useState(false);
+  const [parkMsg, setParkMsg] = useState<string | undefined>(undefined);
+
+  const collected = new Set(collectProgress?.collectedSequences ?? []);
+
+  // Optional scan: a scanned code that matches an unfetched stop checks it off.
+  useScanner({
+    onScan: (code) => {
+      const hit = stops.find((s) => !collected.has(s.sequence) && scanMatches(code, s.locationCode));
+      if (hit) void toggleStop(hit.sequence);
+    },
+  });
 
   // Pull the next cart (backend) or advance the demo Belegset (offline). The live
   // queries refresh the home automatically once the store is rewritten.
@@ -77,6 +106,26 @@ export function BundleHomeScreen(): JSX.Element {
       }
     } finally {
       setPulling(false);
+    }
+  };
+
+  // B4 Parkposition: the Belege of not-yet-fetched stops go back to the pool.
+  const uncollectedCaseIds = stops
+    .filter((s) => !collected.has(s.sequence))
+    .flatMap((s) => s.caseIds);
+
+  const handlePark = async (): Promise<void> => {
+    setParkMsg(undefined);
+    setParking(true);
+    try {
+      const { parkedCount } = await parkRemainingBelege(uncollectedCaseIds, db, isBackendEnabled);
+      setParkMsg(
+        `${parkedCount} Beleg${parkedCount === 1 ? '' : 'e'} geparkt – kommen ins nächste Bündel.`,
+      );
+    } catch (err) {
+      setParkMsg(err instanceof Error ? err.message : 'Parken fehlgeschlagen');
+    } finally {
+      setParking(false);
     }
   };
 
@@ -103,11 +152,14 @@ export function BundleHomeScreen(): JSX.Element {
     ]),
   );
   const ordered = orderBelege(belege);
-  const doneCount = [...statuses.values()].filter((s) => s === 'done').length;
-  const allDone = belege.length > 0 && doneCount === belege.length;
-  // Cumulative Belege finished today (local audit log; survives a backend pull).
-  const doneToday = (events ?? []).filter((e) => e.eventType === 'case.completed').length;
-  const recommended = collectComplete ? nextOpenBeleg(belege, statuses) : undefined;
+  const allDone =
+    belege.length > 0 && [...statuses.values()].every((s) => isBelegClosed(s));
+  const parkedToday = (events ?? []).filter(
+    (e) => e.eventType === 'case.parked_by_employee',
+  ).length;
+  const nextBeleg = collectComplete ? nextOpenBeleg(belege, statuses) : undefined;
+  const belegByCaseId = new Map<string, BelegListItem>(belege.map((b) => [b.caseId, b]));
+  const workstation = getWorkstation();
 
   const openBeleg = (caseId: string): void => {
     if (!collectComplete) return;
@@ -116,71 +168,118 @@ export function BundleHomeScreen(): JSX.Element {
 
   return (
     <Box sx={{ p: 2, pb: 18 }}>
-      {isBackendEnabled ? null : <DemoControls />}
+      {!isBackendEnabled && demoControlsEnabled ? <DemoControls /> : null}
       <Typography variant="overline" color="text.secondary">
         Dein Karren · {belege.length} Belege{bundle?.bereich ? ` · ${bundle.bereich}` : ''}
       </Typography>
       <Typography variant="h1" gutterBottom>
-        Guten Morgen{bundle ? `, ${bundle.employeeName}` : ''}
+        {greetingForHour(new Date().getHours())}
+        {bundle ? `, ${bundle.employeeName}` : ''}
       </Typography>
+      <Typography sx={{ mb: 2 }}>Arbeitsplatz: {workstation?.name ?? '—'}</Typography>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={0.5}>
-          <Typography>Arbeitsplatz: {bundle?.workstation ?? '—'}</Typography>
-          <Typography>
-            {doneCount} von {belege.length} fertig · ca. {bundle?.plannedEffortMinutes ?? 0} Min
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Heute erledigt: {doneToday} Belege
-          </Typography>
-        </Stack>
-      </Paper>
+      {parkMsg ? (
+        <Alert severity="info" sx={{ mb: 2 }} onClose={() => setParkMsg(undefined)}>
+          {parkMsg}
+        </Alert>
+      ) : parkedToday > 0 ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {parkedToday} Beleg{parkedToday === 1 ? '' : 'e'} geparkt – kommen ins nächste Bündel.
+        </Alert>
+      ) : null}
 
-      {/* Phase 1: COLLECT */}
-      <Paper
-        variant="outlined"
-        onClick={() => navigate(COLLECT)}
-        sx={{
-          p: 2,
-          mb: 2,
-          cursor: 'pointer',
-          borderColor: collectComplete ? 'success.main' : 'secondary.main',
-          borderWidth: 2,
-        }}
-      >
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              1 · Sammeln
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {collectComplete
-                ? 'Alle Plätze geholt ✓'
-                : `${counts.collected}/${counts.total} Plätze geholt`}
-            </Typography>
-          </Box>
-          <Chip
-            size="small"
-            color={collectComplete ? 'success' : 'secondary'}
-            label={collectComplete ? 'Fertig' : 'Offen'}
-          />
-        </Stack>
-      </Paper>
-
-      {/* Phase 2: PROCESS */}
+      {/* 1 · Ware holen — inline pick list, check off right here (B1/B2). */}
       <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+        1 · Ware holen
+        {stops.length > 0 ? (
+          <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+            {counts.collected}/{counts.total} Plätze
+          </Typography>
+        ) : null}
+      </Typography>
+      <Stack spacing={1} sx={{ mb: 1 }}>
+        {stops.map((stop, index) => {
+          const isDone = collected.has(stop.sequence);
+          const stopBelege = stop.caseIds
+            .map((id) => belegByCaseId.get(id))
+            .filter((b): b is BelegListItem => Boolean(b));
+          return (
+            <Paper
+              key={stop.sequence}
+              variant="outlined"
+              onClick={() => void toggleStop(stop.sequence)}
+              sx={{
+                p: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                cursor: 'pointer',
+                borderColor: isDone ? 'success.main' : 'divider',
+                bgcolor: isDone ? 'action.hover' : 'background.paper',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: isDone ? 'success.main' : 'action.selected',
+                  color: isDone ? 'common.white' : 'text.primary',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {isDone ? '✓' : index + 1}
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
+                <Typography sx={{ fontWeight: 700, fontSize: 18 }}>{stop.locationCode}</Typography>
+                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                  {stopBelege.map((b) => (
+                    <Chip
+                      key={b.caseId}
+                      size="small"
+                      variant="outlined"
+                      // B3: Etiketten-Hinweis NUR wenn gedruckt werden muss.
+                      label={`WE ${b.weBelegNo}${b.priceLabelPrintRequired ? ' · 🏷️ Etiketten drucken' : ''}`}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+              <Chip
+                size="small"
+                color={isDone ? 'success' : 'default'}
+                label={isDone ? 'geholt' : 'offen'}
+              />
+            </Paper>
+          );
+        })}
+      </Stack>
+      {/* B4: Karren voll → Rest (Belege noch nicht geholter Plätze) parken. */}
+      {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
+        <Button size="small" disabled={parking} onClick={() => void handlePark()} sx={{ mb: 1 }}>
+          {parking
+            ? 'Parken…'
+            : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
+        </Button>
+      ) : null}
+
+      {/* 2 · Bearbeiten — the worker freely picks which Beleg first (B8). */}
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
         2 · Bearbeiten
       </Typography>
-      {!collectComplete ? (
+      {!collectComplete && belege.length > 0 ? (
         <Alert severity="info" sx={{ mb: 1 }}>
-          Erst alle Plätze holen, dann bearbeiten.
+          Erst Ware holen, dann bearbeiten.
         </Alert>
       ) : null}
 
       <Stack spacing={1}>
         {ordered.map((b) => {
           const st = statuses.get(b.caseId) ?? 'open';
-          const isRec = recommended?.caseId === b.caseId;
           return (
             <Paper
               key={b.caseId}
@@ -193,16 +292,21 @@ export function BundleHomeScreen(): JSX.Element {
                 gap: 1.5,
                 cursor: collectComplete ? 'pointer' : 'not-allowed',
                 opacity: collectComplete ? 1 : 0.5,
-                ...(isRec ? { borderColor: 'secondary.main', boxShadow: 2 } : {}),
               }}
             >
               <Box sx={{ fontSize: 22 }}>{ICON[b.goodsType]}</Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {b.storageLocationCode} · {b.totalQuantity} Teile{isRec ? ' · empfohlen' : ''}
+                  {b.storageLocationCode}
+                  {/* B5: Teile-Anzahl nur für Hängeware. */}
+                  {b.goodsType === 'haengeware' ? ` · ${b.totalQuantity} Teile` : ''}
                 </Typography>
               </Box>
+              {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+              {b.goodsTypeText ? (
+                <Chip size="small" variant="outlined" label={b.goodsTypeText} />
+              ) : null}
               <Chip size="small" color={STATUS_CHIP[st].color} label={STATUS_CHIP[st].label} />
             </Paper>
           );
@@ -229,7 +333,7 @@ export function BundleHomeScreen(): JSX.Element {
         {allDone ? (
           <Stack spacing={1}>
             <Alert severity="success" sx={{ py: 0.5 }}>
-              Bündel fertig 🎉 · heute {doneToday} Belege erledigt
+              Bündel fertig 🎉
             </Alert>
             {pullMsg ? (
               <Alert severity="info" sx={{ py: 0.5 }}>
@@ -245,16 +349,16 @@ export function BundleHomeScreen(): JSX.Element {
             </TouchButton>
           </Stack>
         ) : !collectComplete ? (
-          <TouchButton emphasis="primary" onClick={() => navigate(COLLECT)}>
-            Sammeln starten
+          <TouchButton emphasis="primary" disabled>
+            {`Erst Ware holen (${counts.collected}/${counts.total})`}
           </TouchButton>
         ) : (
           <TouchButton
             emphasis="primary"
-            disabled={!recommended}
-            onClick={() => recommended && openBeleg(recommended.caseId)}
+            disabled={!nextBeleg}
+            onClick={() => nextBeleg && openBeleg(nextBeleg.caseId)}
           >
-            {recommended ? `Weiter · WE ${recommended.weBelegNo}` : 'Bearbeiten'}
+            {nextBeleg ? `Start Bearbeitung WE ${nextBeleg.weBelegNo}` : 'Bearbeiten'}
           </TouchButton>
         )}
       </Box>

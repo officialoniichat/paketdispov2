@@ -1,37 +1,39 @@
 /**
- * Offline aggregate model for the Mitarbeiter-App — two-phase bundle flow.
+ * Offline aggregate model for the Mitarbeiter-App — one-screen bundle flow.
  *
  * The PWA caches exactly the engine's assignment for the day: one
  * Bereich-homogeneous bundle (the {@link BundleContext}), its consolidated
- * route-ordered pick list ({@link CollectStop}s for the COLLECT phase) and the
- * per-Beleg aggregates needed to work each Beleg offline (PROCESS phase).
- * Assignment is system-only — the worker never self-assigns; he collects the
- * whole cart, then processes each Beleg and sets the per-Beleg ZST.
+ * route-ordered pick list ({@link CollectStop}s, „Ware holen") and the
+ * per-Beleg aggregates needed to work each Beleg offline. Assignment is
+ * system-only — the worker never self-assigns; he fetches the cart's Ware,
+ * then freely picks which Beleg to process and sets the per-Beleg ZST.
  */
 import type {
   GoodsReceiptCase,
+  GoodsTypeText,
+  OnlineSizeMark,
   ReceiptPosition,
   TransportBoxTarget,
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
 
-/** Storage/goods category — drives display and the close path (Hängeware has no box). */
+/** Storage/goods category — derived from the Lagerplatz-Art (LocationKind), drives icons. */
 export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
 
 /** Derived list status for a Beleg row (computed from CaseProgress + open issues). */
-export type BelegStatus = 'open' | 'in_progress' | 'done' | 'issue';
+export type BelegStatus = 'open' | 'in_progress' | 'done' | 'partial' | 'issue';
 
 /**
  * The engine bundle cached for today (one active bundle per employee). Single
- * row, id = 'today'. `caseIds` is the bundle order; the COLLECT pick list and
- * the PROCESS Beleg list both derive their order from it.
+ * row, id = 'today'. `caseIds` is the bundle order; the pick list derives its
+ * order from it. The Arbeitsplatz (Tisch) is NOT part of the bundle — the
+ * worker claims it at login (see data/workstation.ts).
  */
 export interface BundleContext {
   id: 'today';
   bundleId: string;
   employeeName: string;
-  workstation: string;
   /** ISO date 'YYYY-MM-DD' of the assignment, display only. */
   date: string;
   plannedEffortMinutes: number;
@@ -54,9 +56,9 @@ export interface CollectStop {
 }
 
 /**
- * Bundle-level COLLECT progress (single row, id = 'today'). `collectedSequences`
- * are the stops the worker has checked off. The PROCESS phase is hard-gated
- * until every stop is collected.
+ * Bundle-level „Ware holen" progress (single row, id = 'today').
+ * `collectedSequences` are the stops the worker has checked off. Processing a
+ * Beleg is hard-gated until every (remaining) stop is fetched.
  */
 export interface BundleProgress {
   id: 'today';
@@ -65,15 +67,20 @@ export interface BundleProgress {
   updatedAt: string;
 }
 
-/** One assigned Beleg as shown in the PROCESS list (ordered by the bundle). */
+/** One assigned Beleg as shown in the Bearbeiten list (ordered by the bundle). */
 export interface BelegListItem {
   caseId: string;
   weBelegNo: string;
   /** Position within the bundle (`caseIds` index); drives display order. */
   order: number;
   storageLocationCode: string;
+  /** Derived from the Lagerplatz-Art (LocationKind) — Regal/Palette/Hängebahn icon. */
   goodsType: GoodsCategory;
   totalQuantity: number;
+  /** Warenart (Vororder/Nachorder/NOS/EB …) — Selbst-Priorisierung, keine System-Empfehlung. */
+  goodsTypeText?: GoodsTypeText;
+  /** Preisetiketten müssen gedruckt werden — Hinweis beim Ware holen (nichts anzeigen wenn false). */
+  priceLabelPrintRequired: boolean;
 }
 
 /** Everything needed to work one Beleg offline (case + instruction + positions + box targets). */
@@ -85,9 +92,17 @@ export interface CaseAggregate {
   boxTargets: TransportBoxTarget[];
   /** Ordered Arbeitsanweisung points (derived projection from the engine/backend). */
   instructionPoints: WorkInstructionPoint[];
+  /**
+   * A8 Online-Größen-Markierung je SKU-Zeile (skuLineId → green/red). Vom Backend
+   * berechnet (Fachlogik single-source); die Positions-Karte färbt nur ein.
+   */
+  onlineMarks: Record<string, OnlineSizeMark>;
+  /** Prüfstufen-Label ("Nein"/"10 %"/"Ja") + Aufgabentext — erklärt, was die Stufe bedeutet. */
+  inspectionLevelLabel?: string;
+  inspectionDescription?: string;
 }
 
-/** Per-Beleg workflow step — collapsed to a single PROCESS phase then DONE. */
+/** Per-Beleg workflow step — a single PROCESS phase then DONE. */
 export type CaseStep = 'process' | 'done';
 
 /**
@@ -95,24 +110,26 @@ export type CaseStep = 'process' | 'done';
  * workflowModel return new progress objects (immutable update); the repository
  * owns the version bump on persist.
  *
- * The flow is deliberately flat: print price labels (Beleg-level), open the
- * carton (only after labels — §G.2), confirm the minimum quantity for every
- * position (always required, even "Prüfung = Nein"), then erledigt → ZST.
- * Boxing is shown as info only and never gates completion.
+ * The flow is deliberately flat: check every position („Position geprüft",
+ * un-checkable; always required, even "Prüfung = Nein" — §G.1), capture
+ * Mehr-/Mindermengen per Größe directly on the card, then erledigt → ZST.
+ * Printing happens upstream (vorgelagert) and is no work step here; boxing is
+ * info only. Neither gates completion.
  */
 export interface CaseProgress {
   caseId: string;
   step: CaseStep;
-  /** Price labels printed for the whole Beleg, BEFORE the carton is opened (§G.2). */
-  labelsPrinted: boolean;
-  /** Carton opened — only permitted once labels are printed when required. */
-  cartonOpened: boolean;
   /**
-   * Positions whose minimum quantity control has been done. Required for every
-   * position even when the work instruction maps "Prüfung = Nein" to
-   * quantity_only (§G.1: "Nein" never means none).
+   * Positions confirmed as „Position geprüft". Required for every position even
+   * when the work instruction maps "Prüfung = Nein" to quantity_only
+   * (§G.1: "Nein" never means none). Toggleable (un-checkable, D5).
    */
   quantityCheckedPositionIds: string[];
+  /**
+   * D2 Mehr-/Mindermengen: per Größe (skuLineId → gezählte Ist-Menge), erfasst
+   * direkt an der Positions-Karte. Nur Abweichungen werden gespeichert.
+   */
+  confirmedQuantities: Record<string, number>;
   zstDone: boolean;
   partial: boolean;
   version: number;

@@ -1,15 +1,13 @@
 /**
  * Demo-scenario catalog for the offline pilot. Each scenario is a different
- * Belegset (bundle) the demo can switch between to show the two-phase flow and
+ * Belegset (bundle) the demo can switch between to show the one-screen flow and
  * the Arbeitsanweisung variants. Only used in offline-demo mode; in backend mode
- * the real engine bundle is loaded instead.
+ * the real engine bundle is loaded instead. The default scenario mixes
+ * Regal + Hängebahn + Palette in one Bündel (Dustin A1).
  */
 import {
   assembleScenario,
-  exampleAggregates,
-  exampleBelegList,
-  exampleBundle,
-  exampleCollectStops,
+  EXAMPLE_SCENARIO_INPUT,
   type AssembledScenario,
 } from '../domain/exampleAssignment.js';
 
@@ -20,20 +18,16 @@ export interface DemoScenario {
   build: () => AssembledScenario;
 }
 
-/** Standard Anhang-G Regal bundle (3 Belege, R27 + A-4) — the canonical example. */
+/** Standard: gemischtes Bündel (Regal + Hängebahn + Palette) — the canonical example. */
 const standard: DemoScenario = {
   id: 'standard',
-  label: 'Standard · Regal (3 Belege)',
-  description: 'Anhang-G Beispiel: Regal-Bündel mit Rotpreis, Online und Stichprobe.',
-  build: () => ({
-    bundle: exampleBundle,
-    collectStops: exampleCollectStops,
-    belege: exampleBelegList,
-    aggregates: exampleAggregates,
-  }),
+  label: 'Standard · Gemischt (3 Belege)',
+  description:
+    'Anhang-G Beispiel: gemischtes Bündel (Regal, Hängebahn, Palette) mit Rotpreis, Online, Sicherung und Stichprobe.',
+  build: () => assembleScenario(EXAMPLE_SCENARIO_INPUT),
 };
 
-/** Hängebahn bundle — different Bereich, 2 Belege, one with security. */
+/** Hängebahn bundle — homogeneous Bereich, 2 Belege, one with security pictogram. */
 const haengeware: DemoScenario = {
   id: 'haengeware',
   label: 'Hängeware · Hängebahn (2 Belege)',
@@ -42,7 +36,6 @@ const haengeware: DemoScenario = {
     assembleScenario({
       bundleId: 'bundle-demo-haenge',
       employeeName: 'Anna',
-      workstation: 'Hängebahn 2',
       bereich: 'Hängebahn',
       cases: [
         {
@@ -53,18 +46,21 @@ const haengeware: DemoScenario = {
           locationType: 'haengebahn',
           goodsType: 'haengeware',
           totalQuantity: 6,
+          goodsTypeText: 'Nachorder',
+          inboundCartonCount: 1,
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '820100-Wollmantel',
               supplierColor: '90010-anthrazit',
-              wgr: '230400',
+              wgr: '415210',
               priceLabelAttachLocation: 'Innenkragen',
               securityRequired: true,
               securityLocation: 'Ärmelsaum',
+              securityTypeCode: 'ink-tag',
               skus: [
-                { ean: '4068657040011', size: '38', quantity: 3 },
-                { ean: '4068657040028', size: '40', quantity: 3 },
+                { ean: '4068657040011', size: '38', quantity: 3, ekPrice: 89, vkPrice: 199 },
+                { ean: '4068657040028', size: '40', quantity: 3, ekPrice: 89, vkPrice: 199 },
               ],
             },
           ],
@@ -77,13 +73,15 @@ const haengeware: DemoScenario = {
           locationType: 'haengebahn',
           goodsType: 'haengeware',
           totalQuantity: 4,
+          goodsTypeText: 'NOS',
+          inboundCartonCount: 1,
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '820200-Blazer',
               supplierColor: '40300-marine',
-              wgr: '230410',
-              skus: [{ ean: '4068657040103', size: 'M', quantity: 4 }],
+              wgr: '415210',
+              skus: [{ ean: '4068657040103', size: 'M', quantity: 4, ekPrice: 55, vkPrice: 129 }],
             },
           ],
         },
@@ -100,7 +98,6 @@ const gross: DemoScenario = {
     assembleScenario({
       bundleId: 'bundle-demo-gross',
       employeeName: 'Anna',
-      workstation: 'Tisch 4',
       bereich: 'Regal',
       cases: [
         {
@@ -110,16 +107,22 @@ const gross: DemoScenario = {
           locationCode: 'R3',
           goodsType: 'regal',
           totalQuantity: 6,
-          wi: { goodsReceiptCheckMode: 'percentage_check', goodsReceiptCheckPercentage: 30 },
+          goodsTypeText: 'Vororder',
+          inboundCartonCount: 2,
+          wi: {
+            goodsReceiptCheckMode: 'percentage_check',
+            goodsReceiptCheckPercentage: 30,
+            inspectionLevelCode: 'p20',
+          },
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '410100-Shirt',
               supplierColor: '10000-weiß',
-              wgr: '218000',
+              wgr: '511100',
               priceLabelAttachLocation: 'Seitennaht',
               redPriceRequired: true,
-              skus: [{ ean: '4068657050017', size: 'L', quantity: 6 }],
+              skus: [{ ean: '4068657050017', size: 'L', quantity: 6, ekPrice: 8, vkPrice: 19.99, vkLabelPrice: 14.99 }],
             },
           ],
         },
@@ -130,18 +133,21 @@ const gross: DemoScenario = {
           locationCode: 'R12',
           goodsType: 'regal',
           totalQuantity: 8,
+          goodsTypeText: 'Nachorder',
+          inboundCartonCount: 1,
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '410200-Hose',
               supplierColor: '20000-blau',
-              wgr: '218100',
+              wgr: '312400',
               securityRequired: true,
               securityLocation: 'Bund hinten',
+              securityTypeCode: 'spider-wrap',
               notes: 'Hochwertig – Diebstahlschutz',
               skus: [
-                { ean: '4068657050116', size: '48', quantity: 4 },
-                { ean: '4068657050123', size: '50', quantity: 4 },
+                { ean: '4068657050116', size: '48', quantity: 4, ekPrice: 32, vkPrice: 79.95 },
+                { ean: '4068657050123', size: '50', quantity: 4, ekPrice: 32, vkPrice: 79.95 },
               ],
             },
           ],
@@ -153,15 +159,18 @@ const gross: DemoScenario = {
           locationCode: 'R12',
           goodsType: 'regal',
           totalQuantity: 5,
+          goodsTypeText: 'Extrabestellung',
+          inboundCartonCount: 1,
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '410300-Jacke',
               supplierColor: '30000-oliv',
               wgr: '210300',
+              onlineRelevant: true,
               onlineHandlingRequired: true,
               onlineHandlingLocation: 'Online-Tisch B',
-              skus: [{ ean: '4068657050215', size: 'M', quantity: 5 }],
+              skus: [{ ean: '4068657050215', size: 'M', quantity: 5, ekPrice: 45, vkPrice: 109 }],
             },
           ],
         },
@@ -172,12 +181,14 @@ const gross: DemoScenario = {
           locationCode: 'A-7',
           goodsType: 'regal',
           totalQuantity: 9,
+          goodsTypeText: 'Vororder',
+          inboundCartonCount: 4,
           positions: [
             {
               positionNo: 1,
               supplierArticleNo: '410400-Pulli',
               supplierColor: '40000-grau',
-              wgr: '218200',
+              wgr: '218110',
               skus: [
                 { ean: '4068657050314', size: 'S', quantity: 3 },
                 { ean: '4068657050321', size: 'M', quantity: 3 },

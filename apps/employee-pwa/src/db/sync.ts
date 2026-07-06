@@ -5,15 +5,19 @@
  * the backend serves it via GET /api/me/today (bundle + route-ordered stops +
  * case summaries) and GET /api/me/cases/:id/aggregate (per-Beleg detail). This
  * module mirrors that into Dexie so the offline-first UI (useLiveQuery) works
- * unchanged: a bundle context, the consolidated collect-stop list, the assigned
- * Beleg list and a CaseProgress per case. It is idempotent and preserves any
- * in-progress CaseProgress / collect progress.
+ * unchanged: a bundle context, the consolidated pick list, the assigned Beleg
+ * list and a CaseProgress per case. It is idempotent and preserves any
+ * in-progress CaseProgress. It also carries the Parkposition (B4) back to the
+ * backend (POST /api/me/park).
  */
 import type { components } from '@paket/api-client';
 import type {
   GoodsReceiptCase,
+  LocationKind,
+  OnlineSizeMark,
   ReceiptPosition,
   ReceiptSkuLine,
+  StorageLocation,
   TransportBoxTarget,
   WorkInstructionHeader,
   WorkInstructionPoint,
@@ -21,6 +25,8 @@ import type {
 import {
   caseStatusSchema,
   goodsTypeTextSchema,
+  inspectionLevelCodeSchema,
+  locationKindSchema,
   priorityFlagSchema,
   receiptPositionSchema,
   receiptSkuLineSchema,
@@ -40,16 +46,17 @@ import {
 import { buildCollectStops } from './collectStops.js';
 import type { BelegListItem, BundleContext, CaseAggregate, GoodsCategory } from './types.js';
 import { initialProgress } from '../workflow/workflowModel.js';
+import { createEventDraft } from '../events/eventDraft.js';
+import { append } from '../events/eventLog.js';
 import { getApiClient } from '../data/api.js';
 import { getSession } from '../data/session.js';
+import { getWorkstation, setWorkstation } from '../data/workstation.js';
 
 type CaseSummaryDto = components['schemas']['CaseSummaryDto'];
 type CaseAggregateDto = components['schemas']['CaseAggregateDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
 type ReceiptPositionDto = components['schemas']['ReceiptPositionDto'];
 type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
-
-const DEFAULT_WORKSTATION = 'Tisch 1';
 
 /** Narrow a DTO's loosely-typed nullable field to a string when present. */
 function str(value: unknown): string | undefined {
@@ -100,8 +107,53 @@ function caseGoodsType(value: unknown): GoodsReceiptCase['goodsTypeText'] {
   return parsed.success ? parsed.data : undefined;
 }
 
+/** Parse the summary's Lagerplatz-Art (LocationKind), or undefined when absent. */
+function locationKind(value: unknown): LocationKind | undefined {
+  const parsed = locationKindSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** LocationKind → coarse StorageLocation.type (the domain case's location taxonomy). */
+function locationTypeFromKind(kind: LocationKind | undefined): StorageLocation['type'] {
+  switch (kind) {
+    case 'haengebahn':
+      return 'haengebahn';
+    case 'palette_a':
+    case 'palette_b':
+    case 'palette_c':
+    case 'palette_e':
+      return 'palette';
+    case 'lagerplatz_d':
+      return 'lagerplatz_d';
+    default:
+      return 'regal';
+  }
+}
+
+/**
+ * B6: derive the display GoodsCategory (icon) from the Lagerplatz-Art. The
+ * Bereich is FIXED by the Lagerklasse — no free-text, no hardcoded 'regal'.
+ */
+export function goodsCategoryFromKind(kind: LocationKind | undefined): GoodsCategory {
+  switch (kind) {
+    case 'haengebahn':
+      return 'haengeware';
+    case 'palette_a':
+    case 'palette_b':
+    case 'palette_c':
+    case 'palette_e':
+      return 'palette';
+    case 'regal':
+    case 'lagerplatz_d':
+      return 'regal';
+    default:
+      return 'mixed';
+  }
+}
+
 /** CaseSummaryDto + section→domain case (synthesising fields the DTO omits). */
 function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
+  const kind = locationKind(summary.storageLocationKind);
   return {
     id: summary.id,
     source: 'prohandel_api',
@@ -109,9 +161,14 @@ function toGoodsReceiptCase(summary: CaseSummaryDto): GoodsReceiptCase {
     weBelegNo: summary.weBelegNo,
     bookingDate: summary.bookingDate,
     branchNo: '1',
+    primaryShopNo: str(summary.primaryShopNo),
+    inboundCartonCount:
+      typeof summary.inboundCartonCount === 'number' && summary.inboundCartonCount > 0
+        ? summary.inboundCartonCount
+        : undefined,
     storageLocation: {
       id: `loc-${summary.storageLocationCode ?? 'unbekannt'}`,
-      type: 'regal',
+      type: locationTypeFromKind(kind),
       code: summary.storageLocationCode ?? 'unbekannt',
       barcode: summary.storageLocationCode ?? undefined,
       active: true,
@@ -133,11 +190,14 @@ function toWorkInstruction(
   caseId: string,
   wi: WorkInstructionHeaderDto | null | undefined,
 ): WorkInstructionHeader {
+  const level = inspectionLevelCodeSchema.safeParse(wi?.inspectionLevelCode);
   return {
     caseId,
     priceLabelPrintRequired: wi?.priceLabelPrintRequired ?? false,
     sortByArticleColorSizeRequired: wi?.sortByArticleColorSizeRequired ?? false,
     goodsReceiptCheckMode: checkMode(wi?.goodsReceiptCheckMode ?? 'quantity_only'),
+    goodsReceiptCheckPercentage: wi?.goodsReceiptCheckPercentage ?? undefined,
+    inspectionLevelCode: level.success ? level.data : undefined,
     // §G.1 guardrail: a minimum quantity control is always required.
     minimumQuantityCheckAlwaysRequired: true,
     boxLabelRequired: wi?.boxLabelRequired ?? true,
@@ -169,6 +229,7 @@ function toInstruction(
     priceLabelAttachLocation: dto.priceLabelAttachLocation ?? undefined,
     securityRequired: dto.securityRequired,
     securityLocation: dto.securityLocation ?? undefined,
+    securityTypeCode: dto.securityTypeCode ?? undefined,
     onlineHandlingRequired: dto.onlineHandlingRequired,
     onlineHandlingLocation: dto.onlineHandlingLocation ?? undefined,
     redPriceRequired: dto.redPriceRequired ?? undefined,
@@ -178,8 +239,9 @@ function toInstruction(
 
 /**
  * Build domain positions from the DTO, mapping the real per-position
- * Arbeitsanweisung instruction + SKU lines (EAN/size/Soll/Ist) it now carries.
- * Multiple positions and multiple SKU lines per position are handled dynamically.
+ * Arbeitsanweisung instruction + SKU lines (EAN/Größe/EK/VK/Soll/Ist) it
+ * carries. Multiple positions and multiple SKU lines per position are handled
+ * dynamically.
  */
 function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPosition[] {
   return dtos.map((dto) => ({
@@ -191,6 +253,7 @@ function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPositio
     supplierColor: dto.supplierColor,
     season: str(dto.season),
     nosFlag: dto.nosFlag ?? undefined,
+    catMan: dto.catMan ?? undefined,
     branchNo: dto.branchNo,
     shopNo: dto.shopNo,
     floor: str(dto.floor),
@@ -202,10 +265,24 @@ function toPositions(caseId: string, dtos: ReceiptPositionDto[]): ReceiptPositio
       size: s.size,
       expectedQuantity: s.expectedQuantity,
       confirmedQuantity: s.confirmedQuantity ?? undefined,
+      ekPrice: s.ekPrice ?? undefined,
+      vkPrice: s.vkPrice ?? undefined,
+      vkLabelPrice: s.vkLabelPrice ?? undefined,
       status: skuStatus(s.status),
     })),
     status: positionStatus(dto.status),
   }));
+}
+
+/** A8: collect the backend-computed Rot/Grün marks per skuLine id. */
+function toOnlineMarks(dtos: ReceiptPositionDto[]): Record<string, OnlineSizeMark> {
+  const marks: Record<string, OnlineSizeMark> = {};
+  for (const dto of dtos) {
+    for (const s of dto.skuLines) {
+      if (s.onlineMark === 'green' || s.onlineMark === 'red') marks[s.id] = s.onlineMark;
+    }
+  }
+  return marks;
 }
 
 /** Validate the derived Arbeitsanweisung points from the DTO, dropping any bad row. */
@@ -242,14 +319,6 @@ function toBoxTargets(caseId: string, dtos: TransportBoxTargetDto[]): TransportB
   }));
 }
 
-/** Coarse storage category (the DTO does not expose the location kind). */
-function goodsCategory(value: unknown): GoodsCategory {
-  if (value === 'palette' || value === 'haengeware' || value === 'mixed' || value === 'regal') {
-    return value;
-  }
-  return 'regal';
-}
-
 const BEREICH_LABEL: Record<GoodsCategory, string> = {
   regal: 'Regal',
   palette: 'Palette',
@@ -268,15 +337,17 @@ function deriveBereich(belege: readonly BelegListItem[]): string | null {
   return 'Gemischt';
 }
 
-/** Map the assigned case summaries onto the PROCESS Beleg list, in bundle order. */
+/** Map the assigned case summaries onto the Bearbeiten list, in bundle order. */
 function toBelegList(cases: CaseSummaryDto[]): BelegListItem[] {
   return cases.map((c, index) => ({
     caseId: c.id,
     weBelegNo: c.weBelegNo,
     order: index,
     storageLocationCode: c.storageLocationCode ?? 'unbekannt',
-    goodsType: goodsCategory(c.goodsType),
+    goodsType: goodsCategoryFromKind(locationKind(c.storageLocationKind)),
     totalQuantity: c.totalQuantity,
+    goodsTypeText: caseGoodsType(c.goodsType),
+    priceLabelPrintRequired: c.priceLabelPrintRequired === true,
   }));
 }
 
@@ -289,6 +360,9 @@ function toCaseAggregate(dto: CaseAggregateDto): CaseAggregate {
     positions: toPositions(caseId, dto.positions),
     boxTargets: toBoxTargets(caseId, dto.boxTargets),
     instructionPoints: toInstructionPoints(dto.instructionPoints ?? []),
+    onlineMarks: toOnlineMarks(dto.positions),
+    inspectionLevelLabel: str(dto.workInstruction?.inspectionLevelLabel),
+    inspectionDescription: str(dto.workInstruction?.inspectionDescription),
   };
 }
 
@@ -310,6 +384,12 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
     throw new Error('Tagesdaten konnten nicht geladen werden');
   }
 
+  // A2: the backend knows the claimed Tisch — mirror it into the local claim so
+  // 'Arbeitsplatz: Tisch X' reflects reality after a device change.
+  if (today.workstation) {
+    setWorkstation({ code: today.workstation.code, name: today.workstation.name });
+  }
+
   // Idempotent reset of the cached bundle scope (case progress is preserved).
   await db.bundle.clear();
   await db.collectStops.clear();
@@ -321,7 +401,6 @@ export async function loadAssignedWork(db: PaketDb = defaultDb): Promise<LoadRes
     id: 'today',
     bundleId: today.bundle?.bundleId ?? 'offline',
     employeeName: session.displayName,
-    workstation: DEFAULT_WORKSTATION,
     date: today.date,
     plannedEffortMinutes: today.bundle?.plannedEffortMinutes ?? 0,
     bereich: deriveBereich(belege),
@@ -378,4 +457,61 @@ export async function pullNextBundle(db: PaketDb = defaultDb): Promise<PullResul
   if (error || !data) return { assigned: false, reason: 'error' };
   if (data.assigned) await loadAssignedWork(db);
   return { assigned: data.assigned, reason: data.reason };
+}
+
+export interface ParkResult {
+  parkedCount: number;
+}
+
+/**
+ * B4 Parkposition („Rest parken"): the cart is full — the given unstarted Belege
+ * go back to the pool and re-enter the next Bündel. Backend mode POSTs
+ * /api/me/park and re-mirrors the shrunk bundle; offline the Belege are removed
+ * locally so the demo behaves identically. Each parked Beleg is logged as
+ * `case.parked_by_employee` (drives the „geparkt" indicator).
+ */
+export async function parkRemainingBelege(
+  caseIds: string[],
+  db: PaketDb = defaultDb,
+  backend = true,
+): Promise<ParkResult> {
+  if (caseIds.length === 0) return { parkedCount: 0 };
+  if (backend) {
+    const { error } = await getApiClient().POST('/api/me/park', { body: { caseIds } });
+    if (error) {
+      throw new Error('Parken fehlgeschlagen – bitte erneut versuchen');
+    }
+  }
+
+  // Local mirror: drop the parked Belege from the cached bundle scope.
+  const parked = new Set(caseIds);
+  const bundle = await db.bundle.get('today');
+  if (bundle) {
+    await db.bundle.put({ ...bundle, caseIds: bundle.caseIds.filter((id) => !parked.has(id)) });
+  }
+  await db.belege.bulkDelete(caseIds);
+  await db.aggregates.bulkDelete(caseIds);
+  await db.progress.bulkDelete(caseIds);
+  const stops = await db.collectStops.toArray();
+  for (const stop of stops) {
+    const remaining = stop.caseIds.filter((id) => !parked.has(id));
+    if (remaining.length === 0) {
+      await db.collectStops.delete(stop.sequence);
+    } else if (remaining.length !== stop.caseIds.length) {
+      await db.collectStops.put({ ...stop, caseIds: remaining });
+    }
+  }
+
+  for (const caseId of caseIds) {
+    await append(
+      createEventDraft({
+        eventType: 'case.parked_by_employee',
+        entityType: 'case',
+        entityId: caseId,
+        payload: { reason: 'cart_full' },
+      }),
+      db,
+    );
+  }
+  return { parkedCount: caseIds.length };
 }
