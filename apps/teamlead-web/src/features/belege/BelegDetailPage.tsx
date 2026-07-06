@@ -5,7 +5,7 @@
  * through the store's audited (§8.4) endpoints and invalidate this view + the
  * cockpit on success.
  */
-import { useState, type JSX, type ReactNode } from 'react';
+import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DeliveryGroupPanel } from './DeliveryGroupPanel';
@@ -43,6 +43,9 @@ import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
+import { fetchEmployees } from '../../data/employees.js';
+import { useSplits } from '../split/SplitProvider.js';
+import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
@@ -86,10 +89,25 @@ export function BelegDetailPage(): JSX.Element {
   // C4 deep-link: /belege/:id?tab=problem opens the Problem tab directly.
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => initialTab(searchParams.get('tab')));
-  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit: shared CaseActionMenu custom actions.
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
   const [assignOpen, setAssignOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitDone, setSplitDone] = useState<string | null>(null);
+  const { recordSplit } = useSplits();
+  const employeesQuery = useQuery({
+    queryKey: ['admin', 'employees', 'split'],
+    queryFn: () => fetchEmployees(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const splitEmployees = useMemo<SplitDialogEmployee[]>(
+    () =>
+      (employeesQuery.data?.employees ?? [])
+        .filter((e) => e.active && e.netCapacityToday > 0)
+        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+    [employeesQuery.data],
+  );
 
   const query = useQuery<BelegDetail, Error>({
     queryKey: ['beleg', caseId],
@@ -206,9 +224,24 @@ export function BelegDetailPage(): JSX.Element {
             onAssign={() => setAssignOpen(true)}
             onForward={() => setForwardOpen(true)}
             onAttention={() => setAttentionOpen(true)}
+            onSplit={() => setSplitOpen(true)}
           />
         </Stack>
       </Stack>
+
+      {splitDone && (
+        <Alert
+          severity="success"
+          onClose={() => setSplitDone(null)}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
+              Zur Leistung
+            </Button>
+          }
+        >
+          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        </Alert>
+      )}
 
       {/* C4: an open problem is surfaced on EVERY tab, with a jump to the Problem tab. */}
       {c.hasOpenIssue && openIssue && (
@@ -349,6 +382,23 @@ export function BelegDetailPage(): JSX.Element {
         weBelegNo={c.weBelegNo}
         onConfirm={(note) => flagAttention(c.id, note)}
         onClose={() => setAttentionOpen(false)}
+      />
+
+      <SplitDialog
+        open={splitOpen}
+        beleg={{
+          caseId: c.id,
+          weBelegNo: c.weBelegNo,
+          totalQuantity: c.totalQuantity,
+          effortPoints: c.effortPoints,
+          estimatedMinutes: c.estimatedMinutes,
+        }}
+        employees={splitEmployees}
+        onConfirm={(input) => {
+          recordSplit(input);
+          setSplitDone(input.weBelegNo);
+        }}
+        onClose={() => setSplitOpen(false)}
       />
     </Stack>
   );
