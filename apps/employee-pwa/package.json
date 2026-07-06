@@ -21,14 +21,15 @@
     "@mui/material": "^6.4.0",
     "@paket/api-client": "workspace:*",
     "@paket/domain-types": "workspace:*",
+    "@paket/test-fixtures": "workspace:*",
     "@paket/ui": "workspace:*",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
+    "jose": "^5.10.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.3",
-    "workbox-window": "^7.3.0",
-    "@paket/test-fixtures": "workspace:*"
+    "workbox-window": "^7.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

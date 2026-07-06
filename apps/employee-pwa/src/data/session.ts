@@ -1,43 +1,40 @@
 /**
- * Current employee session, derived from the dev bearer token.
+ * Persisted employee session (real login, see `data/auth.ts`).
  *
- * The token is a standard JWT; we decode (not verify — the backend verifies the
- * RS256 signature) the payload to read `employee_no` and `name`. Falls back to
- * the pilot employee 'ma-101' when no token is present (offline-demo).
+ * The token is a bearer JWT minted by `POST /api/auth/login`. We store the
+ * decoded claims we need (`employeeNo`, `displayName`, `exp`) alongside the raw
+ * token so the rest of the app never has to re-decode the JWT to render the
+ * signed-in identity. The token itself is only ever attached as an
+ * Authorization header (see `data/api.ts`) — never logged.
  */
-import { devToken } from './api.js';
+const STORAGE_KEY = 'paket.session';
 
 export interface Session {
+  token: string;
   employeeNo: string;
   displayName: string;
+  /** JWT `exp` claim (seconds since epoch). */
+  exp: number;
 }
 
-const FALLBACK: Session = { employeeNo: 'ma-101', displayName: 'Mitarbeiter 101' };
-
-/** Base64url-decode a JWT segment to a JSON object, or undefined on failure. */
-function decodeJwtPayload(token: string): Record<string, unknown> | undefined {
-  const segment = token.split('.')[1];
-  if (!segment) return undefined;
+export function getSession(): Session | null {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
   try {
-    const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(base64);
-    return JSON.parse(json) as Record<string, unknown>;
+    return JSON.parse(raw) as Session;
   } catch {
-    return undefined;
+    return null;
   }
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+export function setSession(session: Session): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
-/** The current employee derived from the dev token, or the pilot fallback. */
-export function getSession(): Session {
-  if (!devToken) return FALLBACK;
-  const claims = decodeJwtPayload(devToken);
-  if (!claims) return FALLBACK;
-  const employeeNo = asString(claims.employee_no) ?? asString(claims.preferred_username);
-  if (!employeeNo) return FALLBACK;
-  const displayName = asString(claims.name) ?? employeeNo;
-  return { employeeNo, displayName };
+export function clearSession(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+export function isSessionExpired(session: Session): boolean {
+  return session.exp * 1000 <= Date.now();
 }
