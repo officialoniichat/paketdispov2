@@ -84,4 +84,9 @@ export const CurrentUser = createParamDecorator(
 export interface AuthenticatedRequest {
   principal?: Principal;
   headers: Record<string, string | string[] | undefined>;
+  /** Raw request path + query string (Fastify). Used only for the SSE
+   *  query-token fallback in {@link JwtAuthGuard} — see guards.ts. */
+  url?: string;
+  /** Parsed query string (Fastify auto-parses this). */
+  query?: Record<string, unknown>;
 }

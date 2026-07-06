@@ -17,12 +17,51 @@ import {
   type Principal,
 } from './rbac.js';
 
-function bearerToken(req: AuthenticatedRequest): string | undefined {
+/** Routes whose transport (browser `EventSource`) cannot set a custom
+ *  `Authorization` header, so a `?token=` query param is accepted as a
+ *  fallback (see {@link bearerToken}). Keep this list narrow — do not widen
+ *  query-param auth to routes that can use a normal header. */
+const SSE_QUERY_TOKEN_ROUTES = ['/api/me/stream', '/api/teamlead/stream'];
+
+function isSseQueryTokenRoute(req: AuthenticatedRequest): boolean {
+  const path = req.url?.split('?')[0];
+  return path !== undefined && SSE_QUERY_TOKEN_ROUTES.includes(path);
+}
+
+function hasAuthorizationHeader(req: AuthenticatedRequest): boolean {
+  const header = req.headers['authorization'] ?? req.headers['Authorization'];
+  return Array.isArray(header) ? header.length > 0 : Boolean(header);
+}
+
+function headerBearerToken(req: AuthenticatedRequest): string | undefined {
   const header = req.headers['authorization'] ?? req.headers['Authorization'];
   const value = Array.isArray(header) ? header[0] : header;
   if (!value) return undefined;
   const [scheme, token] = value.split(' ');
   return scheme?.toLowerCase() === 'bearer' && token ? token : undefined;
+}
+
+function queryBearerToken(req: AuthenticatedRequest): string | undefined {
+  const value = req.query?.['token'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Resolves the bearer token for a request. The `Authorization` header always
+ * takes priority: if it is present at all (even malformed), it is used
+ * exclusively and a query-param token is never consulted, so a query token
+ * can never silently override or backstop a bad header. Only when no
+ * `Authorization` header is present at all do SSE routes (which cannot use
+ * `EventSource` custom headers) fall back to a `?token=` query param.
+ */
+function bearerToken(req: AuthenticatedRequest): string | undefined {
+  if (hasAuthorizationHeader(req)) {
+    return headerBearerToken(req);
+  }
+  if (isSseQueryTokenRoute(req)) {
+    return queryBearerToken(req);
+  }
+  return undefined;
 }
 
 /**
