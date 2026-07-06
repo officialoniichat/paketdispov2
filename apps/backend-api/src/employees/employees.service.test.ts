@@ -1,21 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PrismaService } from '../prisma/prisma.service.js';
+import type { EventLogService } from '../events/event-log.service.js';
+import type { Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
 
-const PRINCIPAL = { sub: 'user-teamlead-1' } as any;
+const PRINCIPAL = { sub: 'user-teamlead-1' } as unknown as Principal;
 
-function buildPrismaStub(existingUser: unknown = { id: 'user-abc123', employeeNo: 'ma-101' }) {
+function buildPrismaStub(
+  existingUser: unknown = { id: 'user-abc123', employeeNo: 'ma-101' },
+): PrismaService {
   return {
     user: {
       findUnique: vi.fn().mockResolvedValue(existingUser),
       update: vi.fn().mockResolvedValue({}),
     },
-  } as any;
+  } as unknown as PrismaService;
 }
 
-function buildEventsStub() {
+function buildEventsStub(): EventLogService {
   return {
     append: vi.fn().mockResolvedValue({}),
-  } as any;
+  } as unknown as EventLogService;
 }
 
 describe('EmployeesService.resetPin', () => {

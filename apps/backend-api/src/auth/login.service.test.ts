@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PrismaService } from '../prisma/prisma.service.js';
 import { LoginService } from './login.service.js';
 import { TokenIssuer } from './token-issuer.js';
 import { hashPin } from './pin.js';
@@ -12,8 +13,8 @@ function buildPrismaStub(
     active: boolean;
     roles: { role: { name: string } }[];
   } | null,
-) {
-  return { user: { findUnique: vi.fn().mockResolvedValue(user) } } as any;
+): PrismaService {
+  return { user: { findUnique: vi.fn().mockResolvedValue(user) } } as unknown as PrismaService;
 }
 
 describe('LoginService', () => {
