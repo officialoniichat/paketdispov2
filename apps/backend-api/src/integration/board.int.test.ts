@@ -72,7 +72,10 @@ async function seed(): Promise<void> {
       data: {
         source: 'manual',
         externalRef: 'board-set-1',
-        weBelegNo: `WE-BOARD-${i}`,
+        // Non-consecutive numbers (gap 100 > maxWeBelegGap): six INDEPENDENT Belege —
+        // a consecutive run would form a T3 "suspected" Liefergruppe and be withheld
+        // from auto-distribution (Pool-Hold D2), leaving the board empty.
+        weBelegNo: `WE-BOARD-${i * 100}`,
         bookingDate: asDate(DATE),
         branchNo: '1',
         storageLocationId: loc.id,
@@ -154,7 +157,7 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
 
     // All six pool Belege ended up on the board's assigned rows.
     const placed = assigned.flatMap((r) => r.cases.map((c) => c.weBelegNo)).sort();
-    expect(placed).toEqual(['WE-BOARD-0', 'WE-BOARD-1', 'WE-BOARD-2', 'WE-BOARD-3', 'WE-BOARD-4', 'WE-BOARD-5']);
+    expect(placed).toEqual(['WE-BOARD-0', 'WE-BOARD-100', 'WE-BOARD-200', 'WE-BOARD-300', 'WE-BOARD-400', 'WE-BOARD-500']);
 
     // freeCapacityMinutes = Σ capacity − Σ planned (across ALL rows, idle included)
     const totalCap = board.rows.reduce((s, r) => s + r.capacityMinutes, 0);

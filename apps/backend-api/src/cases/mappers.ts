@@ -33,6 +33,7 @@ export function mapDeliveryGroupRef(group: DeliveryGroup): DeliveryGroupRefDto {
     expectedSize: group.expectedSize ?? null,
     missingCount,
     locked: group.locked,
+    released: group.released,
   };
 }
 

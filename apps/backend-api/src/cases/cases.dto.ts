@@ -130,6 +130,10 @@ export class DeliveryGroupRefDto {
   @ApiProperty({ description: 'Missing = max(0, expectedSize − presentSize); 0 if unknown' })
   missingCount!: number;
   @ApiProperty({ description: 'Teamlead-locked (frozen against re-detection)' }) locked!: boolean;
+  @ApiProperty({
+    description: 'D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben',
+  })
+  released!: boolean;
 }
 
 /** One sibling Beleg of a delivery group, with who currently holds it (Detail panel). */

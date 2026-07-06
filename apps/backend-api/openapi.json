@@ -3336,6 +3336,10 @@
           "locked": {
             "type": "boolean",
             "description": "Teamlead-locked (frozen against re-detection)"
+          },
+          "released": {
+            "type": "boolean",
+            "description": "D2 „trotzdem bearbeiten\": TL hat die unvollständige Lieferung freigegeben"
           }
         },
         "required": [
@@ -3344,7 +3348,8 @@
           "confidence",
           "presentSize",
           "missingCount",
-          "locked"
+          "locked",
+          "released"
         ]
       },
       "BoardCaseDto": {
@@ -4198,6 +4203,10 @@
             "type": "boolean",
             "description": "Teamlead-locked (frozen against re-detection)"
           },
+          "released": {
+            "type": "boolean",
+            "description": "D2 „trotzdem bearbeiten\": TL hat die unvollständige Lieferung freigegeben"
+          },
           "members": {
             "description": "All siblings, by weBelegNo",
             "type": "array",
@@ -4213,6 +4222,7 @@
           "presentSize",
           "missingCount",
           "locked",
+          "released",
           "members"
         ]
       },

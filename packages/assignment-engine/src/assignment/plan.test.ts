@@ -105,6 +105,36 @@ describe('assignWork (§8.3 end-to-end)', () => {
     ]);
   });
 
+  it('withholds an incomplete Liefergruppe but assigns it after TL release (D2)', () => {
+    // "2 von 3 da": incomplete source group is pool-held (delivery_unconfirmed) …
+    const held = (released: boolean) =>
+      baseInput({
+        cases: [
+          makeCase({
+            id: 'g1',
+            deliverySourceGroupKey: 'LS-77',
+            deliverySourceGroupSize: 3,
+            deliveryGroupReleased: released,
+          }),
+          makeCase({
+            id: 'g2',
+            deliverySourceGroupKey: 'LS-77',
+            deliverySourceGroupSize: 3,
+            deliveryGroupReleased: released,
+          }),
+        ],
+      });
+    const heldPlan = assignWork(held(false), undefined, { now: NOW });
+    expect(heldPlan.bundles).toHaveLength(0);
+    expect(heldPlan.unassigned.map((u) => u.reason)).toEqual([
+      'delivery_unconfirmed',
+      'delivery_unconfirmed',
+    ]);
+    // … and „trotzdem bearbeiten" (deliveryGroupReleased) lifts the hold.
+    const releasedPlan = assignWork(held(true), undefined, { now: NOW });
+    expect(releasedPlan.bundles.flatMap((b) => b.caseIds).sort()).toEqual(['g1', 'g2']);
+  });
+
   it('forms starter packages from previous-day cases', () => {
     const input = baseInput({
       cases: [makeCase({ id: 'old', bookingDate: '2026-06-12' }), makeCase({ id: 'today1' })],

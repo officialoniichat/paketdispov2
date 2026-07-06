@@ -208,6 +208,7 @@ export class TeamleadReadService {
         deliverySourceGroupKey: true,
         deliverySourceGroupSize: true,
         manualDeliveryGroupKey: true,
+        deliveryGroupReleased: true,
         bookingDate: true,
         section: true,
       },
@@ -222,6 +223,7 @@ export class TeamleadReadService {
         manualDeliveryGroupKey: c.manualDeliveryGroupKey,
         bookingDate: c.bookingDate.toISOString().slice(0, 10),
         section: c.section,
+        deliveryGroupReleased: c.deliveryGroupReleased,
       })),
       ruleConfig.grouping,
     );
@@ -443,6 +445,7 @@ export class TeamleadReadService {
                   deliverySourceGroupKey: true,
                   deliverySourceGroupSize: true,
                   manualDeliveryGroupKey: true,
+                  deliveryGroupReleased: true,
                   bookingDate: true,
                   section: true,
                   status: true,
@@ -514,6 +517,7 @@ export class TeamleadReadService {
       manualDeliveryGroupKey: string | null;
       bookingDate: string;
       section: number | null;
+      deliveryGroupReleased: boolean;
     }[] = [];
 
     const rowByEmployee = new Map<string, BoardRowDto>();
@@ -582,6 +586,7 @@ export class TeamleadReadService {
           manualDeliveryGroupKey: it.case.manualDeliveryGroupKey,
           bookingDate: it.case.bookingDate.toISOString().slice(0, 10),
           section: it.case.section,
+          deliveryGroupReleased: it.case.deliveryGroupReleased,
         });
       }
       for (const rs of b.routeStops) {
@@ -830,6 +835,7 @@ export class TeamleadReadService {
         deliverySourceGroupKey: true,
         deliverySourceGroupSize: true,
         manualDeliveryGroupKey: true,
+        deliveryGroupReleased: true,
         bookingDate: true,
         section: true,
         status: true,
@@ -847,6 +853,7 @@ export class TeamleadReadService {
         manualDeliveryGroupKey: c.manualDeliveryGroupKey,
         bookingDate: c.bookingDate.toISOString().slice(0, 10),
         section: c.section,
+        deliveryGroupReleased: c.deliveryGroupReleased,
       })),
       grouping,
     );

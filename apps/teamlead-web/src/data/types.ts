@@ -105,6 +105,8 @@ export interface DeliveryGroupRef {
   expectedSize?: number | null;
   missingCount: number;
   locked: boolean;
+  /** D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben. */
+  released: boolean;
 }
 
 /** One case in an employee's bundle, in pickup order (§10.3 board detail). */
@@ -133,8 +135,6 @@ export interface BoardRow {
   assignedMinutes: number;
   netCapacityMinutes: number;
   effortPoints: number;
-  heavyCaseCount: number;
-  lightCaseCount: number;
   openIssues: number;
   currentCaseIndex?: number;
   bundleSize?: number;

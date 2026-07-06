@@ -328,6 +328,14 @@ export async function splitDeliveryGroup(caseIds: string[]): Promise<void> {
   unwrap(result, 'split delivery group');
 }
 
+/** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben). */
+export async function releaseDeliveryGroup(caseIds: string[]): Promise<void> {
+  const result = await api.POST('/api/teamlead/delivery-groups/release', {
+    body: { caseIds },
+  });
+  unwrap(result, 'release delivery group');
+}
+
 /**
  * §10.4 Beleg list — server-driven (A2): scope, per-column filters, sort and
  * pagination all run in the backend; the client renders exactly one page.
@@ -406,6 +414,7 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
           expectedSize: dto.deliveryGroup.expectedSize ?? null,
           missingCount: dto.deliveryGroup.missingCount,
           locked: dto.deliveryGroup.locked,
+          released: dto.deliveryGroup.released,
         }
       : null,
   };
@@ -510,6 +519,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
           expectedSize: item.deliveryGroup.expectedSize ?? null,
           missingCount: item.deliveryGroup.missingCount,
           locked: item.deliveryGroup.locked,
+          released: item.deliveryGroup.released,
         }
       : null,
     bundleQueue: item.bundleQueue
@@ -572,6 +582,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
           expectedSize: dto.deliveryGroup.expectedSize ?? null,
           missingCount: dto.deliveryGroup.missingCount,
           locked: dto.deliveryGroup.locked,
+          released: dto.deliveryGroup.released,
           members: dto.deliveryGroup.members.map((m) => ({
             caseId: m.caseId,
             weBelegNo: m.weBelegNo,

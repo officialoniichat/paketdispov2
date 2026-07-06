@@ -160,6 +160,7 @@ export function assignWork(
       manualDeliveryGroupKey: e.case.manualDeliveryGroupKey,
       bookingDate: e.case.bookingDate,
       section: e.case.section,
+      deliveryGroupReleased: e.case.deliveryGroupReleased,
     })),
     config.grouping,
   );

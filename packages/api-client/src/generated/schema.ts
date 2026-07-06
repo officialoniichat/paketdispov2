@@ -1236,6 +1236,8 @@ export interface components {
             missingCount: number;
             /** @description Teamlead-locked (frozen against re-detection) */
             locked: boolean;
+            /** @description D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben */
+            released: boolean;
         };
         BoardCaseDto: {
             id: string;
@@ -1502,6 +1504,8 @@ export interface components {
             missingCount: number;
             /** @description Teamlead-locked (frozen against re-detection) */
             locked: boolean;
+            /** @description D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben */
+            released: boolean;
             /** @description All siblings, by weBelegNo */
             members: components["schemas"]["DeliveryGroupMemberDto"][];
         };

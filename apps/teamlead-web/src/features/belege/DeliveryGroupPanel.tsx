@@ -12,6 +12,7 @@ import { CaseStatusChip } from '@paket/ui';
 import { LieferungChip } from '../../components/LieferungChip';
 import {
   mergeDeliveryGroup,
+  releaseDeliveryGroup,
   splitDeliveryGroup,
   type DeliveryGroupDetail,
 } from '../../data/belege';
@@ -52,7 +53,12 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
     onSuccess: invalidate,
     onError,
   });
-  const busy = confirm.isPending || split.isPending || remove.isPending;
+  const release = useMutation({
+    mutationFn: () => releaseDeliveryGroup(group.members.map((m) => m.caseId)),
+    onSuccess: invalidate,
+    onError,
+  });
+  const busy = confirm.isPending || split.isPending || remove.isPending || release.isPending;
 
   const missing = group.missingCount;
 
@@ -66,10 +72,16 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
         {group.locked && <LockIcon fontSize="small" color="action" />}
       </Stack>
 
-      {missing > 0 && (
+      {missing > 0 && !group.released && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 1.5 }}>
           {group.presentSize} von {group.expectedSize} Belegen da — {missing} noch nicht gebucht.
-          Lieferung erst vollständig bearbeiten.
+          Die Belege warten im Pool, bis die Lieferung vollständig ist (oder du sie freigibst).
+        </Alert>
+      )}
+      {group.released && (
+        <Alert severity="info" variant="outlined" sx={{ mb: 1.5 }}>
+          Trotz {missing > 0 ? `${missing} fehlender Belege ` : ''}freigegeben — die Lieferung
+          wird verteilt, Nachzügler laufen normal ein.
         </Alert>
       )}
 
@@ -121,6 +133,17 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
         {!group.locked && group.confidence === 'suspected' && (
           <Button variant="contained" size="small" disabled={busy} onClick={() => confirm.mutate()}>
             Lieferung bestätigen
+          </Button>
+        )}
+        {missing > 0 && !group.released && (
+          <Button
+            variant="contained"
+            color="warning"
+            size="small"
+            disabled={busy}
+            onClick={() => release.mutate()}
+          >
+            Trotzdem bearbeiten
           </Button>
         )}
         <Button variant="outlined" size="small" color="warning" disabled={busy} onClick={() => split.mutate()}>

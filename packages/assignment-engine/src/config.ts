@@ -94,7 +94,7 @@ export const DEFAULT_PRIORITY_CONFIG: PriorityConfig = {
  *
  * The pure-engine DEFAULT is 0 (= no cutoff, no wall-clock dependence) so the
  * deterministic engine test suite stays time-independent. The APPLICATION layer
- * (backend recalculate) enables it from `RuleConfig.shiftEnd` (default 120) and feeds
+ * (backend recalculate) enables it from `RuleConfig.shiftEnd` (default 50) and feeds
  * a real `now`. See docs/concept/shift-end-handling-concept.md.
  */
 export const shiftEndConfigSchema = z.object({
