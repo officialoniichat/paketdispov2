@@ -155,6 +155,78 @@
         ]
       }
     },
+    "/api/me/workstation": {
+      "post": {
+        "operationId": "MeController_claimWorkstation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimWorkstationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeWorkstationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/park": {
+      "post": {
+        "operationId": "MeController_parkRemaining",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParkRemainingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParkRemainingResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/cases/{caseId}/start-preparation": {
       "post": {
         "operationId": "CasesController_startPreparation",
@@ -2155,6 +2227,16 @@
             "nullable": true,
             "description": "null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)"
           },
+          "storageLocationKind": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons"
+          },
+          "priceLabelPrintRequired": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen"
+          },
           "primaryShopNo": {
             "type": "string",
             "nullable": true,
@@ -2198,6 +2280,26 @@
           "bookingDate"
         ]
       },
+      "MeWorkstationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Tisch-Nr./Barcode, z. B. \"T-04\""
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name"
+        ]
+      },
       "TodayResponseDto": {
         "type": "object",
         "properties": {
@@ -2219,6 +2321,16 @@
             "items": {
               "$ref": "#/components/schemas/CaseSummaryDto"
             }
+          },
+          "workstation": {
+            "nullable": true,
+            "description": "Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MeWorkstationDto"
+              }
+            ]
           }
         },
         "required": [
@@ -2362,6 +2474,15 @@
           "status": {
             "type": "string",
             "description": "SkuLineStatus: open|confirmed|deviation"
+          },
+          "onlineMark": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "green",
+              "red"
+            ],
+            "description": "Online-Größen-Markierung (A8): green = Onlineartikel-Highlight (bevorzugte/Ausweich-Größe), red = Onlineartikel; null für nicht online-relevante Positionen"
           }
         },
         "required": [
@@ -2612,6 +2733,63 @@
         },
         "required": [
           "assigned"
+        ]
+      },
+      "ClaimWorkstationDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Workstation-Code (Tisch-Nr. oder gescannter Barcode)"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "ParkRemainingDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Zu parkende Belege (müssen assigned + im eigenen Bündel sein)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "caseIds"
+        ]
+      },
+      "ParkRemainingResultDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "parkedCaseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remainingCaseIds": {
+            "description": "Verbleibende Belege des Bündels (in Reihenfolge)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bundleId",
+          "parkedCaseIds",
+          "remainingCaseIds",
+          "plannedEffortMinutes"
         ]
       },
       "TransitionResultDto": {
@@ -3070,6 +3248,16 @@
             "type": "string",
             "nullable": true,
             "description": "null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)"
+          },
+          "storageLocationKind": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons"
+          },
+          "priceLabelPrintRequired": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen"
           },
           "primaryShopNo": {
             "type": "string",

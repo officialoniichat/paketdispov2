@@ -124,8 +124,8 @@ export interface SkuLineRow {
   status: string;
 }
 
-/** Project a SKU-line row onto its response DTO. */
-export function mapSkuLine(s: SkuLineRow): SkuLineDto {
+/** Project a SKU-line row onto its response DTO (A8: optional Online-Größen-Markierung). */
+export function mapSkuLine(s: SkuLineRow, onlineMark: 'green' | 'red' | null = null): SkuLineDto {
   return {
     id: s.id,
     ean: s.ean,
@@ -136,6 +136,7 @@ export function mapSkuLine(s: SkuLineRow): SkuLineDto {
     vkPrice: s.vkPrice,
     vkLabelPrice: s.vkLabelPrice,
     status: s.status,
+    onlineMark,
   };
 }
 

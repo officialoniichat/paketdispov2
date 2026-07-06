@@ -1,10 +1,18 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { NextBundleResultDto } from '../assignment/assignment.dto.js';
 import { CasesService } from './cases.service.js';
-import { CaseAggregateDto, CurrentBundleDto, TodayResponseDto } from './cases.dto.js';
+import {
+  CaseAggregateDto,
+  ClaimWorkstationDto,
+  CurrentBundleDto,
+  MeWorkstationDto,
+  ParkRemainingDto,
+  ParkRemainingResultDto,
+  TodayResponseDto,
+} from './cases.dto.js';
 
 /** Employee self-service (§14.2). Always scoped to the caller's own data (§16.1). */
 @ApiTags('me')
@@ -48,5 +56,28 @@ export class MeController {
   @ApiOkResponse({ type: NextBundleResultDto })
   nextBundle(@CurrentUser() principal: Principal): Promise<NextBundleResultDto> {
     return this.assignment.assignNextBundle(principal);
+  }
+
+  /** A2 Tisch-Anmeldung: eigenen Arbeitsplatz per Tisch-Nr. oder Barcode claimen. */
+  @Post('workstation')
+  @ApiOkResponse({ type: MeWorkstationDto })
+  claimWorkstation(
+    @CurrentUser() principal: Principal,
+    @Body() dto: ClaimWorkstationDto,
+  ): Promise<MeWorkstationDto> {
+    return this.cases.claimWorkstation(principal, dto);
+  }
+
+  /**
+   * B4 Parkposition („Rest parken"): restliche, unbegonnene Belege des eigenen
+   * Bündels zurück in den Pool — sie werden ins nächste Bündel eingeplant.
+   */
+  @Post('park')
+  @ApiOkResponse({ type: ParkRemainingResultDto })
+  parkRemaining(
+    @CurrentUser() principal: Principal,
+    @Body() dto: ParkRemainingDto,
+  ): Promise<ParkRemainingResultDto> {
+    return this.cases.parkRemaining(principal, dto);
   }
 }

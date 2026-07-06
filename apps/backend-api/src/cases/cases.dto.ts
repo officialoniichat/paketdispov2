@@ -22,6 +22,18 @@ export class CaseSummaryDto {
     description: 'null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt)',
   })
   storageLocationCode!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons',
+  })
+  storageLocationKind?: string | null;
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen',
+  })
+  priceLabelPrintRequired?: boolean | null;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Kartons der Anlieferung (A6)' })
@@ -95,11 +107,51 @@ export class CurrentBundleDto {
   @ApiProperty({ type: [RouteStopDto] }) routeStops!: RouteStopDto[];
 }
 
+/** Der vom Mitarbeiter belegte Arbeitsplatz (Tisch) — per Login/Scan geclaimt. */
+export class MeWorkstationDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'Tisch-Nr./Barcode, z. B. "T-04"' }) code!: string;
+  @ApiProperty() name!: string;
+}
+
 export class TodayResponseDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
   @ApiPropertyOptional({ type: CurrentBundleDto, nullable: true })
   bundle!: CurrentBundleDto | null;
   @ApiProperty({ type: [CaseSummaryDto] }) cases!: CaseSummaryDto[];
+  @ApiPropertyOptional({
+    type: MeWorkstationDto,
+    nullable: true,
+    description: 'Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters',
+  })
+  workstation!: MeWorkstationDto | null;
+}
+
+/** Tisch-Anmeldung: der Mitarbeiter identifiziert seinen Arbeitsplatz (Nr. oder Scan). */
+export class ClaimWorkstationDto {
+  @ApiProperty({ description: 'Workstation-Code (Tisch-Nr. oder gescannter Barcode)' })
+  @IsString()
+  code!: string;
+}
+
+/**
+ * Parkposition (B4): der Mitarbeiter parkt die restlichen, noch nicht begonnenen
+ * Belege seines Bündels (Karren voll). Die Belege gehen zurück in den Pool und
+ * werden beim nächsten Bündel wieder eingeplant.
+ */
+export class ParkRemainingDto {
+  @ApiProperty({ type: [String], description: 'Zu parkende Belege (müssen assigned + im eigenen Bündel sein)' })
+  @IsArray()
+  @IsString({ each: true })
+  caseIds!: string[];
+}
+
+export class ParkRemainingResultDto {
+  @ApiProperty() bundleId!: string;
+  @ApiProperty({ type: [String] }) parkedCaseIds!: string[];
+  @ApiProperty({ type: [String], description: 'Verbleibende Belege des Bündels (in Reihenfolge)' })
+  remainingCaseIds!: string[];
+  @ApiProperty() plannedEffortMinutes!: number;
 }
 
 // --- Employee case aggregate (PWA CaseAggregate, §9 work screens) -----------
@@ -139,6 +191,14 @@ export class SkuLineDto {
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'VK-Etikett-Preis (A1)' })
   vkLabelPrice!: number | null;
   @ApiProperty({ description: 'SkuLineStatus: open|confirmed|deviation' }) status!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    enum: ['green', 'red'],
+    description:
+      'Online-Größen-Markierung (A8): green = Onlineartikel-Highlight (bevorzugte/Ausweich-Größe), red = Onlineartikel; null für nicht online-relevante Positionen',
+  })
+  onlineMark!: 'green' | 'red' | null;
 }
 
 /** Per-position Arbeitsanweisung instruction flags (Anhang A PositionInstruction, §G.1). */

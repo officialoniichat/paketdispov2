@@ -14,6 +14,7 @@ import { assertTransition } from '../workflow/case-state-machine.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
+import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
 import {
   type AddToBundleDto,
   type AssignToEmployeeDto,
@@ -535,9 +536,9 @@ export class TeamleadService {
       });
 
       const remaining = bundle.items.filter((i) => i.caseId !== dto.caseId).map((i) => i.caseId);
-      await this.resequenceItems(tx, bundleId, remaining);
-      await this.resequenceRouteStops(tx, bundleId, remaining);
-      const plannedEffortMinutes = await this.recomputeEffort(tx, remaining);
+      await resequenceItems(tx, bundleId, remaining);
+      await resequenceRouteStops(tx, bundleId, remaining);
+      const plannedEffortMinutes = await recomputeEffort(tx, remaining);
       await tx.assignmentBundle.update({
         where: { id: bundleId },
         data: { plannedEffortMinutes },
@@ -692,7 +693,7 @@ export class TeamleadService {
     });
 
     const caseIds = [...bundle.items.map((i) => i.caseId), caseId];
-    const plannedEffortMinutes = await this.recomputeEffort(tx, caseIds);
+    const plannedEffortMinutes = await recomputeEffort(tx, caseIds);
     await tx.assignmentBundle.update({
       where: { id: bundle.id },
       data: { plannedEffortMinutes },
@@ -720,8 +721,8 @@ export class TeamleadService {
         );
       }
 
-      await this.resequenceItems(tx, bundleId, dto.caseIds);
-      await this.resequenceRouteStops(tx, bundleId, dto.caseIds);
+      await resequenceItems(tx, bundleId, dto.caseIds);
+      await resequenceRouteStops(tx, bundleId, dto.caseIds);
 
       const eventId = await this.auditOverride(tx, principal, bundleId, 'reorder', dto.reason, {
         caseIds: dto.caseIds,
@@ -809,64 +810,6 @@ export class TeamleadService {
       plannedEffortMinutes: bundle.plannedEffortMinutes,
       items: bundle.items.map((i) => ({ id: i.id, caseId: i.caseId, sequence: i.sequence })),
     };
-  }
-
-  /** Rewrite AssignmentItem.sequence so it matches `orderedCaseIds`. */
-  private async resequenceItems(
-    tx: PrismaTx,
-    bundleId: string,
-    orderedCaseIds: string[],
-  ): Promise<void> {
-    for (let i = 0; i < orderedCaseIds.length; i++) {
-      await tx.assignmentItem.updateMany({
-        where: { bundleId, caseId: orderedCaseIds[i] },
-        data: { sequence: i },
-      });
-    }
-  }
-
-  /**
-   * Re-sequence route stops to follow the new case order: a stop's rank is the
-   * earliest index (in `orderedCaseIds`) of any case it serves (via orderIds);
-   * stops that touch no listed case keep their relative order at the tail.
-   */
-  private async resequenceRouteStops(
-    tx: PrismaTx,
-    bundleId: string,
-    orderedCaseIds: string[],
-  ): Promise<void> {
-    const stops = await tx.routeStop.findMany({
-      where: { bundleId },
-      orderBy: { sequence: 'asc' },
-    });
-    if (stops.length === 0) return;
-    const rankOf = new Map(orderedCaseIds.map((id, idx) => [id, idx]));
-    const ranked = stops.map((s, originalIdx) => {
-      const ranks = s.orderIds
-        .map((id) => rankOf.get(id))
-        .filter((r): r is number => r !== undefined);
-      const primary = ranks.length > 0 ? Math.min(...ranks) : Number.MAX_SAFE_INTEGER;
-      return { id: s.id, primary, originalIdx };
-    });
-    ranked.sort((a, b) => a.primary - b.primary || a.originalIdx - b.originalIdx);
-    // Two-phase write to avoid colliding with the @@unique([bundleId, sequence]):
-    // first park every stop at a negative slot, then assign the final 0..n order.
-    for (const [i, stop] of ranked.entries()) {
-      await tx.routeStop.update({ where: { id: stop.id }, data: { sequence: -(i + 1) } });
-    }
-    for (const [i, stop] of ranked.entries()) {
-      await tx.routeStop.update({ where: { id: stop.id }, data: { sequence: i } });
-    }
-  }
-
-  /** Sum estimatedMinutes of the given cases — the bundle's planned effort. */
-  private async recomputeEffort(tx: PrismaTx, caseIds: string[]): Promise<number> {
-    if (caseIds.length === 0) return 0;
-    const agg = await tx.goodsReceiptCase.aggregate({
-      where: { id: { in: caseIds } },
-      _sum: { estimatedMinutes: true },
-    });
-    return agg._sum.estimatedMinutes ?? 0;
   }
 
   /** Append the §8.4 audit event (actorType=teamlead, action+reason in payload). */

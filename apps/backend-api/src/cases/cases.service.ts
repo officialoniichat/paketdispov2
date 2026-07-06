@@ -1,6 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { CaseStatus } from '@paket/domain-types';
-import { caseStatusSchema, deriveWorkInstructionPoints } from '@paket/domain-types';
+import {
+  caseStatusSchema,
+  deriveOnlineSizeMarks,
+  deriveWorkInstructionPoints,
+} from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -11,13 +20,18 @@ import { assertCanAccessCase, canAccessCase, CaseAccessDeniedError } from './cas
 import {
   type CaseAggregateDto,
   type CaseSummaryDto,
+  type ClaimWorkstationDto,
   type CreateIssueDto,
   type CurrentBundleDto,
+  type MeWorkstationDto,
+  type ParkRemainingDto,
+  type ParkRemainingResultDto,
   type PartialCompleteDto,
   type ReceiptPositionDto,
   type TodayResponseDto,
   type TransitionResultDto,
 } from './cases.dto.js';
+import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
 import {
   wgrDescription,
   mapBoxTarget,
@@ -87,12 +101,19 @@ export class CasesService {
       include: {
         employee: { select: { displayName: true } },
         routeStops: { orderBy: { sequence: 'asc' } },
-        cases: { include: { storageLocation: true }, orderBy: { bookingDate: 'asc' } },
+        cases: {
+          include: {
+            storageLocation: true,
+            workInstruction: { select: { priceLabelPrintRequired: true } },
+          },
+          orderBy: { bookingDate: 'asc' },
+        },
       },
     });
 
+    const workstation = await this.getMyWorkstation(employee.id);
     if (!bundle) {
-      return { date: isoDay(today), bundle: null, cases: [] };
+      return { date: isoDay(today), bundle: null, cases: [], workstation };
     }
 
     const assignedEmployeeName = bundle.employee.displayName;
@@ -100,7 +121,131 @@ export class CasesService {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
       cases: bundle.cases.map((c) => this.mapSummary(c, assignedEmployeeName)),
+      workstation,
     };
+  }
+
+  /** The employee's currently claimed Arbeitsplatz (Tisch), or null. */
+  private async getMyWorkstation(userId: string): Promise<MeWorkstationDto | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { workstation: { select: { id: true, code: true, name: true } } },
+    });
+    return user?.workstation ?? null;
+  }
+
+  /**
+   * A2 Tisch-Anmeldung: der Mitarbeiter identifiziert seinen Arbeitsplatz per
+   * Tisch-Nr. oder Barcode-Scan. Persistiert User.workstationId und schreibt den
+   * `employee.workstation_assigned` Audit-Event (actorType=employee).
+   */
+  async claimWorkstation(
+    principal: Principal,
+    dto: ClaimWorkstationDto,
+  ): Promise<MeWorkstationDto> {
+    const employee = await this.resolveEmployee(principal);
+    const code = dto.code.trim();
+    const workstation = await this.prisma.workstation.findFirst({
+      where: { code: { equals: code, mode: 'insensitive' }, active: true },
+      select: { id: true, code: true, name: true },
+    });
+    if (!workstation) {
+      throw new NotFoundException(`Workstation ${code} not found`);
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: employee.id },
+        data: { workstationId: workstation.id },
+      });
+      await this.events.append(
+        {
+          eventType: 'employee.workstation_assigned',
+          entityType: 'User',
+          entityId: employee.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: { workstationId: workstation.id, code: workstation.code, via: 'me_login' },
+        },
+        tx,
+      );
+    });
+    return workstation;
+  }
+
+  /**
+   * B4 Parkposition („Rest parken"): der Karren ist voll — die restlichen, noch
+   * nicht begonnenen Belege des eigenen Bündels gehen zurück in den Pool
+   * (assigned → ready, Item entfernt). Die Engine plant sie ins nächste Bündel
+   * ein. Nur `assigned` (unbegonnene) Belege sind parkbar.
+   */
+  async parkRemaining(
+    principal: Principal,
+    dto: ParkRemainingDto,
+  ): Promise<ParkRemainingResultDto> {
+    const employee = await this.resolveEmployee(principal);
+    if (dto.caseIds.length === 0) {
+      throw new ConflictException('No cases to park');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const bundle = await tx.assignmentBundle.findFirst({
+        where: { employeeId: employee.id, status: { notIn: ['completed', 'cancelled'] } },
+        orderBy: { updatedAt: 'desc' },
+        include: { items: { orderBy: { sequence: 'asc' }, include: { case: true } } },
+      });
+      if (!bundle) {
+        throw new NotFoundException('No active bundle to park cases from');
+      }
+      const itemByCaseId = new Map(bundle.items.map((i) => [i.caseId, i]));
+      for (const caseId of dto.caseIds) {
+        const item = itemByCaseId.get(caseId);
+        if (!item) {
+          throw new NotFoundException(`Case ${caseId} is not in the active bundle`);
+        }
+        if (item.case.status !== 'assigned') {
+          throw new ConflictException(
+            `Only an unstarted (assigned) case can be parked (case ${caseId} is ${item.case.status})`,
+          );
+        }
+      }
+
+      const parked = new Set(dto.caseIds);
+      for (const caseId of dto.caseIds) {
+        const item = itemByCaseId.get(caseId);
+        if (!item) continue;
+        await tx.assignmentItem.delete({ where: { id: item.id } });
+        await tx.goodsReceiptCase.update({
+          where: { id: caseId },
+          data: { status: 'ready', assignedBundleId: null, version: { increment: 1 } },
+        });
+        await this.events.append(
+          {
+            eventType: 'case.parked_by_employee',
+            entityType: 'GoodsReceiptCase',
+            entityId: caseId,
+            actorType: 'employee',
+            actorId: principal.sub,
+            payload: { bundleId: bundle.id, reason: 'cart_full' },
+          },
+          tx,
+        );
+      }
+
+      const remaining = bundle.items.filter((i) => !parked.has(i.caseId)).map((i) => i.caseId);
+      await resequenceItems(tx, bundle.id, remaining);
+      await resequenceRouteStops(tx, bundle.id, remaining);
+      const plannedEffortMinutes = await recomputeEffort(tx, remaining);
+      await tx.assignmentBundle.update({
+        where: { id: bundle.id },
+        data: { plannedEffortMinutes },
+      });
+
+      return {
+        bundleId: bundle.id,
+        parkedCaseIds: dto.caseIds,
+        remainingCaseIds: remaining,
+        plannedEffortMinutes,
+      };
+    });
   }
 
   async getCurrentBundle(principal: Principal): Promise<CurrentBundleDto | null> {
@@ -154,31 +299,58 @@ export class CasesService {
           positionNos: point.positionNos,
         }))
       : [];
+    // A8 Online-Größen-Markierung: Präferenzen der betroffenen WGRs einmal laden,
+    // Rot/Grün rein (deriveOnlineSizeMarks) berechnen — die PWA zeigt nur an.
+    const onlineWgrs = [
+      ...new Set(found.positions.filter((p) => p.onlineRelevant === true).map((p) => p.wgr)),
+    ];
+    const prefs = onlineWgrs.length
+      ? await this.prisma.onlineSizePreference.findMany({ where: { wgr: { in: onlineWgrs } } })
+      : [];
+    const prefsByWgr = new Map<string, { preferredSize: string; alternativeSize?: string }[]>();
+    for (const pref of prefs) {
+      const list = prefsByWgr.get(pref.wgr) ?? [];
+      list.push({ preferredSize: pref.preferredSize, alternativeSize: pref.alternativeSize ?? undefined });
+      prefsByWgr.set(pref.wgr, list);
+    }
+
     return {
       case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null),
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
-      positions: found.positions.map((p) => this.mapPosition(p)),
+      positions: found.positions.map((p) => this.mapPosition(p, prefsByWgr)),
       boxTargets: found.transportBoxes.map((b) => mapBoxTarget(b)),
       instructionPoints,
     };
   }
 
-  private mapPosition(p: {
-    id: string;
-    positionNo: number;
-    wgr: string;
-    supplierArticleNo: string;
-    supplierColor: string;
-    season: string | null;
-    nosFlag: boolean | null;
-    branchNo: string;
-    shopNo: string;
-    floor: string | null;
-    status: string;
-    catMan?: boolean | null;
-    instruction: PositionInstructionRow | null;
-    skuLines: SkuLineRow[];
-  }): ReceiptPositionDto {
+  private mapPosition(
+    p: {
+      id: string;
+      positionNo: number;
+      wgr: string;
+      supplierArticleNo: string;
+      supplierColor: string;
+      season: string | null;
+      nosFlag: boolean | null;
+      onlineRelevant?: boolean | null;
+      branchNo: string;
+      shopNo: string;
+      floor: string | null;
+      status: string;
+      catMan?: boolean | null;
+      instruction: PositionInstructionRow | null;
+      skuLines: SkuLineRow[];
+    },
+    onlinePrefsByWgr?: ReadonlyMap<string, { preferredSize: string; alternativeSize?: string }[]>,
+  ): ReceiptPositionDto {
+    // A8: Rot/Grün nur für online-relevante Positionen; sonst bleibt jede Zeile null.
+    const marks =
+      p.onlineRelevant === true
+        ? deriveOnlineSizeMarks(
+            p.skuLines.map((s) => s.size),
+            onlinePrefsByWgr?.get(p.wgr) ?? [],
+          )
+        : {};
     return {
       id: p.id,
       positionNo: p.positionNo,
@@ -194,7 +366,7 @@ export class CasesService {
       floor: p.floor,
       status: p.status,
       instruction: p.instruction ? mapPositionInstruction(p.instruction) : null,
-      skuLines: p.skuLines.map(mapSkuLine),
+      skuLines: p.skuLines.map((s) => mapSkuLine(s, marks[s.size] ?? null)),
     };
   }
 
@@ -459,10 +631,11 @@ export class CasesService {
       estimatedMinutes: number;
       bookingDate: Date;
       goodsTypeText: string | null;
-      storageLocation: { code: string } | null;
+      storageLocation: { code: string; kind?: string } | null;
       primaryShopNo?: string | null;
       inboundCartonCount?: number | null;
       missingFields?: string[];
+      workInstruction?: { priceLabelPrintRequired: boolean } | null;
     },
     assignedEmployeeName: string | null,
   ): CaseSummaryDto {
@@ -475,6 +648,8 @@ export class CasesService {
       totalQuantity: c.totalQuantity,
       estimatedMinutes: c.estimatedMinutes,
       storageLocationCode: c.storageLocation?.code ?? null,
+      storageLocationKind: c.storageLocation?.kind ?? null,
+      priceLabelPrintRequired: c.workInstruction?.priceLabelPrintRequired ?? null,
       primaryShopNo: c.primaryShopNo ?? null,
       inboundCartonCount: c.inboundCartonCount ?? null,
       missingFields: c.missingFields ?? [],

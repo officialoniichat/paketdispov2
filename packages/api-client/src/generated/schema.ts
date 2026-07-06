@@ -102,6 +102,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/workstation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_claimWorkstation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/park": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_parkRemaining"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{caseId}/start-preparation": {
         parameters: {
             query?: never;
@@ -878,6 +910,10 @@ export interface components {
             estimatedMinutes: number;
             /** @description null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt) */
             storageLocationCode?: string | null;
+            /** @description Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons */
+            storageLocationKind?: string | null;
+            /** @description Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen */
+            priceLabelPrintRequired?: boolean | null;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Kartons der Anlieferung (A6) */
@@ -891,11 +927,19 @@ export interface components {
             /** @description Display name of the assigned employee */
             assignedEmployeeName?: string | null;
         };
+        MeWorkstationDto: {
+            id: string;
+            /** @description Tisch-Nr./Barcode, z. B. "T-04" */
+            code: string;
+            name: string;
+        };
         TodayResponseDto: {
             /** @description ISO date YYYY-MM-DD */
             date: string;
             bundle?: components["schemas"]["CurrentBundleDto"] | null;
             cases: components["schemas"]["CaseSummaryDto"][];
+            /** @description Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters */
+            workstation?: components["schemas"]["MeWorkstationDto"] | null;
         };
         WorkInstructionHeaderDto: {
             priceLabelPrintRequired: boolean;
@@ -940,6 +984,11 @@ export interface components {
             vkLabelPrice?: number | null;
             /** @description SkuLineStatus: open|confirmed|deviation */
             status: string;
+            /**
+             * @description Online-Größen-Markierung (A8): green = Onlineartikel-Highlight (bevorzugte/Ausweich-Größe), red = Onlineartikel; null für nicht online-relevante Positionen
+             * @enum {string|null}
+             */
+            onlineMark?: "green" | "red" | null;
         };
         ReceiptPositionDto: {
             id: string;
@@ -1006,6 +1055,21 @@ export interface components {
             caseCount?: number;
             /** @description Bereich of the assigned cart */
             bereich?: string | null;
+        };
+        ClaimWorkstationDto: {
+            /** @description Workstation-Code (Tisch-Nr. oder gescannter Barcode) */
+            code: string;
+        };
+        ParkRemainingDto: {
+            /** @description Zu parkende Belege (müssen assigned + im eigenen Bündel sein) */
+            caseIds: string[];
+        };
+        ParkRemainingResultDto: {
+            bundleId: string;
+            parkedCaseIds: string[];
+            /** @description Verbleibende Belege des Bündels (in Reihenfolge) */
+            remainingCaseIds: string[];
+            plannedEffortMinutes: number;
         };
         TransitionResultDto: {
             caseId: string;
@@ -1143,6 +1207,10 @@ export interface components {
             estimatedMinutes: number;
             /** @description null nur bei blocked-Belegen (Intake-Gate D1: Lagerplatz fehlt) */
             storageLocationCode?: string | null;
+            /** @description Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons */
+            storageLocationKind?: string | null;
+            /** @description Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen */
+            priceLabelPrintRequired?: boolean | null;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Kartons der Anlieferung (A6) */
@@ -1790,6 +1858,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NextBundleResultDto"];
+                };
+            };
+        };
+    };
+    MeController_claimWorkstation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimWorkstationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeWorkstationDto"];
+                };
+            };
+        };
+    };
+    MeController_parkRemaining: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParkRemainingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParkRemainingResultDto"];
                 };
             };
         };

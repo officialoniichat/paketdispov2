@@ -104,3 +104,38 @@ export type OnlineSizePreference = z.infer<typeof onlineSizePreferenceSchema>;
 /** CSV-Upload-Zeile (ohne id — Upsert-Schlüssel ist [wgr, sizeVariant]). */
 export const onlineSizePreferenceUploadRowSchema = onlineSizePreferenceSchema.omit({ id: true });
 export type OnlineSizePreferenceUploadRow = z.infer<typeof onlineSizePreferenceUploadRowSchema>;
+
+/**
+ * Rot/Grün-Markierung der gelieferten Größen eines Onlineartikels (A8):
+ * GRÜN = „Onlineartikel-Highlight" — die Größe, die ins Online-Lager geht
+ * (bevorzugte Größe; nicht geliefert → definierte Ausweichgröße; sonst irgendeine);
+ * ROT = „Onlineartikel" — alle übrigen gelieferten Größen des Artikels.
+ */
+export type OnlineSizeMark = 'green' | 'red';
+
+/**
+ * Berechnet die Rot/Grün-Markierung je gelieferter Größe einer online-relevanten
+ * Position. Fachlogik single-source: Backend rechnet, die PWA zeigt nur an.
+ * Präferenz-Auswahl bei mehreren Größenvarianten derselben WGR: die erste
+ * Präferenz, deren bevorzugte oder Ausweichgröße geliefert wurde, sonst die erste.
+ */
+export function deriveOnlineSizeMarks(
+  deliveredSizes: readonly string[],
+  preferences: readonly Pick<OnlineSizePreference, 'preferredSize' | 'alternativeSize'>[],
+): Record<string, OnlineSizeMark> {
+  const sizes = [...new Set(deliveredSizes)];
+  if (sizes.length === 0) return {};
+  const applicable =
+    preferences.find(
+      (p) =>
+        sizes.includes(p.preferredSize) ||
+        (p.alternativeSize !== undefined && sizes.includes(p.alternativeSize)),
+    ) ?? preferences[0];
+  const highlight =
+    applicable && sizes.includes(applicable.preferredSize)
+      ? applicable.preferredSize
+      : applicable?.alternativeSize !== undefined && sizes.includes(applicable.alternativeSize)
+        ? applicable.alternativeSize
+        : sizes[0];
+  return Object.fromEntries(sizes.map((s) => [s, s === highlight ? 'green' : 'red']));
+}

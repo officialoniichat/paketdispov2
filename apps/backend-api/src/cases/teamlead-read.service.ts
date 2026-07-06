@@ -717,6 +717,7 @@ export class TeamleadReadService {
       vkPrice: s.vkPrice,
       vkLabelPrice: s.vkLabelPrice,
       status: s.status,
+      onlineMark: null,
     }));
     const expectedQuantity = skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
     const confirmed = skuLines.filter((s) => s.confirmedQuantity !== null);
