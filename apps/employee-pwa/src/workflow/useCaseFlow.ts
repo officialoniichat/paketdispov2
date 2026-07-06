@@ -133,16 +133,16 @@ export function useCaseFlow(caseId: string): CaseFlow {
 
   const togglePositionChecked = useCallback(
     (positionId: string): void => {
-      applyLocal((p) => togglePositionCheckedTx(p, positionId));
       ensureStarted();
+      applyLocal((p) => togglePositionCheckedTx(p, positionId));
     },
     [applyLocal, ensureStarted],
   );
 
   const setSkuQuantity = useCallback(
     (skuLineId: string, quantity: number, expectedQuantity: number): void => {
-      applyLocal((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity));
       ensureStarted();
+      applyLocal((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity));
     },
     [applyLocal, ensureStarted],
   );

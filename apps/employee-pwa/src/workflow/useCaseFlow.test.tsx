@@ -172,3 +172,86 @@ describe('useCaseFlow — runMilestone commit/rollback (complete())', () => {
     expect(result.current.progress?.step).toBe('process');
   });
 });
+
+describe('useCaseFlow — ensureStarted fires exactly once on genuinely-first local action', () => {
+  it('calls start-preparation when togglePositionChecked runs on a fresh, untouched case', async () => {
+    const client = makeClient();
+    client.setQueryData(TODAY_KEY, TODAY_DTO);
+
+    const mockGet = vi.fn().mockResolvedValue({
+      data: AGGREGATE_DTO,
+      error: undefined,
+      response: { status: 200 },
+    });
+    const mockPost = vi
+      .fn()
+      .mockResolvedValue({ data: { caseId: CASE_ID, status: 'in_progress', version: 1 }, error: undefined });
+    vi.spyOn(apiModule, 'getApiClient').mockReturnValue({
+      GET: mockGet,
+      POST: mockPost,
+    } as unknown as ReturnType<typeof apiModule.getApiClient>);
+
+    const { result } = renderHook(() => useCaseFlow(CASE_ID), { wrapper: wrapperFor(client) });
+    await waitFor(() => expect(result.current.progress).toBeDefined());
+    // Genuinely untouched: the bug read the already-toggled cache state and
+    // never fired start-preparation on the very first action.
+    expect(result.current.progress?.quantityCheckedPositionIds).toEqual([]);
+
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/cases/{caseId}/start-preparation',
+        expect.objectContaining({ params: { path: { caseId: CASE_ID } } }),
+      ),
+    );
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    // The local toggle itself must still have been applied.
+    await waitFor(() =>
+      expect(result.current.progress?.quantityCheckedPositionIds).toEqual(['pos-1']),
+    );
+  });
+
+  it('does not call start-preparation again on a second action once progress already exists', async () => {
+    const client = makeClient();
+    client.setQueryData(TODAY_KEY, TODAY_DTO);
+
+    const mockGet = vi.fn().mockResolvedValue({
+      data: AGGREGATE_DTO,
+      error: undefined,
+      response: { status: 200 },
+    });
+    const mockPost = vi
+      .fn()
+      .mockResolvedValue({ data: { caseId: CASE_ID, status: 'in_progress', version: 1 }, error: undefined });
+    vi.spyOn(apiModule, 'getApiClient').mockReturnValue({
+      GET: mockGet,
+      POST: mockPost,
+    } as unknown as ReturnType<typeof apiModule.getApiClient>);
+
+    const { result } = renderHook(() => useCaseFlow(CASE_ID), { wrapper: wrapperFor(client) });
+    await waitFor(() => expect(result.current.progress).toBeDefined());
+
+    // First action — establishes progress and fires start-preparation once.
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(result.current.progress?.quantityCheckedPositionIds).toEqual(['pos-1']),
+    );
+
+    // Second action — untoggling still leaves confirmedQuantities/quantityCheckedPositionIds
+    // touched at some point already, so ensureStarted must not fire again.
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+    await waitFor(() =>
+      expect(result.current.progress?.quantityCheckedPositionIds).toEqual([]),
+    );
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+});
