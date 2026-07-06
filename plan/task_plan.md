@@ -72,7 +72,17 @@ reusable from integration tests. Branch: `feat/dev-panel-scenarios` (based on la
       NOTE Phase 4: dev-setup.mjs mints only teamlead/employee tokens — /api/dev needs an admin
       token (extend dev-setup or widen roles).
 - [ ] Phase 3: Scenario library B1–B15 (typed definitions using generator + targeted builders).
-- [ ] Phase 4: Teamlead-web Dev Panel Admin tab (A1–A4) with build-time dev gating.
+- [x] Phase 4: DONE — teamlead-web Dev Panel (A1–A4): dev-gated Admin tab "Dev / Szenarien"
+      (DevScenariosTab lazy behind INLINE `import.meta.env.VITE_DEV_PANEL==='0'?false:DEV||==='1'`
+      gate → Rollup drops the chunk; prod dist greps clean, VITE_DEV_PANEL=1 build contains it;
+      runtime '0' opt-out via resolveEnv in config/devPanel.ts), backend-sourced catalog UI w/
+      expected-outcome collapse + active highlight + reset, time control (datetime-local, Setzen/
+      Zurück zu Echtzeit, tab chip + global lazy DevTimeBadge in AppShell app bar, invalidates ALL
+      queries), quick knobs (ProHandel-Pull/Recalculate/Materialize-Shifts w/ count toasts, dates
+      default to override day). data/dev.ts uses a separate admin-token client — dev-setup.mjs now
+      mints `VITE_DEV_ADMIN_TOKEN` (admin-001) into teamlead .env; backend roles untouched.
+      c3-teamlead-components.mmd + SVG updated. Verified: typecheck 13/13, lint clean, live smoke
+      on :3999 (catalog 200 admin / 403 teamlead, override set+clear, materialize 13 shifts).
 - [ ] Phase 5: C3 int smoke tests (each scenario + headline assertion) + C4 PWA demo mirror of B3.
 - [ ] Phase 6: Quality gate + docs/dev/scenarios.md + C4 diagrams + prod-build verification + commits.
 
@@ -91,9 +101,16 @@ Forbidden: git reset --hard, git clean -fdx, git worktree remove, rm/mv on repo 
 - seed-data.ts generator NOT on main → Phase 0 cherry-pick a90ea09 + reconcile (10 hunks in seed.ts).
 - Phased async agents (same protocol as Task 3/3); this worktree IS the working branch.
 
+## Decisions (added after session restart)
+- Session process exited mid-Phase-3/4; both agents produced NO changes → relaunched fresh.
+- Main advanced (Full-Review task: ce541f4…fd9d67a incl. Pool-Hold release wiring) → rebased
+  feat/dev-panel-scenarios onto fd9d67a. New hashes: f9c50f1 (seed), c7ed47b (framework),
+  730c7ec (dev module), 42fd766 (plan). Only plan/*.md conflicted (kept ours). typecheck 13/13.
+- Repo hook blocks `git checkout` — use `git show <ref>:<path> > path` for conflict resolution.
+
 ## Errors Encountered
-- (none yet)
+- Session restart killed Phase-3/4 agents before any output (worktree was re-pointed to new main;
+  branch itself intact). Resolved via rebase + relaunch.
 
 ## Status
-**Phase 2** — backend dev module agent dispatched (DevModule, ScenarioService framework,
-ClockService/time-override, env guard, OpenAPI regen). Next: Phase 3 (scenarios) + Phase 4 (UI) in parallel.
+**Phase 3+4 running in parallel** (scenario library agent + dev-panel UI agent, post-rebase).

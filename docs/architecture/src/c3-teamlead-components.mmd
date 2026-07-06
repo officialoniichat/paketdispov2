@@ -5,8 +5,9 @@ flowchart TB
     classDef store fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
+    classDef dev fill:#3a2d14,stroke:#e5b567,color:#eef1f6,stroke-dasharray:4 3;
 
-    api["backend-api<br/>/api/teamlead/* · /api/admin/*"]:::ext
+    api["backend-api<br/>/api/teamlead/* · /api/admin/* · /api/dev/* (dev-only)"]:::ext
 
     subgraph web["teamlead-web container"]
         direction TB
@@ -17,11 +18,14 @@ flowchart TB
             belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list (Scopes Aktiv·Topf·Archiv·Alle,<br/>Filter/Sort/Pagination via GET /pool) + detail</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand (EffortPreview)·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen</i>"]:::feat
+            devtab["admin/DevScenariosTab (dev-gated, lazy)<br/><i>Szenario-Katalog (Backend-Quelle) · Zeit-Override · Quick-Knobs —<br/>tree-shaken aus Prod-Builds (import.meta.env-Gate, config/devPanel.ts)</i>"]:::dev
         end
+        devbadge["components/DevTimeBadge (dev-gated, lazy)<br/><i>globales App-Bar-Badge bei aktivem Server-Zeit-Override</i>"]:::dev
         store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>view-models + mutations (TanStack Query)</i>"]:::store
         subgraph datal["data/"]
             remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·cases</i>"]:::logic
             belegeData["belege.ts · admin.ts · employees.ts · audit.ts"]:::logic
+            devData["dev.ts (dev-gated)<br/><i>/api/dev-Client mit Admin-Dev-Token (VITE_DEV_ADMIN_TOKEN)</i>"]:::dev
             mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · assignToEmployee ·<br/>assignBundleToEmployee (A1/A2) · moveCase (B2) · reorder · pause/resume</i>"]:::logic
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
@@ -36,6 +40,10 @@ flowchart TB
     belege --> store
     split --> store
     admin --> belegeData
+    admin -. "lazy (nur Dev-Build)" .-> devtab
+    devtab --> devData
+    devbadge --> devData
+    devData -->|"REST (Admin-Dev-Token)"| api
     ablagen --> actions
     belege --> actions
     actions --> store

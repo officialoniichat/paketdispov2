@@ -76,10 +76,18 @@ if (!reused) {
 
 const teamleadToken = await mint(privateKey, 'tl-001', 'teamlead', 'Teamlead');
 const employeeToken = await mint(privateKey, 'ma-101', 'employee', 'Mitarbeiter 101');
+// Admin token for the dev-gated /api/dev surface (Dev-Panel "Dev / Szenarien"):
+// the cockpit keeps acting as the Teamlead everywhere else and uses this token
+// ONLY for /api/dev/* (see apps/teamlead-web/src/data/dev.ts). Backend roles
+// stay strict — /api/dev remains @Roles(Admin) + DEV_PANEL env gate.
+const adminToken = await mint(privateKey, 'admin-001', 'admin', 'Admin (Dev-Panel)');
 
-writeFileSync(TEAMLEAD_ENV, `VITE_API_BASE_URL=${API_BASE_URL}\nVITE_DEV_TOKEN=${teamleadToken}\n`);
+writeFileSync(
+  TEAMLEAD_ENV,
+  `VITE_API_BASE_URL=${API_BASE_URL}\nVITE_DEV_TOKEN=${teamleadToken}\nVITE_DEV_ADMIN_TOKEN=${adminToken}\n`,
+);
 writeFileSync(EMPLOYEE_ENV, `VITE_API_BASE_URL=${API_BASE_URL}\nVITE_DEV_TOKEN=${employeeToken}\n`);
 
 console.log(`[dev-setup] backend .env: ${reused ? 'kept existing keypair' : 'created new keypair'}`);
-console.log('[dev-setup] wrote apps/teamlead-web/.env + apps/employee-pwa/.env (30d dev tokens)');
+console.log('[dev-setup] wrote apps/teamlead-web/.env (+ admin dev-panel token) + apps/employee-pwa/.env (30d dev tokens)');
 console.log('[dev-setup] If the backend was already running, restart it so it loads the key.');

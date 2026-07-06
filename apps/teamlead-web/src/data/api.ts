@@ -14,7 +14,12 @@ import { resolveCurrentTeamleadId } from './session.js';
 // talks to the Railway backend without a rebuild. See src/config/runtimeEnv.ts.
 // Trailing slash stripped so openapi-fetch never builds `…app//api/...` (a double
 // slash 404s on Fastify) when the dashboard value ends with "/".
-const baseUrl = (resolveEnv('VITE_API_BASE_URL') ?? 'http://localhost:3000').replace(/\/+$/, '');
+/** Resolved backend base URL (shared with the dev-panel data layer, ./dev.ts). */
+export const apiBaseUrl = (resolveEnv('VITE_API_BASE_URL') ?? 'http://localhost:3000').replace(
+  /\/+$/,
+  '',
+);
+const baseUrl = apiBaseUrl;
 const token = resolveEnv('VITE_DEV_TOKEN');
 
 /** Shared, fully typed backend client. */
