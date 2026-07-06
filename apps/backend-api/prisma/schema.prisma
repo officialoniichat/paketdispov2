@@ -364,6 +364,13 @@ model GoodsReceiptCase {
   effortPoints      Float          @default(0)
   estimatedMinutes  Float          @default(0)
   assignedBundleId  String?
+  // Archiv (A6): Link ins DocuWare-Langzeitarchiv (mock, gesetzt bei Abschluss).
+  docuWareUrl       String?
+  // TL-Topf (A7): „Besondere Aufmerksamkeit" — Bucherinnen-Inlet (mock) + Notiz.
+  attentionFlag     Boolean        @default(false)
+  attentionNote     String?
+  // Abschlusszeitpunkt: gesetzt beim Übergang nach completed/zst_done (A6 Archiv).
+  completedAt       DateTime?
   // Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs.
   missingFields     String[]       @default([])
   // Lieferungs-Pool-Hold (D2): TL-Freigabe "trotzdem bearbeiten".

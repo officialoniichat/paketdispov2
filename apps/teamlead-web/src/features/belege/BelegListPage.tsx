@@ -1,68 +1,171 @@
 /**
- * Beleg-Liste (§10.4 list view): the full case population from the live backend
- * (`GET /api/teamlead/cases`) in a dense, filterable, virtualizable TanStack Table.
+ * Beleg-Liste (§10.4, A1–A7): the full case population, SERVER-driven — scope,
+ * per-column filters, sorting and pagination are query params of
+ * `GET /api/teamlead/cases`; the client renders exactly one page of 50.
  *
- * The list is segmented by **lifecycle scope** (see
- * docs/concept/beleg-lifecycle-completion-concept.md): Aktiv (Pool/In Arbeit) is
- * the default; Abgeschlossen heute and Archiv give completed/terminal
- * Belege a home instead of burying them in one flat status dump. Filtering/sorting
- * stay client-side (pilot scale: one page of 200). Row click opens the Belegdetails.
+ * Scopes: Aktiv | Abgeschlossen | Archiv (completed+zst_done, mit Abschlussdatum
+ * + DocuWare-Link, A6) | Topf (Aufmerksamkeit/blocked/needs_review, A7) | Alle.
+ * Row click opens the Belegdetails; „Zuweisen" opens the A4 assign dialog.
  */
-import { useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
+import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
+import TablePagination from '@mui/material/TablePagination';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { ColumnDef, SortingState } from '@tanstack/react-table';
 import DownloadIcon from '@mui/icons-material/Download';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import type { CaseStatus } from '@paket/domain-types';
 import { CaseStatusChip, PriorityChip } from '@paket/ui';
 import {
+  BELEGE_PAGE_LIMIT,
   casePhase,
   fetchBelegeList,
   PHASE_LABEL,
+  releaseIntake,
+  unflagAttention,
+  type BelegeFilters,
+  type BelegeListResult,
+  type BelegeScope,
+  type BelegeSortField,
+  type BelegeViewState,
   type BelegRow,
-  type CasePhase,
 } from '../../data/belege.js';
-import { formatMinutes } from '../../lib/format.js';
+import { formatDate, formatDateTime } from '../../lib/format.js';
 import { DataTable } from '../../components/DataTable.js';
+import { LieferungChip } from '../../components/LieferungChip.js';
 import { CaseActions } from '../../components/CaseActions.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useSplits } from '../split/SplitProvider.js';
 import { SplitDialog, type SplitDialogBeleg, type SplitDialogEmployee } from '../split/SplitDialog.js';
+import { AssignFromListDialog } from './AssignFromListDialog.js';
 
-/** A lifecycle scope = a named set of phases the list can be narrowed to. */
-type Scope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'alle';
+const SCOPES: BelegeScope[] = ['aktiv', 'abgeschlossen', 'archiv', 'topf', 'alle'];
 
-const SCOPE_PHASES: Record<Scope, CasePhase[] | null> = {
-  aktiv: ['pool', 'arbeit'],
-  abgeschlossen: ['abgeschlossen'],
-  archiv: ['erledigt'],
-  alle: null, // no phase filter
-};
-
-const SCOPE_LABEL: Record<Scope, string> = {
+const SCOPE_LABEL: Record<BelegeScope, string> = {
   aktiv: 'Aktiv',
   abgeschlossen: 'Abgeschlossen',
   archiv: 'Archiv',
+  topf: 'Topf',
   alle: 'Alle',
 };
 
+/** Statuses offered in the column filter (all §7.1 states). */
+const STATUS_OPTIONS: CaseStatus[] = [
+  'needs_review',
+  'blocked',
+  'ready',
+  'parked',
+  'assigned',
+  'in_progress',
+  'issue_open',
+  'partially_completed',
+  'completed',
+  'zst_done',
+  'cancelled',
+];
+
+const SECTION_OPTIONS = [1, 2, 3, 4, 7, 8] as const;
+
+/** Column ids that ARE server sort fields — everything else is unsortable. */
+const SORTABLE_COLUMNS = new Set<BelegeSortField>([
+  'weBelegNo',
+  'bookingDate',
+  'totalQuantity',
+  'effortPoints',
+  'status',
+  'section',
+  'branchNo',
+  'primaryShopNo',
+  'completedAt',
+]);
+
+/** Debounce a value (text filters → one server query per pause, not per keypress). */
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export function BelegListPage(): JSX.Element {
   const navigate = useNavigate();
-  const [scope, setScope] = useState<Scope>('aktiv');
-  const [globalFilter, setGlobalFilter] = useState('');
+  const queryClient = useQueryClient();
+  const [scope, setScope] = useState<BelegeScope>('aktiv');
+  const [page, setPage] = useState(1);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [filters, setFilters] = useState<BelegeFilters>({});
+  const debouncedFilters = useDebounced(filters);
 
+  /** Every filter change restarts on page 1 — a filtered page 4 makes no sense. */
+  const updateFilters = (patch: Partial<BelegeFilters>): void => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+    setPage(1);
+  };
+
+  const sortBy =
+    sorting[0] && SORTABLE_COLUMNS.has(sorting[0].id as BelegeSortField)
+      ? (sorting[0].id as BelegeSortField)
+      : null;
+  const viewState: BelegeViewState = {
+    scope,
+    page,
+    sortBy,
+    sortDir: sorting[0]?.desc ? 'desc' : 'asc',
+    filters: debouncedFilters,
+  };
+
+  const query = useQuery<BelegeListResult, Error>({
+    queryKey: ['belege', viewState],
+    queryFn: () => fetchBelegeList(viewState),
+    placeholderData: keepPreviousData,
+  });
+  const rows = query.data?.rows ?? [];
+  const total = query.data?.total ?? 0;
+
+  // Topf badge count — always visible so the pot never goes unnoticed (A7).
+  const topfCountQuery = useQuery<number, Error>({
+    queryKey: ['belege', 'topf-count'],
+    queryFn: async () => {
+      const res = await fetchBelegeList({
+        scope: 'topf',
+        page: 1,
+        sortBy: null,
+        sortDir: 'asc',
+        filters: {},
+      });
+      return res.total;
+    },
+  });
+
+  const invalidateBelege = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['belege'] });
+    void queryClient.invalidateQueries({ queryKey: ['cockpit'] });
+  };
+  const releaseIntakeMutation = useMutation<CaseStatus, Error, string>({
+    mutationFn: (caseId) => releaseIntake(caseId),
+    onSettled: invalidateBelege,
+  });
+  const unflagMutation = useMutation<void, Error, string>({
+    mutationFn: (caseId) => unflagAttention(caseId),
+    onSettled: invalidateBelege,
+  });
   const {
     exportZst,
     prioritiseCase,
@@ -96,11 +199,10 @@ export function BelegListPage(): JSX.Element {
       resolveIssue,
     ],
   );
-  const query = useQuery<BelegRow[], Error>({
-    queryKey: ['belege'],
-    queryFn: fetchBelegeList,
-  });
-  const allRows = query.data ?? [];
+
+  // --- A4 Zuweisen aus der Liste ---
+  const [assignBelegId, setAssignBelegId] = useState<string | null>(null);
+  const assignBeleg = rows.find((r) => r.id === assignBelegId) ?? null;
 
   // --- Manual Beleg-Split (§8.4): pick the case, open the dialog, record the split ---
   const { recordSplit } = useSplits();
@@ -120,7 +222,6 @@ export function BelegListPage(): JSX.Element {
   );
 
   // §15.1 Tagesabschluss lives where finished work lives: the Abgeschlossen scope.
-  // Exports all completed cases (→ zst_done) and downloads the ZST CSV.
   const handleExport = async (): Promise<void> => {
     const res = await exportZst.mutateAsync();
     const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
@@ -132,36 +233,13 @@ export function BelegListPage(): JSX.Element {
     URL.revokeObjectURL(url);
   };
 
-  // Per-scope counts for the toggle badges, and the rows for the active scope.
-  const countByScope = useMemo<Record<Scope, number>>(() => {
-    const counts: Record<Scope, number> = {
-      aktiv: 0,
-      abgeschlossen: 0,
-      archiv: 0,
-      alle: allRows.length,
-    };
-    for (const row of allRows) {
-      const phase = casePhase(row.status);
-      if (SCOPE_PHASES.aktiv?.includes(phase)) counts.aktiv += 1;
-      if (SCOPE_PHASES.abgeschlossen?.includes(phase)) counts.abgeschlossen += 1;
-      if (SCOPE_PHASES.archiv?.includes(phase)) counts.archiv += 1;
-    }
-    return counts;
-  }, [allRows]);
-
-  const rows = useMemo(() => {
-    const phases = SCOPE_PHASES[scope];
-    if (phases === null) return allRows;
-    return allRows.filter((r) => phases.includes(casePhase(r.status)));
-  }, [allRows, scope]);
-
-  const columns = useMemo<ColumnDef<BelegRow>[]>(
-    () => [
-      { accessorKey: 'weBelegNo', header: 'WE-Beleg' },
+  const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
+    const defs: ColumnDef<BelegRow>[] = [
+      { accessorKey: 'weBelegNo', header: 'WE-Beleg', id: 'weBelegNo' },
       {
-        id: 'phase',
-        header: 'Phase',
-        accessorFn: (r) => PHASE_LABEL[casePhase(r.status)],
+        id: 'status',
+        header: 'Status',
+        accessorFn: (r) => r.status,
         cell: (ctx) => (
           <Stack direction="row" gap={0.5} alignItems="center">
             <Chip size="small" label={PHASE_LABEL[casePhase(ctx.row.original.status)]} />
@@ -170,14 +248,35 @@ export function BelegListPage(): JSX.Element {
         ),
       },
       {
-        accessorKey: 'section',
+        id: 'primaryShopNo',
+        header: 'Shop',
+        accessorFn: (r) => r.shopNos[0] ?? '–',
+        cell: (ctx) => {
+          const shops = ctx.row.original.shopNos;
+          if (shops.length === 0) return '–';
+          return (
+            <Stack direction="row" gap={0.5} alignItems="center">
+              <span>{shops[0]}</span>
+              {shops.length > 1 && (
+                <Tooltip title={`Alle Shops: ${shops.join(', ')}`}>
+                  <Chip size="small" label={`+${shops.length - 1}`} />
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+      { accessorKey: 'branchNo', header: 'Filiale', id: 'branchNo' },
+      {
+        id: 'section',
         header: 'Abschnitt',
+        accessorFn: (r) => r.section,
         cell: (ctx) => {
           const section = ctx.row.original.section;
           return section === null ? '–' : String(section);
         },
       },
-      { accessorKey: 'goodsType', header: 'Warenart' },
+      { accessorKey: 'goodsType', header: 'Warenart', enableSorting: false },
       {
         id: 'prio',
         header: 'Prio',
@@ -190,42 +289,169 @@ export function BelegListPage(): JSX.Element {
           </Stack>
         ),
       },
-      { accessorKey: 'quantity', header: 'Menge' },
-      { accessorKey: 'effortPoints', header: 'Punkte' },
+      { accessorKey: 'quantity', header: 'Menge (Teile)', id: 'totalQuantity' },
+      { accessorKey: 'effortPoints', header: 'Punkte', id: 'effortPoints' },
       {
-        accessorKey: 'minutes',
-        header: 'Aufwand',
-        cell: (ctx) => formatMinutes(ctx.getValue() as number),
-      },
-      { accessorKey: 'storageCode', header: 'Lagerplatz' },
-      { accessorKey: 'assignedTo', header: 'Zugeteilt' },
-      {
-        id: 'actions',
-        header: '',
+        id: 'labels',
+        header: 'Etiketten',
         enableSorting: false,
-        // Row click navigates to the detail; stop propagation so an action click
-        // never doubles as "open Beleg".
-        cell: (ctx) => (
-          <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex' }}>
+        cell: (ctx) =>
+          ctx.row.original.labelsRequired ? (
+            <Chip size="small" color="info" variant="outlined" label="ja" />
+          ) : (
+            <Chip size="small" variant="outlined" label="nein" />
+          ),
+      },
+      {
+        id: 'bookingDate',
+        header: 'Buchungsdatum',
+        accessorFn: (r) => r.bookingDate,
+        cell: (ctx) => formatDate(ctx.row.original.bookingDate),
+      },
+      { accessorKey: 'storageCode', header: 'Lagerplatz', enableSorting: false },
+      {
+        id: 'lieferung',
+        header: 'Lieferung',
+        enableSorting: false,
+        cell: (ctx) => <LieferungChip group={ctx.row.original.deliveryGroup} />,
+      },
+      {
+        id: 'assignedTo',
+        header: 'Zugeteilt',
+        enableSorting: false,
+        cell: (ctx) => {
+          const r = ctx.row.original;
+          return (
+            <Stack direction="row" gap={0.5} alignItems="center">
+              <span>{r.assignedTo}</span>
+              {r.bundleQueue && !r.bundleQueue.started && (
+                <Tooltip title="Bündel noch nicht gestartet — der Beleg liegt vorbereitet in der Reihenfolge.">
+                  <Chip size="small" variant="outlined" label={`vorbereitet · Pos ${r.bundleQueue.position}`} />
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
+    ];
+
+    if (scope === 'archiv') {
+      defs.push(
+        {
+          id: 'completedAt',
+          header: 'Abschlussdatum',
+          accessorFn: (r) => r.completedAt ?? '',
+          cell: (ctx) => {
+            const at = ctx.row.original.completedAt;
+            return at ? formatDateTime(at) : '–';
+          },
+        },
+        {
+          id: 'docuware',
+          header: 'DocuWare',
+          enableSorting: false,
+          cell: (ctx) => {
+            const url = ctx.row.original.docuWareUrl;
+            if (!url) return '–';
+            return (
+              <Tooltip title="Im DocuWare-Langzeitarchiv öffnen">
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(url, '_blank', 'noopener');
+                  }}
+                >
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            );
+          },
+        },
+      );
+    }
+
+    if (scope === 'topf') {
+      defs.push({
+        id: 'hinweis',
+        header: 'Hinweis',
+        enableSorting: false,
+        cell: (ctx) => {
+          const r = ctx.row.original;
+          return (
+            <Stack direction="row" gap={0.5} alignItems="center" flexWrap="wrap">
+              {r.missingFields.map((f) => (
+                <Chip key={f} size="small" color="error" variant="outlined" label={`fehlt: ${f}`} />
+              ))}
+              {r.attentionFlag && (
+                <Tooltip title={r.attentionNote ?? ''}>
+                  <Chip size="small" color="warning" variant="outlined" label="Aufmerksamkeit" />
+                </Tooltip>
+              )}
+              {r.attentionNote && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 220 }}>
+                  „{r.attentionNote}"
+                </Typography>
+              )}
+            </Stack>
+          );
+        },
+      });
+    }
+
+    defs.push({
+      id: 'actions',
+      header: '',
+      enableSorting: false,
+      // Row click navigates to the detail; stop propagation so an action click
+      // never doubles as "open Beleg".
+      cell: (ctx) => {
+        const r = ctx.row.original;
+        const assignable = r.status === 'ready' && r.assignedTo === '–';
+        return (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex', gap: 0.5 }}>
+            {assignable && (
+              <Button size="small" variant="outlined" onClick={() => setAssignBelegId(r.id)}>
+                Zuweisen
+              </Button>
+            )}
+            {scope === 'topf' && r.status === 'blocked' && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={releaseIntakeMutation.isPending}
+                onClick={() => releaseIntakeMutation.mutate(r.id)}
+              >
+                Freigeben (an Automatik)
+              </Button>
+            )}
+            {scope === 'topf' && r.attentionFlag && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={unflagMutation.isPending}
+                onClick={() => unflagMutation.mutate(r.id)}
+              >
+                Aus Topf entlassen
+              </Button>
+            )}
             <CaseActions
               variant="row"
-              case={{
-                status: ctx.row.original.status,
-                priorityFlags: ctx.row.original.priorityFlags,
-              }}
-              weBelegNo={ctx.row.original.weBelegNo}
-              ctx={{ caseId: ctx.row.original.id, store }}
+              case={{ status: r.status, priorityFlags: r.priorityFlags }}
+              weBelegNo={r.weBelegNo}
+              ctx={{ caseId: r.id, store }}
               onSplit={(caseId) => setSplitCaseId(caseId)}
             />
           </Box>
-        ),
+        );
       },
-    ],
-    [store],
-  );
+    });
+
+    return defs;
+  }, [scope, store, releaseIntakeMutation, unflagMutation]);
 
   const splitBeleg = useMemo<SplitDialogBeleg | null>(() => {
-    const row = allRows.find((r) => r.id === splitCaseId);
+    const row = rows.find((r) => r.id === splitCaseId);
     if (!row) return null;
     return {
       caseId: row.id,
@@ -234,12 +460,12 @@ export function BelegListPage(): JSX.Element {
       effortPoints: row.effortPoints,
       estimatedMinutes: row.minutes,
     };
-  }, [allRows, splitCaseId]);
+  }, [rows, splitCaseId]);
 
   return (
     <Stack spacing={2}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
-        Belege ({rows.length})
+        Belege ({total})
       </Typography>
 
       {splitDone && (
@@ -275,33 +501,151 @@ export function BelegListPage(): JSX.Element {
           exclusive
           value={scope}
           onChange={(_e, next) => {
-            if (next !== null) setScope(next as Scope);
+            if (next !== null) {
+              setScope(next as BelegeScope);
+              setPage(1);
+            }
           }}
           aria-label="Lebenszyklus-Scope"
         >
-          {(Object.keys(SCOPE_PHASES) as Scope[]).map((s) => (
+          {SCOPES.map((s) => (
             <ToggleButton key={s} value={s}>
-              {SCOPE_LABEL[s]} ({countByScope[s]})
+              {SCOPE_LABEL[s]}
+              {s === 'topf' && topfCountQuery.data !== undefined
+                ? ` (${topfCountQuery.data})`
+                : ''}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
-        <TextField
-          size="small"
-          label="Filter (WE-Nr, Status, Lagerplatz …)"
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          sx={{ minWidth: 280 }}
-        />
         {scope === 'abgeschlossen' && (
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
-            disabled={exportZst.isPending || countByScope.abgeschlossen === 0}
+            disabled={exportZst.isPending || total === 0}
             onClick={() => void handleExport()}
           >
             {exportZst.isPending ? 'Export läuft …' : 'Tagesabschluss / ZST-Export'}
           </Button>
         )}
+      </Stack>
+
+      {scope === 'archiv' && (
+        <Alert severity="info" variant="outlined">
+          Belege bleiben im System erhalten; DocuWare ist das Langzeitarchiv.
+        </Alert>
+      )}
+      {scope === 'topf' && (
+        <Alert severity="info" variant="outlined">
+          Topf: Belege mit „Besonderer Aufmerksamkeit" (Bucherinnen-Hinweis) sowie blockierte /
+          zu prüfende Belege — hier zuweisen, freigeben oder entlassen.
+        </Alert>
+      )}
+
+      {/* Compact per-column filter row — every field sets a SERVER query param (A2). */}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+        <TextField
+          size="small"
+          label="WE-Nr / Lagerplatz / Lieferschein"
+          value={filters.q ?? ''}
+          onChange={(e) => updateFilters({ q: e.target.value || undefined })}
+          sx={{ minWidth: 220 }}
+        />
+        <TextField
+          size="small"
+          select
+          label="Status"
+          value={filters.status ?? ''}
+          onChange={(e) =>
+            updateFilters({ status: (e.target.value || undefined) as CaseStatus | undefined })
+          }
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          {STATUS_OPTIONS.map((s) => (
+            <MenuItem key={s} value={s}>
+              {s}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          size="small"
+          label="Shop"
+          value={filters.shopNo ?? ''}
+          onChange={(e) => updateFilters({ shopNo: e.target.value || undefined })}
+          sx={{ width: 110 }}
+        />
+        <TextField
+          size="small"
+          label="Filiale"
+          value={filters.branchNo ?? ''}
+          onChange={(e) => updateFilters({ branchNo: e.target.value || undefined })}
+          sx={{ width: 110 }}
+        />
+        <TextField
+          size="small"
+          select
+          label="Abschnitt"
+          value={filters.section ?? ''}
+          onChange={(e) =>
+            updateFilters({
+              section: e.target.value === '' ? undefined : (Number(e.target.value) as BelegeFilters['section']),
+            })
+          }
+          sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          {SECTION_OPTIONS.map((s) => (
+            <MenuItem key={s} value={s}>
+              {s}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          size="small"
+          select
+          label="Etiketten"
+          value={filters.labels ?? ''}
+          onChange={(e) =>
+            updateFilters({ labels: (e.target.value || undefined) as BelegeFilters['labels'] })
+          }
+          sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          <MenuItem value="yes">ja</MenuItem>
+          <MenuItem value="no">nein</MenuItem>
+        </TextField>
+        <TextField
+          size="small"
+          select
+          label="Zugeteilt"
+          value={filters.assigned ?? ''}
+          onChange={(e) =>
+            updateFilters({ assigned: (e.target.value || undefined) as BelegeFilters['assigned'] })
+          }
+          sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          <MenuItem value="yes">ja</MenuItem>
+          <MenuItem value="no">nein</MenuItem>
+        </TextField>
+        <TextField
+          size="small"
+          type="date"
+          label="Buchung ab"
+          value={filters.bookingFrom ?? ''}
+          onChange={(e) => updateFilters({ bookingFrom: e.target.value || undefined })}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ width: 160 }}
+        />
+        <TextField
+          size="small"
+          type="date"
+          label="Buchung bis"
+          value={filters.bookingTo ?? ''}
+          onChange={(e) => updateFilters({ bookingTo: e.target.value || undefined })}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ width: 160 }}
+        />
       </Stack>
 
       {query.isLoading ? (
@@ -311,18 +655,38 @@ export function BelegListPage(): JSX.Element {
           ))}
         </Stack>
       ) : (
-        <DataTable
-          data={rows}
-          columns={columns}
-          globalFilter={globalFilter}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          getRowId={(r) => r.id}
-          onRowClick={(r) => navigate(`/belege/${r.id}`)}
-          maxHeight={560}
-          emptyText="Keine Belege in diesem Scope."
-        />
+        <>
+          <DataTable
+            data={rows}
+            columns={columns}
+            serverMode
+            sorting={sorting}
+            onSortingChange={(next) => {
+              setSorting(next);
+              setPage(1);
+            }}
+            getRowId={(r) => r.id}
+            onRowClick={(r) => navigate(`/belege/${r.id}`)}
+            maxHeight={560}
+            emptyText="Keine Belege in diesem Scope."
+          />
+          <TablePagination
+            component="div"
+            count={total}
+            page={page - 1}
+            onPageChange={(_e, next) => setPage(next + 1)}
+            rowsPerPage={BELEGE_PAGE_LIMIT}
+            rowsPerPageOptions={[BELEGE_PAGE_LIMIT]}
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} von ${count}`}
+          />
+        </>
       )}
+
+      <AssignFromListDialog
+        open={assignBeleg !== null}
+        beleg={assignBeleg}
+        onClose={() => setAssignBelegId(null)}
+      />
 
       <SplitDialog
         open={splitBeleg !== null}

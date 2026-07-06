@@ -56,7 +56,7 @@ export class WorkflowService {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.goodsReceiptCase.findUnique({
         where: { id: input.caseId },
-        select: { id: true, status: true, version: true },
+        select: { id: true, status: true, version: true, completedAt: true },
       });
       if (!current) {
         throw new NotFoundException(`Case ${input.caseId} not found`);
@@ -74,9 +74,18 @@ export class WorkflowService {
         throw err;
       }
 
+      // Abschlusszeitpunkt (A6 Archiv): stamped exactly once when the case first
+      // reaches a completion state (completed, or zst_done on the export path).
+      const reachesCompletion = input.toStatus === 'completed' || input.toStatus === 'zst_done';
       const updated = await tx.goodsReceiptCase.updateMany({
         where: { id: current.id, version: current.version },
-        data: { status: input.toStatus as PrismaCaseStatus, version: { increment: 1 } },
+        data: {
+          status: input.toStatus as PrismaCaseStatus,
+          version: { increment: 1 },
+          ...(reachesCompletion && current.completedAt === null
+            ? { completedAt: new Date() }
+            : {}),
+        },
       });
       if (updated.count === 0) {
         throw new ConflictException('Case was modified concurrently');

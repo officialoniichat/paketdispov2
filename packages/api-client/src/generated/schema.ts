@@ -404,6 +404,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/{caseId}/flag-attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet, mock) */
+        post: operations["TeamleadController_flagAttention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/unflag-attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A7 TL-Topf: Aufmerksamkeitsflag entfernen („aus Topf entlassen") */
+        post: operations["TeamleadController_unflagAttention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/delivery-groups/split": {
         parameters: {
             query?: never;
@@ -926,6 +960,20 @@ export interface components {
             goodsType?: string | null;
             /** @description Display name of the assigned employee */
             assignedEmployeeName?: string | null;
+            /** @description Filiale (Beleg-Kopf) */
+            branchNo: string;
+            /** @description Etiketten nötig (abgeleitet: workInstruction.priceLabelPrintRequired || boxLabelRequired) */
+            labelsRequired: boolean;
+            /** @description Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst) */
+            shopNos: string[];
+            /** @description Link ins DocuWare-Langzeitarchiv (A6, mock); gesetzt bei Abschluss */
+            docuWareUrl?: string | null;
+            /** @description ISO-8601 Abschlusszeitpunkt (completed/zst_done), sonst null */
+            completedAt?: string | null;
+            /** @description TL-Topf (A7): „Besondere Aufmerksamkeit" (Bucherinnen-Inlet) */
+            attentionFlag: boolean;
+            /** @description Notiz zum Aufmerksamkeitsflag */
+            attentionNote?: string | null;
         };
         MeWorkstationDto: {
             id: string;
@@ -1195,6 +1243,14 @@ export interface components {
             /** @description Projected from payload, if present */
             reason?: string;
         };
+        BundleQueueRefDto: {
+            bundleId: string;
+            employeeName: string;
+            /** @description 1-based Position des Belegs in der Bündel-Reihenfolge */
+            position: number;
+            /** @description true = das Bündel hat bereits einen Beleg in Arbeit */
+            started: boolean;
+        };
         PoolItemDto: {
             id: string;
             weBelegNo: string;
@@ -1223,12 +1279,28 @@ export interface components {
             goodsType?: string | null;
             /** @description Display name of the assigned employee */
             assignedEmployeeName?: string | null;
+            /** @description Filiale (Beleg-Kopf) */
+            branchNo: string;
+            /** @description Etiketten nötig (abgeleitet: workInstruction.priceLabelPrintRequired || boxLabelRequired) */
+            labelsRequired: boolean;
+            /** @description Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst) */
+            shopNos: string[];
+            /** @description Link ins DocuWare-Langzeitarchiv (A6, mock); gesetzt bei Abschluss */
+            docuWareUrl?: string | null;
+            /** @description ISO-8601 Abschlusszeitpunkt (completed/zst_done), sonst null */
+            completedAt?: string | null;
+            /** @description TL-Topf (A7): „Besondere Aufmerksamkeit" (Bucherinnen-Inlet) */
+            attentionFlag: boolean;
+            /** @description Notiz zum Aufmerksamkeitsflag */
+            attentionNote?: string | null;
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
             /** @description Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds. */
             bereich?: string | null;
+            /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
+            bundleQueue?: components["schemas"]["BundleQueueRefDto"] | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1390,6 +1462,10 @@ export interface components {
             storageLocationId?: string;
             /** @description Lieferschein-Nr */
             deliveryNoteNo?: string;
+        };
+        FlagAttentionDto: {
+            /** @description Optionale Notiz, warum der Beleg Aufmerksamkeit braucht */
+            note?: string;
         };
         ParkDto: {
             reason?: string;
@@ -2115,6 +2191,27 @@ export interface operations {
                 status?: string;
                 /** @description Filter by section code */
                 section?: number;
+                /** @description Volltext: WE-Beleg-Nr / Lagerplatz-Code / Lieferschein-Nr (contains) */
+                q?: string;
+                /** @description Filter: Shop (primärer Shop, contains) */
+                shopNo?: string;
+                /** @description Filter: Filiale (contains) */
+                branchNo?: string;
+                /** @description Filter: fester Bereich (Hängebahn|Palette|Regal) */
+                bereich?: string;
+                /** @description Filter: zugeteilt ja/nein */
+                assigned?: "yes" | "no";
+                /** @description Filter: Etiketten nötig ja/nein */
+                labels?: "yes" | "no";
+                /** @description Lebenszyklus-Scope (server-seitig): aktiv | abgeschlossen | archiv (completed+zst_done) | topf (Aufmerksamkeit/blocked/needs_review) | alle */
+                scope?: "aktiv" | "abgeschlossen" | "archiv" | "topf" | "alle";
+                /** @description Buchungsdatum ab (YYYY-MM-DD, inklusive) */
+                bookingFrom?: string;
+                /** @description Buchungsdatum bis (YYYY-MM-DD, inklusive) */
+                bookingTo?: string;
+                /** @description Server-side sort column */
+                sortBy?: "weBelegNo" | "bookingDate" | "totalQuantity" | "effortPoints" | "status" | "section" | "branchNo" | "primaryShopNo" | "completedAt";
+                sortDir?: "asc" | "desc";
                 page?: number;
                 limit?: number;
             };
@@ -2265,6 +2362,52 @@ export interface operations {
                 "application/json": components["schemas"]["CompleteIntakeDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_flagAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlagAttentionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_unflagAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

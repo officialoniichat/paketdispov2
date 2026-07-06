@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag } from '@prisma/client';
+import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag, Prisma } from '@prisma/client';
 import { detectDeliveryGroups, indexDeliveryGroups } from '@paket/assignment-engine';
-import { bereichFromLocationKind } from '@paket/domain-types';
+import { bereichFromLocationKind, locationKindSchema } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type AuditEventDto,
   type BoardDto,
   type BoardRowDto,
+  type BundleQueueRefDto,
   type CapacityDto,
   type CaseDetailDto,
   type CaseSummaryDto,
@@ -21,7 +22,7 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction,
+import { distinctShopNos, isLabelsRequired, mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction,
   wgrDescription,
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
@@ -34,6 +35,78 @@ const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 's
 const COMPLETED_STATUSES: CaseStatus[] = ['completed', 'zst_done'];
 /** Bundle statuses excluded from planned-effort capacity math. */
 const INACTIVE_BUNDLE_STATUSES: AssignmentStatus[] = ['cancelled', 'completed'];
+
+/**
+ * Lebenszyklus-Scopes der Belege-Ansicht (A2), server-seitig gemappt: aktiv =
+ * alles in Bearbeitung, abgeschlossen = heute fertig (vor ZST-Export), archiv =
+ * fertig inkl. ZST (DocuWare-Verweis, A6). Der `topf`-Scope ist status-übergreifend
+ * (Aufmerksamkeitsflag ODER blocked/needs_review) und lebt in {@link poolWhere}.
+ */
+const SCOPE_STATUSES: Record<'aktiv' | 'abgeschlossen' | 'archiv', CaseStatus[]> = {
+  aktiv: ['ready', 'parked', 'assigned', 'in_progress', 'issue_open', 'partially_completed'],
+  abgeschlossen: ['completed'],
+  archiv: ['completed', 'zst_done'],
+};
+
+/** Compose the Prisma where clause from the Belege list query (scope + column filters, A2/A7). */
+function poolWhere(query: PoolQueryDto): Prisma.GoodsReceiptCaseWhereInput {
+  const and: Prisma.GoodsReceiptCaseWhereInput[] = [];
+  if (query.scope && query.scope !== 'alle') {
+    if (query.scope === 'topf') {
+      // TL-Topf (A7): flagged for attention OR stuck in triage (blocked/needs_review).
+      and.push({
+        OR: [{ attentionFlag: true }, { status: { in: ['blocked', 'needs_review'] } }],
+      });
+    } else {
+      and.push({ status: { in: SCOPE_STATUSES[query.scope] } });
+    }
+  }
+  if (query.status) and.push({ status: query.status as CaseStatus });
+  if (query.section !== undefined) and.push({ section: query.section });
+  if (query.q) {
+    and.push({
+      OR: [
+        { weBelegNo: { contains: query.q, mode: 'insensitive' } },
+        { deliveryNoteNo: { contains: query.q, mode: 'insensitive' } },
+        { storageLocation: { is: { code: { contains: query.q, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+  if (query.shopNo) and.push({ primaryShopNo: { contains: query.shopNo, mode: 'insensitive' } });
+  if (query.branchNo) and.push({ branchNo: { contains: query.branchNo, mode: 'insensitive' } });
+  if (query.bereich) {
+    // Bereich is DERIVED from the Lagerklasse (fixed vocabulary) — translate the
+    // Bereich back to its storage kinds so the filter runs in the database.
+    const kinds = locationKindSchema.options.filter(
+      (kind) => bereichFromLocationKind(kind) === query.bereich,
+    ) as LocationKind[];
+    and.push({ storageLocation: { is: { kind: { in: kinds } } } });
+  }
+  if (query.assigned === 'yes') and.push({ assignedBundleId: { not: null } });
+  if (query.assigned === 'no') and.push({ assignedBundleId: null });
+  if (query.labels === 'yes') {
+    and.push({
+      workInstruction: {
+        is: { OR: [{ priceLabelPrintRequired: true }, { boxLabelRequired: true }] },
+      },
+    });
+  }
+  if (query.labels === 'no') {
+    and.push({
+      OR: [
+        { workInstruction: { is: null } },
+        { workInstruction: { is: { priceLabelPrintRequired: false, boxLabelRequired: false } } },
+      ],
+    });
+  }
+  if (query.bookingFrom) {
+    and.push({ bookingDate: { gte: new Date(`${query.bookingFrom}T00:00:00.000Z`) } });
+  }
+  if (query.bookingTo) {
+    and.push({ bookingDate: { lte: new Date(`${query.bookingTo}T23:59:59.999Z`) } });
+  }
+  return and.length > 0 ? { AND: and } : {};
+}
 
 /** Inclusive UTC day window [start, end] for a YYYY-MM-DD calendar day. */
 function dayWindow(date: string): { start: Date; end: Date } {
@@ -79,10 +152,14 @@ export class TeamleadReadService {
   async listPool(query: PoolQueryDto): Promise<PoolListDto> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 50;
-    const where = {
-      ...(query.status ? { status: query.status as never } : {}),
-      ...(query.section !== undefined ? { section: query.section } : {}),
-    };
+    const where = poolWhere(query);
+    // Server-side sort (A2): validated column + direction, weBelegNo as the
+    // deterministic tie-break so pagination never shuffles equal rows.
+    const sortDir = query.sortDir ?? 'asc';
+    const orderBy: Prisma.GoodsReceiptCaseOrderByWithRelationInput[] = [
+      { [query.sortBy ?? 'bookingDate']: sortDir } as Prisma.GoodsReceiptCaseOrderByWithRelationInput,
+      { weBelegNo: 'asc' },
+    ];
 
     const [rows, total, ruleConfig] = await Promise.all([
       this.prisma.goodsReceiptCase.findMany({
@@ -90,10 +167,19 @@ export class TeamleadReadService {
         include: {
           ...caseEffortInclude,
           assignedBundle: {
-            select: { employee: { select: { employeeNo: true, displayName: true } } },
+            select: {
+              id: true,
+              employee: { select: { employeeNo: true, displayName: true } },
+              // A5 bundleQueue: position of the Beleg in its Bündel + whether the
+              // Bündel is already running (any case in Arbeit).
+              items: {
+                orderBy: { sequence: 'asc' },
+                select: { caseId: true, case: { select: { status: true } } },
+              },
+            },
           },
         },
-        orderBy: [{ bookingDate: 'asc' }],
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -151,16 +237,47 @@ export class TeamleadReadService {
         bookingDate: c.bookingDate.toISOString().slice(0, 10),
         goodsType: c.goodsTypeText,
         assignedEmployeeName: c.assignedBundle?.employee?.displayName ?? null,
+        branchNo: c.branchNo,
+        labelsRequired: isLabelsRequired(c.workInstruction),
+        shopNos: distinctShopNos(c.primaryShopNo, c.positions),
+        docuWareUrl: c.docuWareUrl,
+        completedAt: c.completedAt ? c.completedAt.toISOString() : null,
+        attentionFlag: c.attentionFlag,
+        attentionNote: c.attentionNote,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
         deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
         bereich: c.storageLocation
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
+        bundleQueue: this.toBundleQueue(c.id, c.assignedBundle),
       };
     });
 
     return { items, total, page, limit };
+  }
+
+  /**
+   * A5 „vorbereitet / als nächstes": project a case's place in its Bündel.
+   * `null` when the case is not (or no longer) part of a bundle's item order.
+   */
+  private toBundleQueue(
+    caseId: string,
+    bundle: {
+      id: string;
+      employee: { displayName: string } | null;
+      items: { caseId: string; case: { status: string } }[];
+    } | null,
+  ): BundleQueueRefDto | null {
+    if (!bundle) return null;
+    const index = bundle.items.findIndex((it) => it.caseId === caseId);
+    if (index === -1) return null;
+    return {
+      bundleId: bundle.id,
+      employeeName: bundle.employee?.displayName ?? '',
+      position: index + 1,
+      started: bundle.items.some((it) => it.case.status === 'in_progress'),
+    };
   }
 
   async dashboard(now: Date = new Date()): Promise<DashboardDto> {
@@ -561,6 +678,13 @@ export class TeamleadReadService {
       bookingDate: found.bookingDate.toISOString().slice(0, 10),
       goodsType: found.goodsTypeText,
       assignedEmployeeName: found.assignedBundle?.employee?.displayName ?? null,
+      branchNo: found.branchNo,
+      labelsRequired: isLabelsRequired(found.workInstruction),
+      shopNos: distinctShopNos(found.primaryShopNo, found.positions),
+      docuWareUrl: found.docuWareUrl,
+      completedAt: found.completedAt ? found.completedAt.toISOString() : null,
+      attentionFlag: found.attentionFlag,
+      attentionNote: found.attentionNote,
     };
 
     const history = await this.auditEvents({ entityId: caseId, limit: 200 });

@@ -81,6 +81,8 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.returned_to_bucher': 'An Bucher gemeldet',
   'case.intake_released': 'Intake freigegeben',
   'case.delivery_group_released': 'Lieferung trotzdem freigegeben',
+  'case.attention_flagged': 'Besondere Aufmerksamkeit markiert',
+  'case.attention_cleared': 'Aufmerksamkeit entfernt',
 };
 
 /** German label for each actor, so the audit feed never shows the raw role token. */

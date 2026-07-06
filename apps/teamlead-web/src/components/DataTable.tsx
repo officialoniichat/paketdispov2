@@ -41,6 +41,13 @@ export interface DataTableProps<T> {
   /** When set, the body scrolls within this height and rows are virtualized. */
   maxHeight?: number;
   rowHeight?: number;
+  /**
+   * Server mode: sorting/filtering/pagination happen on the backend — the table
+   * renders `data` as-is and only REPORTS sorting intents via `onSortingChange`
+   * (manualSorting/manualFiltering). Client mode (default) keeps the local
+   * sorted/filtered row models for the other cockpit tables.
+   */
+  serverMode?: boolean;
 }
 
 export function DataTable<T>({
@@ -55,6 +62,7 @@ export function DataTable<T>({
   emptyText = 'Keine Einträge.',
   maxHeight,
   rowHeight = 44,
+  serverMode = false,
 }: DataTableProps<T>): JSX.Element {
   const table = useReactTable({
     data,
@@ -67,8 +75,15 @@ export function DataTable<T>({
     },
     getRowId: getRowId ? (row) => getRowId(row) : undefined,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    manualSorting: serverMode,
+    manualFiltering: serverMode,
+    manualPagination: serverMode,
+    ...(serverMode
+      ? {}
+      : {
+          getSortedRowModel: getSortedRowModel(),
+          getFilteredRowModel: getFilteredRowModel(),
+        }),
     globalFilterFn: 'includesString',
   });
 

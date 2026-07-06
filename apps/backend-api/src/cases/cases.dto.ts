@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 // --- Responses --------------------------------------------------------------
 
@@ -53,6 +53,47 @@ export class CaseSummaryDto {
     description: 'Display name of the assigned employee',
   })
   assignedEmployeeName!: string | null;
+  @ApiProperty({ description: 'Filiale (Beleg-Kopf)' }) branchNo!: string;
+  @ApiProperty({
+    description:
+      'Etiketten nötig (abgeleitet: workInstruction.priceLabelPrintRequired || boxLabelRequired)',
+  })
+  labelsRequired!: boolean;
+  @ApiProperty({
+    type: [String],
+    description: 'Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst)',
+  })
+  shopNos!: string[];
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Link ins DocuWare-Langzeitarchiv (A6, mock); gesetzt bei Abschluss',
+  })
+  docuWareUrl!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'ISO-8601 Abschlusszeitpunkt (completed/zst_done), sonst null',
+  })
+  completedAt!: string | null;
+  @ApiProperty({ description: 'TL-Topf (A7): „Besondere Aufmerksamkeit" (Bucherinnen-Inlet)' })
+  attentionFlag!: boolean;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Notiz zum Aufmerksamkeitsflag' })
+  attentionNote!: string | null;
+}
+
+/**
+ * A5: where an assigned Beleg sits in its Bündel — powers the „vorbereitet /
+ * als nächstes" indicator in the Belege list. `started` = the Bündel already has
+ * a Beleg in Arbeit (then the queue is running, not merely prepared).
+ */
+export class BundleQueueRefDto {
+  @ApiProperty() bundleId!: string;
+  @ApiProperty() employeeName!: string;
+  @ApiProperty({ description: '1-based Position des Belegs in der Bündel-Reihenfolge' })
+  position!: number;
+  @ApiProperty({ description: 'true = das Bündel hat bereits einen Beleg in Arbeit' })
+  started!: boolean;
 }
 
 /**
@@ -310,6 +351,13 @@ export class PoolItemDto extends CaseSummaryDto {
       "Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds.",
   })
   bereich!: string | null;
+  @ApiPropertyOptional({
+    type: BundleQueueRefDto,
+    nullable: true,
+    description:
+      'A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt',
+  })
+  bundleQueue!: BundleQueueRefDto | null;
 }
 
 export class PoolListDto {
@@ -596,6 +644,24 @@ export class DeliveryGroupReleaseResultDto {
 
 // --- Requests ---------------------------------------------------------------
 
+/** Lebenszyklus-Scopes der Belege-Ansicht (server-seitig gemappt, A2/A6/A7). */
+export const POOL_SCOPES = ['aktiv', 'abgeschlossen', 'archiv', 'topf', 'alle'] as const;
+export type PoolScope = (typeof POOL_SCOPES)[number];
+
+/** Server-side sortable Beleg list columns (A2). */
+export const POOL_SORT_FIELDS = [
+  'weBelegNo',
+  'bookingDate',
+  'totalQuantity',
+  'effortPoints',
+  'status',
+  'section',
+  'branchNo',
+  'primaryShopNo',
+  'completedAt',
+] as const;
+export type PoolSortField = (typeof POOL_SORT_FIELDS)[number];
+
 export class PoolQueryDto {
   @ApiPropertyOptional({ description: 'Filter by CaseStatus' })
   @IsOptional()
@@ -606,6 +672,67 @@ export class PoolQueryDto {
   @IsOptional()
   @IsInt()
   section?: number;
+
+  @ApiPropertyOptional({
+    description: 'Volltext: WE-Beleg-Nr / Lagerplatz-Code / Lieferschein-Nr (contains)',
+  })
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: Shop (primärer Shop, contains)' })
+  @IsOptional()
+  @IsString()
+  shopNo?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: Filiale (contains)' })
+  @IsOptional()
+  @IsString()
+  branchNo?: string;
+
+  @ApiPropertyOptional({ description: 'Filter: fester Bereich (Hängebahn|Palette|Regal)' })
+  @IsOptional()
+  @IsString()
+  bereich?: string;
+
+  @ApiPropertyOptional({ enum: ['yes', 'no'], description: 'Filter: zugeteilt ja/nein' })
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  assigned?: 'yes' | 'no';
+
+  @ApiPropertyOptional({ enum: ['yes', 'no'], description: 'Filter: Etiketten nötig ja/nein' })
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  labels?: 'yes' | 'no';
+
+  @ApiPropertyOptional({
+    enum: POOL_SCOPES,
+    description:
+      'Lebenszyklus-Scope (server-seitig): aktiv | abgeschlossen | archiv (completed+zst_done) | topf (Aufmerksamkeit/blocked/needs_review) | alle',
+  })
+  @IsOptional()
+  @IsIn(POOL_SCOPES)
+  scope?: PoolScope;
+
+  @ApiPropertyOptional({ description: 'Buchungsdatum ab (YYYY-MM-DD, inklusive)' })
+  @IsOptional()
+  @IsString()
+  bookingFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Buchungsdatum bis (YYYY-MM-DD, inklusive)' })
+  @IsOptional()
+  @IsString()
+  bookingTo?: string;
+
+  @ApiPropertyOptional({ enum: POOL_SORT_FIELDS, description: 'Server-side sort column' })
+  @IsOptional()
+  @IsIn(POOL_SORT_FIELDS)
+  sortBy?: PoolSortField;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDir?: 'asc' | 'desc';
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
@@ -619,6 +746,14 @@ export class PoolQueryDto {
   @Min(1)
   @Max(200)
   limit?: number;
+}
+
+/** Body for POST /api/teamlead/cases/:caseId/flag-attention (A7, Bucherinnen-Inlet mock). */
+export class FlagAttentionDto {
+  @ApiPropertyOptional({ description: 'Optionale Notiz, warum der Beleg Aufmerksamkeit braucht' })
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class CreateIssueDto {

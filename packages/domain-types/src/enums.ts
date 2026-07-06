@@ -199,6 +199,8 @@ export const workflowEventTypeSchema = z.enum([
   'case.returned_to_bucher',
   'case.intake_released',
   'case.delivery_group_released',
+  'case.attention_flagged',
+  'case.attention_cleared',
 ]);
 export type WorkflowEventType = z.infer<typeof workflowEventTypeSchema>;
 

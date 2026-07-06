@@ -37,6 +37,30 @@ export function mapDeliveryGroupRef(group: DeliveryGroup): DeliveryGroupRefDto {
 }
 
 /**
+ * Distinct Shops of a Beleg (A3 Mehr-Shop): the primary shop first (Beleg-Kopf),
+ * then every further distinct position shop in position order. Empty when the
+ * Beleg carries neither a primary shop nor positions.
+ */
+export function distinctShopNos(
+  primaryShopNo: string | null,
+  positions: ReadonlyArray<{ shopNo: string }>,
+): string[] {
+  const shops: string[] = [];
+  if (primaryShopNo) shops.push(primaryShopNo);
+  for (const p of positions) {
+    if (p.shopNo && !shops.includes(p.shopNo)) shops.push(p.shopNo);
+  }
+  return shops;
+}
+
+/** Etiketten nötig (A1): derived from the work-instruction header, false without one. */
+export function isLabelsRequired(
+  wi: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null | undefined,
+): boolean {
+  return Boolean(wi && (wi.priceLabelPrintRequired || wi.boxLabelRequired));
+}
+
+/**
  * WGR-Klartext (A2). Aufgelöst über die Mock-Stammdaten aus domain-types — der
  * DB-Katalog (WgrCatalog) wird aus DENSELBEN Konstanten geseedet; sobald die echte
  * ProHandel-Anbindung Kataloge liefert, wandert die Auflösung in eine DB-Query.

@@ -546,6 +546,18 @@ interface SeedLifecycleCase {
   exportedAt?: string;
   /** issue_open only: the open problem reported against the case. */
   issue?: { issueType: 'wrong_color' | 'damaged_goods' | 'missing_quantity'; description: string };
+  /** A7 TL-Topf: „Besondere Aufmerksamkeit"-Flag mit Notiz (Bucherinnen-Inlet mock). */
+  attentionNote?: string;
+}
+
+/** True for completion states — these get completedAt + the DocuWare archive link (A6). */
+function isCompletionStatus(status: LifecycleStatus): boolean {
+  return status === 'completed' || status === 'zst_done';
+}
+
+/** Mock DocuWare-Langzeitarchiv link (A6) for a completed Beleg. */
+function docuWareUrlFor(weBelegNo: string): string {
+  return `https://docuware.example.com/lt-archiv/${weBelegNo}`;
 }
 
 const LIFECYCLE_CASES: SeedLifecycleCase[] = [
@@ -579,11 +591,13 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     weBelegNo: 'WE-2026-000206', storageCode: 'R7', section: 7, goodsTypeText: 'NOS',
     totalQuantity: 28, effortPoints: 7, estimatedMinutes: 16, status: 'needs_review',
     employeeNo: 'ma-101',
+    attentionNote: 'Bucherin: Preisangaben unklar — bitte vor Freigabe prüfen.',
   },
   {
     weBelegNo: 'WE-2026-000207', storageCode: 'R18', section: 4, goodsTypeText: 'Nachorder',
     totalQuantity: 52, effortPoints: 12, estimatedMinutes: 26, status: 'parked',
     employeeNo: 'ma-102',
+    attentionNote: 'Bucherin: Lieferant hat Nachlieferung angekündigt.',
   },
   {
     weBelegNo: 'WE-2026-000208', storageCode: 'R27', section: 1, goodsTypeText: 'Vororder',
@@ -619,6 +633,13 @@ async function seedLifecycleCases(
       status: c.status,
       effortPoints: c.effortPoints,
       estimatedMinutes: c.estimatedMinutes,
+      // A6 Archiv: Abschlusszeitpunkt + DocuWare-Link für abgeschlossene Belege.
+      completedAt:
+        isCompletionStatus(c.status) && c.completedAt ? asTime(SEED_DATE, c.completedAt) : null,
+      docuWareUrl: isCompletionStatus(c.status) ? docuWareUrlFor(c.weBelegNo) : null,
+      // A7 TL-Topf: Aufmerksamkeitsflag (Bucherinnen-Inlet mock).
+      attentionFlag: c.attentionNote !== undefined,
+      attentionNote: c.attentionNote ?? null,
     };
     const gcase = await prisma.goodsReceiptCase.upsert({
       where: { weBelegNo: c.weBelegNo },
@@ -812,6 +833,27 @@ async function seedIntakeGateFixtures(locationIds: Record<string, string>): Prom
   }
 }
 
+/**
+ * A7 TL-Topf: flag ONE ready pool case for „Besondere Aufmerksamkeit" so the Topf
+ * also shows a plan-/zuweisbarer Beleg (not only triage states). Deterministic:
+ * always the first ready case by weBelegNo, so re-running flags the same Beleg.
+ */
+async function seedReadyAttentionFlag(): Promise<void> {
+  const target = await prisma.goodsReceiptCase.findFirst({
+    where: { status: 'ready' },
+    orderBy: { weBelegNo: 'asc' },
+    select: { id: true },
+  });
+  if (!target) return;
+  await prisma.goodsReceiptCase.update({
+    where: { id: target.id },
+    data: {
+      attentionFlag: true,
+      attentionNote: 'Bucherin: Ware bitte gesondert prüfen (Reklamation beim letzten Mal).',
+    },
+  });
+}
+
 async function main(): Promise<void> {
   const roleIds = await seedRoles();
   const workstationIds = await seedWorkstations();
@@ -828,6 +870,7 @@ async function main(): Promise<void> {
   // seedCaseDetails so its richer positions/boxes are not overwritten).
   await seedGeneratedBelege(locationIds);
   await seedIntakeGateFixtures(locationIds);
+  await seedReadyAttentionFlag();
   await seedRuleConfig();
 
   const [users, shifts, locations, readyCases, positions, boxes, lifecycleCases, zstRecords] =

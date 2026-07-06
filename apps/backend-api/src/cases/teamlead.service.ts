@@ -390,6 +390,63 @@ export class TeamleadService {
   }
 
   /**
+   * TL-Topf (A7) „Besondere Aufmerksamkeit": flag a Beleg for the teamlead pot
+   * (mocked Bucherinnen-Inlet). Status-neutral — only the flag + optional note
+   * change, with an audited `case.attention_flagged` event.
+   */
+  async flagAttention(
+    principal: Principal,
+    caseId: string,
+    dto: { note?: string },
+  ): Promise<TransitionResultDto> {
+    return this.setAttention(principal, caseId, { flag: true, note: dto.note });
+  }
+
+  /** TL-Topf (A7): clear the attention flag („aus Topf entlassen"), audited. */
+  async unflagAttention(principal: Principal, caseId: string): Promise<TransitionResultDto> {
+    return this.setAttention(principal, caseId, { flag: false });
+  }
+
+  private async setAttention(
+    principal: Principal,
+    caseId: string,
+    input: { flag: boolean; note?: string },
+  ): Promise<TransitionResultDto> {
+    const found = await this.prisma.goodsReceiptCase.findUnique({
+      where: { id: caseId },
+      select: { id: true, status: true, version: true, weBelegNo: true },
+    });
+    if (!found) throw new NotFoundException(`Case ${caseId} not found`);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.goodsReceiptCase.updateMany({
+        where: { id: found.id, version: found.version },
+        data: {
+          attentionFlag: input.flag,
+          attentionNote: input.flag ? (input.note ?? null) : null,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Case was modified concurrently');
+      }
+      const event = await this.events.append(
+        {
+          eventType: input.flag ? 'case.attention_flagged' : 'case.attention_cleared',
+          entityType: 'GoodsReceiptCase',
+          entityId: found.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { weBelegNo: found.weBelegNo, note: input.note ?? null },
+        },
+        tx,
+      );
+      return { caseId: found.id, status: found.status, version: found.version + 1, event };
+    });
+    return this.toResult(result);
+  }
+
+  /**
    * Lieferungs-Pool-Hold (D2) „trotzdem bearbeiten": eine unvollständige Lieferung
    * („X von N") explizit freigeben — alle Mitglieder erhalten das Release-Flag und
    * verteilen sich wieder, obwohl noch Belege der Lieferung fehlen.

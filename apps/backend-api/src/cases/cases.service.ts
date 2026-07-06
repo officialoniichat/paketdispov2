@@ -34,6 +34,8 @@ import {
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
 import {
   wgrDescription,
+  distinctShopNos,
+  isLabelsRequired,
   mapBoxTarget,
   mapPositionInstruction,
   mapSkuLine,
@@ -104,7 +106,9 @@ export class CasesService {
         cases: {
           include: {
             storageLocation: true,
-            workInstruction: { select: { priceLabelPrintRequired: true } },
+            // A1/A3 summary fields: Etiketten (derived) + Mehr-Shop list.
+            workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
+            positions: { select: { shopNo: true }, orderBy: { positionNo: 'asc' } },
           },
           orderBy: { bookingDate: 'asc' },
         },
@@ -635,7 +639,13 @@ export class CasesService {
       primaryShopNo?: string | null;
       inboundCartonCount?: number | null;
       missingFields?: string[];
-      workInstruction?: { priceLabelPrintRequired: boolean } | null;
+      branchNo: string;
+      docuWareUrl: string | null;
+      completedAt: Date | null;
+      attentionFlag: boolean;
+      attentionNote: string | null;
+      workInstruction?: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null;
+      positions?: { shopNo: string }[];
     },
     assignedEmployeeName: string | null,
   ): CaseSummaryDto {
@@ -656,6 +666,13 @@ export class CasesService {
       bookingDate: isoDay(c.bookingDate),
       goodsType: c.goodsTypeText,
       assignedEmployeeName,
+      branchNo: c.branchNo,
+      labelsRequired: isLabelsRequired(c.workInstruction),
+      shopNos: distinctShopNos(c.primaryShopNo ?? null, c.positions ?? []),
+      docuWareUrl: c.docuWareUrl,
+      completedAt: c.completedAt ? c.completedAt.toISOString() : null,
+      attentionFlag: c.attentionFlag,
+      attentionNote: c.attentionNote,
     };
   }
 

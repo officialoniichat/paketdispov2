@@ -15,9 +15,17 @@ import { fetchBelegeList } from './belege.js';
 export function useCaseLabels(): (id: string) => string | undefined {
   const { data } = useQuery({
     queryKey: ['belege', 'labels'],
-    queryFn: fetchBelegeList,
+    // Broad label source: all scopes, one big page (audit lines reference any case).
+    queryFn: () =>
+      fetchBelegeList(
+        { scope: 'alle', page: 1, sortBy: null, sortDir: 'asc', filters: {} },
+        200,
+      ),
     staleTime: 60 * 1000,
   });
-  const byId = useMemo(() => new Map((data ?? []).map((b) => [b.id, b.weBelegNo])), [data]);
+  const byId = useMemo(
+    () => new Map((data?.rows ?? []).map((b) => [b.id, b.weBelegNo])),
+    [data],
+  );
   return useMemo(() => (id: string) => byId.get(id), [byId]);
 }

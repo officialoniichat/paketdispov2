@@ -7,12 +7,17 @@
  */
 import { useState, type JSX, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DeliveryGroupPanel } from './DeliveryGroupPanel';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
@@ -23,11 +28,16 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import FlagIcon from '@mui/icons-material/Flag';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import {
   fetchBelegDetail,
+  flagAttention,
+  unflagAttention,
   type BelegBox,
   type BelegDetail,
   type BelegHistoryEntry,
@@ -66,12 +76,29 @@ export function BelegDetailPage(): JSX.Element {
     resolveIssue,
   } = useCockpitData();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
+  // A7 „Besondere Aufmerksamkeit" (Bucherinnen-Inlet mock): flag with optional note.
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [attentionNoteDraft, setAttentionNoteDraft] = useState('');
 
   const query = useQuery<BelegDetail, Error>({
     queryKey: ['beleg', caseId],
     queryFn: () => fetchBelegDetail(caseId),
     enabled: caseId !== '',
+  });
+
+  const invalidateBeleg = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['beleg', caseId] });
+    void queryClient.invalidateQueries({ queryKey: ['belege'] });
+  };
+  const flagMutation = useMutation<void, Error, string | undefined>({
+    mutationFn: (note) => flagAttention(caseId, note),
+    onSettled: invalidateBeleg,
+  });
+  const unflagMutation = useMutation<void, Error, void>({
+    mutationFn: () => unflagAttention(caseId),
+    onSettled: invalidateBeleg,
   });
 
   if (query.isLoading) {
@@ -149,15 +176,43 @@ export function BelegDetailPage(): JSX.Element {
               <PriorityChip key={f} flag={f} size="small" />
             ))}
             {c.hasOpenIssue && <ProblemChip status="open" size="small" />}
+            {c.attentionFlag && (
+              <Chip size="small" color="warning" variant="outlined" label="Besondere Aufmerksamkeit" />
+            )}
           </Stack>
         </Box>
-        <CaseActions
-          variant="header"
-          case={{ status: c.status, priorityFlags: c.priorityFlags }}
-          weBelegNo={c.weBelegNo}
-          ctx={actionCtx}
-        />
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <Button
+            size="small"
+            variant={c.attentionFlag ? 'contained' : 'outlined'}
+            color="warning"
+            startIcon={<FlagIcon />}
+            disabled={flagMutation.isPending || unflagMutation.isPending}
+            onClick={() => {
+              if (c.attentionFlag) {
+                unflagMutation.mutate();
+              } else {
+                setAttentionNoteDraft('');
+                setNoteDialogOpen(true);
+              }
+            }}
+          >
+            {c.attentionFlag ? 'Aufmerksamkeit entfernen' : 'Besondere Aufmerksamkeit'}
+          </Button>
+          <CaseActions
+            variant="header"
+            case={{ status: c.status, priorityFlags: c.priorityFlags }}
+            weBelegNo={c.weBelegNo}
+            ctx={actionCtx}
+          />
+        </Stack>
       </Stack>
+
+      {c.attentionFlag && c.attentionNote && (
+        <Alert severity="warning" variant="outlined">
+          Hinweis der Bucherin: „{c.attentionNote}"
+        </Alert>
+      )}
 
       {c.deliveryGroup && <DeliveryGroupPanel caseId={c.id} group={c.deliveryGroup} />}
 
@@ -173,12 +228,26 @@ export function BelegDetailPage(): JSX.Element {
             rows={[
               ['WE-Belegnummer', c.weBelegNo],
               ['Lieferschein', c.deliveryNoteNo ?? '–'],
+              ['Filiale', c.branchNo],
               ['Buchungsdatum', formatDate(c.bookingDate)],
               ['Lagerplatz', c.storageCode],
               ['Shopbereich', c.primaryShopAreaNo ?? '–'],
+              ['Shops', c.shopNos.length > 0 ? c.shopNos.join(', ') : '–'],
               ['Etage', c.primaryFloor ?? '–'],
+              ['Kartons (Anlieferung)', c.inboundCartonCount === null ? '–' : String(c.inboundCartonCount)],
+              ['Etiketten', c.labelsRequired ? 'ja' : 'nein'],
               ['Belegmenge', String(c.totalQuantity)],
               ['Zugeteilt', c.assignedEmployeeName ?? '–'],
+              [
+                'DocuWare',
+                c.docuWareUrl ? (
+                  <Link href={c.docuWareUrl} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                    Langzeitarchiv öffnen <OpenInNewIcon fontSize="inherit" />
+                  </Link>
+                ) : (
+                  '–'
+                ),
+              ],
             ]}
           />
         )}
@@ -235,6 +304,38 @@ export function BelegDetailPage(): JSX.Element {
         {tab === 6 && <IssuesTab issues={c.issues} />}
         {tab === 7 && <HistoryTab history={c.history} />}
       </Paper>
+
+      {/* A7 flag inlet (mock Bucherinnen-Inlet): optional note, then flag. */}
+      <Dialog open={noteDialogOpen} onClose={() => setNoteDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Besondere Aufmerksamkeit — {c.weBelegNo}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            sx={{ mt: 1 }}
+            label="Notiz (optional)"
+            value={attentionNoteDraft}
+            onChange={(e) => setAttentionNoteDraft(e.target.value)}
+            helperText={'Der Beleg erscheint im Belege-Scope „Topf" der Teamleitung.'}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNoteDialogOpen(false)}>Abbrechen</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={flagMutation.isPending}
+            onClick={() => {
+              flagMutation.mutate(attentionNoteDraft.trim() || undefined);
+              setNoteDialogOpen(false);
+            }}
+          >
+            Markieren
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

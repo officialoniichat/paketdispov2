@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, isoDateSchema, moneySchema } from './primitives.js';
+import { idSchema, isoDateSchema, isoDateTimeSchema, moneySchema } from './primitives.js';
 import {
   caseSourceSchema,
   caseStatusSchema,
@@ -155,6 +155,14 @@ export const goodsReceiptCaseSchema = z.object({
   effortPoints: z.number().nonnegative(),
   estimatedMinutes: z.number().nonnegative(),
   assignedBundleId: idSchema.optional(),
+  /** Archiv (A6): Link ins DocuWare-Langzeitarchiv (mock, gesetzt bei Abschluss). */
+  docuWareUrl: z.string().optional(),
+  /** TL-Topf (A7): „Besondere Aufmerksamkeit" — Bucherinnen-Inlet (mock). */
+  attentionFlag: z.boolean().default(false),
+  /** Optionale Notiz zum Aufmerksamkeitsflag (A7). */
+  attentionNote: z.string().optional(),
+  /** Abschlusszeitpunkt: gesetzt beim Übergang nach completed/zst_done (A6 Archiv). */
+  completedAt: isoDateTimeSchema.optional(),
   /** Intake-Gate (D1): fehlende Pflichtfelder eines blocked-Belegs (z. B. Lagerplatz). */
   missingFields: z.array(z.string()).default([]),
   /** Lieferungs-Pool-Hold (D2): TL-Freigabe „trotzdem bearbeiten" für Gruppen-Mitglieder. */

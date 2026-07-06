@@ -32,6 +32,7 @@ import {
   CompleteIntakeDto,
   DeliveryGroupReleaseDto,
   DeliveryGroupReleaseResultDto,
+  FlagAttentionDto,
   ReturnToBucherDto,
 } from './cases.dto.js';
 
@@ -152,6 +153,30 @@ export class TeamleadController {
     @Body() dto: CompleteIntakeDto,
   ): Promise<TransitionResultDto> {
     return this.teamlead.completeIntake(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/flag-attention')
+  @ApiOperation({
+    summary:
+      'A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet, mock)',
+  })
+  @ApiOkResponse({ type: TransitionResultDto })
+  flagAttention(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: FlagAttentionDto,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.flagAttention(principal, caseId, dto);
+  }
+
+  @Post('cases/:caseId/unflag-attention')
+  @ApiOperation({ summary: 'A7 TL-Topf: Aufmerksamkeitsflag entfernen („aus Topf entlassen")' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  unflagAttention(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+  ): Promise<TransitionResultDto> {
+    return this.teamlead.unflagAttention(principal, caseId);
   }
 
   @Post('delivery-groups/split')

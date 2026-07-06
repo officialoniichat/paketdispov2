@@ -32,11 +32,63 @@ type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
 type ZstSummaryDto = components['schemas']['ZstSummaryDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
 
-const BELEGE_PAGE_LIMIT = 200;
+/** Server page size of the Beleg list (real pagination, A2). */
+export const BELEGE_PAGE_LIMIT = 50;
+
+// ---------------------------------------------------------------------------
+// View-state (server-driven list: scope + column filters + sort + page, A2)
+// ---------------------------------------------------------------------------
+
+/** Lebenszyklus-Scope of the Beleg list — mapped server-side (A2/A6/A7). */
+export type BelegeScope = 'aktiv' | 'abgeschlossen' | 'archiv' | 'topf' | 'alle';
+
+/** Server-side sortable list columns (mirrors the backend PoolSortField). */
+export type BelegeSortField =
+  | 'weBelegNo'
+  | 'bookingDate'
+  | 'totalQuantity'
+  | 'effortPoints'
+  | 'status'
+  | 'section'
+  | 'branchNo'
+  | 'primaryShopNo'
+  | 'completedAt';
+
+/** Per-column filters — every value becomes a server query param (A2). */
+export interface BelegeFilters {
+  /** Volltext: WE-Nr / Lagerplatz / Lieferschein (contains). */
+  q?: string;
+  status?: CaseStatus;
+  shopNo?: string;
+  branchNo?: string;
+  section?: SectionCode;
+  labels?: 'yes' | 'no';
+  assigned?: 'yes' | 'no';
+  bookingFrom?: string;
+  bookingTo?: string;
+}
+
+/** The complete server-driven view state — doubles as the query key. */
+export interface BelegeViewState {
+  scope: BelegeScope;
+  /** 1-based page. */
+  page: number;
+  sortBy: BelegeSortField | null;
+  sortDir: 'asc' | 'desc';
+  filters: BelegeFilters;
+}
 
 // ---------------------------------------------------------------------------
 // View-models
 // ---------------------------------------------------------------------------
+
+/** A5: where an assigned Beleg sits in its Bündel („vorbereitet · Pos n"). */
+export interface BundleQueueRef {
+  bundleId: string;
+  employeeName: string;
+  position: number;
+  started: boolean;
+}
 
 /** One row of the §10.4 Beleg list table. */
 export interface BelegRow {
@@ -51,6 +103,36 @@ export interface BelegRow {
   storageCode: string;
   assignedTo: string;
   priorityFlags: PriorityFlag[];
+  /** Filiale (Beleg-Kopf, A1). */
+  branchNo: string;
+  /** Alle Shops (Primär zuerst) — Mehr-Shop-Belege zeigen „+n" (A3). */
+  shopNos: string[];
+  /** Etiketten nötig (abgeleitet aus der Arbeitsanweisung, A1). */
+  labelsRequired: boolean;
+  bookingDate: string;
+  /** ISO-Abschlusszeitpunkt (Archiv-Spalte, A6); null solange offen. */
+  completedAt: string | null;
+  /** DocuWare-Langzeitarchiv-Link (A6, mock); null solange offen. */
+  docuWareUrl: string | null;
+  /** TL-Topf (A7): „Besondere Aufmerksamkeit". */
+  attentionFlag: boolean;
+  attentionNote: string | null;
+  /** Intake-Gate: fehlende Pflichtfelder (blocked-Belege im Topf). */
+  missingFields: string[];
+  /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */
+  bereich: string | null;
+  /** „Gehört zusammen"-Lieferung; null für Einzel-Belege (A1). */
+  deliveryGroup: DeliveryGroupRef | null;
+  /** Bündel-Position für „vorbereitet · Pos n" (A5); null ohne Bündel. */
+  bundleQueue: BundleQueueRef | null;
+}
+
+/** One server page of the Beleg list plus the total for the pagination. */
+export interface BelegeListResult {
+  rows: BelegRow[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 /**
@@ -196,6 +278,21 @@ export interface BelegDetail {
   loadPlanDate: string | null;
   goodsType: string | null;
   assignedEmployeeName: string | null;
+  /** Filiale (Beleg-Kopf, A1). */
+  branchNo: string;
+  /** Alle Shops des Belegs, Primär zuerst (A3). */
+  shopNos: string[];
+  /** Etiketten nötig (A1). */
+  labelsRequired: boolean;
+  /** Kartons der Anlieferung (A6-Kopf). */
+  inboundCartonCount: number | null;
+  /** DocuWare-Langzeitarchiv-Link (A6, mock). */
+  docuWareUrl: string | null;
+  /** Abschlusszeitpunkt (A6). */
+  completedAt: string | null;
+  /** TL-Topf (A7): „Besondere Aufmerksamkeit". */
+  attentionFlag: boolean;
+  attentionNote: string | null;
   hasOpenIssue: boolean;
   workInstruction: BelegWorkInstruction | null;
   positions: BelegPosition[];
@@ -227,13 +324,68 @@ export async function splitDeliveryGroup(caseIds: string[]): Promise<void> {
   unwrap(result, 'split delivery group');
 }
 
-/** §10.4 Beleg list — the full operational pool (pilot scale: one page of 200). */
-export async function fetchBelegeList(): Promise<BelegRow[]> {
+/**
+ * §10.4 Beleg list — server-driven (A2): scope, per-column filters, sort and
+ * pagination all run in the backend; the client renders exactly one page.
+ */
+export async function fetchBelegeList(
+  state: BelegeViewState,
+  limit: number = BELEGE_PAGE_LIMIT,
+): Promise<BelegeListResult> {
+  const f = state.filters;
   const result = await api.GET('/api/teamlead/cases', {
-    params: { query: { page: 1, limit: BELEGE_PAGE_LIMIT } },
+    params: {
+      query: {
+        page: state.page,
+        limit,
+        scope: state.scope,
+        ...(state.sortBy ? { sortBy: state.sortBy, sortDir: state.sortDir } : {}),
+        ...(f.q ? { q: f.q } : {}),
+        ...(f.status ? { status: f.status } : {}),
+        ...(f.shopNo ? { shopNo: f.shopNo } : {}),
+        ...(f.branchNo ? { branchNo: f.branchNo } : {}),
+        ...(f.section !== undefined ? { section: f.section } : {}),
+        ...(f.labels ? { labels: f.labels } : {}),
+        ...(f.assigned ? { assigned: f.assigned } : {}),
+        ...(f.bookingFrom ? { bookingFrom: f.bookingFrom } : {}),
+        ...(f.bookingTo ? { bookingTo: f.bookingTo } : {}),
+      },
+    },
   });
   const dto = unwrap<PoolListDto>(result, 'cases');
-  return dto.items.map(toBelegRow);
+  return { rows: dto.items.map(toBelegRow), total: dto.total, page: dto.page, limit: dto.limit };
+}
+
+/** A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet mock). */
+export async function flagAttention(caseId: string, note?: string): Promise<void> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/flag-attention', {
+    params: { path: { caseId } },
+    body: note ? { note } : {},
+  });
+  unwrap(result, 'flag attention');
+}
+
+/** A7 TL-Topf: Aufmerksamkeitsflag entfernen („aus Topf entlassen"). */
+export async function unflagAttention(caseId: string): Promise<void> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/unflag-attention', {
+    params: { path: { caseId } },
+    body: undefined,
+  });
+  unwrap(result, 'unflag attention');
+}
+
+/**
+ * D1 Freigabe aus dem Topf: blocked-Beleg an die Automatik zurückgeben. Ohne
+ * nachgetragene Felder gibt der Server den Beleg nur frei, wenn nichts mehr
+ * fehlt — sonst bleibt er (korrekt) blocked; the caller shows the result status.
+ */
+export async function releaseIntake(caseId: string): Promise<CaseStatus> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/complete-intake', {
+    params: { path: { caseId } },
+    body: {},
+  });
+  const dto = unwrap<{ status: string }>(result, 'complete intake');
+  return toCaseStatus(dto.status);
 }
 
 /** §10.4 Belegdetails — one case with positions, boxes, history. */
@@ -262,6 +414,35 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     storageCode: item.storageLocationCode ?? '–',
     assignedTo: item.assignedEmployeeName ?? '–',
     priorityFlags: toPriorityFlags(item.priorityFlags),
+    branchNo: item.branchNo,
+    shopNos: item.shopNos,
+    labelsRequired: item.labelsRequired,
+    bookingDate: item.bookingDate,
+    completedAt: item.completedAt ?? null,
+    docuWareUrl: item.docuWareUrl ?? null,
+    attentionFlag: item.attentionFlag,
+    attentionNote: item.attentionNote ?? null,
+    missingFields: item.missingFields,
+    bereich: item.bereich ?? null,
+    deliveryGroup: item.deliveryGroup
+      ? {
+          id: item.deliveryGroup.id,
+          signal: item.deliveryGroup.signal,
+          confidence: item.deliveryGroup.confidence,
+          presentSize: item.deliveryGroup.presentSize,
+          expectedSize: item.deliveryGroup.expectedSize ?? null,
+          missingCount: item.deliveryGroup.missingCount,
+          locked: item.deliveryGroup.locked,
+        }
+      : null,
+    bundleQueue: item.bundleQueue
+      ? {
+          bundleId: item.bundleQueue.bundleId,
+          employeeName: item.bundleQueue.employeeName,
+          position: item.bundleQueue.position,
+          started: item.bundleQueue.started,
+        }
+      : null,
   };
 }
 
@@ -287,6 +468,14 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     loadPlanDate: dto.loadPlanDate ?? null,
     goodsType: dto.goodsType ?? null,
     assignedEmployeeName: dto.case.assignedEmployeeName ?? null,
+    branchNo: dto.case.branchNo,
+    shopNos: dto.case.shopNos,
+    labelsRequired: dto.case.labelsRequired,
+    inboundCartonCount: dto.case.inboundCartonCount ?? null,
+    docuWareUrl: dto.case.docuWareUrl ?? null,
+    completedAt: dto.case.completedAt ?? null,
+    attentionFlag: dto.case.attentionFlag,
+    attentionNote: dto.case.attentionNote ?? null,
     // The dedicated issue list is not part of the case detail read; an open issue
     // is reflected by the case status itself (§7.1 issue_open).
     hasOpenIssue: status === 'issue_open',

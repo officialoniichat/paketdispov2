@@ -607,6 +607,135 @@
             }
           },
           {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Volltext: WE-Beleg-Nr / Lagerplatz-Code / Lieferschein-Nr (contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shopNo",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Shop (primärer Shop, contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchNo",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Filiale (contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bereich",
+            "required": false,
+            "in": "query",
+            "description": "Filter: fester Bereich (Hängebahn|Palette|Regal)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assigned",
+            "required": false,
+            "in": "query",
+            "description": "Filter: zugeteilt ja/nein",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
+            "name": "labels",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Etiketten nötig ja/nein",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "Lebenszyklus-Scope (server-seitig): aktiv | abgeschlossen | archiv (completed+zst_done) | topf (Aufmerksamkeit/blocked/needs_review) | alle",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aktiv",
+                "abgeschlossen",
+                "archiv",
+                "topf",
+                "alle"
+              ]
+            }
+          },
+          {
+            "name": "bookingFrom",
+            "required": false,
+            "in": "query",
+            "description": "Buchungsdatum ab (YYYY-MM-DD, inklusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingTo",
+            "required": false,
+            "in": "query",
+            "description": "Buchungsdatum bis (YYYY-MM-DD, inklusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Server-side sort column",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "weBelegNo",
+                "bookingDate",
+                "totalQuantity",
+                "effortPoints",
+                "status",
+                "section",
+                "branchNo",
+                "primaryShopNo",
+                "completedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "asc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -890,6 +1019,88 @@
           }
         ],
         "summary": "D1 Freigabe: fehlende Pflichtfelder nachtragen; vollständig → blocked → ready",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/flag-attention": {
+      "post": {
+        "operationId": "TeamleadController_flagAttention",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagAttentionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit\" markieren (Bucherinnen-Inlet, mock)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/unflag-attention": {
+      "post": {
+        "operationId": "TeamleadController_unflagAttention",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A7 TL-Topf: Aufmerksamkeitsflag entfernen („aus Topf entlassen\")",
         "tags": [
           "teamlead"
         ]
@@ -2267,6 +2478,40 @@
             "type": "string",
             "nullable": true,
             "description": "Display name of the assigned employee"
+          },
+          "branchNo": {
+            "type": "string",
+            "description": "Filiale (Beleg-Kopf)"
+          },
+          "labelsRequired": {
+            "type": "boolean",
+            "description": "Etiketten nötig (abgeleitet: workInstruction.priceLabelPrintRequired || boxLabelRequired)"
+          },
+          "shopNos": {
+            "description": "Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "docuWareUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Link ins DocuWare-Langzeitarchiv (A6, mock); gesetzt bei Abschluss"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Abschlusszeitpunkt (completed/zst_done), sonst null"
+          },
+          "attentionFlag": {
+            "type": "boolean",
+            "description": "TL-Topf (A7): „Besondere Aufmerksamkeit\" (Bucherinnen-Inlet)"
+          },
+          "attentionNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Notiz zum Aufmerksamkeitsflag"
           }
         },
         "required": [
@@ -2277,7 +2522,11 @@
           "totalQuantity",
           "estimatedMinutes",
           "missingFields",
-          "bookingDate"
+          "bookingDate",
+          "branchNo",
+          "labelsRequired",
+          "shopNos",
+          "attentionFlag"
         ]
       },
       "MeWorkstationDto": {
@@ -3214,6 +3463,31 @@
           "entityId"
         ]
       },
+      "BundleQueueRefDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "position": {
+            "type": "number",
+            "description": "1-based Position des Belegs in der Bündel-Reihenfolge"
+          },
+          "started": {
+            "type": "boolean",
+            "description": "true = das Bündel hat bereits einen Beleg in Arbeit"
+          }
+        },
+        "required": [
+          "bundleId",
+          "employeeName",
+          "position",
+          "started"
+        ]
+      },
       "PoolItemDto": {
         "type": "object",
         "properties": {
@@ -3290,6 +3564,40 @@
             "nullable": true,
             "description": "Display name of the assigned employee"
           },
+          "branchNo": {
+            "type": "string",
+            "description": "Filiale (Beleg-Kopf)"
+          },
+          "labelsRequired": {
+            "type": "boolean",
+            "description": "Etiketten nötig (abgeleitet: workInstruction.priceLabelPrintRequired || boxLabelRequired)"
+          },
+          "shopNos": {
+            "description": "Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "docuWareUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Link ins DocuWare-Langzeitarchiv (A6, mock); gesetzt bei Abschluss"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Abschlusszeitpunkt (completed/zst_done), sonst null"
+          },
+          "attentionFlag": {
+            "type": "boolean",
+            "description": "TL-Topf (A7): „Besondere Aufmerksamkeit\" (Bucherinnen-Inlet)"
+          },
+          "attentionNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Notiz zum Aufmerksamkeitsflag"
+          },
           "assignedEmployeeNo": {
             "type": "object",
             "nullable": true
@@ -3311,6 +3619,16 @@
             "type": "string",
             "nullable": true,
             "description": "Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds."
+          },
+          "bundleQueue": {
+            "nullable": true,
+            "description": "A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n\"); null wenn nicht gebündelt",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BundleQueueRefDto"
+              }
+            ]
           }
         },
         "required": [
@@ -3322,6 +3640,10 @@
           "estimatedMinutes",
           "missingFields",
           "bookingDate",
+          "branchNo",
+          "labelsRequired",
+          "shopNos",
+          "attentionFlag",
           "effortPoints"
         ]
       },
@@ -3848,6 +4170,15 @@
           "deliveryNoteNo": {
             "type": "string",
             "description": "Lieferschein-Nr"
+          }
+        }
+      },
+      "FlagAttentionDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Optionale Notiz, warum der Beleg Aufmerksamkeit braucht"
           }
         }
       },
