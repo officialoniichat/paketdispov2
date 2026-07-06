@@ -47,6 +47,7 @@ export const OVERRIDE_ACTION_LABELS: Record<OverrideAction, string> = {
 export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'case.ready': 'Freigegeben',
   'case.parked': 'Geparkt',
+  'case.parked_by_employee': 'Rest geparkt (Mitarbeiter)',
   'case.prioritized': 'Priorisiert',
   'case.deprioritized': 'Priorität entfernt',
   'case.cancelled': 'Storniert',
