@@ -1,13 +1,18 @@
 /**
  * Mitarbeiter-Stammdaten (concept §d Screen 2). WHO + per-head capacity params only:
- * Rolle (read-only), aktiv, Bereich/Skill, Produktivität, Überstunden-Toleranz.
+ * Rolle (read-only), aktiv, Bereich/Skill, Produktivität, Employee-App-PIN.
  * Arbeitszeit/Schichten live in the separate Schichtplan tab — not here.
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
@@ -20,6 +25,7 @@ import type { SkillTier } from '@paket/domain-types';
 import {
   fetchEmployee,
   fetchWorkstations,
+  resetEmployeePin,
   updateEmployeeProfile,
   type EmployeeDetail,
   type EmployeeProfileUpdate,
@@ -28,6 +34,9 @@ import {
 import { useBereichCatalog } from '../../data/bereichCatalog.js';
 import { formatAuditAction } from '../../data/audit.js';
 import { toEventType } from '../../data/narrow.js';
+
+/** PIN-Login: 4–8 Ziffern (matches the backend's Length(4,8) validation). */
+const PIN_PATTERN = /^\d{4,8}$/;
 
 type ProfilePatchArgs = [string, EmployeeProfileUpdate];
 
@@ -104,6 +113,8 @@ export function EmployeeDetailPanel({
       <ProfileSection emp={emp} onSaved={onSaved} />
       <Divider />
       <ParamsSection emp={emp} onSaved={onSaved} />
+      <Divider />
+      <PinSection emp={emp} onSaved={onSaved} />
       <Divider />
       <AuditSection emp={emp} />
     </Stack>
@@ -250,11 +261,9 @@ function ParamsSection({
   onSaved: (e: EmployeeDetail) => void;
 }): JSX.Element {
   const [productivity, setProductivity] = useState(emp.productivityFactor);
-  const [overtime, setOvertime] = useState(emp.overtimeTolerancePct);
   useEffect(() => {
     setProductivity(emp.productivityFactor);
-    setOvertime(emp.overtimeTolerancePct);
-  }, [emp.productivityFactor, emp.overtimeTolerancePct]);
+  }, [emp.productivityFactor]);
 
   const mutation = useMutation({
     mutationFn: ([id, patch]: ProfilePatchArgs) => updateEmployeeProfile(id, patch),
@@ -283,25 +292,117 @@ function ParamsSection({
           Skaliert die geplante Netto-Kapazität dieser Person.
         </Typography>
       </div>
-      <div>
-        <Typography variant="body2">Überstunden-Toleranz: +{overtime}%</Typography>
-        <Slider
-          value={overtime}
-          min={0}
-          max={25}
-          step={1}
-          marks={[
-            { value: 0, label: '0' },
-            { value: 25, label: '+25%' },
-          ]}
-          onChange={(_, v) => setOvertime(v as number)}
-          onChangeCommitted={(_, v) => mutation.mutate([emp.id, { overtimeTolerancePct: v as number }])}
-        />
-        <Typography variant="caption" color="text.secondary">
-          Aufwand pro Beleg (§8.2) bleibt im Tab „Aufwand“.
-        </Typography>
-      </div>
       <SaveFeedback mutation={mutation} />
+    </Stack>
+  );
+}
+
+/**
+ * Employee-App-Login (Auth Task 4/5): admin setzt/setzt zurück die PIN, mit der
+ * sich diese Person am Mitarbeiter-Tablet anmeldet (Mitarbeiternummer + PIN).
+ * Die PIN selbst wird nie angezeigt oder vom Backend zurückgegeben — nur ob
+ * eine gesetzt ist (`hasPinSet`).
+ */
+function PinSection({
+  emp,
+  onSaved,
+}: {
+  emp: EmployeeDetail;
+  onSaved: (e: EmployeeDetail) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [validationError, setValidationError] = useState<string | undefined>(undefined);
+
+  const mutation = useMutation({
+    mutationFn: (newPin: string) => resetEmployeePin(emp.id, newPin),
+    onSuccess: () => {
+      onSaved({ ...emp, hasPinSet: true });
+      setOpen(false);
+      setPin('');
+      setConfirmPin('');
+    },
+  });
+
+  const openDialog = (): void => {
+    setPin('');
+    setConfirmPin('');
+    setValidationError(undefined);
+    mutation.reset();
+    setOpen(true);
+  };
+
+  const submit = (): void => {
+    if (!PIN_PATTERN.test(pin)) {
+      setValidationError('PIN muss 4–8 Ziffern haben.');
+      return;
+    }
+    if (pin !== confirmPin) {
+      setValidationError('PINs stimmen nicht überein.');
+      return;
+    }
+    setValidationError(undefined);
+    mutation.mutate(pin);
+  };
+
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="subtitle2">Employee-App-Anmeldung</Typography>
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Chip
+          size="small"
+          color={emp.hasPinSet ? 'success' : 'default'}
+          label={emp.hasPinSet ? 'PIN gesetzt' : 'Keine PIN gesetzt'}
+        />
+        <Button size="small" variant="outlined" onClick={openDialog}>
+          {emp.hasPinSet ? 'PIN zurücksetzen' : 'PIN setzen'}
+        </Button>
+      </Stack>
+      <Typography variant="caption" color="text.secondary">
+        Mit Mitarbeiternummer #{emp.employeeNo} + dieser PIN meldet sich die Person am
+        Mitarbeiter-Tablet an. Die PIN ist nach dem Speichern nicht mehr einsehbar.
+      </Typography>
+
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{emp.hasPinSet ? 'PIN zurücksetzen' : 'PIN setzen'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Neue PIN für {emp.displayName} (#{emp.employeeNo}), 4–8 Ziffern.
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Neue PIN"
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+            />
+            <TextField
+              fullWidth
+              label="PIN wiederholen"
+              type="password"
+              inputMode="numeric"
+              value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value)}
+            />
+            {validationError ? <Alert severity="error">{validationError}</Alert> : null}
+            {mutation.error ? (
+              <Alert severity="error">
+                Speichern fehlgeschlagen: {mutation.error.message}
+              </Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>Abbrechen</Button>
+          <Button variant="contained" onClick={submit} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Speichert…' : 'Speichern'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

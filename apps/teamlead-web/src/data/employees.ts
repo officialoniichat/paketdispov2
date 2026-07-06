@@ -5,7 +5,7 @@
  */
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
-import { unwrap } from './http.js';
+import { hasFetchError, unwrap } from './http.js';
 
 export type EmployeeListResponse = components['schemas']['EmployeeListResponseDto'];
 export type EmployeeListItem = components['schemas']['EmployeeListItemDto'];
@@ -53,4 +53,19 @@ export async function updateEmployeeProfile(
     body: patch,
   });
   return unwrap<EmployeeDetail>(result, 'update employee');
+}
+
+/**
+ * Set/reset an employee's Mitarbeiter-App login PIN (Employee-Login Task 5).
+ * 204 No Content on success — no body to unwrap, so this checks the error
+ * channel directly rather than `unwrap()` (which requires a response body).
+ */
+export async function resetEmployeePin(id: string, pin: string): Promise<void> {
+  const result = await api.PATCH('/api/admin/employees/{id}/pin', {
+    params: { path: { id } },
+    body: { pin },
+  });
+  if (hasFetchError(result)) {
+    throw new Error(`Backend request failed: reset employee PIN (${JSON.stringify(result.error)})`);
+  }
 }
