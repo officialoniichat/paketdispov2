@@ -71,7 +71,23 @@ reusable from integration tests. Branch: `feat/dev-panel-scenarios` (based on la
       HTTP smoke green incl. DEV_PANEL=0→404 + teamlead→403 + override shifts preview date.
       NOTE Phase 4: dev-setup.mjs mints only teamlead/employee tokens — /api/dev needs an admin
       token (extend dev-setup or widen roles).
-- [ ] Phase 3: Scenario library B1–B15 (typed definitions using generator + targeted builders).
+- [x] Phase 3: DONE — all 15 scenarios in the typed catalog (`src/dev/scenarios/catalog.ts`,
+      definitions in `scenarios/definitions/*.ts`): standard · peak-tag · gemischtes-buendel ·
+      lieferung-zusammenhaengend (run/note/Brax-Kartonnummern-Lücke) · lieferung-unvollstaendig
+      ("2 von 4" Pool-Hold + Freigabe) · datenqualitaet · gross-beleg-knecki (2400-Teile +
+      Vortages-Fortsetzung ma-104) · shop-31-nos · prio-leiter (alle Ränge, exakte Reihenfolge
+      dokumentiert) · schichtende (Cutoff-50-Demo mit Zeit-Override-Anleitung) ·
+      feiertag-sonderregelung (specialDay DO→MI, wochentag-robust via Buchungstag=Do−6) ·
+      skill-tiers-crew (Koffer=WGR 812770) · online-groessen (CSV-Fixture
+      `scenarios/fixtures/online-size-preferences.csv` = einzige Quelle, admin-upload-kompatibel) ·
+      problemfaelle-ablage · leerer-tag. Builders: CustomCaseSpec/seedCustomCases +
+      seedCustomDetail + seedCarryoverBundle (definitions/custom-case.ts), forceRuleConfig +
+      fixture-backed seedOnlineSizePreferences (lib.ts), seedLifecycleCases parameterisiert.
+      Alle nicht-standard-Szenarien forcen DEFAULT_RULE_CONFIG(+Overrides) → kein Config-Leak.
+      Verified: backend typecheck + unit 134 green; smoke: alle 15 laden gegen die Dev-DB,
+      Doppel-Lauf byte-identisch (Determinismus); Engine-Gegenprobe: B4-Gruppen (run-withheld/
+      likely/Brax ungruppiert), B5 "2 von 4" withheld + 3-von-3 frei, B9-Reihenfolge exakt,
+      B11 Verladetag Do→Mi. Dev-DB danach auf 'standard' zurückgesetzt.
 - [x] Phase 4: DONE — teamlead-web Dev Panel (A1–A4): dev-gated Admin tab "Dev / Szenarien"
       (DevScenariosTab lazy behind INLINE `import.meta.env.VITE_DEV_PANEL==='0'?false:DEV||==='1'`
       gate → Rollup drops the chunk; prod dist greps clean, VITE_DEV_PANEL=1 build contains it;

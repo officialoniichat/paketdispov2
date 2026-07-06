@@ -3,7 +3,10 @@
 // idempotent upserts by natural keys (employeeNo, role name, location code,
 // [employeeId,date]) for master data, and one deterministic wipe of the
 // transactional case graph. All date math anchors on the caller's `baseDate`.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Prisma } from '@prisma/client';
+import type { RuleConfig } from '@paket/domain-types';
 import {
   DEFAULT_INSPECTION_LEVELS,
   DEFAULT_RULE_CONFIG,
@@ -225,13 +228,55 @@ export async function seedCatalogs(prisma: ScenarioPrisma): Promise<void> {
       create: level,
     });
   }
-  // A8: Beispiel-Präferenzen für die Rot/Grün-Hervorhebung (per Admin-CSV erweiterbar).
-  const preferences = [
-    { wgr: '218110', sizeVariant: 'konfektion', preferredSize: '38', alternativeSize: '40' },
-    { wgr: '312400', sizeVariant: 'jeans-inch', preferredSize: '32/32', alternativeSize: '31/32' },
-    { wgr: '511100', sizeVariant: 'konfektion', preferredSize: '40', alternativeSize: null },
-  ];
-  for (const pref of preferences) {
+  // A8: Präferenzen für die Rot/Grün-Hervorhebung — einzige Quelle ist die
+  // eingecheckte CSV-Fixture (identisches Format wie der Admin-CSV-Upload).
+  await seedOnlineSizePreferences(prisma);
+}
+
+// --- Online-Größen-Präferenzen (A8) aus der CSV-Fixture -------------------------
+// Single source: `fixtures/online-size-preferences.csv` ist exakt die Datei, die
+// auch über POST /api/admin/online-size-preferences/upload hochladbar ist
+// (`wgr;sizeVariant;preferredSize;alternativeSize`, Semikolon, mit Kopfzeile) —
+// Seed und Upload-Demo können nie auseinanderlaufen.
+
+interface OnlineSizePreferenceRow {
+  wgr: string;
+  sizeVariant: string;
+  preferredSize: string;
+  alternativeSize: string | null;
+}
+
+export function readOnlineSizePreferenceFixture(): {
+  csv: string;
+  rows: OnlineSizePreferenceRow[];
+} {
+  // Runs from src in every real execution path (swc-register dev server, prisma
+  // seed, vitest); the dist fallback covers a built runtime with DEV_PANEL=1.
+  const srcPath = fileURLToPath(new URL('./fixtures/online-size-preferences.csv', import.meta.url));
+  let csv: string;
+  try {
+    csv = readFileSync(srcPath, 'utf8');
+  } catch {
+    csv = readFileSync(srcPath.replace('/dist/', '/src/'), 'utf8');
+  }
+  const rows = csv
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .filter((l) => !l.toLowerCase().startsWith('wgr'))
+    .map((line): OnlineSizePreferenceRow => {
+      const [wgr, sizeVariant, preferredSize, alternativeSize] = line.split(';').map((c) => c.trim());
+      if (!wgr || !sizeVariant || !preferredSize) {
+        throw new Error(`[scenario] invalid online-size-preference fixture line: "${line}"`);
+      }
+      return { wgr, sizeVariant, preferredSize, alternativeSize: alternativeSize || null };
+    });
+  return { csv, rows };
+}
+
+export async function seedOnlineSizePreferences(prisma: ScenarioPrisma): Promise<void> {
+  const { rows } = readOnlineSizePreferenceFixture();
+  for (const pref of rows) {
     await prisma.onlineSizePreference.upsert({
       where: { online_size_wgr_variant: { wgr: pref.wgr, sizeVariant: pref.sizeVariant } },
       update: { preferredSize: pref.preferredSize, alternativeSize: pref.alternativeSize },
@@ -252,6 +297,25 @@ export async function seedRuleConfig(prisma: ScenarioPrisma): Promise<void> {
       key: RULE_CONFIG_KEY,
       value: DEFAULT_RULE_CONFIG as unknown as Prisma.InputJsonValue,
     },
+  });
+}
+
+/**
+ * Deterministic-world variant for the B2–B15 demo scenarios: FORCE the rule config
+ * to the default merged with the scenario's overrides, clobbering prior edits. Every
+ * non-standard scenario runs this so its behavior (grouping hold, Cutoff 50, Sonder-
+ * Verladeplan, …) never depends on what an admin configured before the load — and a
+ * config a previous scenario forced (e.g. B11's Sonderzeile) never leaks forward.
+ */
+export async function forceRuleConfig(
+  prisma: ScenarioPrisma,
+  overrides: Partial<RuleConfig> = {},
+): Promise<void> {
+  const value = { ...DEFAULT_RULE_CONFIG, ...overrides } as unknown as Prisma.InputJsonValue;
+  await prisma.appConfig.upsert({
+    where: { key: RULE_CONFIG_KEY },
+    update: { value },
+    create: { key: RULE_CONFIG_KEY, value },
   });
 }
 

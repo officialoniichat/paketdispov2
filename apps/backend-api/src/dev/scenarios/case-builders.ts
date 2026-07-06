@@ -291,7 +291,7 @@ type LifecycleStatus =
   | 'cancelled'
   | 'issue_open';
 
-interface SeedLifecycleCase {
+export interface SeedLifecycleCase {
   weBelegNo: string;
   storageCode: string;
   section: number | null;
@@ -300,7 +300,7 @@ interface SeedLifecycleCase {
   effortPoints: number;
   estimatedMinutes: number;
   status: LifecycleStatus;
-  employeeNo: 'ma-101' | 'ma-102' | 'ma-103';
+  employeeNo: string;
   completedQuantity?: number;
   completedAt?: string;
   exportedAt?: string;
@@ -380,8 +380,9 @@ export async function seedLifecycleCases(
   baseDate: string,
   locationIds: Record<string, string>,
   userIds: Record<string, string>,
+  cases: readonly SeedLifecycleCase[] = LIFECYCLE_CASES,
 ): Promise<void> {
-  for (const c of LIFECYCLE_CASES) {
+  for (const c of cases) {
     const storageLocationId = requireId(locationIds, c.storageCode, 'location');
     const employeeId = requireId(userIds, c.employeeNo, 'user');
     const caseData = {

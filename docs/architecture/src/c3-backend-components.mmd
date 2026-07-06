@@ -57,7 +57,7 @@ flowchart TB
 
         subgraph devMod["DevModule (env-gated: DEV_PANEL, 404 in prod)"]
             devCtrl["DevController<br/>GET /api/dev/scenarios · POST scenarios/:key/load<br/>· POST scenarios/reset · POST/DELETE time-override<br/>· POST materialize-shifts<br/><i>@Roles(Admin) + DevPanelGuard</i>"]:::ctrl
-            scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typed registry,<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
+            scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typed registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
         end
 
         subgraph dom["Domain cores (src/modules/*)"]
