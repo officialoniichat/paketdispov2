@@ -25,10 +25,16 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import type { WorkflowEvent } from '@paket/domain-types';
+import type { ForwardRecipient, WorkflowEvent } from '@paket/domain-types';
 import type { AuditPayload } from './audit.js';
 import type { components } from '@paket/api-client';
 import { api, CURRENT_TEAMLEAD_ID } from './api.js';
+import {
+  flagAttention as flagAttentionRequest,
+  forwardCase as forwardCaseRequest,
+  unflagAttention as unflagAttentionRequest,
+  unforwardCase as unforwardCaseRequest,
+} from './belege.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
 import {
   addCaseToBundle as addCaseToBundleRequest,
@@ -168,6 +174,14 @@ export interface CockpitApi {
   cancelCase(caseId: string, reason: string): void;
   /** Issue triage: resolve an open issue (issue_open → in_progress). */
   resolveIssue(caseId: string, reason: string): void;
+  /** C5 „Weiterleiten an …" — status-neutral, no §7.1 transition. */
+  forwardCase(caseId: string, recipient: ForwardRecipient, reason?: string): void;
+  /** C5 „Zurückholen" — clears the forward flag. */
+  unforwardCase(caseId: string): void;
+  /** A7 TL-Topf „Besondere Aufmerksamkeit" — status-neutral. */
+  flagAttention(caseId: string, note?: string): void;
+  /** A7 „Aufmerksamkeit entfernen". */
+  unflagAttention(caseId: string): void;
   /** Audited bundle interventions backed by real endpoints (§8.4). */
   withdraw: BundleMutation<WithdrawVars>;
   addToBundle: BundleMutation<AddVars>;
@@ -355,6 +369,30 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
+  const forwardMutation = useMutation<
+    void,
+    Error,
+    { caseId: string; recipient: ForwardRecipient; reason?: string }
+  >({
+    mutationFn: ({ caseId, recipient, reason }) => forwardCaseRequest(caseId, recipient, reason),
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const unforwardMutation = useMutation<void, Error, { caseId: string }>({
+    mutationFn: ({ caseId }) => unforwardCaseRequest(caseId),
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const flagAttentionMutation = useMutation<void, Error, { caseId: string; note?: string }>({
+    mutationFn: ({ caseId, note }) => flagAttentionRequest(caseId, note),
+    onSettled: invalidateCockpitAndBelege,
+  });
+
+  const unflagAttentionMutation = useMutation<void, Error, { caseId: string }>({
+    mutationFn: ({ caseId }) => unflagAttentionRequest(caseId),
+    onSettled: invalidateCockpitAndBelege,
+  });
+
   // --- §8.4 audited bundle interventions, with optimistic board patches -----
 
   const withdraw = useMutation<unknown, Error, WithdrawVars, { previous: CockpitSnapshot | undefined }>(
@@ -481,6 +519,11 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
       resolveIssue: (caseId, reason) => resolveIssueMutation.mutate({ caseId, reason }),
+      forwardCase: (caseId, recipient, reason) =>
+        forwardMutation.mutate({ caseId, recipient, reason }),
+      unforwardCase: (caseId) => unforwardMutation.mutate({ caseId }),
+      flagAttention: (caseId, note) => flagAttentionMutation.mutate({ caseId, note }),
+      unflagAttention: (caseId) => unflagAttentionMutation.mutate({ caseId }),
 
       withdraw,
       addToBundle,
@@ -503,6 +546,10 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       unparkMutation,
       cancelMutation,
       resolveIssueMutation,
+      forwardMutation,
+      unforwardMutation,
+      flagAttentionMutation,
+      unflagAttentionMutation,
       withdraw,
       addToBundle,
       assignToEmployee,

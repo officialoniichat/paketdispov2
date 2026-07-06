@@ -82,6 +82,13 @@ export interface LaneCard {
   openIssue: { kind: string; note: string | null } | null;
   /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
+  /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */
+  bereich: string | null;
+  /** TL-Topf (A7): „Besondere Aufmerksamkeit". */
+  attentionFlag: boolean;
+  attentionNote: string | null;
+  /** „Gehört zusammen"-Lieferung; null für Einzel-Belege (A1). */
+  deliveryGroup: DeliveryGroupRef | null;
 }
 
 export interface Lane {

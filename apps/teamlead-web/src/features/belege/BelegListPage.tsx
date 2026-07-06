@@ -47,7 +47,9 @@ import { formatDate, formatDateTime } from '../../lib/format.js';
 import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
 import { DataTable } from '../../components/DataTable.js';
 import { LieferungChip } from '../../components/LieferungChip.js';
-import { CaseActions } from '../../components/CaseActions.js';
+import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { ForwardDialog } from '../../components/ForwardDialog.js';
+import { AttentionDialog } from '../../components/AttentionDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
 import { fetchEmployees } from '../../data/employees.js';
@@ -194,6 +196,10 @@ export function BelegListPage(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention: unflagAttentionAction,
   } = useCockpitData();
   const store = useMemo<CaseActionCtx['store']>(
     () => ({
@@ -205,6 +211,10 @@ export function BelegListPage(): JSX.Element {
       reactivateCase,
       cancelCase,
       resolveIssue,
+      forwardCase,
+      unforwardCase,
+      flagAttention,
+      unflagAttention: unflagAttentionAction,
     }),
     [
       prioritiseCase,
@@ -215,12 +225,22 @@ export function BelegListPage(): JSX.Element {
       reactivateCase,
       cancelCase,
       resolveIssue,
+      forwardCase,
+      unforwardCase,
+      flagAttention,
+      unflagAttentionAction,
     ],
   );
 
   // --- A4 Zuweisen aus der Liste ---
   const [assignBelegId, setAssignBelegId] = useState<string | null>(null);
   const assignBeleg = rows.find((r) => r.id === assignBelegId) ?? null;
+
+  // --- Weiterleiten + Besondere Aufmerksamkeit (shared CaseActionMenu custom actions) ---
+  const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
+  const forwardBeleg = rows.find((r) => r.id === forwardCaseId) ?? null;
+  const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
+  const attentionBeleg = rows.find((r) => r.id === attentionCaseId) ?? null;
 
   // --- Manual Beleg-Split (§8.4): pick the case, open the dialog, record the split ---
   const { recordSplit } = useSplits();
@@ -425,14 +445,8 @@ export function BelegListPage(): JSX.Element {
       // never doubles as "open Beleg".
       cell: (ctx) => {
         const r = ctx.row.original;
-        const assignable = r.status === 'ready' && r.assignedTo === '–';
         return (
           <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex', gap: 0.5 }}>
-            {assignable && (
-              <Button size="small" variant="outlined" onClick={() => setAssignBelegId(r.id)}>
-                Zuweisen
-              </Button>
-            )}
             {scope === 'topf' && r.status === 'blocked' && (
               <Button
                 size="small"
@@ -453,12 +467,21 @@ export function BelegListPage(): JSX.Element {
                 Aus Topf entlassen
               </Button>
             )}
-            <CaseActions
-              variant="row"
-              case={{ status: r.status, priorityFlags: r.priorityFlags }}
+            <CaseActionMenu
+              density="compact"
+              case={{
+                status: r.status,
+                priorityFlags: r.priorityFlags,
+                assignedTo: r.assignedTo === '–' ? null : r.assignedTo,
+                forwardedTo: r.forwardedTo,
+                attentionFlag: r.attentionFlag,
+              }}
               weBelegNo={r.weBelegNo}
               ctx={{ caseId: r.id, store }}
               onSplit={(caseId) => setSplitCaseId(caseId)}
+              onAssign={(caseId) => setAssignBelegId(caseId)}
+              onForward={(caseId) => setForwardCaseId(caseId)}
+              onAttention={(caseId) => setAttentionCaseId(caseId)}
             />
           </Box>
         );
@@ -704,6 +727,24 @@ export function BelegListPage(): JSX.Element {
         open={assignBeleg !== null}
         beleg={assignBeleg}
         onClose={() => setAssignBelegId(null)}
+      />
+
+      <ForwardDialog
+        open={forwardBeleg !== null}
+        weBelegNo={forwardBeleg?.weBelegNo ?? ''}
+        onConfirm={(recipient) => {
+          if (forwardBeleg) forwardCase(forwardBeleg.id, recipient);
+        }}
+        onClose={() => setForwardCaseId(null)}
+      />
+
+      <AttentionDialog
+        open={attentionBeleg !== null}
+        weBelegNo={attentionBeleg?.weBelegNo ?? ''}
+        onConfirm={(note) => {
+          if (attentionBeleg) flagAttention(attentionBeleg.id, note);
+        }}
+        onClose={() => setAttentionCaseId(null)}
       />
 
       <SplitDialog

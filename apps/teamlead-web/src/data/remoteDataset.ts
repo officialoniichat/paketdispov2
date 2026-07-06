@@ -310,6 +310,10 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
     openIssue: item.openIssue ? { kind: item.openIssue.kind, note: item.openIssue.note ?? null } : null,
     forwardedTo: item.forwardedTo ?? null,
+    bereich: item.bereich ?? null,
+    attentionFlag: item.attentionFlag,
+    attentionNote: item.attentionNote ?? null,
+    deliveryGroup: item.deliveryGroup ?? null,
   };
 }
 

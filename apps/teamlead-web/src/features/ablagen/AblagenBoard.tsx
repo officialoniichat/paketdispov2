@@ -39,8 +39,10 @@ import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
 import { formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
-import { CaseActions } from '../../components/CaseActions.js';
-import { ForwardMenuButton, forwardRecipientLabel } from '../../components/ForwardMenu.js';
+import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
+import { AttentionDialog } from '../../components/AttentionDialog.js';
+import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
 
@@ -94,8 +96,17 @@ export function AblagenBoard(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention,
   } = useCockpitData();
   const navigate = useNavigate();
+
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit: shared CaseActionMenu custom actions.
+  const [assignCaseId, setAssignCaseId] = useState<string | null>(null);
+  const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
+  const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
 
   // C2: display order + collapse, persisted. Bucketing precedence stays fixed in
   // the data layer; this only re-orders/collapses the *display*.
@@ -152,7 +163,16 @@ export function AblagenBoard(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention,
   };
+
+  const allCards = lanes.flatMap((l) => l.cards);
+  const assignCard = allCards.find((c) => c.caseId === assignCaseId) ?? null;
+  const forwardCard = allCards.find((c) => c.caseId === forwardCaseId) ?? null;
+  const attentionCard = allCards.find((c) => c.caseId === attentionCaseId) ?? null;
 
   return (
     <Stack spacing={1.5} sx={{ height: 'calc(100vh - 140px)', minHeight: 360 }}>
@@ -186,9 +206,45 @@ export function AblagenBoard(): JSX.Element {
             onOpen={(caseId, tab) =>
               navigate(tab ? `/belege/${caseId}?tab=${tab}` : `/belege/${caseId}`)
             }
+            onAssign={setAssignCaseId}
+            onForward={setForwardCaseId}
+            onAttention={setAttentionCaseId}
           />
         ))}
       </Box>
+
+      <AssignFromListDialog
+        open={assignCard !== null}
+        beleg={
+          assignCard && {
+            id: assignCard.caseId,
+            weBelegNo: assignCard.weBelegNo,
+            bereich: assignCard.bereich,
+            quantity: assignCard.totalQuantity,
+            deliveryGroup: assignCard.deliveryGroup,
+            attentionNote: assignCard.attentionNote,
+          }
+        }
+        onClose={() => setAssignCaseId(null)}
+      />
+
+      <ForwardDialog
+        open={forwardCard !== null}
+        weBelegNo={forwardCard?.weBelegNo ?? ''}
+        onConfirm={(recipient) => {
+          if (forwardCard) forwardCase(forwardCard.caseId, recipient);
+        }}
+        onClose={() => setForwardCaseId(null)}
+      />
+
+      <AttentionDialog
+        open={attentionCard !== null}
+        weBelegNo={attentionCard?.weBelegNo ?? ''}
+        onConfirm={(note) => {
+          if (attentionCard) flagAttention(attentionCard.caseId, note);
+        }}
+        onClose={() => setAttentionCaseId(null)}
+      />
     </Stack>
   );
 }
@@ -203,6 +259,9 @@ interface LaneColumnProps {
   parkedContext: Map<string, ParkedContext>;
   store: CaseActionCtx['store'];
   onOpen: (caseId: string, tab?: string) => void;
+  onAssign: (caseId: string) => void;
+  onForward: (caseId: string) => void;
+  onAttention: (caseId: string) => void;
 }
 
 function LaneColumn({
@@ -215,6 +274,9 @@ function LaneColumn({
   parkedContext,
   store,
   onOpen,
+  onAssign,
+  onForward,
+  onAttention,
 }: LaneColumnProps): JSX.Element {
   if (collapsed) {
     return (
@@ -304,6 +366,9 @@ function LaneColumn({
                 parked={parkedContext.get(c.caseId)}
                 store={store}
                 onOpen={onOpen}
+                onAssign={onAssign}
+                onForward={onForward}
+                onAttention={onAttention}
               />
             ))}
           </Stack>
@@ -337,12 +402,18 @@ function LaneCardView({
   parked,
   store,
   onOpen,
+  onAssign,
+  onForward,
+  onAttention,
 }: {
   card: LaneCard;
   laneId: LaneId;
   parked: ParkedContext | undefined;
   store: CaseActionCtx['store'];
   onOpen: (caseId: string, tab?: string) => void;
+  onAssign: (caseId: string) => void;
+  onForward: (caseId: string) => void;
+  onAttention: (caseId: string) => void;
 }): JSX.Element {
   // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
   // so the same ctx works from every surface — incl. the Problemfälle lane card.
@@ -401,12 +472,20 @@ function LaneCardView({
         >
           Details
         </Button>
-        <ForwardMenuButton caseId={card.caseId} forwardedTo={card.forwardedTo} />
-        <CaseActions
-          variant="card"
-          case={{ status: card.status, priorityFlags: card.priorityFlags }}
+        <CaseActionMenu
+          density="compact"
+          case={{
+            status: card.status,
+            priorityFlags: card.priorityFlags,
+            assignedTo: card.assignedTo ?? null,
+            forwardedTo: card.forwardedTo,
+            attentionFlag: card.attentionFlag,
+          }}
           weBelegNo={card.weBelegNo}
           ctx={ctx}
+          onAssign={onAssign}
+          onForward={onForward}
+          onAttention={onAttention}
         />
       </CardActions>
     </Card>
