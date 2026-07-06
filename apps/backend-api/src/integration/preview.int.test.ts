@@ -59,7 +59,9 @@ async function seedReadyPool(): Promise<string[]> {
       data: {
         source: 'manual',
         externalRef: 'itest-preview-1',
-        weBelegNo: `WE-PV-${i}`,
+        // Weit auseinanderliegende Nummern: sonst erkennt die T3-Beleglauf-Heuristik
+        // die Fixtures als vermutete Lieferung und hält sie aus dem Pool zurück.
+        weBelegNo: `WE-PV-${i * 100}`,
         bookingDate: day,
         branchNo: '1',
         storageLocationId: loc.id,

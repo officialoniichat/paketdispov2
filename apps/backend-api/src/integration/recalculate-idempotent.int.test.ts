@@ -37,8 +37,14 @@ let events: EventLogService;
 let assignment: AssignmentService;
 
 async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
+  // Wochenplan mitseeden: recalculate materialisiert Schichten aus dem Pattern und
+  // löscht sonst die manuell angelegte Schicht (bekanntes Verhalten, s. board.int).
+  const work = { working: true, start: '06:00', end: '14:00', breakMinutes: 0, partTimePct: 100 };
+  const weeklyPattern = {
+    mon: work, tue: work, wed: work, thu: work, fri: work, sat: work, sun: work,
+  };
   const emp = await prisma.user.create({
-    data: { employeeNo: 'E100', displayName: 'Anna Beispiel' },
+    data: { employeeNo: 'E100', displayName: 'Anna Beispiel', weeklyPattern },
   });
   const loc = await prisma.location.create({
     data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
@@ -62,7 +68,9 @@ async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
       data: {
         source: 'manual',
         externalRef: 'recalc-set-1',
-        weBelegNo: `WE-RECALC-${i}`,
+        // Weit auseinanderliegende Nummern: sonst erkennt die T3-Beleglauf-Heuristik
+        // die Fixtures als vermutete Lieferung und hält sie aus dem Pool zurück.
+        weBelegNo: `WE-RECALC-${i * 100}`,
         bookingDate: day,
         branchNo: '1',
         storageLocationId: loc.id,

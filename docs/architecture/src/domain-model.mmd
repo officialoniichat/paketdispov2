@@ -14,7 +14,8 @@ erDiagram
 
     LOCATION ||--o{ WORKSTATION : hosts
     WORKSTATION ||--o{ SHIFT : "staffed at"
-    LOCATION ||--o{ GOODS_RECEIPT_CASE : "stored at"
+    WORKSTATION ||--o{ USER : "assigned table"
+    LOCATION |o--o{ GOODS_RECEIPT_CASE : "stored at (null only if blocked)"
     LOCATION ||--o{ ROUTE_STOP : "visited by"
 
     GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf AW"
@@ -40,6 +41,8 @@ erDiagram
         json weeklyPattern
         boolean active
         boolean measured "temp staff=false → excl. Leistung-KPI"
+        enum skillTier "profi|fortgeschritten|basis|starter|dummy"
+        string workstationId FK "assigned table (nullable)"
     }
     ROLE { string id PK
         string name UK }
@@ -76,20 +79,26 @@ erDiagram
         string externalRef "ProHandel idempotency"
         string weBelegNo UK
         string deliveryNoteNo "KOPF: Lieferschein"
+        string deliverySourceGroupKey "Liefergruppe: X von N + manual override"
         string branchNo "KOPF: Filiale"
+        string primaryShopNo "KOPF: primaerer Shop"
+        int inboundCartonCount "KOPF: Kartons der Anlieferung"
         int section "KOPF: Abschnitt 1-4,7,8"
         enum goodsTypeText "KOPF: Warenart"
-        string storageLocationId FK
+        string storageLocationId FK "nullable ONLY for blocked (Intake-Gate D1)"
         string_array priorityFlags "prio|catman_due|overdue|..."
         date catManDate
         date loadPlanDate
-        enum status "ready|assigned|in_progress|completed|zst_done|..."
+        enum status "blocked|ready|assigned|in_progress|completed|zst_done|..."
         float effortPoints
         string assignedBundleId FK
+        string_array missingFields "blocked: fehlende Pflichtfelder"
+        boolean deliveryGroupReleased "TL-Freigabe trotz unvollstaendiger Gruppe"
         int version "optimistic lock"
     }
     WORK_INSTRUCTION_HEADER {
         string caseId PK "FK→case (1:1)"
+        enum inspectionLevelCode "Katalog A5: none|p10|p20|full"
         enum goodsReceiptCheckMode "quantity_only|percentage|full"
         boolean minimumQuantityCheckAlwaysRequired
         boolean priceLabelPrintRequired
@@ -104,12 +113,14 @@ erDiagram
         string supplierColor "POS: colour"
         string season "POS: Saison"
         boolean nosFlag "POS: NOS"
+        boolean catMan "POS: Anzeige-Datum, KEIN Prio-Treiber"
         enum status "open|confirmed|issue_open|completed"
     }
     POSITION_INSTRUCTION {
         string positionId PK "FK→position (1:1)"
         boolean priceLabelRequired
         boolean securityRequired
+        string securityTypeCode "Piktogramm-Ref: /static/pictograms/(code).svg"
         boolean onlineHandlingRequired
     }
     RECEIPT_SKU_LINE {
@@ -199,3 +210,23 @@ erDiagram
     EFFORT_RULE { string id PK
         string driverKey UK
         float weight }
+
+    %% Mock-ERP catalogs (Teamlead-Feedback 03.07.2026) — standalone lookup tables,
+    %% referenced by code (wgr / inspectionLevelCode), no FK relations.
+    WGR_CATALOG {
+        string wgr PK "Warengruppe, z.B. 218110"
+        string description "Klartext, z.B. D-Bermuda"
+    }
+    INSPECTION_LEVEL {
+        enum code PK "none|p10|p20|full"
+        string label
+        float percentage
+        string description "Aufgabentext"
+    }
+    ONLINE_SIZE_PREFERENCE {
+        string id PK
+        string wgr "UK: wgr+sizeVariant"
+        string sizeVariant
+        string preferredSize
+        string alternativeSize "optional"
+    }

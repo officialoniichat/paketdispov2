@@ -1,7 +1,8 @@
 %% C4 Level 3 — Components: @paket/assignment-engine (pure, deterministic)
-%% Verified against committed main: packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
+%% Verified against packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
 %% priority/, effort/{effort-score,effort-factors}.ts, assignment/{bundling,distribute}.ts,
-%% capacity/{net-capacity,shift-import,shift-end}.ts, grouping/delivery-group.ts, pickup/, config.ts, types.ts).
+%% capacity/{net-capacity,shift-import,shift-end}.ts, grouping/delivery-group.ts, pickup/, config.ts, types.ts)
+%% — Teile-Modell nach Teamlead-Feedback 03.07.2026 (Skill-Tier-Gate, Starter-Packs, Self-Pull-Pool).
 flowchart TB
     classDef orch fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef mod fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
@@ -12,10 +13,10 @@ flowchart TB
 
     subgraph engine["@paket/assignment-engine"]
         direction TB
-        plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>orchestrator → AssignmentPlan</i>"]:::orch
+        plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>orchestrator → AssignmentPlan<br/>Skill-Tier-Gate: starter/dummy-Schichten ausgenommen (A10)</i>"]:::orch
 
         subgraph prio["priority/"]
-            priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6) · sortByPriority · comparePriority<br/>(rank-3 = overdue; CatMan display-only)</i>"]:::mod
+            priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6, Leiter B2) · sortByPriority · comparePriority<br/>3 = tägl. Verladung (7/4/8 + Shops 120/90) · 4 = NOS+Hängeware<br/>5 = Verladeplan fällig ab Verladetag (kein Vorlauf) · 6 = FIFO</i>"]:::mod
         end
         subgraph eff["effort/"]
             effSc["effort-score.ts<br/><i>computeEffort → minutes + fairness points (B.3)</i>"]:::mod
@@ -27,11 +28,11 @@ flowchart TB
             shEnd["shift-end.ts<br/><i>autoAssignableCapacityMinutes · finishableBudgetMinutes (Pkt 5/6)</i>"]:::mod
         end
         subgraph asg["assignment/"]
-            bundling["bundling.ts<br/><i>createBalancedBundles (~55min, ≤6 cases, Bereich-homogen)</i>"]:::mod
-            distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad (LPT + delivery affinity, §8.3/8.4)</i>"]:::mod
+            bundling["bundling.ts<br/><i>createBalancedBundles — Teile-dimensionierte Packs (C1/C2):<br/>Starter 200–250 / Folge 80–90 Teile, gruppen-atomar, Bereich-homogen,<br/>Minuten-Budget als Machbarkeits-Deckel</i>"]:::mod
+            distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad — GENAU EIN Starter-Pack je MA (C3);<br/>LPT über Minuten-Last + Specialist-/Bereich-Penalty (§8.3/8.4)</i>"]:::mod
         end
         subgraph grp["grouping/"]
-            delivery["delivery-group.ts<br/><i>detectDeliveryGroups · indexDeliveryGroups (Pkt 1)</i>"]:::mod
+            delivery["delivery-group.ts<br/><i>detectDeliveryGroups · indexDeliveryGroups · withheldCaseIds<br/>(Pkt 1: suspected/unvollständige Gruppen werden zurückgehalten)</i>"]:::mod
         end
         subgraph pck["pickup/"]
             pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, type→number, never feeds back)</i>"]:::mod
@@ -50,9 +51,7 @@ flowchart TB
     plan --> delivery
     plan --> distribute
     plan --> pickup
-    bundling --> priEng
-    distribute --> netCap
-    distribute --> delivery
+    delivery -. "groupIdByCaseId (Liefergruppe bleibt im Pack)" .-> bundling
     plan -. "reads defaults" .-> config
     priEng --> types
     effSc --> types

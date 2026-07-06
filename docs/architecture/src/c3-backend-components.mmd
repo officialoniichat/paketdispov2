@@ -1,6 +1,6 @@
 %% C4 Level 3 — Components: backend-api (NestJS on Fastify)
 %% Verified against apps/backend-api/src/* (app.module.ts, cases/, assignment/, employees/,
-%% admin/, workflow/, events/, live/, auth/, prisma/, health/, openapi/).
+%% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, health/, openapi/).
 flowchart TB
     classDef ctrl fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef svc fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
@@ -28,7 +28,7 @@ flowchart TB
         subgraph cases["CasesModule"]
             meCtrl["MeController<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle"]:::ctrl
             casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation<br/>· complete · partial-complete · /api/issues"]:::ctrl
-            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst"]:::ctrl
+            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· delivery-groups/merge|split|release (D2)"]:::ctrl
             casesSvc["CasesService<br/><i>getToday · aggregate · start · complete</i>"]:::svc
             tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst</i>"]:::svc
             tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool · detail</i>"]:::svc
@@ -39,13 +39,19 @@ flowchart TB
         end
 
         subgraph empl["EmployeesModule"]
-            emplCtrl["EmployeesController<br/>/api/admin/employees (GET·PATCH)"]:::ctrl
-            emplSvc["EmployeesService<br/><i>list · get · updateProfile · materializeShift</i>"]:::svc
+            emplCtrl["EmployeesController<br/>/api/admin/employees (GET·POST·PATCH)"]:::ctrl
+            emplSvc["EmployeesService<br/><i>list · get · create · updateProfile (skillTier · Workstation)<br/>· materializeShift</i>"]:::svc
         end
 
         subgraph adminMod["AdminModule"]
-            adminCtrl["AdminController<br/>/api/admin/locations · /api/admin/rules"]:::ctrl
-            adminSvc["AdminService<br/><i>RuleConfig (AppConfig singleton) · Lagerplätze</i>"]:::svc
+            adminCtrl["AdminController<br/>/api/admin/locations · /api/admin/rules<br/>· catalogs/wgr · catalogs/inspection-levels<br/>· online-size-preferences (GET·POST·upload)"]:::ctrl
+            adminSvc["AdminService<br/><i>RuleConfig (AppConfig singleton) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
+        end
+
+        subgraph prohandel["ProhandelModule"]
+            phCtrl["ProhandelController<br/>POST /api/admin/integrations/prohandel/pull"]:::ctrl
+            pictoCtrl["PictogramsController<br/>GET /static/pictograms/:code.svg"]:::ctrl
+            phSvc["ProhandelService<br/><i>Mock-Connector (A9): beleg-generator + beleg-persist<br/>(gemeinsame Senke mit prisma/seed.ts)</i>"]:::svc
         end
 
         subgraph dom["Domain cores (src/modules/*)"]
@@ -55,9 +61,11 @@ flowchart TB
 
     pwa -->|"REST + SSE"| meCtrl
     pwa --> casesCtrl
+    pwa -->|"Piktogramme"| pictoCtrl
     web -->|"REST + SSE"| tlCtrl
     web --> emplCtrl
     web --> adminCtrl
+    web -->|"Jetzt pullen"| phCtrl
 
     meCtrl --> casesSvc
     casesCtrl --> casesSvc
@@ -67,6 +75,7 @@ flowchart TB
     meCtrl --> asgSvc
     emplCtrl --> emplSvc
     adminCtrl --> adminSvc
+    phCtrl --> phSvc
 
     casesSvc --> workflow
     tlSvc --> workflow
@@ -75,6 +84,7 @@ flowchart TB
     tlSvc --> live
     asgSvc --> enginePkg
     asgSvc --> events
+    phSvc --> events
     tlSvc --> mods
 
     auth -. "guards all controllers" .-> cases
@@ -85,6 +95,7 @@ flowchart TB
     asgSvc --> prisma
     emplSvc --> prisma
     adminSvc --> prisma
+    phSvc --> prisma
     events --> prisma
     workflow --> prisma
     prisma --> db

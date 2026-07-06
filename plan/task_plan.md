@@ -4,12 +4,11 @@
 Land ALL backend/engine/domain-model points (A mock-ERP model+seed, B priority ladder rework, C Teile-based packs, D intake gates) end-to-end (Zod → Prisma → seed → OpenAPI → api-client → DTOs), quality gate green, docs/architecture updated, several coherent Conventional Commits on a feature branch off main.
 
 ## Phases
-- [ ] Phase 0: Explore & ground plan in real code (schema, engine, services, seed, admin tabs)
-- [ ] Phase 1: A — Mock-ERP domain model + seed + connector + endpoints (A1–A10) → commit(s)
-- [ ] Phase 2: B — Priority ladder rework (B1–B3) → commit
-- [ ] Phase 3: C — Teile-based packs (C1–C7) → commit
-- [ ] Phase 4: D — Intake gates (D1–D2) → commit
-- [ ] Phase 5: Quality gate: typecheck 13/13, engine vitest, integration tests, OpenAPI+api-client regen, docs/architecture .mmd + render.sh, final review
+- [x] Phase 0: Explore & ground plan in real code
+- [x] Phase 1: A — Mock-ERP domain model + seed + connector + endpoints (A1–A10) — commit "feat(mock-erp)"
+- [x] Phase 2+3: B priority ladder + C Teile packs — combined commit "feat(engine)!" (both cut through engine core: config/types/plan)
+- [x] Phase 4: D — Intake gates (D1–D2) — commit "feat(intake)"
+- [~] Phase 5: Quality gate — typecheck 13/13 ✓, lint 8/8 ✓, full unit tests 13/13 ✓, updated int-test files (admin/me-next-bundle/recalculate/preview/effort-wiring) 19/19 ✓ (rest of test:int pre-existing red per memory), OpenAPI+api-client regenerated ✓, handbook stale claims patched ✓; PENDING: docs/architecture agent (diagrams+render), final docs commit
 
 ## Key facts from memory
 - bundle.* RuleConfig NOT mapped into engineConfig (load-plan.ts:101-122) — must wire new Teile config

@@ -114,7 +114,7 @@
           <table>
             <tr><th>Begriff</th><th>Bedeutung</th></tr>
             <tr><td><strong>Beleg</strong></td><td>Ein Wareneingang (WE-Beleg) mit Positionen und Größen/Mengen.</td></tr>
-            <tr><td><strong>Bündel</strong></td><td>Eine „Karre" Arbeit für eine Person (~55 Min, ≤ 6 Belege).</td></tr>
+            <tr><td><strong>Bündel</strong></td><td>Eine „Karre" Arbeit für eine Person — dimensioniert in <strong>Teilen</strong>: Starter-Pack ~200–250 Teile zu Schichtbeginn, Folge-Packs ~80–90 Teile per Selbst-Abruf.</td></tr>
             <tr><td><strong>Pool</strong></td><td>Alle Belege im Status <code>ready</code>, die verteilt werden können.</td></tr>
             <tr><td><strong>Eiserne Reserve</strong></td><td>Puffer, der nicht verplant wird (für nächsten Morgen / Eilfälle).</td></tr>
             <tr><td><strong>ZST</strong></td><td>Zeit-/Leistungs-Tagesabschluss; Export der erledigten Belege als CSV.</td></tr>
@@ -168,8 +168,8 @@
             <tr><td>6</td><td>FIFO</td><td>Rest nach Buchungsdatum</td></tr>
           </table>
           <h3>Faire Verteilung &amp; Reserve</h3>
-          <p>Belege werden zu <strong>Bündeln</strong> (~55 Min, ≤ 6 Belege, möglichst ein Bereich) gepackt und per <strong>LPT-Verfahren</strong> (Largest-Processing-Time) auf die Mitarbeitenden verteilt — gleichmäßige Auslastung, schwere/leichte Belege gemischt. Die <strong>eiserne Reserve</strong> bleibt geschützt; nur Prio/überfällig/Teamlead dürfen sie anbrechen.</p>
-          <div class="callout bad"><div class="ch">⚠ Wirksame vs. unwirksame Stellschrauben</div>Aktuell beeinflussen nur diese Admin-Einstellungen die echte Zuteilung: <strong>Priorität</strong> (Vorlauf-Tage), <strong>Lieferungen</strong> (Gruppierung), <strong>Schichtende</strong>, <strong>Verladeplan</strong> und die Stammdaten (Lagerplätze/Mitarbeiter/Schichten). Die Tabs <strong>Reserve</strong> und <strong>Bündel</strong> werden gespeichert, aber <em>nicht</em> an die Engine übergeben (Standardwerte greifen). <strong>Aufwand</strong> ist verdrahtet, wirkt aber praktisch nicht, weil keine positionsgenauen Aufwandsdaten reinkommen. Details in Abschnitt 9.</div>
+          <p>Belege werden zu <strong>Teile-dimensionierten Packs</strong> gepackt (Starter-Pack ~200–250 Teile, möglichst ein Bereich, Liefergruppen bleiben zusammen; es gibt keine Beleg-Obergrenze mehr) und per <strong>LPT-Verfahren</strong> (Largest-Processing-Time) verteilt — genau <strong>ein Starter-Pack je Mitarbeiter:in</strong>, der Rest bleibt im Pool für den Selbst-Abruf (Folge-Packs ~80–90 Teile). Minuten bleiben die interne Machbarkeits-Währung (Aufwandsmodell unverändert). Belege ab ~2000 Teilen (konfigurierbar) werden nie automatisch verteilt, sondern warten auf die manuelle Teamlead-Entscheidung.</p>
+          <div class="callout bad"><div class="ch">⚠ Wirksame vs. unwirksame Stellschrauben</div>Wirksam sind: <strong>Priorität</strong> (tägliche Shopbereiche — der Überfälligkeitsvorlauf ist gestrichen), <strong>Bündel</strong> (Teile-Dimensionierung, jetzt verdrahtet), <strong>Lieferungen</strong> (Gruppierung), <strong>Schichtende</strong> (Autostopp, Standard 50 min), <strong>Verladeplan</strong> (inkl. Sonderregelungen) und die Stammdaten (Lagerplätze/Mitarbeiter/Schichten). Der Tab <strong>Reserve</strong> wird gespeichert, aber <em>nicht</em> an die Engine übergeben (Standardwerte greifen). <strong>Aufwand</strong> ist verdrahtet und bleibt die interne Minuten-Währung für Machbarkeit/Fairness. Details in Abschnitt 9.</div>
         </section>
 
         <!-- 5 -->
