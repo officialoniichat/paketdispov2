@@ -5,6 +5,9 @@ import { config } from '../config.js';
 import { logger } from '../observability/logger.js';
 import { JwtAuthGuard, RolesGuard } from './guards.js';
 import { OidcTokenVerifier, type VerifyKey } from './token-verifier.js';
+import { TokenIssuer } from './token-issuer.js';
+import { LoginService } from './login.service.js';
+import { LoginController } from './login.controller.js';
 
 async function buildVerifier(): Promise<OidcTokenVerifier> {
   let key: VerifyKey | undefined;
@@ -33,11 +36,17 @@ async function buildVerifier(): Promise<OidcTokenVerifier> {
  * order, so every route is fail-closed unless explicitly marked @Public.
  */
 @Module({
+  controllers: [LoginController],
   providers: [
     {
       provide: OidcTokenVerifier,
       useFactory: buildVerifier,
     },
+    {
+      provide: TokenIssuer,
+      useFactory: () => new TokenIssuer({ devPrivateKeyPem: config.auth.devPrivateKeyPem, expiresIn: '12h' }),
+    },
+    LoginService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
