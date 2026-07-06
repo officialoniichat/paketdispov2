@@ -43,6 +43,23 @@ export const DEFAULT_ABLAGEN_FILTER_STATE: AblagenFilterState = {
   groupBy: 'none',
 };
 
+const VALID_GROUP_BY: ReadonlySet<string> = new Set<AblagenGroupBy>(['none', 'bereich']);
+
+/**
+ * Merge a persisted (possibly stale) `paket.view.ablagen` blob over the current
+ * defaults. Guards against values from a since-removed option — e.g. a stored
+ * `groupBy: 'assignedTo'` from before that dimension was dropped — which would
+ * otherwise flow straight into the MUI `<Select>` and render blank because no
+ * `<MenuItem>` matches it.
+ */
+export function sanitizeAblagenFilterState(persisted: Partial<AblagenFilterState> | undefined): AblagenFilterState {
+  const merged = { ...DEFAULT_ABLAGEN_FILTER_STATE, ...persisted };
+  return {
+    ...merged,
+    groupBy: VALID_GROUP_BY.has(merged.groupBy) ? merged.groupBy : 'none',
+  };
+}
+
 /** Statuses that represent an open decision the TL must make (README §5). */
 const DECISION_STATUSES: ReadonlySet<CaseStatus> = new Set(['blocked', 'issue_open', 'needs_review']);
 

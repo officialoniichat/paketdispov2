@@ -12,6 +12,7 @@ import {
   isFilterActive,
   isFilterExemptLane,
   removeFilterChip,
+  sanitizeAblagenFilterState,
 } from './ablagenFilters.js';
 
 function makeCard(overrides: Partial<LaneCard> = {}): LaneCard {
@@ -241,5 +242,24 @@ describe('groupCards', () => {
     ];
     const groups = groupCards(cards, 'bereich');
     expect(groups.map((g) => g.label)).toEqual(['Hängebahn', 'unbekannt']);
+  });
+});
+
+describe('sanitizeAblagenFilterState', () => {
+  it('returns the default filter for undefined input', () => {
+    expect(sanitizeAblagenFilterState(undefined)).toEqual(DEFAULT_ABLAGEN_FILTER_STATE);
+  });
+
+  it('falls back groupBy to "none" for a value from a removed option (e.g. old "assignedTo")', () => {
+    const stale = { groupBy: 'assignedTo' } as unknown as Partial<typeof DEFAULT_ABLAGEN_FILTER_STATE>;
+    expect(sanitizeAblagenFilterState(stale).groupBy).toBe('none');
+  });
+
+  it('keeps a valid groupBy and merges other persisted fields over the defaults', () => {
+    const persisted = { groupBy: 'bereich' as const, onlyPrio: true };
+    const result = sanitizeAblagenFilterState(persisted);
+    expect(result.groupBy).toBe('bereich');
+    expect(result.onlyPrio).toBe(true);
+    expect(result.onlyNeedsDecision).toBe(false);
   });
 });

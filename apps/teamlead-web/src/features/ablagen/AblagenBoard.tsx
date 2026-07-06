@@ -51,9 +51,9 @@ import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
 import { AblagenFilterBar } from './AblagenFilterBar.js';
 import {
-  DEFAULT_ABLAGEN_FILTER_STATE,
   filterLaneCardsForLane,
   groupCards,
+  sanitizeAblagenFilterState,
   type AblagenFilterState,
   type AblagenGroupBy,
 } from './ablagenFilters.js';
@@ -143,9 +143,10 @@ export function AblagenBoard(): JSX.Element {
     return {
       laneOrder: loaded.laneOrder ?? [],
       collapsed: loaded.collapsed ?? [],
-      // Spread over the default so a stored blob from before the filter feature
-      // (or missing individual keys) never yields `undefined` filter fields.
-      filter: { ...DEFAULT_ABLAGEN_FILTER_STATE, ...loaded.filter },
+      // Sanitized over the default so a stored blob from before the filter
+      // feature — or referencing a since-removed option like the old
+      // groupBy: 'assignedTo' — never yields `undefined` or invalid fields.
+      filter: sanitizeAblagenFilterState(loaded.filter),
     };
   });
   const updateView = (next: AblagenViewState): void => {
