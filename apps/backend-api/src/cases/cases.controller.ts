@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { CasesService } from './cases.service.js';
-import { CreateIssueDto, PartialCompleteDto, TransitionResultDto } from './cases.dto.js';
+import { CompleteDto, CreateIssueDto, PartialCompleteDto, TransitionResultDto } from './cases.dto.js';
 
 /**
  * Employee package-handling lifecycle (§14.2 Mitarbeiter-App). Every handler is
@@ -32,8 +32,9 @@ export class CasesController {
   complete(
     @CurrentUser() principal: Principal,
     @Param('caseId') caseId: string,
+    @Body() dto: CompleteDto,
   ): Promise<TransitionResultDto> {
-    return this.cases.complete(principal, caseId);
+    return this.cases.complete(principal, caseId, dto);
   }
 
   @Post('cases/:caseId/partial-complete')

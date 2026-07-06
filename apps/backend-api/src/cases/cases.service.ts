@@ -21,6 +21,7 @@ import {
   type CaseAggregateDto,
   type CaseSummaryDto,
   type ClaimWorkstationDto,
+  type CompleteDto,
   type CreateIssueDto,
   type CurrentBundleDto,
   type MeWorkstationDto,
@@ -389,7 +390,7 @@ export class CasesService {
     return this.finish(principal, result);
   }
 
-  async complete(principal: Principal, caseId: string): Promise<TransitionResultDto> {
+  async complete(principal: Principal, caseId: string, dto: CompleteDto = {}): Promise<TransitionResultDto> {
     const owned = await this.requireOwnedCase(principal, caseId);
     const employee = await this.resolveEmployee(principal);
     const caseRow = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
@@ -403,10 +404,13 @@ export class CasesService {
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
     });
-    // §17.1 ZST: digital completion produces the ZST record + KPI basis.
+    // §17.1 ZST: digital completion produces the ZST record + KPI basis. Uses the
+    // employee's actual counted quantity (incl. Mehr-/Mindermengen) when supplied,
+    // falling back to the case's Soll total for callers that omit it.
+    const completedQuantity = dto.completedQuantity ?? caseRow.totalQuantity;
     await this.writeZst(principal, owned.id, employee.id, {
-      completedQuantity: caseRow.totalQuantity,
-      effortPoints: caseRow.effortPoints,
+      completedQuantity,
+      effortPoints: proratedEffort(caseRow.totalQuantity, completedQuantity, caseRow.effortPoints),
     });
     // §continuation: if this was the bundle's last open case, close the bundle.
     await this.closeBundleIfDone(principal, owned.id);

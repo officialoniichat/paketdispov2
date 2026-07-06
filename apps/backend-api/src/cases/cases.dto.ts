@@ -912,6 +912,15 @@ export class PartialCompleteDto {
   completedQuantity?: number;
 }
 
+export class CompleteDto {
+  /** Actual counted quantity (Ist, incl. Mehr-/Mindermengen); defaults to the case's Soll total. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  completedQuantity?: number;
+}
+
 export class PrioritizeDto {
   @ApiPropertyOptional({ description: 'Reason for manual teamlead priority' })
   @IsOptional()
