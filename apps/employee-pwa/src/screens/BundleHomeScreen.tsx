@@ -216,6 +216,11 @@ export function BundleHomeScreen(): JSX.Element {
     );
   }
 
+  // TODO(task-13+): `ordered` is just `cases` in the backend's booking-date
+  // order (`getToday()`'s `orderBy: { bookingDate: 'asc' }`) — there is no
+  // engine/bundle-assignment order field on CaseSummaryDto to sort by instead.
+  // If „2 · Bearbeiten" ever needs to reflect a specific pick/processing
+  // sequence, the backend must add that order field first.
   const ordered = cases;
   const allDone = cases.length > 0 && cases.every((c) => isCaseClosed(c.status));
   const nextBeleg = collectComplete ? cases.find((c) => !isCaseClosed(c.status)) : undefined;
