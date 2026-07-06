@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Digitale Ablagen — Filterleiste (Modell A, empfohlen)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --brand: #0a3d62;
+    --brand-light: #3c6e8f;
+    --accent: #e58e26;
+    --surface: #f5f7fa;
+    --surface-raised: #ffffff;
+    --text-primary: #1a2430;
+    --text-secondary: #516170;
+    --border: #d6dde5;
+    --danger: #c62828;
+    --warning: #b26a00;
+    --success: #2e7d32;
+    --info: #1565c0;
+    --chip-bg: #eef1f5;
+    color-scheme: light dark;
+  }
+  :root[data-theme="dark"] {
+    --surface: #10161d;
+    --surface-raised: #1a2430;
+    --text-primary: #e8edf2;
+    --text-secondary: #9fb0bf;
+    --border: #2c3947;
+    --chip-bg: #23303c;
+    --brand-light: #5c8aa8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #10161d;
+      --surface-raised: #1a2430;
+      --text-primary: #e8edf2;
+      --text-secondary: #9fb0bf;
+      --border: #2c3947;
+      --chip-bg: #23303c;
+      --brand-light: #5c8aa8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    padding: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 800;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+  .badge-recommended {
+    display: inline-block;
+    background: var(--success);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* ---- Filter bar ---- */
+  .filterbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .search {
+    flex: 1 1 220px;
+    min-width: 160px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--chip-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    flex: 1;
+  }
+  .divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    margin: 2px 4px;
+  }
+  .quick-chip {
+    border: 1px solid var(--border);
+    background: var(--chip-bg);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .quick-chip .count {
+    background: rgba(0,0,0,.12);
+    border-radius: 999px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+  .quick-chip.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+  }
+  .quick-chip.active .count { background: rgba(255,255,255,.25); }
+  .quick-chip.tone-warning.active { background: var(--warning); border-color: var(--warning); }
+  .quick-chip.tone-danger.active { background: var(--danger); border-color: var(--danger); }
+
+  .more-filters-btn {
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .more-filters-btn.open { border-style: solid; color: var(--brand-light); border-color: var(--brand-light); }
+
+  .group-select {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .group-select select {
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12.5px;
+  }
+
+  /* ---- Advanced popover (static, for illustration) ---- */
+  .advanced {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .advanced .field { display: flex; flex-direction: column; gap: 6px; }
+  .advanced label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); font-weight: 700; }
+  .advanced .pill-group { display: flex; flex-wrap: wrap; gap: 5px; }
+  .advanced .pill {
+    border: 1px solid var(--border);
+    background: var(--chip-bg);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    padding: 4px 9px;
+    border-radius: 999px;
+  }
+  .advanced .pill.sel { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .advanced .range { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .advanced .range input[type="range"] { flex: 1; }
+  .advanced .disabled-note { font-size: 11px; color: var(--text-secondary); font-style: italic; }
+
+  /* ---- Active filters summary ---- */
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .active-filters .af-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chip-bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 6px 3px 10px;
+    color: var(--text-primary);
+  }
+  .active-filters .af-chip .x {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+  .clear-all {
+    color: var(--brand-light);
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* ---- Board ---- */
+  .board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .lane {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    max-height: 78vh;
+  }
+  .lane-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+  }
+  .lane-title { font-weight: 700; font-size: 13.5px; flex: 1; }
+  .lane-count {
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--chip-bg);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .lane-count.filtered { background: var(--accent); color: #1a2430; }
+  .lane-desc { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+  .lane-cards { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+  .subgroup-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-secondary);
+    font-weight: 700;
+    margin: 6px 0 2px;
+  }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--surface);
+  }
+  .card.dimmed { opacity: .32; }
+  .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .card-weBeleg { font-weight: 700; font-size: 12.5px; }
+  .card-storage { font-size: 11px; color: var(--text-secondary); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .chip {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 999px;
+  }
+  .chip.status-ready { background: var(--success); }
+  .chip.status-assigned { background: var(--info); }
+  .chip.status-parked { background: #6b6b6b; }
+  .chip.status-problem { background: var(--danger); }
+  .chip.status-needsreview { background: var(--warning); }
+  .chip.status-blocked { background: #8e3b46; }
+  .chip.prio { background: var(--danger); }
+  .chip.tl-prio { background: var(--accent); color: #1a2430; }
+  .chip.bereich { background: var(--brand-light); }
+  .card-meta { font-size: 11px; color: var(--text-secondary); }
+  .empty-lane { font-size: 11.5px; color: var(--text-secondary); padding: 10px 0; }
+  .empty-lane.no-match { color: var(--warning); font-weight: 600; }
+
+  .legend {
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  .legend b { color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<h1>Digitale Ablagen <span class="badge-recommended">Empfohlen — Modell A</span></h1>
+<p class="subtitle">Globale Filterleiste + Quick-Chips über den bestehenden Status-Lanes. Lane-Struktur bleibt unverändert — Filter zeigt nur eine Teilmenge.</p>
+
+<div class="filterbar">
+  <div class="search">🔎 <input placeholder="WE-Nr, Filiale, Bereich suchen…" /></div>
+  <div class="divider"></div>
+  <button class="quick-chip active">Frei <span class="count">14</span></button>
+  <button class="quick-chip tone-danger active">Braucht Entscheidung <span class="count">5</span></button>
+  <button class="quick-chip tone-warning">Prio <span class="count">9</span></button>
+  <button class="quick-chip">Meine Filiale <span class="count">31</span></button>
+  <button class="more-filters-btn open">⚙ Weitere Filter (2)</button>
+  <div class="group-select">
+    Gruppieren nach
+    <select>
+      <option>— keine —</option>
+      <option selected>Bereich</option>
+      <option>Filiale</option>
+      <option>Zugeteilter Mitarbeiter</option>
+    </select>
+  </div>
+</div>
+
+<div class="advanced">
+  <div class="field">
+    <label>Bereich</label>
+    <div class="pill-group">
+      <span class="pill sel">Kühlware</span>
+      <span class="pill">Trocken</span>
+      <span class="pill">Textil</span>
+      <span class="pill">Elektro</span>
+    </div>
+  </div>
+  <div class="field">
+    <label>Warenart</label>
+    <div class="pill-group">
+      <span class="pill">NOS</span>
+      <span class="pill sel">Saison</span>
+      <span class="pill">Aktion</span>
+    </div>
+  </div>
+  <div class="field">
+    <label>Lieferungs-Gruppe</label>
+    <div class="pill-group">
+      <span class="pill">Nur Gruppen</span>
+      <span class="pill">Nur Einzel-Belege</span>
+    </div>
+  </div>
+  <div class="field">
+    <label>Teile-Anzahl</label>
+    <div class="range">0 <input type="range" min="0" max="500" value="120" /> 500+</div>
+  </div>
+  <div class="field">
+    <label>Filiale <span class="disabled-note">(Modell erweitert)</span></label>
+    <div class="pill-group">
+      <span class="pill">042 · Mitte</span>
+      <span class="pill">017 · Nord</span>
+      <span class="pill">003 · Ost</span>
+    </div>
+  </div>
+  <div class="field">
+    <label>Skill-Tier <span class="disabled-note">(Modell erweitert)</span></label>
+    <div class="pill-group">
+      <span class="pill">Junior</span>
+      <span class="pill">Senior</span>
+    </div>
+  </div>
+</div>
+
+<div class="active-filters">
+  Aktive Filter:
+  <span class="af-chip">Frei <span class="x">✕</span></span>
+  <span class="af-chip">Braucht Entscheidung <span class="x">✕</span></span>
+  <span class="af-chip">Bereich: Kühlware <span class="x">✕</span></span>
+  <span class="af-chip">Warenart: Saison <span class="x">✕</span></span>
+  <span class="clear-all">Alle zurücksetzen</span>
+</div>
+
+<div class="board">
+
+  <!-- Problemfälle -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Problemfälle</div>
+      <div class="lane-count filtered">2/6</div>
+    </div>
+    <div class="lane-desc">Offene Probleme &amp; Zurück-an-Bucher</div>
+    <div class="lane-cards">
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88231</span><span class="card-storage">K-14-3</span></div>
+        <div class="chips"><span class="chip status-problem">Problem</span><span class="chip bereich">Kühlware</span></div>
+        <div class="card-meta">Falschlieferung — „Menge weicht ab" · 44 Teile</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88240</span><span class="card-storage">K-02-1</span></div>
+        <div class="chips"><span class="chip status-blocked">Zurück an Bucher</span><span class="chip bereich">Kühlware</span></div>
+        <div class="card-meta">Warenart fehlt · 12 Teile</div>
+      </div>
+      <div class="card dimmed">
+        <div class="card-top"><span class="card-weBeleg">WE-87991</span><span class="card-storage">T-09-2</span></div>
+        <div class="chips"><span class="chip status-problem">Problem</span><span class="chip bereich">Textil</span></div>
+        <div class="card-meta">Ausgeblendet — nicht Bereich Kühlware</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Geparkt -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Geparkt</div>
+      <div class="lane-count filtered">1/4</div>
+    </div>
+    <div class="lane-desc">Aus Automatik ausgeschlossen</div>
+    <div class="lane-cards">
+      <div class="subgroup-label">Bereich Kühlware</div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88117</span><span class="card-storage">K-08-4</span></div>
+        <div class="chips"><span class="chip status-parked">Geparkt</span><span class="chip bereich">Kühlware</span></div>
+        <div class="card-meta">von M. Berger am 07.07. — „Wartet auf Rückmeldung Lieferant" · 20 Teile</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prio -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Prio</div>
+      <div class="lane-count filtered">1/3</div>
+    </div>
+    <div class="lane-desc">Nur Prio-Belege ohne feste Priorisierung</div>
+    <div class="lane-cards">
+      <div class="subgroup-label">Bereich Kühlware</div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88301</span><span class="card-storage">K-11-2</span></div>
+        <div class="chips"><span class="chip prio">Prio</span><span class="chip bereich">Kühlware</span></div>
+        <div class="card-meta">Frei · 33 Teile · 42 Min</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verladeplan heute -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Verladeplan heute</div>
+      <div class="lane-count filtered">0/9</div>
+    </div>
+    <div class="lane-desc">Für den heutigen Verladeplan</div>
+    <div class="lane-cards">
+      <div class="empty-lane no-match">Kein Treffer für aktuelle Filter.</div>
+    </div>
+  </div>
+
+  <!-- Verladeplan morgen -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Verladeplan morgen</div>
+      <div class="lane-count filtered">0/5</div>
+    </div>
+    <div class="lane-desc">Für morgen vorgesehen</div>
+    <div class="lane-cards">
+      <div class="empty-lane no-match">Kein Treffer für aktuelle Filter.</div>
+    </div>
+  </div>
+
+  <!-- Jeden-Tag-Ware -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Jeden-Tag-Ware</div>
+      <div class="lane-count filtered">1/11</div>
+    </div>
+    <div class="lane-desc">Kein festes Verlade-Datum</div>
+    <div class="lane-cards">
+      <div class="subgroup-label">Bereich Kühlware</div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88355</span><span class="card-storage">K-05-1</span></div>
+        <div class="chips"><span class="chip status-ready">Bereit</span><span class="chip bereich">Kühlware</span></div>
+        <div class="card-meta">Frei · 18 Teile · 25 Min</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sonstige -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Sonstige</div>
+      <div class="lane-count filtered">0/2</div>
+    </div>
+    <div class="lane-desc">Ohne Zuordnung zu einer anderen Lane</div>
+    <div class="lane-cards">
+      <div class="empty-lane no-match">Kein Treffer für aktuelle Filter.</div>
+    </div>
+  </div>
+
+  <!-- Weitergeleitet -->
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">Weitergeleitet</div>
+      <div class="lane-count filtered">0/3</div>
+    </div>
+    <div class="lane-desc">An andere Abteilung übergeben</div>
+    <div class="lane-cards">
+      <div class="empty-lane no-match">Kein Treffer für aktuelle Filter.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <p><b>Wie das Filtern funktioniert:</b> Quick-Chips und „Weitere Filter" wirken additiv (UND-Verknüpfung)
+  auf alle Lanes gleichzeitig. Karten, die nicht (mehr) passen, verschwinden aus der Lane — die Lane
+  selbst bleibt bestehen, auch wenn 0 Treffer übrig sind, damit die Fachlogik-Struktur (Status-Workflow)
+  jederzeit erkennbar bleibt. Der Lane-Zähler zeigt „gefiltert/gesamt", sobald ein Filter aktiv ist.
+  Das „Gruppieren nach"-Dropdown fügt optionale Sub-Header <i>innerhalb</i> jeder Lane ein (hier: nach
+  Bereich) — das ist eine Verallgemeinerung der bestehenden Weiterleitungs-Empfänger-Gruppierung, keine
+  neue Lane-Achse.</p>
+</div>
+
+</body>
+</html>
