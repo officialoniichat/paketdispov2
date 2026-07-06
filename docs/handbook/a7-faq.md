@@ -44,10 +44,11 @@ bleibt keine angefangene Ware über Nacht liegen. Offene Belege bespricht die Te
 Steht `'Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege hier.'`,
 hast du gerade nichts zugeteilt. Warte auf die Zuteilung oder frage die Teamleitung.
 
-## Ich sehe keinen Abmelden-Knopf
+## Wie melde ich mich ab?
 
-Es gibt keinen. Dein Tisch bleibt gespeichert. Bei Tischwechsel meldest du dich einfach am neuen
-Tisch neu an (Kapitel A1).
+Oben rechts in der Kopfzeile steht der Knopf `'Abmelden'`. Ein Tipp darauf beendet deine Anmeldung
+und bringt dich zurück zum Anmeldebildschirm (Kapitel A1). Läuft deine Anmeldung technisch ab, siehst
+du automatisch denselben Anmeldebildschirm.
 
 ## Rückmeldungen kommen als Hinweis-Text
 
