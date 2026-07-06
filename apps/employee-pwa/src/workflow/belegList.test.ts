@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BelegListItem, BelegStatus, CaseProgress } from '../db/types.js';
+import type { BelegListItem, BelegStatus, CaseProgress } from '../domain/types.js';
 import { deriveBelegStatus, isBelegClosed, nextOpenBeleg, orderBelege } from './belegList.js';
 
 const item = (over: Partial<BelegListItem>): BelegListItem => ({

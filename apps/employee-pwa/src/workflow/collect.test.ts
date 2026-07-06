@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BundleProgress, CollectStop } from '../db/types.js';
+import type { BundleProgress, CollectStop } from '../domain/types.js';
 import { collectCounts, isCollectComplete, toggleStop } from './collect.js';
 
 const stop = (sequence: number, over: Partial<CollectStop> = {}): CollectStop => ({
@@ -11,7 +11,6 @@ const stop = (sequence: number, over: Partial<CollectStop> = {}): CollectStop =>
 });
 
 const progress = (over: Partial<BundleProgress> = {}): BundleProgress => ({
-  id: 'today',
   collectedSequences: [],
   version: 0,
   updatedAt: '',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exampleAggregate } from '../domain/exampleAssignment.js';
+import { exampleAggregate } from '../test/exampleAggregate.js';
 import {
   canCompleteCase,
   completeCase,

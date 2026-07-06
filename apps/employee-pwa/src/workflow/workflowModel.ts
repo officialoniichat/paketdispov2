@@ -11,7 +11,7 @@
  * and never gates completion.
  */
 import type { WorkInstructionHeader } from '@paket/domain-types';
-import type { CaseAggregate, CaseProgress } from '../db/types.js';
+import type { CaseAggregate, CaseProgress } from '../domain/types.js';
 
 /** Fresh progress for a Beleg at version 0 (persisted before the first action). */
 export function initialProgress(aggregate: CaseAggregate, now: string): CaseProgress {

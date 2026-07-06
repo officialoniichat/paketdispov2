@@ -5,7 +5,7 @@
  * Belege); status is derived from per-case progress + open-issue count. There is
  * no free-pick priority sort — assignment and order are the engine's.
  */
-import type { BelegListItem, BelegStatus, CaseProgress } from '../db/types.js';
+import type { BelegListItem, BelegStatus, CaseProgress } from '../domain/types.js';
 
 /** Order by the bundle order (`order` index). Returns a new array. */
 export function orderBelege(belege: readonly BelegListItem[]): BelegListItem[] {

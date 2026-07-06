@@ -6,7 +6,7 @@
  * list is complete. Scanning is optional (a stop's `scanRequired` only drives
  * the scan affordance); checking off is the gate.
  */
-import type { BundleProgress, CollectStop } from '../db/types.js';
+import type { BundleProgress, CollectStop } from '../domain/types.js';
 
 /** Toggle a stop's collected state (immutable). The repository owns the version bump. */
 export function toggleStop(progress: BundleProgress, sequence: number): BundleProgress {

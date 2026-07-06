@@ -8,7 +8,7 @@
  * label, and defends against a stale/unknown scopeId by falling back to the case.
  */
 import { issueScopeSchema, type IssueScope } from '@paket/domain-types';
-import type { CaseAggregate } from '../db/types.js';
+import type { CaseAggregate } from '../domain/types.js';
 
 export interface IssueTarget {
   scope: IssueScope;
