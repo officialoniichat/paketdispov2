@@ -1,15 +1,16 @@
 %% C4 Level 3 — Components: employee-pwa (React + Vite PWA)
-%% Verified against apps/employee-pwa/src/* (screens/, workflow/, data/, routes/) — task-13.
+%% Verified against apps/employee-pwa/src/* (screens/, workflow/, data/, routes/) — tasks 13-17.
 %% Real employee login (data/auth.ts) gates the app; the backend is the single source of
-%% truth via React Query — the former Dexie-backed db/ (offline-first cache), events/
-%% (local audit log) and seed/sync/repository modules are gone (tasks 10-13).
+%% truth via React Query plus an SSE live-update channel — the former Dexie-backed db/
+%% (offline-first cache), events/ (local audit log) and seed/sync/repository modules are
+%% gone (tasks 10-13). Task 15 added useLiveUpdates() (GET /api/me/stream, SSE).
 flowchart TB
     classDef screen fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef hook fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
 
-    api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* · /api/issues · /static/pictograms/*"]:::ext
+    api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* · /api/issues · /static/pictograms/* · SSE /api/me/stream"]:::ext
 
     subgraph pwa["employee-pwa container"]
         direction TB
@@ -32,6 +33,7 @@ flowchart TB
             mapper["caseAggregateMapper.ts<br/><i>CaseAggregateDto → CaseAggregate (domain/types.ts)</i>"]:::logic
             persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete/Issue — plain POST, throws on failure</i>"]:::logic
             focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) on window focus</i>"]:::hook
+            live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — on message: invalidateQueries(['me','today'])</i>"]:::hook
         end
     end
 
@@ -49,5 +51,7 @@ flowchart TB
     meToday --> apiClient
     persist --> apiClient
     focus --> meToday
+    live --> meToday
+    live -->|"SSE (query-param JWT)"| api
     process -->|"Piktogramm img"| api
     apiClient -->|"REST (Bearer JWT)"| api

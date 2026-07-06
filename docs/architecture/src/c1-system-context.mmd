@@ -11,13 +11,13 @@ C4Context
     System(paket, "Paketlagerdispo", "Modular monolith that turns goods-receipt cases into fair, deterministic daily work bundles and steers their lifecycle to Tagesabschluss.")
 
     System_Ext(prohandel, "ProHandel ERP", "Retail ERP — intended system of record for goods-receipt cases incl. Lagerplatz. Cases carry source=prohandel_api + externalRef. NOTE: settings-configured delta-pull is concept-stage, not yet a running ingestion service.")
-    System_Ext(oidc, "OIDC Auth Provider", "Keycloak / Entra. Issues JWT access tokens (JWKS). Roles: Employee, Teamlead, Admin, IT. Dev: static RS256 key fallback.")
+    System_Ext(oidc, "OIDC Auth Provider", "Keycloak / Entra. Issues JWT access tokens (JWKS) for Teamlead / Admin / IT login. Dev: static RS256 key fallback. Employees do NOT authenticate through this provider (see note below).")
 
-    Rel(employee, paket, "Uses (mobile PWA)", "HTTPS / REST + SSE")
+    Rel(employee, paket, "Uses (mobile PWA). Logs in with employeeNo+PIN directly against Paketlagerdispo — no external IdP hop.", "HTTPS / REST + SSE")
     Rel(teamlead, paket, "Steers pool & overrides", "HTTPS / REST + SSE")
     Rel(admin, paket, "Configures rules & master data", "HTTPS / REST")
 
-    Rel(paket, oidc, "Verifies access tokens against", "OIDC / JWKS")
+    Rel(paket, oidc, "Verifies Teamlead/Admin access tokens against", "OIDC / JWKS")
     Rel(prohandel, paket, "Goods-receipt cases (system of record)", "API pull — concept-stage")
 
     UpdateRelStyle(prohandel, paket, $offsetY="-30", $offsetX="-40", $lineColor="grey")
