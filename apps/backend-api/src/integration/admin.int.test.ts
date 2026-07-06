@@ -116,25 +116,25 @@ describe('admin rule config (§11)', () => {
   it('returns the seeded default config', async () => {
     await admin.seedDefaultRuleConfig();
     const rules = await admin.getRuleConfig();
-    expect(rules.priority.overdueLeadDays).toBe(DEFAULT_RULE_CONFIG.priority.overdueLeadDays);
-    expect(rules.bundle.maxCases).toBe(DEFAULT_RULE_CONFIG.bundle.maxCases);
+    expect(rules.priority.dailyShopAreas).toEqual(DEFAULT_RULE_CONFIG.priority.dailyShopAreas);
+    expect(rules.bundle.starterPackMinTeile).toBe(DEFAULT_RULE_CONFIG.bundle.starterPackMinTeile);
   });
 
   it('round-trips a PUT of a changed config', async () => {
     const next = {
       ...DEFAULT_RULE_CONFIG,
-      bundle: { ...DEFAULT_RULE_CONFIG.bundle, maxCases: 12 },
+      bundle: { ...DEFAULT_RULE_CONFIG.bundle, starterPackMaxTeile: 300 },
     };
     const saved = await admin.replaceRuleConfig(next);
-    expect(saved.bundle.maxCases).toBe(12);
+    expect(saved.bundle.starterPackMaxTeile).toBe(300);
     const reread = await admin.getRuleConfig();
-    expect(reread.bundle.maxCases).toBe(12);
+    expect(reread.bundle.starterPackMaxTeile).toBe(300);
   });
 
   it('rejects an invalid config (Zod boundary)', async () => {
     const bad = {
       ...DEFAULT_RULE_CONFIG,
-      priority: { ...DEFAULT_RULE_CONFIG.priority, overdueLeadDays: -5 },
+      priority: { ...DEFAULT_RULE_CONFIG.priority, dailyShopAreas: -5 },
     };
     await expect(admin.replaceRuleConfig(bad as never)).rejects.toThrow();
   });

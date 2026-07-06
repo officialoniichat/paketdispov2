@@ -2,26 +2,32 @@ import type { CaseStatus, GoodsReceiptCase, ISODate, SectionCode } from '@paket/
 import { PRIORITY_RANK, type EnrichedCase, type PriorityClassification } from '../types.js';
 
 /**
- * Shop-/Abschnitts-spezifischer Vorlauf-Override (Teamlead-Punkt 4). A case matches
- * an override when every specified field equals the case's; `undefined` fields are
- * wildcards. The most specific match wins (see {@link resolveLeadDays}).
- */
-export interface LoadPlanLeadOverride {
-  shopAreaNo?: string;
-  /** SectionCode value (1/2/3/4/7/8); typed `number` to match the engine config schema. */
-  section?: number;
-  leadDays: number;
-}
-
-/**
- * §8.1 Prioritätsklassen. Cases are classified into ranks 0–6 and then ordered
- * Ausschluss → Manuell → Prio → Überfällig → Jeden-Tag (7/4/8) → Verladeplan (1/2/3) → FIFO.
+ * §8.1 Prioritätsklassen — Leiter nach Teamlead-Feedback 03.07.2026 (B2):
+ *
+ *   0 Ausschluss → 1 Manuell → 2 Prio →
+ *   3 TIER 1 „tägliche Verladung" (Jeden-Tag-Abschnitte 7/4/8 inkl. EB-Abschnitt 7
+ *     PLUS die täglichen Shopbereiche, standardmäßig 120 und 90 — diese Shops kommen
+ *     damit VOR NOS) →
+ *   4 TIER 2 NOS + Hängeware (NOS-Kennzeichen und Hängeware-Bereich sind ECHTE
+ *     Prioritätstreiber) →
+ *   5 TIER 3 Verladeplan (Abschnitte 1/2/3, fällig ab dem Verladetag) →
+ *   6 FIFO.
+ *
+ * Der Überfälligkeitsvorlauf (overdueLeadDays) ist ersatzlos gestrichen (B1): ein
+ * Verladeplan-Case ist fällig, sobald `today >= loadPlanDate` — keine Vorlauf-Tage,
+ * keine Shop-/Abschnitts-Overrides. CatMan bleibt reines Anzeige-Datum (deaktiviert).
  * Classification returns the FIRST matching class, so e.g. a Prio case in section 7
- * is ranked as Prio, not Jeden-Tag.
+ * is ranked as Prio, not tägliche Verladung.
  */
 
 const EVERY_DAY_SECTIONS: readonly SectionCode[] = [7, 4, 8];
 const LOAD_PLAN_SECTIONS: readonly SectionCode[] = [1, 2, 3];
+
+/** Warenarten, die als NOS zählen (nie ausverkauft — Tier 2). */
+const NOS_GOODS_TYPES: readonly string[] = ['NOS', 'NOS-Nachorder', 'NOOS'];
+
+/** Default: Shopbereiche mit täglicher Verladung (Tier 1, konfigurierbar). */
+export const DEFAULT_DAILY_SHOP_AREAS: readonly string[] = ['120', '90'];
 
 /** Statuses eligible for assignment. Everything else is class 0 (Ausschluss). */
 const DEFAULT_ELIGIBLE_STATUSES: readonly CaseStatus[] = ['ready', 'partially_completed'];
@@ -31,48 +37,23 @@ export interface PriorityContext {
   today: ISODate;
   eligibleStatuses?: readonly CaseStatus[];
   /**
-   * §Teamlead-Punkt 4: default Vorlauf in days. A Verladeplan case (section 1/2/3)
-   * counts as due/overdue once `today >= loadPlanDate − overdueLeadDays` — i.e. it is
-   * within `overdueLeadDays` days BEFORE its loading day, or the loading day passed.
-   * Defaults to 0, which reproduces the legacy "Verladeplan-Ware heute" behaviour
-   * (due only on/after the loading day). The loading day itself (`loadPlanDate`) is
-   * resolved upstream from the Verladeplan calendar — the engine stays pure.
+   * Shopbereiche mit täglicher Verladung (Tier 1 neben den Jeden-Tag-Abschnitten).
+   * Default {@link DEFAULT_DAILY_SHOP_AREAS} (120, 90).
    */
-  overdueLeadDays?: number;
-  /** Shop-/section-specific lead-day overrides; most specific match wins. */
-  overdueLeadDaysOverrides?: readonly LoadPlanLeadOverride[];
+  dailyShopAreas?: readonly string[];
 }
 
-const MS_PER_DAY = 86_400_000;
-
-/** Shift an ISO date (YYYY-MM-DD) by `days` (may be negative), returning a new ISO date. */
-function addDays(date: ISODate, days: number): ISODate {
-  const shifted = new Date(`${date}T00:00:00.000Z`).getTime() + days * MS_PER_DAY;
-  return new Date(shifted).toISOString().slice(0, 10) as ISODate;
+/** NOS-Erkennung auf Beleg-Ebene: Warenart des Kopfes. */
+function isNosCase(goodsCase: GoodsReceiptCase): boolean {
+  return goodsCase.goodsTypeText !== undefined && NOS_GOODS_TYPES.includes(goodsCase.goodsTypeText);
 }
 
-/**
- * Resolve the effective Vorlauf for a case: the most specific matching override wins,
- * otherwise the context default (or 0). Specificity = number of fields the override
- * pins (shopAreaNo and/or section); ties keep the first listed override (deterministic).
- */
-export function resolveLeadDays(goodsCase: GoodsReceiptCase, ctx: PriorityContext): number {
-  const overrides = ctx.overdueLeadDaysOverrides ?? [];
-  let best: LoadPlanLeadOverride | undefined;
-  let bestScore = -1;
-  for (const o of overrides) {
-    if (o.shopAreaNo !== undefined && o.shopAreaNo !== goodsCase.primaryShopAreaNo) continue;
-    if (o.section !== undefined && o.section !== goodsCase.section) continue;
-    const score = (o.shopAreaNo !== undefined ? 1 : 0) + (o.section !== undefined ? 1 : 0);
-    if (score > bestScore) {
-      best = o;
-      bestScore = score;
-    }
-  }
-  return best?.leadDays ?? ctx.overdueLeadDays ?? 0;
+/** Hängeware: der Bereich ist durch die Lagerklasse des Lagerplatzes fixiert. */
+function isHaengeware(goodsCase: GoodsReceiptCase): boolean {
+  return goodsCase.storageLocation.type === 'haengebahn';
 }
 
-/** Classify one case against §8.1. */
+/** Classify one case against the §8.1 ladder (B2). */
 export function classifyPriority(
   goodsCase: GoodsReceiptCase,
   ctx: PriorityContext,
@@ -98,43 +79,63 @@ export function classifyPriority(
     return { rank: PRIORITY_RANK.prioFlag, class: 'prio_flag', reason: 'Prio-Kennzeichen' };
   }
 
-  // Rank-3 tier is driven by overdue only. CatMan (the `catman_due` flag and
-  // `catManDate`) is deliberately NOT a priority driver — it stays a purely
-  // informational field shown in the UIs. (Tier name kept for the overdue task.)
-  if (flags.includes('overdue')) {
-    return { rank: PRIORITY_RANK.catManDue, class: 'catman_due', reason: 'überfällig' };
-  }
-
+  // TIER 1 tägliche Verladung: Jeden-Tag-Abschnitte 7/4/8 + tägliche Shopbereiche.
   const section = goodsCase.section;
   if (section !== null && EVERY_DAY_SECTIONS.includes(section)) {
     return {
-      rank: PRIORITY_RANK.everyDay,
-      class: 'every_day',
-      reason: `Jeden-Tag-Ware (Abschnitt ${section})`,
+      rank: PRIORITY_RANK.dailyLoading,
+      class: 'daily_loading',
+      reason: `tägliche Verladung (Abschnitt ${section})`,
+    };
+  }
+  const dailyShopAreas = ctx.dailyShopAreas ?? DEFAULT_DAILY_SHOP_AREAS;
+  if (
+    goodsCase.primaryShopAreaNo !== undefined &&
+    dailyShopAreas.includes(goodsCase.primaryShopAreaNo)
+  ) {
+    return {
+      rank: PRIORITY_RANK.dailyLoading,
+      class: 'daily_loading',
+      reason: `tägliche Verladung (Shopbereich ${goodsCase.primaryShopAreaNo})`,
     };
   }
 
-  // §Teamlead-Punkt 4: a Verladeplan case becomes due/overdue relative to its loading
-  // day, not via an hour-difference threshold. It is due once today is within the
-  // (shop-/section-configurable) Vorlauf before the loading day, or the day has passed.
-  if (section !== null && LOAD_PLAN_SECTIONS.includes(section) && goodsCase.loadPlanDate !== undefined) {
-    const leadDays = resolveLeadDays(goodsCase, ctx);
-    const dueFrom = addDays(goodsCase.loadPlanDate, -leadDays);
-    if (ctx.today >= dueFrom) {
-      const overdue = ctx.today > goodsCase.loadPlanDate;
-      const reason = overdue
-        ? `Verladeplan-Ware überfällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate})`
-        : `Verladeplan-Ware fällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate}, Vorlauf ${leadDays}� Tage)`;
-      return { rank: PRIORITY_RANK.loadPlanDue, class: 'load_plan_due', reason };
-    }
+  // TIER 2 NOS + Hängeware — echte Prioritätstreiber (B2).
+  if (isNosCase(goodsCase)) {
+    return {
+      rank: PRIORITY_RANK.nosHaengeware,
+      class: 'nos_haengeware',
+      reason: `NOS-Ware (${goodsCase.goodsTypeText})`,
+    };
+  }
+  if (isHaengeware(goodsCase)) {
+    return {
+      rank: PRIORITY_RANK.nosHaengeware,
+      class: 'nos_haengeware',
+      reason: 'Hängeware (Bereich Hängebahn)',
+    };
+  }
+
+  // TIER 3 Verladeplan: Abschnitte 1/2/3, fällig ab dem Verladetag (kein Vorlauf, B1).
+  if (
+    section !== null &&
+    LOAD_PLAN_SECTIONS.includes(section) &&
+    goodsCase.loadPlanDate !== undefined &&
+    ctx.today >= goodsCase.loadPlanDate
+  ) {
+    const overdue = ctx.today > goodsCase.loadPlanDate;
+    const reason = overdue
+      ? `Verladeplan-Ware überfällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate})`
+      : `Verladeplan-Ware fällig (Abschnitt ${section}, Verladetag ${goodsCase.loadPlanDate})`;
+    return { rank: PRIORITY_RANK.loadPlanDue, class: 'load_plan_due', reason };
   }
 
   return { rank: PRIORITY_RANK.fifo, class: 'fifo', reason: 'FIFO (älteste Buchungsdaten zuerst)' };
 }
 
 /**
- * §8.3 `sortByPriorityCatManLoadPlanFifo`: order by rank, then FIFO (oldest booking
- * date first), with deterministic tie-breaks so simulation/recalculate is reproducible.
+ * §8.3 Sortierung: order by rank, then FIFO (oldest booking date first), with
+ * deterministic tie-breaks so simulation/recalculate is reproducible.
  */
 export function comparePriority(a: EnrichedCase, b: EnrichedCase): number {
   if (a.priority.rank !== b.priority.rank) return a.priority.rank - b.priority.rank;

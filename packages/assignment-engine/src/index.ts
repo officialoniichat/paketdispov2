@@ -69,9 +69,8 @@ export {
   classifyPriority,
   comparePriority,
   sortByPriority,
-  resolveLeadDays,
+  DEFAULT_DAILY_SHOP_AREAS,
   type PriorityContext,
-  type LoadPlanLeadOverride,
 } from './priority/priority-engine.js';
 
 // (3) Effort score (§8.2).

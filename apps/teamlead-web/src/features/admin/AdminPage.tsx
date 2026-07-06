@@ -4,8 +4,8 @@
  * (§11.2 – simple Lagerplatzliste, no routing graph in the MVP).
  *
  * The structured RuleConfig is loaded from and saved to the real backend
- * (`/api/admin/rules`) via {@link ../../data/admin}; the Verladeplan (loadPlan +
- * shop-specific Vorlauf) is edited in {@link ./VerladeplanTab}.
+ * (`/api/admin/rules`) via {@link ../../data/admin}; the Verladeplan (loadPlan)
+ * is edited in {@link ./VerladeplanTab}.
  * Lagerplätze are edited in {@link ./LocationMasterEditor}.
  */
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -48,7 +49,7 @@ const TABS = [
 
 /** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
 const GROUPING_TAB = 3;
-/** Editable Verladeplan tab (loadPlan + shop-specific Vorlauf, Teamlead-Punkt 4). */
+/** Editable Verladeplan tab (loadPlan, Teamlead-Punkt 4). */
 const LOADPLAN_TAB = 4;
 /** RuleConfig-form tab index for the Schichtende-Cutoff (Punkt 5). */
 const SHIFT_END_TAB = 9;
@@ -151,13 +152,13 @@ export function AdminPage(): JSX.Element {
             <>
               {tab === 0 && (
                 <Grid>
-                  <Num
-                    label="Überfälligkeits-Vorlauf (Tage)"
-                    value={draft.priority.overdueLeadDays}
+                  <ShopAreaListField
+                    label="Tägliche Verladung — Shopbereiche"
+                    value={draft.priority.dailyShopAreas}
                     onChange={(v) =>
-                      patch('priority', { ...draft.priority, overdueLeadDays: v })
+                      patch('priority', { ...draft.priority, dailyShopAreas: v })
                     }
-                    hint="Standard-Vorlauf: so viele Tage vor dem Verladetag gilt ein Verladeplan-Beleg als überfällig und wird vorgezogen. Greift auch bei seltenen (z. B. wöchentlichen) Verladetagen. Shop-spezifische Vorläufe pflegst du im Tab „Verladeplan“ direkt am Shop-Bereich."
+                    hint="Shopbereiche mit täglicher Verladung (Stufe 1 der Prio-Leiter, zusammen mit Abschnitt 7/4/8). Belege dieser Shopbereiche werden immer vorgezogen. Verladeplan-Belege sind ab dem Verladetag fällig — ohne Vorlauf."
                   />
                   <Toggle
                     label="FIFO aktiv"
@@ -177,28 +178,36 @@ export function AdminPage(): JSX.Element {
               {tab === 1 && (
                 <Grid>
                   <Num
-                    label="Min. Minuten"
-                    value={draft.bundle.minMinutes}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, minMinutes: v })}
-                    hint="Mindestaufwand je Bündel; kleinere Reste werden zu einem Bündel zusammengelegt."
+                    label="Starter-Pack min (Teile)"
+                    value={draft.bundle.starterPackMinTeile}
+                    onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMinTeile: v })}
+                    hint="Bündel werden in Teilen dimensioniert: das Starter-Pack zu Schichtbeginn schließt ab dieser Teilezahl (ca. 200)."
                   />
                   <Num
-                    label="Max. Minuten"
-                    value={draft.bundle.maxMinutes}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, maxMinutes: v })}
-                    hint="Maximaler Aufwand je Bündel; danach wird ein neues Bündel begonnen."
+                    label="Starter-Pack max (Teile)"
+                    value={draft.bundle.starterPackMaxTeile}
+                    onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMaxTeile: v })}
+                    hint="Obergrenze des Starter-Packs (ca. 250 Teile). Eine Liefergruppe bleibt trotzdem zusammen."
                   />
                   <Num
-                    label="Max. Belege / Bündel"
-                    value={draft.bundle.maxCases}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, maxCases: v })}
-                    hint="Höchstzahl Belege je Bündel (Rollwagen-/Kapazitätsgrenze)."
+                    label="Folge-Pack min (Teile)"
+                    value={draft.bundle.followUpPackMinTeile}
+                    onChange={(v) => patch('bundle', { ...draft.bundle, followUpPackMinTeile: v })}
+                    hint="Folge-Packs zieht der Mitarbeiter selbst (Self-Pull); sie schließen ab dieser Teilezahl (ca. 80)."
                   />
                   <Num
-                    label="Max. schwere Belege"
-                    value={draft.bundle.maxHeavyCases}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, maxHeavyCases: v })}
-                    hint="Höchstzahl aufwändiger Belege je Bündel, damit schwer/leicht gemischt bleibt."
+                    label="Folge-Pack max (Teile)"
+                    value={draft.bundle.followUpPackMaxTeile}
+                    onChange={(v) => patch('bundle', { ...draft.bundle, followUpPackMaxTeile: v })}
+                    hint="Obergrenze des Folge-Packs (ca. 90 Teile)."
+                  />
+                  <Num
+                    label="Monster-Beleg-Schwelle (Teile)"
+                    value={draft.bundle.largeBelegTeileThreshold}
+                    onChange={(v) =>
+                      patch('bundle', { ...draft.bundle, largeBelegTeileThreshold: v })
+                    }
+                    hint="Belege ab dieser Teilezahl werden NICHT automatisch verteilt, sondern warten auf die manuelle Teamlead-Entscheidung."
                   />
                 </Grid>
               )}
@@ -510,6 +519,78 @@ function Num({
           : undefined
       }
     />
+  );
+}
+
+/** Chip list editor for a string[] setting (add via TextField + Enter, remove via chip ✕). */
+function ShopAreaListField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: readonly string[];
+  onChange: (v: string[]) => void;
+  /** Hover-tooltip explanation shown via an ⓘ marker in the field. */
+  hint?: string;
+}): JSX.Element {
+  const [input, setInput] = useState('');
+
+  function add(): void {
+    const next = input.trim();
+    if (next === '' || value.includes(next)) {
+      setInput('');
+      return;
+    }
+    onChange([...value, next]);
+    setInput('');
+  }
+
+  return (
+    <Stack spacing={1}>
+      <TextField
+        size="small"
+        label={label}
+        value={input}
+        placeholder="z. B. 120 — Enter zum Hinzufügen"
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            add();
+          }
+        }}
+        onBlur={add}
+        InputProps={
+          hint
+            ? {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <InfoHint text={hint} />
+                  </InputAdornment>
+                ),
+              }
+            : undefined
+        }
+      />
+      <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.75 }}>
+        {value.length === 0 && (
+          <Typography variant="caption" color="text.disabled">
+            Keine Shopbereiche hinterlegt.
+          </Typography>
+        )}
+        {value.map((area) => (
+          <Chip
+            key={area}
+            size="small"
+            label={`Shop ${area}`}
+            onDelete={() => onChange(value.filter((a) => a !== area))}
+            sx={{ fontWeight: 700 }}
+          />
+        ))}
+      </Stack>
+    </Stack>
   );
 }
 

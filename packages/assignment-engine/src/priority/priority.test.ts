@@ -59,17 +59,47 @@ describe('classifyPriority (§8.1)', () => {
     expect(classifyPriority(future, { today: TODAY }).class).toBe('fifo');
   });
 
-  it('classifies an overdue flag as rank 3 (Überfällig)', () => {
+  it('ignores the display-only overdue flag — kein Überfälligkeits-Rang mehr (B1)', () => {
     const c = makeCase({ id: 'od', priorityFlags: ['overdue'] });
-    expect(classifyPriority(c, { today: TODAY }).class).toBe('catman_due');
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
 
-  it('classifies sections 7/4/8 as Jeden-Tag-Ware', () => {
+  it('classifies sections 7/4/8 as tägliche Verladung (Tier 1)', () => {
     for (const section of [7, 4, 8] as const) {
       expect(
         classifyPriority(makeCase({ id: `s${section}`, section }), { today: TODAY }).class,
-      ).toBe('every_day');
+      ).toBe('daily_loading');
     }
+  });
+
+  it('classifies the daily shop areas 120/90 as Tier 1 — BEFORE NOS (B2)', () => {
+    const shop120 = makeCase({ id: 'sh120', primaryShopAreaNo: '120', goodsTypeText: 'NOS' });
+    const shop90 = makeCase({ id: 'sh90', primaryShopAreaNo: '90' });
+    expect(classifyPriority(shop120, { today: TODAY }).class).toBe('daily_loading');
+    expect(classifyPriority(shop90, { today: TODAY }).class).toBe('daily_loading');
+  });
+
+  it('honours a configured dailyShopAreas list', () => {
+    const c = makeCase({ id: 'sh31', primaryShopAreaNo: '31' });
+    expect(classifyPriority(c, { today: TODAY, dailyShopAreas: ['31'] }).class).toBe(
+      'daily_loading',
+    );
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
+  });
+
+  it('classifies NOS goods types as Tier 2 (echter Prioritätstreiber, B2)', () => {
+    for (const goodsTypeText of ['NOS', 'NOS-Nachorder', 'NOOS'] as const) {
+      const c = makeCase({ id: `nos-${goodsTypeText}`, goodsTypeText });
+      expect(classifyPriority(c, { today: TODAY }).class).toBe('nos_haengeware');
+    }
+  });
+
+  it('classifies Hängeware (Lagerklasse haengebahn) as Tier 2', () => {
+    const c = makeCase({
+      id: 'hb',
+      storageLocation: { id: 'loc-hb', type: 'haengebahn', code: 'HB-1', active: true },
+    });
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('nos_haengeware');
   });
 
   it('classifies sections 1/2/3 as Verladeplan-due on/after the loading day (no Vorlauf)', () => {

@@ -252,13 +252,16 @@ describe('assignWork — Schichtende-Cutoff (ZIEL A, Punkt 5)', () => {
     expect(plan.unassigned.every((u) => u.reason === 'no_capacity')).toBe(true);
   });
 
-  it('assigns strictly less work under the cutoff than without it', () => {
+  it('reserves the cutoff window: effective capacity is strictly below the full capacity', () => {
+    // Seit dem Teile-Modell verteilt der Batch ohnehin nur EIN Starter-Pack je
+    // Mitarbeiter — der Cutoff wirkt daher auf das MACHBARKEITS-Budget (Minuten):
+    // die Cutoff-effektive Gesamtkapazität liegt strikt unter der vollen Kapazität.
     const input = baseInput({ cases: poolFillingCapacity() });
-    const planned = (config: EngineConfig): number =>
-      assignWork(input, config, { now: NOW }).diagnostics.assignedMinutes;
+    const capacity = (config: EngineConfig): number =>
+      assignWork(input, config, { now: NOW }).diagnostics.totalCapacityMinutes;
 
-    const withoutCutoff = planned(DEFAULT_ENGINE_CONFIG); // autoCutoffMinutes 0 → full capacity
-    const withCutoff = planned(cutoff120); // ~75% of capacity at shift start
+    const withoutCutoff = capacity(DEFAULT_ENGINE_CONFIG); // autoCutoffMinutes 0 → full capacity
+    const withCutoff = capacity(cutoff120);
     expect(withCutoff).toBeGreaterThan(0);
     expect(withCutoff).toBeLessThan(withoutCutoff);
   });

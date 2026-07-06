@@ -26,18 +26,23 @@ import {
 } from '../grouping/delivery-group.js';
 
 /**
- * assignWork(date) — the §8.3 Zuteilungsalgorithmus. Pure and deterministic so the
- * Teamlead "Neu berechnen" / recalculate stays reproducible and well under the
- * Anhang E.5 budget of < 5 s for a typical day pool.
+ * assignWork(date) — the §8.3 Zuteilungsalgorithmus (Teile-Modell, Teamlead-Feedback
+ * C1–C6). Pure and deterministic so the Teamlead "Neu berechnen" / recalculate stays
+ * reproducible and well under the Anhang E.5 budget of < 5 s for a typical day pool.
  *
- * Pipeline: enrich (priority + effort) → exclude → capacity → starter packages →
- * balanced bundles (priority/FIFO order) → weighted distribution (no specialists,
- * heavy/light mix) → pickup order inside each finished bundle.
+ * Pipeline: enrich (priority + effort) → exclude → withhold delivery groups →
+ * Monster-Belege zur manuellen TL-Entscheidung (C6) → Teile-dimensionierte
+ * Starter-Packs (200–250 Teile) in priority/FIFO order → GENAU EIN Pack je
+ * Mitarbeiter (weighted, no specialists) → Rest bleibt als `pool_remaining` im Pool
+ * für den Self-Pull (C3) → pickup order inside each assigned pack.
+ *
+ * Minuten bleiben die interne Kapazitätswährung: jedes Pack wird über das
+ * unveränderte Aufwandsmodell gegen die (Cutoff-effektiven) Netto-Schichtminuten
+ * auf Machbarkeit geprüft.
  */
 
 export interface AssignWorkOptions {
   avoidSpecialists?: boolean;
-  balanceHeavyLight?: boolean;
   /** Timestamp stamped onto pickup sequences (deterministic when supplied). */
   now?: ISODateTime;
 }
@@ -55,9 +60,9 @@ function enrichCase(
     case: goodsCase,
     priority: classifyPriority(goodsCase, {
       today: input.date,
-      overdueLeadDays: config.priority.overdueLeadDays,
-      overdueLeadDaysOverrides: config.priority.overdueLeadDaysOverrides,
+      dailyShopAreas: config.priority.dailyShopAreas,
     }),
+    teile: goodsCase.totalQuantity,
     effortMinutes: effort.minutes,
     effortPoints: effort.points,
     wgrCodes: vector ? vector.wgrCodes : [],
@@ -172,34 +177,41 @@ export function assignWork(
   }
   const { groupIdByCaseId } = indexDeliveryGroups(deliveryGroups);
 
-  // Capacity (§4.3) — over the cutoff-effective shifts.
+  // Monster-Belege (C6): über der Teile-Schwelle wird NICHT auto-verteilt — der Beleg
+  // bleibt als `large_beleg` markiert im Pool und wartet auf die manuelle TL-Entscheidung.
+  const packable: EnrichedCase[] = [];
+  for (const e of eligible) {
+    if (e.teile >= config.assignment.largeBelegTeileThreshold) {
+      unassigned.push({
+        caseId: e.case.id,
+        reason: 'large_beleg',
+        priorityClass: e.priority.class,
+      });
+    } else {
+      packable.push(e);
+    }
+  }
+
+  // Capacity (§4.3) — over the cutoff-effective shifts (minutes feasibility budget).
   const totalCapacity = teamCapacityMinutes(effectiveShifts);
-  const morningCapacity = totalCapacity * config.capacity.morningCapacityFraction;
 
-  // Starter packages from previous days, filled first against the morning capacity.
-  const starterCandidates = sortByPriority(eligible.filter((e) => e.fromPreviousDays));
-  const todayCandidates = sortByPriority(eligible.filter((e) => !e.fromPreviousDays));
-  const starter = createBalancedBundles(
-    starterCandidates,
-    morningCapacity,
-    config.assignment,
-    'starter',
-  );
-  const starterMinutes = sumEffort(starter.bundles);
+  // Starter-Packs (C1/C3): Fortsetzungen aus Vortagen zuerst, dann der heutige Pool,
+  // beides in Prioritäts-/FIFO-Ordnung — die wichtigsten Belege landen in den ersten
+  // Packs, und der erste angemeldete Mitarbeiter erhält das erste Pack.
+  const ordered = [
+    ...sortByPriority(packable.filter((e) => e.fromPreviousDays)),
+    ...sortByPriority(packable.filter((e) => !e.fromPreviousDays)),
+  ];
+  const packing = createBalancedBundles(ordered, totalCapacity, config.assignment, 'starter', {
+    groupIdByCaseId,
+  });
+  const protoBundles: ProtoBundle[] = packing.bundles;
+  const starterMinutes = sumEffort(protoBundles);
 
-  const capacityAfterStarter = Math.max(0, totalCapacity - starterMinutes);
-
-  // Today's pool, in priority/FIFO order, filled against the remaining capacity.
-  const today = createBalancedBundles(todayCandidates, capacityAfterStarter, config.assignment);
-
-  const protoBundles: ProtoBundle[] = [...starter.bundles, ...today.bundles];
-
-  // Weighted distribution (§8.3/§8.4) with a soft delivery-group affinity, over the
-  // Schichtende-cutoff-effective shifts (Punkt 5).
+  // Ein Starter-Pack je Mitarbeiter (§8.3/§8.4) mit soft delivery-group affinity, über
+  // die Schichtende-cutoff-effektiven Schichten (Punkt 5). Übrige Packs bleiben im Pool.
   const distribution = distributeBundlesByWeightedLoad(effectiveShifts, protoBundles, input.date, {
     avoidSpecialists: options.avoidSpecialists ?? true,
-    balanceHeavyLight: options.balanceHeavyLight ?? true,
-    groupIdByCaseId,
   });
 
   // Pickup order INSIDE each finished bundle (§D.3). Never feeds back into distribution.
@@ -227,15 +239,17 @@ export function assignWork(
     return assignmentBundleSchema.parse({ ...bundle, route: sequence.stops });
   });
 
-  // Cases that did not fit anywhere.
-  for (const e of [...starter.overflow, ...today.overflow]) {
+  // Cases beyond the minutes budget did not fit anywhere today.
+  for (const e of packing.overflow) {
     unassigned.push({ caseId: e.case.id, reason: 'no_capacity', priorityClass: e.priority.class });
   }
+  // Packs ohne freien Mitarbeiter bleiben bewusst im Pool: der Self-Pull zieht sie
+  // als Folge-Packs (C3) — kein Kapazitätsproblem, sondern das gewollte Modell.
   for (const proto of distribution.unassigned) {
     for (const e of proto.cases) {
       unassigned.push({
         caseId: e.case.id,
-        reason: 'no_capacity',
+        reason: 'pool_remaining',
         priorityClass: e.priority.class,
       });
     }

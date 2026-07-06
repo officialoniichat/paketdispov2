@@ -69,44 +69,42 @@ export class LocationUpsertDto {
 
 // --- Rule config ------------------------------------------------------------
 
-export class LoadPlanLeadOverrideDto {
-  @ApiPropertyOptional({ description: 'Shopbereich; weggelassen = alle' })
-  @IsOptional()
-  @IsString()
-  shopAreaNo?: string;
-
-  @ApiPropertyOptional({ description: 'Abschnitt 1..8; weggelassen = alle' })
-  @IsOptional()
-  @IsInt()
-  section?: number;
-
-  @ApiProperty({ description: 'Vorlauf in Tagen vor dem Verladetag' })
-  @IsInt()
-  @Min(0)
-  leadDays!: number;
-}
-
+/** Prioritäts-Konfiguration (Leiter B1/B2 — kein Überfälligkeitsvorlauf mehr). */
 export class PriorityRuleConfigDto {
-  @ApiProperty({ description: 'Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit' })
-  @IsInt()
-  @Min(0)
-  overdueLeadDays!: number;
-
-  @ApiProperty({ type: [LoadPlanLeadOverrideDto] })
+  @ApiProperty({
+    type: [String],
+    description: 'Shopbereiche mit täglicher Verladung (Tier 1 neben Abschnitten 7/4/8)',
+  })
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => LoadPlanLeadOverrideDto)
-  overdueLeadDaysOverrides!: LoadPlanLeadOverrideDto[];
+  @IsString({ each: true })
+  dailyShopAreas!: string[];
 
   @ApiProperty() @IsBoolean() fifoEnabled!: boolean;
   @ApiProperty() @IsBoolean() manualPriorityWins!: boolean;
 }
 
+/** Bündel-Dimensionierung in TEILEN (C1/C2) — ersetzt die min/max-Minuten-Regler. */
 export class BundleRuleConfigDto {
-  @ApiProperty() @IsNumber() @Min(0) minMinutes!: number;
-  @ApiProperty() @IsNumber() @Min(0) maxMinutes!: number;
-  @ApiProperty() @IsInt() @Min(0) maxCases!: number;
-  @ApiProperty() @IsInt() @Min(0) maxHeavyCases!: number;
+  @ApiProperty({ description: 'Starter-Pack min Teile (ca. 200)' })
+  @IsInt()
+  @Min(1)
+  starterPackMinTeile!: number;
+  @ApiProperty({ description: 'Starter-Pack max Teile (ca. 250)' })
+  @IsInt()
+  @Min(1)
+  starterPackMaxTeile!: number;
+  @ApiProperty({ description: 'Folge-Pack min Teile (ca. 80)' })
+  @IsInt()
+  @Min(1)
+  followUpPackMinTeile!: number;
+  @ApiProperty({ description: 'Folge-Pack max Teile (ca. 90)' })
+  @IsInt()
+  @Min(1)
+  followUpPackMaxTeile!: number;
+  @ApiProperty({ description: 'Teile-Schwelle für Monster-Belege (manuelle TL-Entscheidung)' })
+  @IsInt()
+  @Min(1)
+  largeBelegTeileThreshold!: number;
 }
 
 /** Prüf-Multiplikator je Prüfmodus (§8.2). */

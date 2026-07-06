@@ -41,44 +41,50 @@ export const DEFAULT_CAPACITY_CONFIG: CapacityConfig = {
   morningCapacityFraction: 0.5,
 };
 
-/** Bundling/distribution tuning (§8.3, §8.4 Anti-Cherry-Picking). */
+/**
+ * Bundling/distribution tuning (§8.3, Teamlead-Feedback C1/C2): Bündel werden nach
+ * TEILEN dimensioniert — Starter-Pack ca. 200–250 Teile je Mitarbeiter zu Schichtbeginn,
+ * Folge-Packs ca. 80–90 Teile per Self-Pull. Die Beleg-Obergrenze (Shop 31 = viele
+ * NOS-Einzelanlieferungen) und die schwer/leicht-Gewichtung sind ersatzlos gestrichen.
+ * MINUTEN bleiben die interne Kapazitätswährung: jedes Pack wird über das unveränderte
+ * Aufwandsmodell gegen die Rest-Schichtminuten auf Machbarkeit geprüft.
+ */
 export const assignmentConfigSchema = z.object({
-  /** Target effort-minutes per bundle; bundles close once they reach this. */
-  targetBundleMinutes: z.number().positive(),
-  /** Hard cap on cases per bundle (Rollwagen-/Kapazitätsgrenze, Anhang D.2). */
-  maxCasesPerBundle: z.number().int().positive(),
-  /** Effort-minutes threshold separating "heavy" from "light" cases for the mix. */
-  heavyCaseMinutes: z.number().positive(),
+  /** Starter-Pack-Größe in Teilen (Pack schließt ab min, nimmt bis max auf). */
+  starterPackMinTeile: z.number().int().positive(),
+  starterPackMaxTeile: z.number().int().positive(),
+  /** Folge-Pack-Größe in Teilen (Self-Pull über assignNextBundle). */
+  followUpPackMinTeile: z.number().int().positive(),
+  followUpPackMaxTeile: z.number().int().positive(),
+  /**
+   * Teile-Schwelle, ab der ein Beleg NICHT auto-verteilt wird, sondern als
+   * Monster-Beleg zur manuellen Teamlead-Entscheidung markiert bleibt (C6).
+   */
+  largeBelegTeileThreshold: z.number().int().positive(),
 });
 export type AssignmentConfig = z.infer<typeof assignmentConfigSchema>;
 
 export const DEFAULT_ASSIGNMENT_CONFIG: AssignmentConfig = {
-  targetBundleMinutes: 55,
-  maxCasesPerBundle: 6,
-  heavyCaseMinutes: 45,
+  starterPackMinTeile: 200,
+  starterPackMaxTeile: 250,
+  followUpPackMinTeile: 80,
+  followUpPackMaxTeile: 90,
+  largeBelegTeileThreshold: 2000,
 };
 
-/** Prioritäts-Tuning (§8.1, Teamlead-Punkt 4). */
+/**
+ * Prioritäts-Tuning (§8.1, Leiter B2). Der Überfälligkeitsvorlauf ist ersatzlos
+ * gestrichen (B1); konfigurierbar bleibt nur die Liste der täglichen Shopbereiche
+ * (Tier 1 neben den Jeden-Tag-Abschnitten 7/4/8).
+ */
 export const priorityConfigSchema = z.object({
-  /**
-   * Default Vorlauf in days before a Verladeplan loading day at which a case becomes
-   * due/overdue (Teamlead-Punkt 4). 0 reproduces the legacy "due on/after loading day".
-   */
-  overdueLeadDays: z.number().int().nonnegative(),
-  /** Shop-/section-specific overrides; most specific match wins. */
-  overdueLeadDaysOverrides: z.array(
-    z.object({
-      shopAreaNo: z.string().optional(),
-      section: z.number().int().optional(),
-      leadDays: z.number().int().nonnegative(),
-    }),
-  ),
+  /** Shopbereiche mit täglicher Verladung (Tier 1), z. B. ['120', '90']. */
+  dailyShopAreas: z.array(z.string()),
 });
 export type PriorityConfig = z.infer<typeof priorityConfigSchema>;
 
 export const DEFAULT_PRIORITY_CONFIG: PriorityConfig = {
-  overdueLeadDays: 0,
-  overdueLeadDaysOverrides: [],
+  dailyShopAreas: ['120', '90'],
 };
 
 /**

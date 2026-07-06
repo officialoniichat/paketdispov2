@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   goodsReceiptCaseSchema,
   DEFAULT_EFFORT_RULE_CONFIG,
+  DEFAULT_RULE_CONFIG,
   type GoodsReceiptCase,
   type LoadPlanRow,
 } from '@paket/domain-types';
@@ -100,23 +101,50 @@ describe('applyResolvedLoadPlanDates', () => {
   });
 });
 
+describe('resolveLoadPlanDate — Sonderregelungen (B3, specialDay)', () => {
+  it('uses a specialDay row as a one-off loading date (validFrom IS the day)', () => {
+    const c = makeCase({ id: 'special', bookingDate: '2026-06-15' });
+    const special = row({ weekday: 'Mi', specialDay: true, validFrom: '2026-06-16', validTo: '2026-06-16' });
+    expect(resolveLoadPlanDate(c, [special], '2026-06-15')).toBe('2026-06-16');
+  });
+
+  it('suppresses a regular weekday candidate inside a specialDay window (Feiertag: vorziehen)', () => {
+    // Regular Do-loading (2026-06-18) falls on a Feiertag; the TL pre-pulls to Mi
+    // (special 06-17) and pushes a make-up load on Fr (special 06-19). The regular
+    // Do candidate inside the special window must NOT win.
+    const c = makeCase({ id: 'holiday', bookingDate: '2026-06-15' });
+    const rows = [
+      row({ weekday: 'Do' }), // regular → 2026-06-18, inside the special window
+      row({ id: 'sp-mi', weekday: 'Mi', specialDay: true, validFrom: '2026-06-17', validTo: '2026-06-19' }),
+      row({ id: 'sp-fr', weekday: 'Fr', specialDay: true, validFrom: '2026-06-19', validTo: '2026-06-19' }),
+    ];
+    expect(resolveLoadPlanDate(c, rows, '2026-06-15')).toBe('2026-06-17');
+  });
+
+  it('keeps the regular weekday when the specialDay window does not cover it', () => {
+    const c = makeCase({ id: 'outside', bookingDate: '2026-06-15' });
+    const rows = [
+      row({ weekday: 'Di' }), // regular → 2026-06-16
+      row({ id: 'sp', weekday: 'Fr', specialDay: true, validFrom: '2026-06-26', validTo: '2026-06-26' }),
+    ];
+    expect(resolveLoadPlanDate(c, rows, '2026-06-15')).toBe('2026-06-16');
+  });
+
+  it('ignores a specialDay date before the booking date', () => {
+    const c = makeCase({ id: 'past-special', bookingDate: '2026-06-15' });
+    const special = row({ weekday: 'Mo', specialDay: true, validFrom: '2026-06-10', validTo: '2026-06-10' });
+    expect(resolveLoadPlanDate(c, [special], '2026-06-15')).toBeUndefined();
+  });
+});
+
 describe('engineConfigFromRuleConfig', () => {
-  it('threads the priority Vorlauf + overrides into the engine config', () => {
+  it('threads the daily shop areas + effort parameters into the engine config', () => {
     const config = engineConfigFromRuleConfig({
-      priority: {
-        overdueLeadDays: 3,
-        overdueLeadDaysOverrides: [{ shopAreaNo: '21', leadDays: 5 }],
-        fifoEnabled: true,
-        manualPriorityWins: true,
-      },
-      bundle: { minMinutes: 20, maxMinutes: 90, maxCases: 8, maxHeavyCases: 2 },
+      ...DEFAULT_RULE_CONFIG,
+      priority: { dailyShopAreas: ['120', '90', '31'], fifoEnabled: true, manualPriorityWins: true },
       effort: { ...DEFAULT_EFFORT_RULE_CONFIG, baseMinutesPerCase: 7 },
-      grouping: { enabled: true, maxWeBelegGap: 1 },
-      shiftEnd: { autoCutoffMinutes: 120 },
-      loadPlan: [],
     });
-    expect(config.priority.overdueLeadDays).toBe(3);
-    expect(config.priority.overdueLeadDaysOverrides).toEqual([{ shopAreaNo: '21', leadDays: 5 }]);
+    expect(config.priority.dailyShopAreas).toEqual(['120', '90', '31']);
     // The cockpit-edited effort parameters are threaded through to the engine config.
     expect(config.effort.baseMinutesPerCase).toBe(7);
   });

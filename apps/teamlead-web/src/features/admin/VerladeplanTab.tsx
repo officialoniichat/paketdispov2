@@ -1,36 +1,27 @@
 /**
- * Verladeplan-Editor (§11, Teamlead-Punkt 4 — seltene Verladetage).
+ * Verladeplan-Editor (§11, Teamlead-Punkt 4).
  *
  * Macht den früher read-only Verladeplan im Admin/Regeln-Bereich bedienbar und
  * transparent. Pro Shop-Bereich (shopAreaNo + Etage): Verladetage als Wochentag-Chips,
- * ein eigener Überfälligkeits-Vorlauf (übersteuert den globalen Standard), ein
- * Kadenz-Vorschlag und eine Live-Vorschau, die zeigt WANN die Schwelle bei diesem Shop
- * greift — der direkte Konter gegen „bei wöchentlichen Verladetagen greift sie nie".
+ * Gültigkeit/Sondertag und eine Live-Vorschau, die zeigt WANN der nächste Verladetag
+ * liegt — Belege sind ab dem Verladetag fällig, es gibt keinen Vorlauf mehr.
  *
  * Reines Settings-UX: keine eigene Fachlogik. Editiert nur den geteilten RuleConfig-Draft
- * (`loadPlan` + `priority.*`), gespeichert über die gemeinsame „Regeln speichern"-Aktion
- * der {@link ./AdminPage}. Die Engine entscheidet weiterhin allein.
+ * (`loadPlan`), gespeichert über die gemeinsame „Regeln speichern"-Aktion der
+ * {@link ./AdminPage}. Die Engine entscheidet weiterhin allein.
  *
  * Datenmodell-Annahme: alle Zeilen eines (shopAreaNo, floor)-Bereichs teilen
  * Gültigkeit/Sondertag — ein aktiver Wochentag-Chip = genau ein {@link LoadPlanRow}.
  */
-import { useState, type JSX } from 'react';
+import type { JSX } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Collapse from '@mui/material/Collapse';
-import Divider from '@mui/material/Divider';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import type {
-  LoadPlanLeadOverride,
-  LoadPlanRow,
-  RuleConfig,
-  SectionCode,
-} from '@paket/domain-types';
+import type { LoadPlanRow, RuleConfig } from '@paket/domain-types';
 
 /** Display order of weekdays; values match the LoadPlanRow.weekday vocabulary. */
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const;
@@ -44,8 +35,6 @@ const WEEKDAY_JS_INDEX: Record<string, number> = {
   Fr: 5,
   Sa: 6,
 };
-/** Verladeplan-relevant warehouse sections (Abschnitt 1/2/3) for advanced overrides. */
-const LOAD_PLAN_SECTIONS: readonly SectionCode[] = [1, 2, 3];
 
 const DAY_MS = 86_400_000;
 
@@ -70,10 +59,6 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
 
   function setLoadPlan(rows: LoadPlanRow[]): void {
     patch('loadPlan', rows);
-  }
-
-  function setOverrides(overrides: LoadPlanLeadOverride[]): void {
-    patch('priority', { ...draft.priority, overdueLeadDaysOverrides: overrides });
   }
 
   function toggleWeekday(group: ShopGroup, weekday: string): void {
@@ -108,7 +93,7 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
     );
   }
 
-  /** Rename a group's shopAreaNo/floor on every row (and re-key its overrides). */
+  /** Rename a group's shopAreaNo/floor on every row. */
   function renameGroup(group: ShopGroup, next: { shopAreaNo?: string; floor?: string }): void {
     const shopAreaNo = next.shopAreaNo ?? group.shopAreaNo;
     const floor = next.floor ?? group.floor;
@@ -119,21 +104,11 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
           : r,
       ),
     );
-    if (next.shopAreaNo !== undefined && next.shopAreaNo !== group.shopAreaNo) {
-      setOverrides(
-        draft.priority.overdueLeadDaysOverrides.map((o) =>
-          o.shopAreaNo === group.shopAreaNo ? { ...o, shopAreaNo } : o,
-        ),
-      );
-    }
   }
 
   function removeGroup(group: ShopGroup): void {
     setLoadPlan(
       draft.loadPlan.filter((r) => !(r.shopAreaNo === group.shopAreaNo && r.floor === group.floor)),
-    );
-    setOverrides(
-      draft.priority.overdueLeadDaysOverrides.filter((o) => o.shopAreaNo !== group.shopAreaNo),
     );
   }
 
@@ -152,49 +127,13 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
     ]);
   }
 
-  /** Upsert/remove the area-level (section-less) Vorlauf override. */
-  function setAreaLead(shopAreaNo: string, leadDays: number | null): void {
-    const rest = draft.priority.overdueLeadDaysOverrides.filter(
-      (o) => !(o.shopAreaNo === shopAreaNo && o.section === undefined),
-    );
-    setOverrides(leadDays === null ? rest : [...rest, { shopAreaNo, leadDays }]);
-  }
-
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
-        Pro Shop-Bereich &amp; Etage: an welchen Wochentagen verladen wird, ab wann der Plan gilt, und
-        wie viele Tage vorher die Ware als überfällig vorgezogen wird. Der globale Vorlauf gilt
-        überall, wo kein eigener Wert gesetzt ist — er greift auch bei seltenen (z. B. wöchentlichen)
-        Verladetagen.
+        Pro Shop-Bereich &amp; Etage: an welchen Wochentagen verladen wird und ab wann der Plan
+        gilt. Belege sind <strong>ab dem Verladetag fällig</strong> — es gibt keinen
+        Überfälligkeits-Vorlauf mehr.
       </Typography>
-
-      <Paper
-        variant="outlined"
-        sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.secondary' }}>
-          Globaler Überfälligkeits-Vorlauf
-        </Typography>
-        <TextField
-          type="number"
-          size="small"
-          value={draft.priority.overdueLeadDays}
-          onChange={(e) =>
-            patch('priority', {
-              ...draft.priority,
-              overdueLeadDays: Math.max(0, Math.round(Number(e.target.value))),
-            })
-          }
-          inputProps={{ min: 0, step: 1, style: { width: 56 } }}
-          helperText="Tage"
-          sx={{ '& .MuiFormHelperText-root': { m: 0, textAlign: 'center' } }}
-        />
-        <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 460 }}>
-          Standard für alle Shop-Bereiche ohne eigenen Wert. Mit <strong>0</strong> gilt ein Beleg
-          erst am Verladetag selbst als fällig.
-        </Typography>
-      </Paper>
 
       {groups.length === 0 && (
         <Typography variant="body2" color="text.secondary">
@@ -206,14 +145,10 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
         <ShopAreaCard
           key={group.key}
           group={group}
-          globalLeadDays={draft.priority.overdueLeadDays}
-          overrides={draft.priority.overdueLeadDaysOverrides}
           onToggleWeekday={(wd) => toggleWeekday(group, wd)}
           onPatchRows={(change) => patchGroupRows(group, change)}
           onRename={(next) => renameGroup(group, next)}
           onRemove={() => removeGroup(group)}
-          onSetAreaLead={(lead) => setAreaLead(group.shopAreaNo, lead)}
-          onSetOverrides={setOverrides}
         />
       ))}
 
@@ -228,37 +163,21 @@ export function VerladeplanTab({ draft, patch }: VerladeplanTabProps): JSX.Eleme
 
 interface ShopAreaCardProps {
   group: ShopGroup;
-  globalLeadDays: number;
-  overrides: LoadPlanLeadOverride[];
   onToggleWeekday: (weekday: string) => void;
   onPatchRows: (change: Partial<LoadPlanRow>) => void;
   onRename: (next: { shopAreaNo?: string; floor?: string }) => void;
   onRemove: () => void;
-  onSetAreaLead: (leadDays: number | null) => void;
-  onSetOverrides: (overrides: LoadPlanLeadOverride[]) => void;
 }
 
 function ShopAreaCard({
   group,
-  globalLeadDays,
-  overrides,
   onToggleWeekday,
   onPatchRows,
   onRename,
   onRemove,
-  onSetAreaLead,
-  onSetOverrides,
 }: ShopAreaCardProps): JSX.Element {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-
   const dayCount = group.weekdays.length;
-  const areaOverride = overrides.find((o) => o.shopAreaNo === group.shopAreaNo && o.section === undefined);
-  const effectiveLead = areaOverride?.leadDays ?? globalLeadDays;
-  const suggestion = suggestLeadDays(dayCount);
-  const sectionOverrides = overrides.filter(
-    (o) => o.shopAreaNo === group.shopAreaNo && o.section !== undefined,
-  );
-  const preview = computePreview(group.weekdays, effectiveLead);
+  const preview = computePreview(group.weekdays);
   const isRare = dayCount === 1;
 
   return (
@@ -364,79 +283,6 @@ function ShopAreaCard({
         </Box>
 
         <Box sx={{ p: 2 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
-            Überfälligkeits-Vorlauf für diesen Shop
-          </Typography>
-          <Paper variant="outlined" sx={{ p: 1.5, mt: 0.5, bgcolor: 'grey.50' }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-              <TextField
-                type="number"
-                size="small"
-                placeholder={String(globalLeadDays)}
-                value={areaOverride?.leadDays ?? ''}
-                onChange={(e) =>
-                  onSetAreaLead(
-                    e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))),
-                  )
-                }
-                inputProps={{ min: 0, step: 1, style: { width: 56 } }}
-                helperText="Tage"
-                sx={{ '& .MuiFormHelperText-root': { m: 0, textAlign: 'center' } }}
-              />
-              <Typography variant="caption" color="text.secondary">
-                {areaOverride
-                  ? `eigener Wert · übersteuert den globalen Standard (${globalLeadDays})`
-                  : `kein eigener Wert · globaler Standard (${globalLeadDays}) gilt`}
-              </Typography>
-            </Stack>
-            {suggestion !== null && (
-              <Box
-                sx={{
-                  mt: 1.25,
-                  p: 1,
-                  borderRadius: 1,
-                  bgcolor: 'warning.50',
-                  border: '1px solid',
-                  borderColor: 'warning.light',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: 'warning.dark' }}>
-                  Kadenz <strong>{cadenceLabel(dayCount)}</strong> erkannt → empfohlen{' '}
-                  <strong>{suggestion} Tage</strong>
-                </Typography>
-                <Button
-                  size="small"
-                  color="warning"
-                  variant="contained"
-                  onClick={() => onSetAreaLead(suggestion)}
-                  disabled={areaOverride?.leadDays === suggestion}
-                  sx={{ ml: 'auto' }}
-                >
-                  Übernehmen
-                </Button>
-              </Box>
-            )}
-            <Button
-              size="small"
-              onClick={() => setAdvancedOpen((o) => !o)}
-              sx={{ mt: 0.5, textTransform: 'none' }}
-            >
-              {advancedOpen ? '▾' : '▸'} Erweitert: Vorlauf je Abschnitt (1 / 2 / 3)
-            </Button>
-            <Collapse in={advancedOpen}>
-              <SectionOverrideEditor
-                shopAreaNo={group.shopAreaNo}
-                overrides={overrides}
-                sectionOverrides={sectionOverrides}
-                onSetOverrides={onSetOverrides}
-              />
-            </Collapse>
-          </Paper>
-
           <PreviewBox preview={preview} />
         </Box>
       </Box>
@@ -444,115 +290,17 @@ function ShopAreaCard({
   );
 }
 
-interface SectionOverrideEditorProps {
-  shopAreaNo: string;
-  overrides: LoadPlanLeadOverride[];
-  sectionOverrides: LoadPlanLeadOverride[];
-  onSetOverrides: (overrides: LoadPlanLeadOverride[]) => void;
-}
-
-function SectionOverrideEditor({
-  shopAreaNo,
-  overrides,
-  sectionOverrides,
-  onSetOverrides,
-}: SectionOverrideEditorProps): JSX.Element {
-  const usedSections = new Set(sectionOverrides.map((o) => o.section));
-  const freeSection = LOAD_PLAN_SECTIONS.find((s) => !usedSections.has(s));
-
-  function updateSection(section: SectionCode, leadDays: number): void {
-    onSetOverrides(
-      overrides.map((o) =>
-        o.shopAreaNo === shopAreaNo && o.section === section ? { ...o, leadDays } : o,
-      ),
-    );
-  }
-
-  function removeSection(section: SectionCode): void {
-    onSetOverrides(
-      overrides.filter((o) => !(o.shopAreaNo === shopAreaNo && o.section === section)),
-    );
-  }
-
-  function addSection(): void {
-    if (freeSection === undefined) return;
-    onSetOverrides([...overrides, { shopAreaNo, section: freeSection, leadDays: 0 }]);
-  }
-
-  return (
-    <Stack spacing={1} sx={{ mt: 1 }}>
-      <Divider />
-      <Typography variant="caption" color="text.secondary">
-        Abschnittsfeiner Vorlauf für Shop {shopAreaNo} (übersteuert den Shop-Wert für den jeweiligen
-        Abschnitt).
-      </Typography>
-      {sectionOverrides.length === 0 && (
-        <Typography variant="caption" color="text.disabled">
-          Keine abschnittsfeinen Ausnahmen.
-        </Typography>
-      )}
-      {sectionOverrides.map((o) => (
-        <Stack key={o.section} direction="row" spacing={1} alignItems="center">
-          <TextField
-            select
-            size="small"
-            label="Abschnitt"
-            value={o.section}
-            onChange={(e) => {
-              removeSection(o.section as SectionCode);
-              onSetOverrides([
-                ...overrides.filter((x) => !(x.shopAreaNo === shopAreaNo && x.section === o.section)),
-                { shopAreaNo, section: Number(e.target.value) as SectionCode, leadDays: o.leadDays },
-              ]);
-            }}
-            sx={{ width: 110 }}
-          >
-            {LOAD_PLAN_SECTIONS.map((s) => (
-              <MenuItem key={s} value={s} disabled={usedSections.has(s) && s !== o.section}>
-                Abschnitt {s}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            type="number"
-            size="small"
-            label="Vorlauf (Tage)"
-            value={o.leadDays}
-            onChange={(e) =>
-              updateSection(o.section as SectionCode, Math.max(0, Math.round(Number(e.target.value))))
-            }
-            inputProps={{ min: 0, step: 1, style: { width: 64 } }}
-          />
-          <Button color="error" size="small" onClick={() => removeSection(o.section as SectionCode)}>
-            Entfernen
-          </Button>
-        </Stack>
-      ))}
-      {freeSection !== undefined && (
-        <Box>
-          <Button size="small" onClick={addSection}>
-            + Abschnitt-Ausnahme
-          </Button>
-        </Box>
-      )}
-    </Stack>
-  );
-}
-
 interface Preview {
   hasPlan: boolean;
   nextLoad?: string;
-  dueFrom?: string;
-  overdueFrom?: string;
-  status: 'calm' | 'soon' | 'none';
-  daysUntilWindow?: number;
+  status: 'due' | 'calm' | 'none';
+  daysUntilDue?: number;
 }
 
 function PreviewBox({ preview }: { preview: Preview }): JSX.Element {
   return (
     <Box
       sx={{
-        mt: 1.5,
         p: 1.5,
         borderRadius: 1,
         border: '1px dashed',
@@ -565,22 +313,21 @@ function PreviewBox({ preview }: { preview: Preview }): JSX.Element {
       </Typography>
       {!preview.hasPlan ? (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Kein Verladetag hinterlegt — diese Belege werden nicht über den Verladeplan überfällig.
+          Kein Verladetag hinterlegt — diese Belege werden nicht über den Verladeplan fällig.
         </Typography>
       ) : (
         <Stack spacing={0.25} sx={{ mt: 0.5 }}>
           <PreviewLine k="Nächster Verladetag (ab heute)" v={preview.nextLoad ?? '—'} />
-          <PreviewLine k="Wird dringend ab" v={preview.dueFrom ?? '—'} />
-          <PreviewLine k="Überfällig ab" v={preview.overdueFrom ?? '—'} />
+          <PreviewLine k="Fällig ab" v={preview.nextLoad ?? '—'} />
           <Box sx={{ mt: 1 }}>
             <Chip
               size="small"
-              color={preview.status === 'soon' ? 'warning' : 'info'}
-              variant={preview.status === 'soon' ? 'filled' : 'outlined'}
+              color={preview.status === 'due' ? 'warning' : 'info'}
+              variant={preview.status === 'due' ? 'filled' : 'outlined'}
               label={
-                preview.status === 'soon'
-                  ? '● Im Vorlauf-Fenster — wird heute vorgezogen'
-                  : `● Noch ruhig — Vorlauf-Fenster öffnet in ${preview.daysUntilWindow} Tag(en)`
+                preview.status === 'due'
+                  ? '● Heute Verladetag — Belege sind fällig'
+                  : `● Fällig in ${preview.daysUntilDue} Tag(en) — ab dem Verladetag`
               }
             />
           </Box>
@@ -653,35 +400,18 @@ function nextAreaNo(rows: readonly LoadPlanRow[]): string {
   return String(max + 1);
 }
 
-/** UI-only Vorlauf suggestion from the weekly cadence; null = no suggestion. */
-function suggestLeadDays(dayCount: number): number | null {
-  if (dayCount <= 0) return null;
-  const cadenceDays = 7 / dayCount;
-  const upper = Math.max(1, Math.ceil(cadenceDays) - 1);
-  return Math.min(Math.max(Math.round(cadenceDays / 2), 1), upper);
-}
-
-function cadenceLabel(dayCount: number): string {
-  if (dayCount <= 0) return '—';
-  if (dayCount === 1) return '7 Tage';
-  return `~${Math.round(7 / dayCount)} Tage`;
-}
-
-function computePreview(weekdays: readonly string[], leadDays: number): Preview {
+/** Due preview: a Beleg is fällig ab dem Verladetag (no lead window). */
+function computePreview(weekdays: readonly string[]): Preview {
   if (weekdays.length === 0) return { hasPlan: false, status: 'none' };
   const today = startOfDay(new Date());
   const next = earliestNextWeekday(today, weekdays);
   if (next === null) return { hasPlan: false, status: 'none' };
-  const dueFrom = addDays(next, -leadDays);
-  const overdueFrom = addDays(next, 1);
-  const inWindow = today.getTime() >= dueFrom.getTime();
+  const isDue = today.getTime() >= next.getTime();
   return {
     hasPlan: true,
     nextLoad: formatDe(next),
-    dueFrom: formatDe(dueFrom),
-    overdueFrom: formatDe(overdueFrom),
-    status: inWindow ? 'soon' : 'calm',
-    daysUntilWindow: inWindow ? 0 : Math.round((dueFrom.getTime() - today.getTime()) / DAY_MS),
+    status: isDue ? 'due' : 'calm',
+    daysUntilDue: isDue ? 0 : Math.round((next.getTime() - today.getTime()) / DAY_MS),
   };
 }
 

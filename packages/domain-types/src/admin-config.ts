@@ -15,38 +15,34 @@ import { inspectionSourceSchema, sectionCodeSchema } from './enums.js';
  */
 
 /**
- * Shop-/Abschnitts-spezifischer Überfälligkeits-Vorlauf (Teamlead-Punkt 4). Every
- * specified field must equal the case's; `undefined` fields are wildcards. The most
- * specific match wins in the engine.
+ * Prioritäts-Konfiguration (§8.1, Leiter nach Teamlead-Feedback B1/B2). Der
+ * Überfälligkeitsvorlauf (overdueLeadDays + Overrides) ist ersatzlos gestrichen;
+ * ein Verladeplan-Case ist fällig, sobald der Verladetag erreicht ist. Konfigurierbar
+ * bleibt die Liste der Shopbereiche mit täglicher Verladung (Tier 1).
  */
-export const loadPlanLeadOverrideSchema = z.object({
-  shopAreaNo: z.string().optional(),
-  section: sectionCodeSchema.optional(),
-  leadDays: z.number().int().nonnegative(),
-});
-export type LoadPlanLeadOverride = z.infer<typeof loadPlanLeadOverrideSchema>;
-
-/** Priority weighting + Überfälligkeits-Vorlauf (§8.1, Teamlead-Punkt 4). */
 export const priorityRuleConfigSchema = z.object({
-  /**
-   * Default Vorlauf in Tagen vor dem Verladetag, ab dem ein Verladeplan-Case
-   * (Abschnitt 1/2/3) dringend/überfällig wird. Ersetzt die tote, nie konsumierte
-   * Stundenschwelle `overdueThresholdHours`. 0 = erst am/nach dem Verladetag.
-   */
-  overdueLeadDays: z.number().int().nonnegative(),
-  /** Shop-/abschnittsspezifische Übersteuerungen des Vorlaufs. */
-  overdueLeadDaysOverrides: z.array(loadPlanLeadOverrideSchema),
+  /** Shopbereiche mit täglicher Verladung (Tier 1 neben Abschnitten 7/4/8). */
+  dailyShopAreas: z.array(z.string()),
   fifoEnabled: z.boolean(),
   manualPriorityWins: z.boolean(),
 });
 export type PriorityRuleConfig = z.infer<typeof priorityRuleConfigSchema>;
 
-/** Bundle-size guardrails (§8.3). */
+/**
+ * Bündel-Dimensionierung in TEILEN (§8.3, Teamlead-Feedback C1/C2): Starter-Pack
+ * ca. 200–250 Teile je Mitarbeiter zu Schichtbeginn, Folge-Packs ca. 80–90 Teile per
+ * Self-Pull. Ersetzt die min/max-Minuten-Regler; die Beleg-Obergrenze und die
+ * schwer/leicht-Gewichtung sind ersatzlos gestrichen. Minuten bleiben die INTERNE
+ * Kapazitätswährung (Aufwandsmodell unverändert) — hier wird nur die Pack-GRÖSSE
+ * konfiguriert.
+ */
 export const bundleRuleConfigSchema = z.object({
-  minMinutes: z.number().nonnegative(),
-  maxMinutes: z.number().nonnegative(),
-  maxCases: z.number().int().nonnegative(),
-  maxHeavyCases: z.number().int().nonnegative(),
+  starterPackMinTeile: z.number().int().positive(),
+  starterPackMaxTeile: z.number().int().positive(),
+  followUpPackMinTeile: z.number().int().positive(),
+  followUpPackMaxTeile: z.number().int().positive(),
+  /** Teile-Schwelle für Monster-Belege → keine Auto-Verteilung, manuelle TL-Entscheidung (C6). */
+  largeBelegTeileThreshold: z.number().int().positive(),
 });
 export type BundleRuleConfig = z.infer<typeof bundleRuleConfigSchema>;
 
@@ -208,16 +204,16 @@ export const RULE_CONFIG_KEY = 'rule_config';
  */
 export const DEFAULT_RULE_CONFIG: RuleConfig = {
   priority: {
-    overdueLeadDays: 2,
-    overdueLeadDaysOverrides: [],
+    dailyShopAreas: ['120', '90'],
     fifoEnabled: true,
     manualPriorityWins: true,
   },
   bundle: {
-    minMinutes: 20,
-    maxMinutes: 90,
-    maxCases: 8,
-    maxHeavyCases: 2,
+    starterPackMinTeile: 200,
+    starterPackMaxTeile: 250,
+    followUpPackMinTeile: 80,
+    followUpPackMaxTeile: 90,
+    largeBelegTeileThreshold: 2000,
   },
   effort: DEFAULT_EFFORT_RULE_CONFIG,
   grouping: {
@@ -230,8 +226,11 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
     runRequiresSameSection: true,
     autoDistributeSuspected: false,
   },
+  // Autostopp-Default 50 min (C5): am Cutoff wird nicht mehr vorverteilt; bereits
+  // zugeteilte, nicht begonnene Bündel lösen sich beim nächsten Recalculate in den
+  // Pool auf (clearPriorPlanForDate) und die Cutoff-effektive Kapazität ist 0.
   shiftEnd: {
-    autoCutoffMinutes: 120,
+    autoCutoffMinutes: 50,
   },
   inspection: {
     source: 'prohandel',

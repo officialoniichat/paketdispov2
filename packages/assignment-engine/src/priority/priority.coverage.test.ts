@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { goodsReceiptCaseSchema, type GoodsReceiptCase } from '@paket/domain-types';
-import {
-  classifyPriority,
-  comparePriority,
-  resolveLeadDays,
-  sortByPriority,
-} from './priority-engine.js';
+import { classifyPriority, comparePriority, sortByPriority } from './priority-engine.js';
 import { PRIORITY_RANK, type EnrichedCase } from '../types.js';
 
 /**
@@ -134,12 +129,12 @@ describe('classifyPriority — class ladder & first-match semantics (§8.1)', ()
   });
 });
 
-describe('classifyPriority — Überfällig (§8.1 rank 3)', () => {
-  it('treats an explicit overdue flag as rank 3', () => {
+describe('classifyPriority — Anzeige-Flags ohne Rang (B1: kein Überfälligkeits-Rang)', () => {
+  it('does NOT raise the rank for the display-only overdue flag (FIFO)', () => {
     const c = makeCase({ id: 'od', priorityFlags: ['overdue'] });
     const result = classifyPriority(c, { today: TODAY });
-    expect(result.class).toBe('catman_due');
-    expect(result.rank).toBe(PRIORITY_RANK.catManDue);
+    expect(result.class).toBe('fifo');
+    expect(result.rank).toBe(PRIORITY_RANK.fifo);
   });
 
   // CatMan is informational only — neither the flag nor the date may raise the rank.
@@ -165,12 +160,38 @@ describe('classifyPriority — Überfällig (§8.1 rank 3)', () => {
 });
 
 describe('classifyPriority — section-based classes (§8.1 ranks 4/5)', () => {
-  it('classifies sections 7/4/8 as Jeden-Tag-Ware (rank 4)', () => {
+  it('classifies sections 7/4/8 as tägliche Verladung (Tier 1, rank 3)', () => {
     for (const section of [7, 4, 8] as const) {
       const result = classifyPriority(makeCase({ id: `ed${section}`, section }), { today: TODAY });
-      expect(result.class).toBe('every_day');
-      expect(result.rank).toBe(PRIORITY_RANK.everyDay);
+      expect(result.class).toBe('daily_loading');
+      expect(result.rank).toBe(PRIORITY_RANK.dailyLoading);
     }
+  });
+
+  it('classifies the daily shop areas (default 120/90) as Tier 1 — before NOS', () => {
+    const nosInDailyShop = makeCase({
+      id: 'shop120-nos',
+      primaryShopAreaNo: '120',
+      goodsTypeText: 'NOS',
+    });
+    const result = classifyPriority(nosInDailyShop, { today: TODAY });
+    expect(result.class).toBe('daily_loading');
+    expect(result.rank).toBe(PRIORITY_RANK.dailyLoading);
+  });
+
+  it('classifies NOS and Hängeware as Tier 2 (rank 4)', () => {
+    const nos = classifyPriority(makeCase({ id: 'nos', goodsTypeText: 'NOS' }), { today: TODAY });
+    expect(nos.class).toBe('nos_haengeware');
+    expect(nos.rank).toBe(PRIORITY_RANK.nosHaengeware);
+    const haenge = classifyPriority(
+      makeCase({
+        id: 'hb',
+        storageLocation: { id: 'loc-hb', type: 'haengebahn', code: 'HB-1', active: true },
+      }),
+      { today: TODAY },
+    );
+    expect(haenge.class).toBe('nos_haengeware');
+    expect(haenge.rank).toBe(PRIORITY_RANK.nosHaengeware);
   });
 
   it('classifies sections 1/2/3 with loadPlanDate <= today as Verladeplan-due (rank 5)', () => {
@@ -191,7 +212,7 @@ describe('classifyPriority — section-based classes (§8.1 ranks 4/5)', () => {
     expect(result.reason).toContain('überfällig');
   });
 
-  it('falls back to FIFO for sections 1/2/3 with a future loadPlanDate and no Vorlauf', () => {
+  it('falls back to FIFO for sections 1/2/3 with a future loadPlanDate', () => {
     const c = makeCase({ id: 'lp-future', section: 3, loadPlanDate: '2026-06-20' });
     expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
@@ -201,9 +222,9 @@ describe('classifyPriority — section-based classes (§8.1 ranks 4/5)', () => {
     expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
 
-  it('Jeden-Tag sections do not require a loadPlanDate', () => {
+  it('tägliche-Verladung sections do not require a loadPlanDate', () => {
     const c = makeCase({ id: 'ed-nolp', section: 8 });
-    expect(classifyPriority(c, { today: TODAY }).class).toBe('every_day');
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('daily_loading');
   });
 
   it('priority order: every-day section beats a verladeplan-today section', () => {
@@ -224,73 +245,17 @@ describe('classifyPriority — FIFO fallback (§8.1 rank 6)', () => {
   });
 });
 
-describe('classifyPriority — Verladetag-relative Überfälligkeit (Teamlead-Punkt 4)', () => {
-  it('escalates a Verladeplan case once today enters the Vorlauf window before its loading day', () => {
-    // Loading day is 3 days out; with a 2-day Vorlauf it is NOT yet due...
+describe('classifyPriority — Verladetag ohne Vorlauf (B1)', () => {
+  it('a future loading day stays FIFO — es gibt kein Vorlauf-Fenster mehr', () => {
     const c = makeCase({ id: 'lead', section: 1, loadPlanDate: '2026-06-18' });
-    expect(classifyPriority(c, { today: TODAY, overdueLeadDays: 2 }).class).toBe('fifo');
-    // ...but with a 3-day Vorlauf today (06-15) is exactly the threshold → due.
-    const due = classifyPriority(c, { today: TODAY, overdueLeadDays: 3 });
-    expect(due.class).toBe('load_plan_due');
-    expect(due.reason).toContain('fällig');
-  });
-
-  it('weekly loading day: urgency triggers as the single weekday nears, with NO hour-difference', () => {
-    // A shop loaded once a week (next loading day 2026-06-17, a Wednesday). The case is
-    // ready since 06-10 but the day-difference is what matters, not any hour delta.
-    const weekly = makeCase({ id: 'weekly', section: 2, loadPlanDate: '2026-06-17' });
-    // 4 days before (today 06-15) with a 1-day Vorlauf → still FIFO.
-    expect(classifyPriority(weekly, { today: TODAY, overdueLeadDays: 1 }).class).toBe('fifo');
-    // As the weekday nears, a 2-day Vorlauf escalates it on 06-15 (06-17 minus 2).
-    expect(classifyPriority(weekly, { today: TODAY, overdueLeadDays: 2 }).class).toBe(
-      'load_plan_due',
-    );
+    expect(classifyPriority(c, { today: TODAY }).class).toBe('fifo');
   });
 
   it('a missed weekly loading day stays overdue (not reset to a future week)', () => {
     const missed = makeCase({ id: 'missed', section: 3, loadPlanDate: '2026-06-08' });
-    const result = classifyPriority(missed, { today: TODAY, overdueLeadDays: 0 });
+    const result = classifyPriority(missed, { today: TODAY });
     expect(result.class).toBe('load_plan_due');
     expect(result.reason).toContain('überfällig');
-  });
-
-  it('resolveLeadDays picks the most specific override (shop+section > shop > section > default)', () => {
-    const c = makeCase({ id: 'ovr', section: 1, primaryShopAreaNo: '21' });
-    const ctx = {
-      today: TODAY,
-      overdueLeadDays: 1,
-      overdueLeadDaysOverrides: [
-        { leadDays: 2 }, // wildcard (score 0)
-        { section: 1 as const, leadDays: 3 }, // section-only (score 1)
-        { shopAreaNo: '21', leadDays: 4 }, // shop-only (score 1, listed later → not chosen over equal)
-        { shopAreaNo: '21', section: 1 as const, leadDays: 5 }, // shop+section (score 2 → wins)
-      ],
-    };
-    expect(resolveLeadDays(c, ctx)).toBe(5);
-  });
-
-  it('resolveLeadDays falls back to the context default when no override matches', () => {
-    const c = makeCase({ id: 'nomatch', section: 1, primaryShopAreaNo: '99' });
-    expect(
-      resolveLeadDays(c, {
-        today: TODAY,
-        overdueLeadDays: 7,
-        overdueLeadDaysOverrides: [{ shopAreaNo: '21', leadDays: 2 }],
-      }),
-    ).toBe(7);
-  });
-
-  it('applies a shop-specific override end-to-end in classifyPriority', () => {
-    // Shop 22 gets a generous 5-day Vorlauf; loading day 06-19 → due on 06-15 (06-19−5=06-14<=06-15).
-    const c = makeCase({ id: 'shop22', section: 1, primaryShopAreaNo: '22', loadPlanDate: '2026-06-19' });
-    const ctx = {
-      today: TODAY,
-      overdueLeadDays: 1,
-      overdueLeadDaysOverrides: [{ shopAreaNo: '22', leadDays: 5 }],
-    };
-    expect(classifyPriority(c, ctx).class).toBe('load_plan_due');
-    // The same case under the 1-day default Vorlauf would still be FIFO.
-    expect(classifyPriority(c, { today: TODAY, overdueLeadDays: 1 }).class).toBe('fifo');
   });
 });
 
@@ -332,14 +297,14 @@ describe('sortByPriority — full ladder & determinism (§8.3)', () => {
     const cases = [
       makeCase({ id: 'fifo', section: null }),
       makeCase({ id: 'loadplan', section: 1, loadPlanDate: TODAY }),
-      makeCase({ id: 'everyday', section: 7 }),
-      makeCase({ id: 'overdue', priorityFlags: ['overdue'] }),
+      makeCase({ id: 'nos', goodsTypeText: 'NOS' }),
+      makeCase({ id: 'daily', section: 7 }),
       makeCase({ id: 'prio', priorityFlags: ['prio'] }),
       makeCase({ id: 'manual', priorityFlags: ['manual_teamlead_priority'] }),
     ].map(enrich);
 
     const ordered = sortByPriority(cases).map((e) => e.case.id);
-    expect(ordered).toEqual(['manual', 'prio', 'overdue', 'everyday', 'loadplan', 'fifo']);
+    expect(ordered).toEqual(['manual', 'prio', 'daily', 'nos', 'loadplan', 'fifo']);
   });
 
   it('produces the same order regardless of input order (determinism)', () => {

@@ -10,7 +10,7 @@ import { distributeBundlesByWeightedLoad } from './distribute.js';
 import type { EnrichedCase } from '../types.js';
 import { DEFAULT_ASSIGNMENT_CONFIG } from '../config.js';
 
-function makeCase(id: string): GoodsReceiptCase {
+function makeCase(id: string, totalQuantity: number): GoodsReceiptCase {
   return goodsReceiptCaseSchema.parse({
     id,
     source: 'prohandel_api',
@@ -21,7 +21,7 @@ function makeCase(id: string): GoodsReceiptCase {
     storageLocation: { id: `loc-${id}`, type: 'regal', code: `R${id}`, active: true },
     section: null,
     priorityFlags: [],
-    totalQuantity: 10,
+    totalQuantity,
     status: 'ready',
     effortPoints: 0,
     estimatedMinutes: 0,
@@ -29,10 +29,11 @@ function makeCase(id: string): GoodsReceiptCase {
   });
 }
 
-function enriched(id: string, minutes: number, wgr = 'default'): EnrichedCase {
+function enriched(id: string, teile: number, minutes: number, wgr = 'default'): EnrichedCase {
   return {
-    case: makeCase(id),
+    case: makeCase(id, teile),
     priority: { rank: 6, class: 'fifo', reason: 'fifo' },
+    teile,
     effortMinutes: minutes,
     effortPoints: minutes,
     wgrCodes: [wgr],
@@ -54,83 +55,90 @@ function shift(employeeId: string, capacity: number): EmployeeShift {
   });
 }
 
-describe('createBalancedBundles (§8.3)', () => {
-  it('packs cases up to the target minutes, preserving order', () => {
-    const cases = [enriched('1', 30), enriched('2', 30), enriched('3', 30), enriched('4', 30)];
-    const { bundles } = createBalancedBundles(cases, 1000, {
-      ...DEFAULT_ASSIGNMENT_CONFIG,
-      targetBundleMinutes: 55,
-      maxCasesPerBundle: 6,
-    });
-    // 30+30 = 60 >= 55 closes bundle → two cases per bundle
+describe('createBalancedBundles — Teile-Dimensionierung (§8.3, C1/C2)', () => {
+  it('packs cases up to the Starter-Pack-Teile, preserving order', () => {
+    // 4 × 120 Teile: 120+120 = 240 ≥ 200 (min) und ≤ 250 (max) → 2er-Packs.
+    const cases = [
+      enriched('1', 120, 30),
+      enriched('2', 120, 30),
+      enriched('3', 120, 30),
+      enriched('4', 120, 30),
+    ];
+    const { bundles } = createBalancedBundles(cases, 1000, DEFAULT_ASSIGNMENT_CONFIG, 'starter');
     expect(bundles).toHaveLength(2);
     expect(bundles[0]?.caseIds).toEqual(['1', '2']);
+    expect(bundles[0]?.teile).toBe(240);
     expect(bundles[0]?.effortMinutes).toBe(60);
   });
 
-  it('respects the max-cases-per-bundle cap', () => {
-    const cases = Array.from({ length: 6 }, (_, i) => enriched(String(i), 5));
-    const { bundles } = createBalancedBundles(cases, 1000, {
-      ...DEFAULT_ASSIGNMENT_CONFIG,
-      targetBundleMinutes: 999,
-      maxCasesPerBundle: 3,
-    });
-    expect(bundles.map((b) => b.caseIds.length)).toEqual([3, 3]);
+  it('closes a pack BEFORE exceeding the max Teile', () => {
+    // 180 + 120 = 300 > 250 (max) → der zweite Beleg beginnt ein neues Pack.
+    const cases = [enriched('1', 180, 10), enriched('2', 120, 10), enriched('3', 120, 10)];
+    const { bundles } = createBalancedBundles(cases, 1000, DEFAULT_ASSIGNMENT_CONFIG, 'starter');
+    expect(bundles[0]?.caseIds).toEqual(['1']);
+    expect(bundles[1]?.caseIds).toEqual(['2', '3']);
   });
 
-  it('routes cases beyond capacity into overflow (allowing a single-case overshoot)', () => {
-    const cases = [enriched('1', 40), enriched('2', 40), enriched('3', 40)];
+  it('has NO case cap: many small NOS-Einzelanlieferungen fit in one pack (C2)', () => {
+    // 20 Belege à 10 Teile = 200 Teile → EIN Pack mit 20 Belegen (früher: max 6-8).
+    const cases = Array.from({ length: 20 }, (_, i) => enriched(String(i), 10, 2));
+    const { bundles } = createBalancedBundles(cases, 1000, DEFAULT_ASSIGNMENT_CONFIG, 'starter');
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]?.caseIds).toHaveLength(20);
+    expect(bundles[0]?.teile).toBe(200);
+  });
+
+  it('uses the smaller Folge-Pack sizes for kind follow_up', () => {
+    const cases = [enriched('1', 45, 10), enriched('2', 45, 10), enriched('3', 45, 10)];
+    const { bundles } = createBalancedBundles(cases, 1000, DEFAULT_ASSIGNMENT_CONFIG, 'follow_up');
+    // 45+45 = 90 ≥ 80 (follow-up min) → 2er-Pack.
+    expect(bundles[0]?.caseIds).toEqual(['1', '2']);
+    expect(bundles[0]?.teile).toBe(90);
+  });
+
+  it('routes cases beyond the MINUTES budget into overflow (Aufwandsmodell bleibt Machbarkeits-Gate)', () => {
+    const cases = [enriched('1', 50, 40), enriched('2', 50, 40), enriched('3', 50, 40)];
     const { bundles, overflow } = createBalancedBundles(cases, 50, DEFAULT_ASSIGNMENT_CONFIG);
     // case 1 fits; case 2 is added since used (40) < 50, pushing used to 80; case 3 overflows.
     expect(bundles.flatMap((b) => b.caseIds)).toEqual(['1', '2']);
     expect(overflow.map((c) => c.case.id)).toEqual(['3']);
   });
 
-  it('flags a bundle that contains a heavy case and computes the dominant WGR', () => {
-    const cases = [enriched('1', 50, 'socks'), enriched('2', 5, 'socks')];
-    const { bundles } = createBalancedBundles(cases, 1000, {
-      ...DEFAULT_ASSIGNMENT_CONFIG,
-      targetBundleMinutes: 999,
-      maxCasesPerBundle: 6,
-      heavyCaseMinutes: 45,
-    });
-    expect(bundles[0]?.containsHeavy).toBe(true);
+  it('computes the dominant WGR of a pack', () => {
+    const cases = [enriched('1', 100, 50, 'socks'), enriched('2', 100, 5, 'socks')];
+    const { bundles } = createBalancedBundles(cases, 1000, DEFAULT_ASSIGNMENT_CONFIG);
     expect(bundles[0]?.dominantWgr).toBe('socks');
   });
 });
 
-describe('distributeBundlesByWeightedLoad (§8.3/§8.4)', () => {
+describe('distributeBundlesByWeightedLoad — ein Starter-Pack je Mitarbeiter (§8.3/§8.4, C3)', () => {
   function protosOf(...specs: Array<[string, number, string]>) {
     return specs.map(
       ([id, minutes, wgr]) =>
-        createBalancedBundles([enriched(id, minutes, wgr)], 1000, {
-          ...DEFAULT_ASSIGNMENT_CONFIG,
-          targetBundleMinutes: 1,
-          maxCasesPerBundle: 1,
-        }).bundles[0]!,
+        createBalancedBundles([enriched(id, 200, minutes, wgr)], 1000, DEFAULT_ASSIGNMENT_CONFIG)
+          .bundles[0]!,
     );
   }
 
-  it('balances equal proto-bundles evenly, then merges into one bundle per employee', () => {
+  it('assigns exactly ONE pack per employee; the rest stays unassigned (pool)', () => {
     const protos = protosOf(['1', 50, 'a'], ['2', 50, 'a'], ['3', 50, 'a'], ['4', 50, 'a']);
     const result = distributeBundlesByWeightedLoad(
       [shift('E-1', 480), shift('E-2', 480)],
       protos,
       '2026-06-15',
     );
-    // Fairness unchanged (LPT spreads the 4 equal protos 2+2), but each employee
-    // ends with exactly ONE merged AssignmentBundle carrying both their cases.
     expect(result.bundles).toHaveLength(2);
     const sizes = result.bundles.map((b) => b.caseIds.length).sort();
-    expect(sizes).toEqual([2, 2]);
+    expect(sizes).toEqual([1, 1]);
     const counts = result.loads.map((l) => l.bundleCount).sort();
     expect(counts).toEqual([1, 1]);
     expect(new Set(result.bundles.map((b) => b.employeeId)).size).toBe(2);
-    expect(result.unassigned).toHaveLength(0);
+    // Die beiden übrigen Packs warten im Pool auf den Self-Pull.
+    expect(result.unassigned).toHaveLength(2);
   });
 
   it('emits one stable bundle id per employee (bundle-<date>-<index>)', () => {
-    const protos = protosOf(['1', 50, 'a'], ['2', 50, 'a'], ['3', 50, 'a'], ['4', 50, 'a']);
+    const protos = protosOf(['1', 50, 'a'], ['2', 50, 'a']);
     const result = distributeBundlesByWeightedLoad(
       [shift('E-1', 480), shift('E-2', 480)],
       protos,
@@ -139,25 +147,17 @@ describe('distributeBundlesByWeightedLoad (§8.3/§8.4)', () => {
     for (const b of result.bundles) {
       expect(b.id).toMatch(/^bundle-2026-06-15-\d{4}$/);
     }
-    // One bundle id per employee — ids are unique.
     expect(new Set(result.bundles.map((b) => b.id)).size).toBe(result.bundles.length);
   });
 
-  it('spreads distinct Warengruppen to avoid specialists', () => {
-    const protos = protosOf(['1', 30, 'wgrA'], ['2', 30, 'wgrA'], ['3', 30, 'wgrB'], ['4', 30, 'wgrB']);
-    const result = distributeBundlesByWeightedLoad(
-      [shift('E-1', 480), shift('E-2', 480)],
-      protos,
-      '2026-06-15',
-      { avoidSpecialists: true },
-    );
-    // Each employee should end up handling both WGRs rather than specialising.
-    for (const load of result.loads) {
-      expect(load.distinctWgrCount).toBe(2);
-    }
+  it('does not hand an employee a pack that exceeds their net capacity minutes', () => {
+    const protos = protosOf(['1', 400, 'a']);
+    const result = distributeBundlesByWeightedLoad([shift('E-1', 300)], protos, '2026-06-15');
+    expect(result.bundles).toHaveLength(0);
+    expect(result.unassigned).toHaveLength(1);
   });
 
-  it('returns all bundles as unassigned when no employee is active', () => {
+  it('returns all packs as unassigned when no employee is active', () => {
     const protos = protosOf(['1', 30, 'a']);
     const result = distributeBundlesByWeightedLoad([], protos, '2026-06-15');
     expect(result.bundles).toHaveLength(0);

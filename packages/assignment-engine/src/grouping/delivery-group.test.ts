@@ -230,10 +230,11 @@ function makeCase(id: string): GoodsReceiptCase {
   });
 }
 
-function enriched(id: string, minutes: number): EnrichedCase {
+function enriched(id: string, minutes: number, teile = 150): EnrichedCase {
   return {
     case: makeCase(id),
     priority: { rank: 6, class: 'fifo', reason: 'fifo' },
+    teile,
     effortMinutes: minutes,
     effortPoints: minutes,
     wgrCodes: ['default'],
@@ -258,54 +259,64 @@ function shift(employeeId: string, capacity: number): EmployeeShift {
 /** One proto-bundle per single case (mirrors the engine's smallest unit). */
 function protosOf(...ids: string[]) {
   return ids.map(
-    (id) =>
-      createBalancedBundles([enriched(id, 30)], 1000, {
-        ...DEFAULT_ASSIGNMENT_CONFIG,
-        targetBundleMinutes: 1,
-        maxCasesPerBundle: 1,
-      }).bundles[0]!,
+    (id) => createBalancedBundles([enriched(id, 30, 200)], 1000, DEFAULT_ASSIGNMENT_CONFIG).bundles[0]!,
   );
 }
 
-describe('distributeBundlesByWeightedLoad — delivery-group affinity', () => {
-  it('keeps a delivery group on ONE employee when capacity allows', () => {
-    const protos = protosOf('1', '2');
+describe('createBalancedBundles — delivery-group cohesion (Punkt 1, im Pack)', () => {
+  it('keeps a delivery group in ONE pack even past the Teile-Grenzen', () => {
+    // 3 × 120 Teile einer Gruppe: min (200) wäre nach dem 2. Beleg erreicht und max
+    // (250) nach dem 3. überschritten — die Gruppe bleibt trotzdem zusammen.
+    const groupIdByCaseId = new Map([
+      ['1', 'dg-1'],
+      ['2', 'dg-1'],
+      ['3', 'dg-1'],
+    ]);
+    const { bundles } = createBalancedBundles(
+      [enriched('1', 10, 120), enriched('2', 10, 120), enriched('3', 10, 120)],
+      1000,
+      DEFAULT_ASSIGNMENT_CONFIG,
+      'starter',
+      { groupIdByCaseId },
+    );
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]!.caseIds).toEqual(['1', '2', '3']);
+  });
+
+  it('without the group map, the same cases split at the Teile-Grenze', () => {
+    const { bundles } = createBalancedBundles(
+      [enriched('1', 10, 120), enriched('2', 10, 120), enriched('3', 10, 120)],
+      1000,
+      DEFAULT_ASSIGNMENT_CONFIG,
+    );
+    expect(bundles.length).toBeGreaterThan(1);
+  });
+
+  it('one pack per employee: the group pack lands on exactly one person (C3)', () => {
     const groupIdByCaseId = new Map([
       ['1', 'dg-1'],
       ['2', 'dg-1'],
     ]);
+    const { bundles: protos } = createBalancedBundles(
+      [enriched('1', 30, 120), enriched('2', 30, 120)],
+      1000,
+      DEFAULT_ASSIGNMENT_CONFIG,
+      'starter',
+      { groupIdByCaseId },
+    );
     const result = distributeBundlesByWeightedLoad(
       [shift('E-1', 1000), shift('E-2', 1000)],
       protos,
       '2026-06-15',
-      { groupIdByCaseId },
     );
     expect(result.bundles).toHaveLength(1);
     expect([...result.bundles[0]!.caseIds].sort()).toEqual(['1', '2']);
   });
 
-  it('without the group map, equal protos spread across both employees', () => {
-    const protos = protosOf('1', '2');
-    const result = distributeBundlesByWeightedLoad(
-      [shift('E-1', 1000), shift('E-2', 1000)],
-      protos,
-      '2026-06-15',
-    );
-    expect(result.bundles).toHaveLength(2);
-  });
-
-  it('splits a group that no longer fits one shift (capacity beats the soft bias)', () => {
-    const protos = protosOf('1', '2');
-    const groupIdByCaseId = new Map([
-      ['1', 'dg-1'],
-      ['2', 'dg-1'],
-    ]);
-    const result = distributeBundlesByWeightedLoad(
-      [shift('E-1', 35), shift('E-2', 35)],
-      protos,
-      '2026-06-15',
-      { groupIdByCaseId },
-    );
-    expect(result.bundles).toHaveLength(2);
+  it('a pack exceeding a shift stays unassigned (capacity beats cohesion, §8.4)', () => {
+    const protos = protosOf('1');
+    const result = distributeBundlesByWeightedLoad([shift('E-1', 20)], protos, '2026-06-15');
+    expect(result.bundles).toHaveLength(0);
+    expect(result.unassigned).toHaveLength(1);
   });
 });

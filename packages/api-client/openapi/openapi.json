@@ -3716,37 +3716,14 @@
           "active"
         ]
       },
-      "LoadPlanLeadOverrideDto": {
-        "type": "object",
-        "properties": {
-          "shopAreaNo": {
-            "type": "string",
-            "description": "Shopbereich; weggelassen = alle"
-          },
-          "section": {
-            "type": "number",
-            "description": "Abschnitt 1..8; weggelassen = alle"
-          },
-          "leadDays": {
-            "type": "number",
-            "description": "Vorlauf in Tagen vor dem Verladetag"
-          }
-        },
-        "required": [
-          "leadDays"
-        ]
-      },
       "PriorityRuleConfigDto": {
         "type": "object",
         "properties": {
-          "overdueLeadDays": {
-            "type": "number",
-            "description": "Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit"
-          },
-          "overdueLeadDaysOverrides": {
+          "dailyShopAreas": {
+            "description": "Shopbereiche mit täglicher Verladung (Tier 1 neben Abschnitten 7/4/8)",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LoadPlanLeadOverrideDto"
+              "type": "string"
             }
           },
           "fifoEnabled": {
@@ -3757,8 +3734,7 @@
           }
         },
         "required": [
-          "overdueLeadDays",
-          "overdueLeadDaysOverrides",
+          "dailyShopAreas",
           "fifoEnabled",
           "manualPriorityWins"
         ]
@@ -3766,24 +3742,33 @@
       "BundleRuleConfigDto": {
         "type": "object",
         "properties": {
-          "minMinutes": {
-            "type": "number"
+          "starterPackMinTeile": {
+            "type": "number",
+            "description": "Starter-Pack min Teile (ca. 200)"
           },
-          "maxMinutes": {
-            "type": "number"
+          "starterPackMaxTeile": {
+            "type": "number",
+            "description": "Starter-Pack max Teile (ca. 250)"
           },
-          "maxCases": {
-            "type": "number"
+          "followUpPackMinTeile": {
+            "type": "number",
+            "description": "Folge-Pack min Teile (ca. 80)"
           },
-          "maxHeavyCases": {
-            "type": "number"
+          "followUpPackMaxTeile": {
+            "type": "number",
+            "description": "Folge-Pack max Teile (ca. 90)"
+          },
+          "largeBelegTeileThreshold": {
+            "type": "number",
+            "description": "Teile-Schwelle für Monster-Belege (manuelle TL-Entscheidung)"
           }
         },
         "required": [
-          "minMinutes",
-          "maxMinutes",
-          "maxCases",
-          "maxHeavyCases"
+          "starterPackMinTeile",
+          "starterPackMaxTeile",
+          "followUpPackMinTeile",
+          "followUpPackMaxTeile",
+          "largeBelegTeileThreshold"
         ]
       },
       "CheckModeFactorsDto": {

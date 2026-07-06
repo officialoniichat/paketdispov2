@@ -89,15 +89,31 @@ export class AssignmentService {
     // because the calendar rolled over to a new (un-materialized) date.
     await this.materializeShiftsForDate(day, dayStart);
 
-    const [shiftRows, locationRows, ruleConfig] = await Promise.all([
+    const [allShiftRows, locationRows, ruleConfig] = await Promise.all([
       this.prisma.shift.findMany({
         where: { date: { gte: dayStart, lte: dayEnd }, active: true },
-        include: { employee: { select: { bereiche: true, skillTier: true } } },
+        include: { employee: { select: { id: true, bereiche: true, skillTier: true } } },
       }),
       this.prisma.location.findMany({ where: { active: true } }),
       this.readRuleConfig(),
     ]);
     const engineConfig = engineConfigFromRuleConfig(ruleConfig);
+
+    // Monster-Beleg-Fortsetzung (C6): Mitarbeiter, die noch an einem offenen Beleg
+    // über der Teile-Schwelle hängen (partially_completed), bekommen KEIN neues
+    // Starter-Pack — ihre Schicht wird der Verteilung entzogen, bis der Beleg fertig ist.
+    const continuationCases = await this.prisma.goodsReceiptCase.findMany({
+      where: {
+        status: 'partially_completed',
+        totalQuantity: { gte: engineConfig.assignment.largeBelegTeileThreshold },
+        assignedBundleId: { not: null },
+      },
+      select: { assignedBundle: { select: { employeeId: true } } },
+    });
+    const continuationEmployeeIds = new Set(
+      continuationCases.map((c) => c.assignedBundle?.employeeId).filter((id): id is string => !!id),
+    );
+    const shiftRows = allShiftRows.filter((s) => !continuationEmployeeIds.has(s.employee.id));
 
     // ONE transaction: clearing the prior plan, re-reading the freed pool, running
     // the engine, and persisting the new plan all commit (or roll back) together so
@@ -189,6 +205,22 @@ export class AssignmentService {
       return { assigned: false, reason: 'skill_tier' };
     }
 
+    const ruleConfig = await this.readRuleConfig();
+    const engineConfig = engineConfigFromRuleConfig(ruleConfig);
+
+    // Monster-Beleg-Fortsetzung (C6): wer noch an einem mehrtägigen Beleg über der
+    // Teile-Schwelle hängt (partially_completed), erhält KEINE neuen Belege, bis er
+    // fertig ist — die Fortsetzung läuft über das bestehende Bündel.
+    const openLargeCase = await this.prisma.goodsReceiptCase.findFirst({
+      where: {
+        status: 'partially_completed',
+        totalQuantity: { gte: engineConfig.assignment.largeBelegTeileThreshold },
+        assignedBundle: { employeeId: employee.id },
+      },
+      select: { id: true },
+    });
+    if (openLargeCase) return { assigned: false, reason: 'continuation' };
+
     await this.materializeShiftsForDate(day, dayStart);
     const shift = await this.prisma.shift.findFirst({
       where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd }, active: true },
@@ -224,9 +256,6 @@ export class AssignmentService {
     const finishableBudget = finishableBudgetMinutes(remainingCapacity, shiftDomain, now.toISOString());
     if (finishableBudget <= 0) return { assigned: false, reason: 'shift_ending' };
 
-    const ruleConfig = await this.readRuleConfig();
-    const engineConfig = engineConfigFromRuleConfig(ruleConfig);
-
     return this.prisma.$transaction(async (tx) => {
       const [caseRows, locationRows] = await Promise.all([
         tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: caseEffortInclude }),
@@ -260,9 +289,9 @@ export class AssignmentService {
             case: c,
             priority: classifyPriority(c, {
               today: day,
-              overdueLeadDays: ruleConfig.priority.overdueLeadDays,
-              overdueLeadDaysOverrides: ruleConfig.priority.overdueLeadDaysOverrides,
+              dailyShopAreas: ruleConfig.priority.dailyShopAreas,
             }),
+            teile: c.totalQuantity,
             effortMinutes: effort.minutes,
             effortPoints: effort.points,
             wgrCodes: vector ? vector.wgrCodes : [],
@@ -271,14 +300,19 @@ export class AssignmentService {
           } satisfies EnrichedCase;
         })
         .filter((e) => e.priority.rank > 0)
+        // Monster-Belege (C6) sind nie Self-Pull-Ware — manuelle TL-Entscheidung.
+        .filter((e) => e.teile < engineConfig.assignment.largeBelegTeileThreshold)
         .filter((e) => allowedBereiche.size === 0 || (e.bereich != null && allowedBereiche.has(e.bereich)));
       if (enriched.length === 0) return { assigned: false, reason: 'pool_empty' };
 
       const ordered = sortByPriority(enriched);
+      // Folge-Pack (C1): 80–90 Teile, machbarkeitsgeprüft gegen das finishable
+      // Minuten-Budget (unverändertes Aufwandsmodell + Schichtende-Gate).
       const { bundles } = createBalancedBundles(
         ordered,
         finishableBudget,
         engineConfig.assignment,
+        'follow_up',
       );
       const cart = bundles[0];
       if (!cart) return { assigned: false, reason: 'pool_empty' };

@@ -10,13 +10,19 @@ import type {
   PickupSequenceProfile,
 } from '@paket/domain-types';
 
-/** Priority class ranks (§8.1). Lower rank = processed earlier. Rank 0 is excluded. */
+/**
+ * Priority class ranks (§8.1, Leiter nach Teamlead-Feedback B2). Lower rank =
+ * processed earlier. Rank 0 is excluded.
+ */
 export const PRIORITY_RANK = {
   exclusion: 0,
   manualTeamlead: 1,
   prioFlag: 2,
-  catManDue: 3,
-  everyDay: 4,
+  /** TIER 1: Jeden-Tag-Abschnitte 7/4/8 + tägliche Shopbereiche (120/90). */
+  dailyLoading: 3,
+  /** TIER 2: NOS + Hängeware. */
+  nosHaengeware: 4,
+  /** TIER 3: Verladeplan-Abschnitte 1/2/3, fällig ab Verladetag. */
   loadPlanDue: 5,
   fifo: 6,
 } as const;
@@ -27,8 +33,8 @@ export type PriorityClass =
   | 'exclusion'
   | 'manual_teamlead'
   | 'prio_flag'
-  | 'catman_due'
-  | 'every_day'
+  | 'daily_loading'
+  | 'nos_haengeware'
   | 'load_plan_due'
   | 'fifo';
 
@@ -44,6 +50,8 @@ export interface PriorityClassification {
 export interface EnrichedCase {
   case: GoodsReceiptCase;
   priority: PriorityClassification;
+  /** Teile (Stückzahl) des Belegs — die Bündel-Dimensionierungs-Einheit (C1). */
+  teile: number;
   effortMinutes: number;
   effortPoints: number;
   /** Warengruppen codes for the case (specialist-avoidance signal, §8.4). Empty if unknown. */
@@ -76,7 +84,15 @@ export interface EngineInput {
 /** A case that could not be placed, with the reason (surfaced to Teamlead). */
 export interface UnassignedCase {
   caseId: Id;
-  reason: 'excluded' | 'no_capacity' | 'delivery_unconfirmed';
+  /**
+   * - excluded: status not eligible.
+   * - no_capacity: no shift could take the case within its minutes budget.
+   * - delivery_unconfirmed: withheld member of an unconfirmed delivery group.
+   * - pool_remaining: bewusst im Pool gelassen — die Batch-Verteilung legt nur
+   *   Starter-Packs; den Rest ziehen die Mitarbeiter per Self-Pull (C3).
+   * - large_beleg: Monster-Beleg über der Teile-Schwelle → manuelle TL-Entscheidung (C6).
+   */
+  reason: 'excluded' | 'no_capacity' | 'delivery_unconfirmed' | 'pool_remaining' | 'large_beleg';
   priorityClass: PriorityClass;
 }
 

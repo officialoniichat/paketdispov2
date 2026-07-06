@@ -1330,26 +1330,23 @@ export interface components {
             scanCode?: string | null;
             active: boolean;
         };
-        LoadPlanLeadOverrideDto: {
-            /** @description Shopbereich; weggelassen = alle */
-            shopAreaNo?: string;
-            /** @description Abschnitt 1..8; weggelassen = alle */
-            section?: number;
-            /** @description Vorlauf in Tagen vor dem Verladetag */
-            leadDays: number;
-        };
         PriorityRuleConfigDto: {
-            /** @description Default Vorlauf (Tage) vor dem Verladetag bis Überfälligkeit */
-            overdueLeadDays: number;
-            overdueLeadDaysOverrides: components["schemas"]["LoadPlanLeadOverrideDto"][];
+            /** @description Shopbereiche mit täglicher Verladung (Tier 1 neben Abschnitten 7/4/8) */
+            dailyShopAreas: string[];
             fifoEnabled: boolean;
             manualPriorityWins: boolean;
         };
         BundleRuleConfigDto: {
-            minMinutes: number;
-            maxMinutes: number;
-            maxCases: number;
-            maxHeavyCases: number;
+            /** @description Starter-Pack min Teile (ca. 200) */
+            starterPackMinTeile: number;
+            /** @description Starter-Pack max Teile (ca. 250) */
+            starterPackMaxTeile: number;
+            /** @description Folge-Pack min Teile (ca. 80) */
+            followUpPackMinTeile: number;
+            /** @description Folge-Pack max Teile (ca. 90) */
+            followUpPackMaxTeile: number;
+            /** @description Teile-Schwelle für Monster-Belege (manuelle TL-Entscheidung) */
+            largeBelegTeileThreshold: number;
         };
         CheckModeFactorsDto: {
             quantity_only: number;
