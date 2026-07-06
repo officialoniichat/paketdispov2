@@ -267,9 +267,17 @@ export function BelegProcessScreen(): JSX.Element {
         <Typography variant="subtitle2">Positionen</Typography>
         {wi.goodsReceiptCheckMode === 'quantity_only' ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
-            Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein“.
+            Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".
           </Typography>
         ) : null}
+        {/* TODO(task-13+): "Position geprüft"/Mengen-Fortschritt is client-only
+            cache state (no backend endpoint yet, see useCaseFlow.ts) — it does
+            not survive a reload. Disclosed here so nobody navigates away
+            mid-Beleg expecting it to be saved. */}
+        <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+          Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" sichert
+          ihn dauerhaft.
+        </Typography>
         {aggregate.positions.map((pos) => {
           const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
           const isChecked = checked.has(pos.id);
