@@ -525,8 +525,12 @@ function LaneCardView({
         </Typography>
       </CardContent>
       <CardActions sx={{ flexWrap: 'wrap', gap: 0.25, px: 1, py: 0.5 }}>
+        {/* Quiet by design: pure navigation, not an action — should read as
+            lower-priority than the case's actual primary action next to it. */}
         <Button
           size="small"
+          variant="text"
+          sx={{ color: 'text.secondary', fontWeight: 400 }}
           onClick={() => onOpen(card.caseId, laneId === 'probleme' ? 'problem' : undefined)}
         >
           Details

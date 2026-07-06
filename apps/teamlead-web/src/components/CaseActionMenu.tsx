@@ -154,6 +154,7 @@ export function CaseActionMenu({
               color={toneColor(a.tone)}
               startIcon={ACTION_ICON[a.id]}
               onClick={() => trigger(a)}
+              sx={buttonVariant === 'text' ? { fontWeight: 700 } : undefined}
             >
               {a.label}
             </Button>
