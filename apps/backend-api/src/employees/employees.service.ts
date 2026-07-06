@@ -264,18 +264,24 @@ export class EmployeesService {
   }
 
   /**
-   * Admin-only PIN reset (Auth-Task 5). Hashes via `hashPin` (Task 2) and stores
+   * Admin-only PIN reset (Auth-Task 5). `id` is the Prisma `User.id`, matching
+   * `updateProfile`'s identifier semantics (all sibling routes on this controller
+   * take the Prisma id, not `employeeNo`). Hashes via `hashPin` (Task 2) and stores
    * only the hash — the plaintext PIN is never persisted, logged, or written into
    * the audit event payload.
    */
-  async resetPin(employeeNo: string, pin: string): Promise<void> {
+  async resetPin(principal: Principal, id: string, pin: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException(`Employee ${id} not found`);
+
     const pinHash = await hashPin(pin);
-    await this.prisma.user.update({ where: { employeeNo }, data: { pinHash } });
+    await this.prisma.user.update({ where: { id }, data: { pinHash } });
     await this.events.append({
       eventType: 'employee.pin_reset',
       entityType: 'User',
-      entityId: employeeNo,
-      actorType: 'admin',
+      entityId: id,
+      actorType: 'teamlead',
+      actorId: principal.sub,
       payload: {},
     });
   }

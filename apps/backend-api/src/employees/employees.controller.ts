@@ -75,7 +75,11 @@ export class EmployeesController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Admin-only PIN reset (employeeNo + PIN login, Auth-Task 5).' })
   @ApiNoContentResponse()
-  async resetPin(@Param('id') id: string, @Body() body: PinResetDto): Promise<void> {
-    await this.employees.resetPin(id, body.pin);
+  async resetPin(
+    @CurrentUser() principal: Principal,
+    @Param('id') id: string,
+    @Body() body: PinResetDto,
+  ): Promise<void> {
+    await this.employees.resetPin(principal, id, body.pin);
   }
 }
