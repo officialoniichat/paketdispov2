@@ -99,7 +99,20 @@ reusable from integration tests. Branch: `feat/dev-panel-scenarios` (based on la
       mints `VITE_DEV_ADMIN_TOKEN` (admin-001) into teamlead .env; backend roles untouched.
       c3-teamlead-components.mmd + SVG updated. Verified: typecheck 13/13, lint clean, live smoke
       on :3999 (catalog 200 admin / 403 teamlead, override set+clear, materialize 13 shifts).
-- [ ] Phase 5: C3 int smoke tests (each scenario + headline assertion) + C4 PWA demo mirror of B3.
+- [x] Phase 5: DONE — C3: `src/integration/scenarios.int.test.ts` (Testcontainers, ein Container,
+      fixed baseDate 2026-06-15): lädt ALLE 15 Keys via `loadScenario(prisma, key, {baseDate})` und
+      prüft je die Headline-Erwartung (standard 189 ready + 2 blocked · peak 333 · B3 16/12/12 über
+      alle Bereiche à 52 Teile · B4 Run/Note/Brax-Signale · B5 „2 von 4" PH-LFG-501 withheld +
+      3-von-3 frei · B6 3 blocked m. missingFields + 9.403.713 re-released · B7 Monster 2400 im Pool
+      + Vortages-Bündel ma-104 · B8 22 NOS Shop 31 · B9 exakte Reihenfolge via purem
+      classifyPriority/sortByPriority · B10 Früh+Spät-Schichten · B11 specialDay-Zeile Mi 17.→18.6.
+      · B12 starter/dummy measured=false + Koffer-WGR 812770 · B13 CSV-Präferenzen + gezielte Größen
+      · B14 alle Lanes/Status/Empfänger · B15 0 Belege) + Determinismus (standard 2× → identischer
+      SHA-256-Case-Digest) + unknown-key-Fehler. 18/18 grün in ~25 s. C4: PWA-Offline-Demo spiegelt
+      B3 'gemischtes-buendel' — Standard-Szenario umbenannt/beschrieben als B3-Spiegel, Lagerplatz-
+      Codes auf den echten Stamm gezogen (HB-3→HB-5/234, P-2→PA-1; Hängeware HB-6/118+HB-7/090,
+      Groß R3/R11/R23), DemoControls-Gating unverändert; e2e-Spec angepasst, 7/7 grün (offline
+      build), PWA unit 69/69 + typecheck grün. Gesamt: typecheck 13/13, backend unit 134 grün.
 - [ ] Phase 6: Quality gate + docs/dev/scenarios.md + C4 diagrams + prod-build verification + commits.
 
 ## Integration protocol (harness instruction — execute at END of task)
