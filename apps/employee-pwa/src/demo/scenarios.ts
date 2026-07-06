@@ -18,12 +18,17 @@ export interface DemoScenario {
   build: () => AssembledScenario;
 }
 
-/** Standard: gemischtes Bündel (Regal + Hängebahn + Palette) — the canonical example. */
+/**
+ * Standard: gemischtes Bündel (Regal + Hängebahn + Palette) — the offline mirror
+ * of the backend dev scenario 'gemischtes-buendel' (B3): one assignment whose
+ * route/cases span all three Bereiche with real Lagerplatz-Stamm codes
+ * (R27 / HB-5/234 / PA-1), Teile counts and Bereich icons.
+ */
 const standard: DemoScenario = {
   id: 'standard',
-  label: 'Standard · Gemischt (3 Belege)',
+  label: 'Gemischtes Bündel · Regal + Hängebahn + Palette (3 Belege)',
   description:
-    'Anhang-G Beispiel: gemischtes Bündel (Regal, Hängebahn, Palette) mit Rotpreis, Online, Sicherung und Stichprobe.',
+    'Spiegel des Dev-Szenarios „Gemischtes Bündel" (B3): Regal, Hängebahn und Palette in einem Bündel — mit Rotpreis, Online, Sicherung und Stichprobe (Anhang-G-Beispiel).',
   build: () => assembleScenario(EXAMPLE_SCENARIO_INPUT),
 };
 
@@ -42,7 +47,7 @@ const haengeware: DemoScenario = {
           id: 'demo-hb-1',
           weBelegNo: '3700101',
           weShort: '3700101',
-          locationCode: 'HB-3',
+          locationCode: 'HB-6/118',
           locationType: 'haengebahn',
           goodsType: 'haengeware',
           totalQuantity: 6,
@@ -69,7 +74,7 @@ const haengeware: DemoScenario = {
           id: 'demo-hb-2',
           weBelegNo: '3700102',
           weShort: '3700102',
-          locationCode: 'HB-5',
+          locationCode: 'HB-7/090',
           locationType: 'haengebahn',
           goodsType: 'haengeware',
           totalQuantity: 4,
@@ -130,7 +135,7 @@ const gross: DemoScenario = {
           id: 'demo-g-2',
           weBelegNo: '3800002',
           weShort: '3800002',
-          locationCode: 'R12',
+          locationCode: 'R11',
           goodsType: 'regal',
           totalQuantity: 8,
           goodsTypeText: 'Nachorder',
@@ -156,7 +161,7 @@ const gross: DemoScenario = {
           id: 'demo-g-3',
           weBelegNo: '3800003',
           weShort: '3800003',
-          locationCode: 'R12',
+          locationCode: 'R11',
           goodsType: 'regal',
           totalQuantity: 5,
           goodsTypeText: 'Extrabestellung',
@@ -178,7 +183,7 @@ const gross: DemoScenario = {
           id: 'demo-g-4',
           weBelegNo: '3800004',
           weShort: '3800004',
-          locationCode: 'A-7',
+          locationCode: 'R23',
           goodsType: 'regal',
           totalQuantity: 9,
           goodsTypeText: 'Vororder',

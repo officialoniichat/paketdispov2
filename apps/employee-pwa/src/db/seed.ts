@@ -1,8 +1,11 @@
 /**
  * Offline-demo seeding. On first run the selected demo scenario (a Belegset) is
- * mirrored into Dexie so the two-phase flow works without a backend. The demo
- * controls can switch scenarios / reset the data via {@link resetToScenario}.
- * In production the bundle arrives from GET /api/me/today (system-only).
+ * mirrored into Dexie so the two-phase flow works without a backend. The default
+ * scenario mirrors the backend dev scenario 'gemischtes-buendel' (B3/C4): one
+ * assignment mixing Regal + Hängebahn + Palette with real Lagerplatz-Stamm codes.
+ * The demo controls can switch scenarios / reset the data via
+ * {@link resetToScenario}. In production the bundle arrives from
+ * GET /api/me/today (system-only).
  */
 import { db as defaultDb, type PaketDb } from './db.js';
 import {

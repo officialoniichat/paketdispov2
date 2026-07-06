@@ -63,7 +63,7 @@ async function checkAllPositions(page: Page, max = 8): Promise<void> {
 
 /** Check off every „Ware holen" stop of the default mixed bundle. */
 async function collectAll(page: Page): Promise<void> {
-  for (const code of ['HB-3', 'P-2', 'R27']) {
+  for (const code of ['HB-5/234', 'PA-1', 'R27']) {
     // The code appears twice (stop row + Beleg row) — the stop renders first.
     await page.getByText(code, { exact: true }).first().click();
   }
@@ -166,7 +166,7 @@ test('D2 Mehr-/Mindermengen per +/- an der Größe (kein Problem-Umweg)', async 
 
 test('B4 Parkposition: Rest parken schickt ungeholte Belege zurück', async ({ page }) => {
   // Fetch only the first stop, then park the rest (2 Belege of 2 open stops).
-  await page.getByText('HB-3', { exact: true }).first().click();
+  await page.getByText('HB-5/234', { exact: true }).first().click();
   const park = page.getByRole('button', { name: /Rest parken \(2 Belege\)/ });
   await expect(park).toBeVisible();
   await park.click();
@@ -198,12 +198,12 @@ test('Demo: Belegset wechseln (dev-Flag) + Continuation', async ({ page }) => {
   await expect(page.getByText('Demo · Belegset')).toBeVisible();
   await page.getByLabel('Szenario').click();
   await page.getByRole('option', { name: /Hängeware/ }).click();
-  await expect(page.getByText('HB-5', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('HB-6/118', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: `${SHOT_DIR}/09-demo-haengeware.png`, fullPage: true });
 
   // Collect both stops → process both Belege to completion.
-  await page.getByText('HB-3', { exact: true }).first().click();
-  await page.getByText('HB-5', { exact: true }).first().click();
+  await page.getByText('HB-6/118', { exact: true }).first().click();
+  await page.getByText('HB-7/090', { exact: true }).first().click();
   for (const we of ['3700101', '3700102']) {
     await page.getByText(`WE ${we}`, { exact: true }).click();
     await expectHeading(page, `WE ${we}`);
@@ -218,7 +218,7 @@ test('Demo: Belegset wechseln (dev-Flag) + Continuation', async ({ page }) => {
   await expect(page.getByText(/Bündel fertig/)).toBeVisible();
   const holen = page.getByRole('button', { name: 'Nächstes Bündel holen' });
   await holen.click();
-  // Cycles to the Großbündel Belegset (Regal locations R3/R12/A-7).
+  // Cycles to the Großbündel Belegset (Regal locations R3/R11/R23).
   await expect(page.getByText('R3', { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: `${SHOT_DIR}/10-continuation.png`, fullPage: true });
 });

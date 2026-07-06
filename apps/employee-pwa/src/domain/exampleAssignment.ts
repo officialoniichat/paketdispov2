@@ -405,12 +405,12 @@ const case1Spec: DemoCaseSpec = {
   ],
 };
 
-/** Case 2: Hängebahn-Beleg mit Sicherung (Piktogramm) at HB-3. */
+/** Case 2: Hängebahn-Beleg mit Sicherung (Piktogramm) at HB-5/234 (Lagerplatz-Stamm). */
 const case2Spec: DemoCaseSpec = {
   id: CASE_2_ID,
   weBelegNo: '3656861',
   weShort: '3656861',
-  locationCode: 'HB-3',
+  locationCode: 'HB-5/234',
   locationType: 'haengebahn',
   goodsType: 'haengeware',
   totalQuantity: 4,
@@ -434,12 +434,12 @@ const case2Spec: DemoCaseSpec = {
   ],
 };
 
-/** Case 3: Paletten-Beleg mit Online-Handling + Stichprobe at P-2. */
+/** Case 3: Paletten-Beleg mit Online-Handling + Stichprobe at PA-1 (Lagerplatz-Stamm). */
 const case3Spec: DemoCaseSpec = {
   id: CASE_3_ID,
   weBelegNo: '3656862',
   weShort: '3656862',
-  locationCode: 'P-2',
+  locationCode: 'PA-1',
   locationType: 'palette',
   goodsType: 'palette',
   totalQuantity: 4,
@@ -489,5 +489,5 @@ export const exampleAggregate: CaseAggregate = assembled.aggregates[0]!;
 export const exampleBundle: BundleContext = assembled.bundle;
 export const exampleBelegList: BelegListItem[] = assembled.belege;
 
-/** Route-ordered consolidated pick list: HB-3, P-2, R27 (deterministic fallback order). */
+/** Route-ordered consolidated pick list: HB-5/234, PA-1, R27 (deterministic fallback order). */
 export const exampleCollectStops: CollectStop[] = assembled.collectStops;
