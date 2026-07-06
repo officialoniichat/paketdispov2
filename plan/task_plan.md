@@ -1,41 +1,27 @@
-# Task Plan: Task 2/3 — Mitarbeiter-App (employee-pwa) Dustin feedback integration
+# Task Plan: Dustin Feedback v2 — Full Critical Review
 
 ## Goal
-Integrate ALL Mitarbeiter-App feedback points (Dustin Feldmann 03.07.2026) into apps/employee-pwa,
-building on the merged foundation (mock-ERP fields) on main @102841c.
-
-Branch: `feat/employee-pwa-dustin` (worktree d9bf3, based directly on main tip — no rebase needed).
+Pessimistic completeness review of ALL Dustin feedback (03.07.2026) against code at main (fdaaee3); fix safe gaps; write docs/review/dustin-feedback-v2-review.md.
 
 ## Phases
-- [x] Phase 0: Setup — branch off main tip 102841c
-- [x] Phase 1: Explore — PWA + foundation API surface mapped (agent report in notes.md)
-- [x] Phase 2: Backend prerequisites (commit 8e3a0a2) — storageLocationKind + priceLabelPrintRequired
-      on CaseSummaryDto, SkuLineDto.onlineMark (deriveOnlineSizeMarks in domain-types),
-      POST /api/me/workstation (A2), POST /api/me/park (B4, Event case.parked_by_employee),
-      bundle-mutations.ts extraction, OpenAPI + api-client regen
-- [x] Phase 3: Commit "flow" (7163972) — A1–A4 + B1–B8, Dexie v5, CollectScreen gelöscht
-- [x] Phase 4: Commit "beleg-detail" (ce445e7) — C1–C6, LabelPlacementHint gelöscht
-- [x] Phase 5: Commit "positionen" (17db7eb) — D1–D7
-- [x] Phase 6: Quality gate — typecheck 13/13 ✓, unit tests 13/13 suites (PWA 69) ✓, lint 8/8 ✓,
-      build 8/8 ✓, e2e 7/7 ✓ (offline seed, VITE_DEMO_CONTROLS=1), C3 PWA+Backend .mmd + render ✓
-      (commit 0e4da57), stale screenshots pruned (91f1c97)
+- [ ] Phase 0: Setup — git state (detached @ fdaaee3, verify == main), read 3 source feedback files verbatim
+- [ ] Phase 1: Build completeness matrix (every feedback sentence → row) in plan/notes.md
+- [ ] Phase 2: Verify each row against code (parallel Explore agents: PWA / Cockpit-Admin / Engine-Backend)
+- [ ] Phase 3: Regression + quality gate (typecheck, build, lint, engine vitest, backend unit, test:int vs 18/41 baseline, OpenAPI regen diff, seed, dead-config grep, C4 diagrams)
+- [ ] Phase 4: E2E browser smoke (pnpm dev, three apps)
+- [ ] Phase 5: Fix PARTIAL/WRONG findings (small/medium), Conventional Commits
+- [ ] Phase 6: Write docs/review/dustin-feedback-v2-review.md + memory update
+
+## Key Questions
+1. Detached HEAD == main? Where to commit fixes? (answer: verify refs; commit on main)
+2. Which feedback points are half-wired/dead config?
+3. New test:int failures vs 18/41 baseline?
 
 ## Decisions Made
-- Missing backend pieces (park, workstation-claim, LocationKind, onlineMark) added in a
-  dedicated feat(api) commit — task assumed them from task 1 but they did not exist.
-- Employee park = assigned→ready back to pool (withdraw semantics), NOT teamlead 'parked'.
-- Online-Rot/Grün computed server-side (Fachlogik single-source); demo seed mirrors via
-  the same pure deriveOnlineSizeMarks.
-- Tisch claim persisted locally (localStorage) + POST in backend mode; today.workstation
-  mirrors back on sync.
-- D7: BelegStatus 'partial' — Teilabschluss never counts as 'Fertig'.
+- Aufwand tab/effort model KEPT per user steer — verify intact; only pack sizing must be Teile-based.
 
 ## Errors Encountered
-- Fact-Forcing Gate on first Bash call — quoted instruction, retried OK.
-- Stale package dists (tsbuildinfo no-op emit) → rotated dist + tsbuildinfo, rebuilt.
-- employee-pwa node_modules symlinks (Documents/908e8) → repointed @paket/api-client +
-  domain-types to this worktree (known gotcha).
-- e2e: Intl € uses narrow no-break space; Lagerplatz code appears twice (stop + Beleg row).
+- Fact-Forcing Gate on first Bash — quoted instruction, retried OK.
 
 ## Status
-**DONE** — 6 commits on feat/employee-pwa-dustin, not pushed/merged.
+**Phase 0** — reading source files + verifying main ref
