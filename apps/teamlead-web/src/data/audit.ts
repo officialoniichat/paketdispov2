@@ -76,6 +76,7 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'employee.profile_updated': 'Stammdaten geändert',
   'employee.shift_overridden': 'Schicht geändert',
   'employee.workstation_assigned': 'Arbeitsplatz zugewiesen',
+  'employee.pin_reset': 'PIN zurückgesetzt',
   'integration.pull_completed': 'ProHandel-Pull abgeschlossen',
   'case.intake_blocked': 'Intake blockiert (zurück an Bucher)',
   'case.returned_to_bucher': 'An Bucher gemeldet',
