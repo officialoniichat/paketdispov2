@@ -37,7 +37,6 @@ const GOODS_TYPES: readonly GoodsTypeText[] = goodsTypeTextSchema.options;
 const GROUP_BY_LABEL: Record<AblagenGroupBy, string> = {
   none: '— keine —',
   bereich: 'Bereich',
-  assignedTo: 'Zugeteilter Mitarbeiter',
 };
 
 export interface AblagenFilterBarProps {
@@ -105,11 +104,6 @@ export function AblagenFilterBar({ filter, onChange }: AblagenFilterBarProps): J
           }}
         />
 
-        <QuickChip
-          label="Frei"
-          active={filter.onlyFree}
-          onClick={() => onChange({ ...filter, onlyFree: !filter.onlyFree })}
-        />
         <QuickChip
           label="Braucht Entscheidung"
           active={filter.onlyNeedsDecision}
@@ -257,7 +251,6 @@ export function AblagenFilterBar({ filter, onChange }: AblagenFilterBarProps): J
 /** The subset of {@link AblagenFilterState} that "Alle zurücksetzen" clears — groupBy is a display preference, not a filter, and survives a reset. */
 const CLEARED_FIELDS: Omit<AblagenFilterState, 'groupBy'> = {
   search: '',
-  onlyFree: false,
   onlyNeedsDecision: false,
   onlyPrio: false,
   bereiche: [],

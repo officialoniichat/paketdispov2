@@ -21,7 +21,7 @@ Segmentierungspotenzial vorhanden oder absehbar:
 | Warenart | `LaneCard.goodsTypeText` | vorhanden |
 | Prio-Flags (Prio/Überfällig/CatMan/Heute/TL-Prio) | `LaneCard.priorityFlags` | vorhanden |
 | Lieferungs-Gruppe | `LaneCard.deliveryGroup` | vorhanden |
-| Zugewiesen/frei | `LaneCard.assignedTo` (null = frei) | vorhanden |
+| Zugewiesen/frei | `LaneCard.assignedTo` (null = frei) | vorhanden, aber **kein Filter/Gruppierungs-Dimension** — siehe §5b |
 | Teile-Anzahl | `LaneCard.totalQuantity` | vorhanden |
 | Besondere Aufmerksamkeit | `LaneCard.attentionFlag` / `.attentionNote` | vorhanden |
 | Offenes Problem / „braucht Entscheidung" | `LaneCard.openIssue`, `.issueStatus`, Status `blocked`/`issue_open`/`needs_review` | vorhanden (kombiniert aus mehreren Feldern) |
@@ -132,10 +132,25 @@ verwerfen oder als spätere Zusatz-Ansicht zu planen.
 Diese drei Lanes sind bereits kleine Ausnahme-/Triage-Queues — ihr ganzer Zweck ist, dass nichts darin
 übersehen wird. Ein zufälliger Bereichs-/Warenart-/Teile-Filter, der genau den einen Problemfall
 außerhalb des aktuellen Filters versteckt, würde diesen Zweck aushebeln. Deshalb ignorieren diese drei
-Lanes alle einschränkenden Filter (Bereich, Warenart, Lieferungs-Gruppe, Teile-Range, „Frei", „Prio",
+Lanes alle einschränkenden Filter (Bereich, Warenart, Lieferungs-Gruppe, Teile-Range, „Prio",
 „Braucht Entscheidung") vollständig und zeigen immer 100 % ihrer Karten — nur die Freitextsuche bleibt
 aktiv (Suche ist ein „Finden", kein „Einschränken", und ist auch in kleinen Lanes nützlich). Umgesetzt
 in `ablagenFilters.ts` (`isFilterExemptLane` / `filterLaneCardsForLane`).
+
+## 5b. „Frei"-Filter und „Zugeteilter Mitarbeiter"-Gruppierung entfernt
+
+Ursprünglich geplant, aber wieder entfernt, nachdem sich am echten Bucketing gezeigt hat, dass sie nie
+etwas verändern können: `laneForPoolItem`/`isPoolResident` (`remoteDataset.ts`) lassen `assignedTo` nur
+in genau den zwei Lanes ungleich `null` werden, die bereits filter-exempt sind (§5a) — Problemfälle
+(ein Beleg kann `issue_open` werden, während er noch an ein Bündel/einen Mitarbeiter gebunden ist) und
+Weitergeleitet (Weiterleiten ist status-neutral, ein bereits zugeteilter Beleg kann weitergeleitet
+werden). Alle fünf „Arbeits-Lanes" (Prio/Jeden-Tag/Verladeplan-\*/Sonstige) enthalten laut
+`POOL_LANE_STATUSES` nur `ready`/`parked`-Belege ohne Zuteilung — dort ist `assignedTo` strukturell
+immer `null`. Ein „Frei"-Quick-Chip oder eine „Zugeteilter Mitarbeiter"-Gruppierung hätte also entweder
+gar keinen Effekt (in den Arbeits-Lanes) oder gar keine Wirkung, weil die einzigen Lanes mit variablem
+`assignedTo` vom Filtern ausgenommen sind — tote UI, die nur Verwirrung stiftet. Entfernt statt behalten;
+`assignedTo` bleibt weiterhin über die Freitextsuche auffindbar (§5a) und wird auf der Karte selbst
+angezeigt.
 
 ## 6. Was zuerst am Datenmodell nachgezogen werden müsste
 

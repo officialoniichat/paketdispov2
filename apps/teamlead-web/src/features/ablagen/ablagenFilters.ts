@@ -9,12 +9,18 @@
 import type { Bereich, CaseStatus, GoodsTypeText, PriorityFlag } from '@paket/domain-types';
 import type { LaneCard, LaneId } from '../../data/types.js';
 
-export type AblagenGroupBy = 'none' | 'bereich' | 'assignedTo';
+/**
+ * 'assignedTo' is deliberately NOT a groupBy option: by construction (see
+ * `laneForPoolItem`/`isPoolResident` in remoteDataset.ts), only the Problemfälle
+ * and Weitergeleitet lanes can ever have an assigned employee, and both are
+ * filter-exempt lanes (see {@link isFilterExemptLane}) — so grouping by
+ * assignedTo would always collapse into a single "Frei" bucket everywhere else.
+ */
+export type AblagenGroupBy = 'none' | 'bereich';
 export type DeliveryGroupFilter = 'any' | 'only_grouped' | 'only_single';
 
 export interface AblagenFilterState {
   search: string;
-  onlyFree: boolean;
   onlyNeedsDecision: boolean;
   onlyPrio: boolean;
   bereiche: Bereich[];
@@ -27,7 +33,6 @@ export interface AblagenFilterState {
 
 export const DEFAULT_ABLAGEN_FILTER_STATE: AblagenFilterState = {
   search: '',
-  onlyFree: false,
   onlyNeedsDecision: false,
   onlyPrio: false,
   bereiche: [],
@@ -78,7 +83,6 @@ function matchesSearch(card: LaneCard, search: string): boolean {
 }
 
 export function cardMatchesFilter(card: LaneCard, filter: AblagenFilterState): boolean {
-  if (filter.onlyFree && card.assignedTo) return false;
   if (filter.onlyNeedsDecision && !cardNeedsDecision(card)) return false;
   if (filter.onlyPrio && !cardIsPrio(card)) return false;
   if (filter.bereiche.length > 0 && !(card.bereich && filter.bereiche.includes(card.bereich as Bereich))) {
@@ -120,7 +124,6 @@ export function filterLaneCardsForLane(
 export function isFilterActive(filter: AblagenFilterState): boolean {
   return (
     filter.search.trim() !== '' ||
-    filter.onlyFree ||
     filter.onlyNeedsDecision ||
     filter.onlyPrio ||
     filter.bereiche.length > 0 ||
@@ -139,7 +142,6 @@ export interface ActiveFilterChip {
 /** Removable chip per active filter dimension, in a stable, predictable order. */
 export function activeFilterChips(filter: AblagenFilterState): ActiveFilterChip[] {
   const chips: ActiveFilterChip[] = [];
-  if (filter.onlyFree) chips.push({ key: 'onlyFree', label: 'Frei' });
   if (filter.onlyNeedsDecision) chips.push({ key: 'onlyNeedsDecision', label: 'Braucht Entscheidung' });
   if (filter.onlyPrio) chips.push({ key: 'onlyPrio', label: 'Prio' });
   for (const bereich of filter.bereiche) chips.push({ key: `bereich:${bereich}`, label: `Bereich: ${bereich}` });
@@ -160,7 +162,6 @@ export function activeFilterChips(filter: AblagenFilterState): ActiveFilterChip[
 /** Clear exactly the filter dimension named by `key` (as produced by {@link activeFilterChips}). */
 export function removeFilterChip(filter: AblagenFilterState, key: string): AblagenFilterState {
   if (key === 'search') return { ...filter, search: '' };
-  if (key === 'onlyFree') return { ...filter, onlyFree: false };
   if (key === 'onlyNeedsDecision') return { ...filter, onlyNeedsDecision: false };
   if (key === 'onlyPrio') return { ...filter, onlyPrio: false };
   if (key === 'deliveryGroup') return { ...filter, deliveryGroup: 'any' };
@@ -183,13 +184,10 @@ export interface CardGroup {
   cards: LaneCard[];
 }
 
-/** Fallback bucket label per dimension — "unbekannt" only fits a genuinely unknown
- *  Bereich; a card without an assigned employee is a known state ("Frei"), not an
- *  unknown one, so it gets its own label rather than being called "unbekannt". */
-const FALLBACK_GROUP_LABEL: Record<Exclude<AblagenGroupBy, 'none'>, string> = {
-  bereich: 'unbekannt',
-  assignedTo: 'Frei',
-};
+/** Fallback bucket label for a card without a Bereich — genuinely unknown, unlike
+ *  "unassigned", which is why "unbekannt" fits here (see the module-level note
+ *  on {@link AblagenGroupBy} for why 'assignedTo' isn't a groupBy option at all). */
+const FALLBACK_GROUP_LABEL = 'unbekannt';
 const FALLBACK_GROUP_KEY = '__fallback__';
 
 /** Sub-group cards within a lane; 'none' preserves the existing single-bucket behaviour. */
@@ -197,7 +195,7 @@ export function groupCards(cards: LaneCard[], groupBy: AblagenGroupBy): CardGrou
   if (groupBy === 'none') return [{ key: 'all', label: null, cards }];
   const byKey = new Map<string, LaneCard[]>();
   for (const card of cards) {
-    const key = groupBy === 'bereich' ? (card.bereich ?? FALLBACK_GROUP_KEY) : (card.assignedTo ?? FALLBACK_GROUP_KEY);
+    const key = card.bereich ?? FALLBACK_GROUP_KEY;
     const bucket = byKey.get(key) ?? [];
     bucket.push(card);
     byKey.set(key, bucket);
@@ -207,10 +205,10 @@ export function groupCards(cards: LaneCard[], groupBy: AblagenGroupBy): CardGrou
   const groups = [...byKey.entries()]
     .sort(([a], [b]) => a.localeCompare(b, 'de'))
     .map(([key, groupedCards]) => ({ key, label: key, cards: groupedCards }));
-  // The fallback bucket ("unbekannt"/"Frei") always sorts last — it is an
-  // exception case, not a value that should compete alphabetically with real ones.
+  // The fallback bucket ("unbekannt") always sorts last — it is an exception
+  // case, not a value that should compete alphabetically with real ones.
   if (fallbackCards) {
-    groups.push({ key: FALLBACK_GROUP_KEY, label: FALLBACK_GROUP_LABEL[groupBy], cards: fallbackCards });
+    groups.push({ key: FALLBACK_GROUP_KEY, label: FALLBACK_GROUP_LABEL, cards: fallbackCards });
   }
   return groups;
 }

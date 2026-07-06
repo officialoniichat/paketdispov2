@@ -71,12 +71,6 @@ describe('cardMatchesFilter', () => {
     expect(cardMatchesFilter(makeCard(), DEFAULT_ABLAGEN_FILTER_STATE)).toBe(true);
   });
 
-  it('onlyFree excludes assigned cards', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyFree: true };
-    expect(cardMatchesFilter(makeCard({ assignedTo: 'M. Berger' }), filter)).toBe(false);
-    expect(cardMatchesFilter(makeCard({ assignedTo: undefined }), filter)).toBe(true);
-  });
-
   it('bereiche filter requires a matching Bereich', () => {
     const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Hängebahn' as const] };
     expect(cardMatchesFilter(makeCard({ bereich: 'Regal' }), filter)).toBe(false);
@@ -123,24 +117,24 @@ describe('cardMatchesFilter', () => {
   });
 
   it('combines multiple active filters with AND', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyFree: true, onlyPrio: true };
-    const freeButNotPrio = makeCard({ assignedTo: undefined, priorityFlags: [] });
-    const prioButAssigned = makeCard({ assignedTo: 'M. Berger', priorityFlags: ['prio'] });
-    const freeAndPrio = makeCard({ assignedTo: undefined, priorityFlags: ['prio'] });
-    expect(cardMatchesFilter(freeButNotPrio, filter)).toBe(false);
-    expect(cardMatchesFilter(prioButAssigned, filter)).toBe(false);
-    expect(cardMatchesFilter(freeAndPrio, filter)).toBe(true);
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyPrio: true, bereiche: ['Regal' as const] };
+    const prioButWrongBereich = makeCard({ bereich: 'Palette', priorityFlags: ['prio'] });
+    const bereichButNotPrio = makeCard({ bereich: 'Regal', priorityFlags: [] });
+    const both = makeCard({ bereich: 'Regal', priorityFlags: ['prio'] });
+    expect(cardMatchesFilter(prioButWrongBereich, filter)).toBe(false);
+    expect(cardMatchesFilter(bereichButNotPrio, filter)).toBe(false);
+    expect(cardMatchesFilter(both, filter)).toBe(true);
   });
 });
 
 describe('filterLaneCards', () => {
   it('returns only the matching cards, preserving order', () => {
     const cards = [
-      makeCard({ caseId: 'a', assignedTo: undefined }),
-      makeCard({ caseId: 'b', assignedTo: 'M. Berger' }),
-      makeCard({ caseId: 'c', assignedTo: undefined }),
+      makeCard({ caseId: 'a', bereich: 'Regal' }),
+      makeCard({ caseId: 'b', bereich: 'Palette' }),
+      makeCard({ caseId: 'c', bereich: 'Regal' }),
     ];
-    const result = filterLaneCards(cards, { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyFree: true });
+    const result = filterLaneCards(cards, { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal'] });
     expect(result.map((c) => c.caseId)).toEqual(['a', 'c']);
   });
 });
@@ -154,18 +148,18 @@ describe('isFilterActive / activeFilterChips / removeFilterChip', () => {
   it('reports one chip per active dimension', () => {
     const filter = {
       ...DEFAULT_ABLAGEN_FILTER_STATE,
-      onlyFree: true,
+      onlyNeedsDecision: true,
       bereiche: ['Regal' as const, 'Palette' as const],
     };
     expect(isFilterActive(filter)).toBe(true);
     const chips = activeFilterChips(filter);
-    expect(chips.map((c) => c.key)).toEqual(['onlyFree', 'bereich:Regal', 'bereich:Palette']);
+    expect(chips.map((c) => c.key)).toEqual(['onlyNeedsDecision', 'bereich:Regal', 'bereich:Palette']);
   });
 
   it('removeFilterChip clears exactly the targeted dimension', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyFree: true, onlyPrio: true };
-    const next = removeFilterChip(filter, 'onlyFree');
-    expect(next.onlyFree).toBe(false);
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyNeedsDecision: true, onlyPrio: true };
+    const next = removeFilterChip(filter, 'onlyNeedsDecision');
+    expect(next.onlyNeedsDecision).toBe(false);
     expect(next.onlyPrio).toBe(true);
   });
 
@@ -198,7 +192,7 @@ describe('filterLaneCardsForLane', () => {
       makeCard({ caseId: 'a', bereich: 'Regal' }),
       makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
     ];
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const], onlyFree: true };
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const], onlyPrio: true };
     expect(filterLaneCardsForLane(cards, filter, 'probleme').map((c) => c.caseId)).toEqual(['a', 'b']);
     expect(filterLaneCardsForLane(cards, filter, 'geparkt').map((c) => c.caseId)).toEqual(['a', 'b']);
     expect(filterLaneCardsForLane(cards, filter, 'weitergeleitet').map((c) => c.caseId)).toEqual(['a', 'b']);
@@ -240,22 +234,12 @@ describe('groupCards', () => {
     expect(groups.find((g) => g.label === 'unbekannt')?.cards.map((c) => c.caseId)).toEqual(['d']);
   });
 
-  it('groupBy assignedTo buckets by employee; unassigned is a known state ("Frei"), not "unbekannt"', () => {
+  it('the fallback ("unbekannt") bucket always sorts last, even when it would alphabetically sort first', () => {
     const cards = [
-      makeCard({ caseId: 'a', assignedTo: 'M. Berger' }),
-      makeCard({ caseId: 'b', assignedTo: undefined }),
+      makeCard({ caseId: 'a', bereich: null }),
+      makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
     ];
-    const groups = groupCards(cards, 'assignedTo');
-    expect(groups.map((g) => g.label)).toEqual(['M. Berger', 'Frei']);
-    expect(groups.find((g) => g.label === 'Frei')?.cards.map((c) => c.caseId)).toEqual(['b']);
-  });
-
-  it('the fallback bucket always sorts last, even when it would alphabetically sort first', () => {
-    const cards = [
-      makeCard({ caseId: 'a', assignedTo: undefined }),
-      makeCard({ caseId: 'b', assignedTo: 'A. Anfang' }),
-    ];
-    const groups = groupCards(cards, 'assignedTo');
-    expect(groups.map((g) => g.label)).toEqual(['A. Anfang', 'Frei']);
+    const groups = groupCards(cards, 'bereich');
+    expect(groups.map((g) => g.label)).toEqual(['Hängebahn', 'unbekannt']);
   });
 });
