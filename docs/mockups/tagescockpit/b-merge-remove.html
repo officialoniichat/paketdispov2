@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Direction B — Merge / Remove</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --brand: #0a3d62; --brand-light: #3c6e8f; --accent: #e58e26;
+    --success: #2e7d32; --success-bg: #e8f3e9;
+    --warning: #b26a00; --warning-bg: #fdf1dd;
+    --danger: #c62828; --danger-bg: #fbe9e9;
+    --info: #1565c0; --info-bg: #e8f0fb;
+    --bg: #f5f7fa; --paper: #ffffff; --text: #1a2430; --text-secondary: #516170; --border: #d6dde5;
+  }
+  :root[data-theme="dark"] {
+    --brand: #4d90c4; --brand-light: #6fa8d1; --accent: #f0a94a;
+    --success: #6bc27a; --success-bg: #133023;
+    --warning: #e2a94e; --warning-bg: #33280f;
+    --danger: #f08787; --danger-bg: #351515;
+    --info: #7ab0ec; --info-bg: #10233a;
+    --bg: #10161d; --paper: #1a2330; --text: #eef2f6; --text-secondary: #a9b6c3; --border: #2b3847;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand: #4d90c4; --brand-light: #6fa8d1; --accent: #f0a94a;
+      --success: #6bc27a; --success-bg: #133023;
+      --warning: #e2a94e; --warning-bg: #33280f;
+      --danger: #f08787; --danger-bg: #351515;
+      --info: #7ab0ec; --info-bg: #10233a;
+      --bg: #10161d; --paper: #1a2330; --text: #eef2f6; --text-secondary: #a9b6c3; --border: #2b3847;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+  .annotate {
+    padding: 12px 20px; background: var(--info-bg); border-bottom: 1px solid var(--info); font-size: 13.5px; line-height:1.5;
+  }
+  .annotate b { color: var(--info); }
+  .app { display: flex; min-height: 600px; }
+  .nav {
+    width: 208px; flex: none; background: var(--brand); color: #fff; padding: 18px 12px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .nav .brand { font-weight: 800; font-size: 15px; padding: 8px 10px 18px; opacity: .95; }
+  .nav a {
+    display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,.82); text-decoration:none;
+    padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 600;
+  }
+  .nav a.active { background: rgba(255,255,255,.12); color: #fff; border-left: 3px solid var(--accent); padding-left: 9px; }
+  .nav a .ic { width: 18px; text-align: center; }
+  .removed {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px;
+    color: rgba(255,255,255,.35); text-decoration: line-through; font-weight: 600;
+  }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  /* Global slim status bar — replaces the cockpit tab's job */
+  .statusbar {
+    display: flex; align-items: center; gap: 18px; padding: 9px 22px; background: var(--paper);
+    border-bottom: 1px solid var(--border); font-size: 13px; flex-wrap: wrap;
+  }
+  .sb-item { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); font-weight: 600; }
+  .sb-item b { color: var(--text); font-weight: 800; }
+  .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .sb-sep { width: 1px; height: 16px; background: var(--border); }
+  .sb-switch { width: 34px; height: 20px; border-radius: 999px; background: var(--success); position: relative; }
+  .sb-switch::after { content:""; position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:50%; background:#fff; }
+  .sb-btn {
+    margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--brand); font-weight: 700;
+    font-size: 12.5px; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+  }
+  :root[data-theme="dark"] .sb-btn { color: var(--brand-light); }
+  .sb-alert-btn {
+    display: flex; align-items: center; gap: 6px; background: var(--warning-bg); color: var(--warning);
+    border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); border-radius: 999px;
+    padding: 5px 12px; font-weight: 700; font-size: 12.5px; cursor: pointer;
+  }
+
+  .content { padding: 24px 28px; }
+  .page-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
+  .page-head h1 { font-size: 22px; margin: 0; font-weight: 800; }
+  .page-head .sub { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+
+  /* idle strip folded into board header */
+  .idle-band {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .idle-band .label { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+  .mini-chip {
+    display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px 4px 4px; font-size: 12px; font-weight: 700;
+  }
+  .mini-avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 9px;
+    display:flex; align-items:center; justify-content:center; }
+
+  .board-table { width: 100%; border-collapse: collapse; background: var(--paper); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .board-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary);
+    padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .board-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .board-table tr:last-child td { border-bottom: none; }
+  .chip { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .chip.busy { background: var(--info-bg); color: var(--info); }
+  .chip.idle { background: var(--success-bg); color: var(--success); }
+  .chip.problem { background: var(--danger-bg); color: var(--danger); }
+
+  /* popover drawer opened from the status bar's alert button */
+  .drawer {
+    position: absolute; top: 132px; right: 28px; width: 340px; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.16); padding: 16px; z-index: 5;
+  }
+  .drawer h3 { margin: 0 0 10px; font-size: 14px; }
+  .drawer .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .drawer .row:last-child { border-bottom: none; }
+  .drawer .row b { color: var(--warning); }
+</style>
+</head>
+<body>
+
+<div class="annotate">
+  <b>Direction B — „Merge/Remove".</b> Der Tab „Tagescockpit" verschwindet komplett aus der Nav (durchgestrichen links,
+  nur zur Illustration). Was wirklich gebraucht wird, wandert an zwei Stellen: ein <b>schlanker, globaler Statusbalken</b>
+  über jeder Seite (Automatik An/Aus, Plan-Status, ein Alert-Button für offene Entscheidungen) und eine <b>Frei-&amp;-wartend-Leiste</b>
+  direkt im Mitarbeiterboard-Kopf. Die Detail-Fälle (Topf, Probleme, geparkt) waren im Board/den Ablagen ohnehin schon vorhanden.
+</div>
+
+<div class="app" style="position:relative;">
+  <div class="nav">
+    <div class="brand">Paketlager · TL</div>
+    <div class="removed">⊘ Tagescockpit</div>
+    <a href="#"><span class="ic">▤</span> Digitale Ablagen</a>
+    <a class="active" href="#"><span class="ic">▥</span> Mitarbeiterboard</a>
+    <a href="#"><span class="ic">▤</span> Belege</a>
+    <a href="#"><span class="ic">⑃</span> Aufteilungen</a>
+    <a href="#"><span class="ic">⚙</span> Admin &amp; Regeln</a>
+  </div>
+
+  <div class="main">
+    <div class="statusbar">
+      <div class="sb-item"><span class="sb-dot"></span> Automatik <b>An</b></div>
+      <div class="sb-switch"></div>
+      <div class="sb-sep"></div>
+      <div class="sb-item">Plan <b>aktuell</b> · zuletzt verteilt vor 4 Min.</div>
+      <div class="sb-sep"></div>
+      <div class="sb-item">214 Belege · <b>26</b> im Pool</div>
+      <button class="sb-alert-btn">⚠ 3 brauchen dich</button>
+      <button class="sb-btn">↻ Neu berechnen</button>
+    </div>
+
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1>Mitarbeiterboard</h1>
+          <div class="sub">Freitag, 06.11. · 18 Mitarbeiter im Dienst</div>
+        </div>
+      </div>
+
+      <div class="idle-band">
+        <span class="label">4 frei &amp; wartend:</span>
+        <span class="mini-chip"><span class="mini-avatar">SK</span>Sara Klein</span>
+        <span class="mini-chip"><span class="mini-avatar">TM</span>Tom Meier</span>
+        <span class="mini-chip"><span class="mini-avatar">JB</span>Jana Berg</span>
+        <span class="mini-chip"><span class="mini-avatar">RÖ</span>Recep Öz</span>
+      </div>
+
+      <table class="board-table">
+        <thead><tr><th>Mitarbeiter</th><th>Bündel</th><th>Teile</th><th>Auslastung</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Anna Vogel</td><td>#4821 · 6 Belege</td><td>18 / 24</td><td>82%</td><td><span class="chip busy">In Arbeit</span></td></tr>
+          <tr><td>Ben Fischer</td><td>#4830 · 4 Belege</td><td>9 / 16</td><td>96%</td><td><span class="chip problem">1 Problem</span></td></tr>
+          <tr><td>Sara Klein</td><td>—</td><td>—</td><td>—</td><td><span class="chip idle">Frei</span></td></tr>
+          <tr><td>Tom Meier</td><td>—</td><td>—</td><td>—</td><td><span class="chip idle">Frei</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="drawer">
+    <h3>Braucht dich (3)</h3>
+    <div class="row"><span>Topf — wartet auf Zuordnung</span><b>7</b></div>
+    <div class="row"><span>Zurück an Bucher</span><b>3</b></div>
+    <div class="row"><span>Keine Kapazität</span><b>11</b></div>
+  </div>
+</div>
+
+</body>
+</html>

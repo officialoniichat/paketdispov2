@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Direction C — Dispo-Timeline (Hybrid)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --brand: #0a3d62; --brand-light: #3c6e8f; --accent: #e58e26;
+    --success: #2e7d32; --success-bg: #e8f3e9;
+    --warning: #b26a00; --warning-bg: #fdf1dd;
+    --danger: #c62828; --danger-bg: #fbe9e9;
+    --info: #1565c0; --info-bg: #e8f0fb;
+    --bg: #f5f7fa; --paper: #ffffff; --text: #1a2430; --text-secondary: #516170; --border: #d6dde5;
+  }
+  :root[data-theme="dark"] {
+    --brand: #4d90c4; --brand-light: #6fa8d1; --accent: #f0a94a;
+    --success: #6bc27a; --success-bg: #133023;
+    --warning: #e2a94e; --warning-bg: #33280f;
+    --danger: #f08787; --danger-bg: #351515;
+    --info: #7ab0ec; --info-bg: #10233a;
+    --bg: #10161d; --paper: #1a2330; --text: #eef2f6; --text-secondary: #a9b6c3; --border: #2b3847;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand: #4d90c4; --brand-light: #6fa8d1; --accent: #f0a94a;
+      --success: #6bc27a; --success-bg: #133023;
+      --warning: #e2a94e; --warning-bg: #33280f;
+      --danger: #f08787; --danger-bg: #351515;
+      --info: #7ab0ec; --info-bg: #10233a;
+      --bg: #10161d; --paper: #1a2330; --text: #eef2f6; --text-secondary: #a9b6c3; --border: #2b3847;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); padding-bottom: 60px; }
+  .annotate {
+    max-width: 1180px; margin: 20px auto 0; padding: 12px 20px; background: var(--info-bg); border: 1px solid var(--info);
+    border-radius: 10px; font-size: 13.5px; line-height: 1.5;
+  }
+  .annotate b { color: var(--info); }
+  .shell {
+    max-width: 1180px; margin: 20px auto 0; padding: 28px 32px 34px; background: var(--paper); border: 1px solid var(--border);
+    border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 12px 32px rgba(10,61,98,.06);
+  }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap; margin-bottom: 22px; }
+  h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); font-size: 13.5px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: 13px;
+    background: var(--success-bg); color: var(--success); border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+  .timeline-block { margin-bottom: 30px; }
+  .tl-head { display: flex; justify-content: space-between; margin-bottom: 12px; }
+  .tl-head h2 { font-size: 15px; margin: 0; font-weight: 700; }
+  .tl-head span { font-size: 12px; color: var(--text-secondary); }
+
+  .timeline {
+    position: relative; height: 132px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg);
+    padding: 14px 18px 30px;
+  }
+  .tl-svg { width: 100%; height: 76px; display: block; }
+  .tl-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-top: 8px; }
+  .now-flag {
+    position: absolute; top: 8px; bottom: 26px; width: 2px; background: var(--accent);
+  }
+  .now-label {
+    position: absolute; top: -2px; font-size: 10.5px; font-weight: 800; color: var(--accent); background: var(--paper);
+    padding: 1px 6px; border-radius: 6px; border: 1px solid var(--accent); transform: translateX(-50%);
+  }
+  .marker {
+    position: absolute; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--paper);
+  }
+  .marker.recalc { background: var(--brand-light); }
+  .marker.block { background: var(--danger); }
+  .marker-tip {
+    position: absolute; top: -22px; font-size: 9.5px; font-weight: 700; color: var(--text-secondary); white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  .avail { margin-bottom: 28px; }
+  .avail h2 { font-size: 15px; margin: 0 0 10px; font-weight: 700; }
+  .avail-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .avail-row .who { width: 96px; font-size: 12.5px; font-weight: 700; flex: none; }
+  .avail-track { flex: 1; height: 18px; border-radius: 6px; background: var(--border); position: relative; overflow: hidden; }
+  .avail-seg { position: absolute; top: 0; bottom: 0; }
+  .avail-seg.work { background: var(--info); }
+  .avail-seg.free { background: var(--success); }
+
+  .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .panel-sub { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+
+  .decision-list { display: flex; flex-direction: column; gap: 9px; }
+  .decision {
+    display: flex; align-items: center; gap: 13px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg);
+  }
+  .decision .count {
+    min-width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13.5px; flex: none;
+  }
+  .decision.sev-high .count { background: var(--danger-bg); color: var(--danger); }
+  .decision.sev-mid .count { background: var(--warning-bg); color: var(--warning); }
+  .decision .title { font-weight: 700; font-size: 13.5px; }
+  .decision .desc { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+
+  .forecast {
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--bg);
+  }
+  .forecast .big { font-size: 28px; font-weight: 800; color: var(--brand); }
+  :root[data-theme="dark"] .forecast .big { color: var(--brand-light); }
+  .forecast .lbl { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .forecast .line { margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="annotate">
+  <b>Direction C — „Dispo-Timeline" (Hybrid, eigene Idee).</b> Statt eines Snapshots zeigt die Startseite den <b>Verlauf des
+  Tages</b>: Pool-Größe über die Schicht, wann automatisch nachverteilt wurde, wann etwas blockiert war — plus eine
+  Verfügbarkeits-Leiste je Mitarbeiter (arbeitet / frei) für die restliche Schicht. Beantwortet nicht nur „ist gerade alles ok",
+  sondern „wird der Pool bis Schichtende leer" — die Frage, die die alte Momentaufnahme nicht beantworten konnte.
+</div>
+
+<div class="shell">
+  <div class="header">
+    <div>
+      <h1>Dispo-Verlauf — Freitag, 06.11.</h1>
+      <div class="sub">08:00–17:00 · aktuell 13:42 · 3 Entscheidungen offen</div>
+    </div>
+    <div class="status-pill"><span class="dot"></span> Automatik An · zuletzt vor 4 Min. verteilt</div>
+  </div>
+
+  <div class="timeline-block">
+    <div class="tl-head"><h2>Pool-Verlauf &amp; Ereignisse</h2><span>Fläche = offene Belege im Pool</span></div>
+    <div class="timeline">
+      <svg class="tl-svg" viewBox="0 0 1000 76" preserveAspectRatio="none">
+        <polygon points="0,76 0,50 90,20 180,55 270,40 360,15 450,48 540,30 630,12 690,26 690,76"
+                 fill="var(--brand-light)" opacity="0.28"/>
+        <polyline points="0,50 90,20 180,55 270,40 360,15 450,48 540,30 630,12 690,26"
+                 fill="none" stroke="var(--brand)" stroke-width="2.5"/>
+        <polyline points="690,26 780,34 870,20 960,30" fill="none" stroke="var(--border)" stroke-width="2.5" stroke-dasharray="5,5"/>
+      </svg>
+      <div class="now-flag" style="left:69%;"><span class="now-label" style="left:0;">JETZT</span></div>
+      <div class="marker recalc" style="left:9%; top:34px;"><span class="marker-tip" style="left:4px;">↻ 08:40</span></div>
+      <div class="marker recalc" style="left:27%; top:54px;"><span class="marker-tip" style="left:4px;">↻ 10:05</span></div>
+      <div class="marker block" style="left:36%; top:9px;"><span class="marker-tip" style="left:4px; color:var(--danger);">⚠ Kapazität eng 10:45</span></div>
+      <div class="marker recalc" style="left:54%; top:44px;"><span class="marker-tip" style="left:4px;">↻ 12:15</span></div>
+      <div class="marker recalc" style="left:69%; top:20px;"><span class="marker-tip" style="left:4px;">↻ 13:38</span></div>
+      <div class="tl-axis"><span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>17:00</span></div>
+    </div>
+  </div>
+
+  <div class="avail">
+    <h2>Verfügbarkeit — Rest der Schicht</h2>
+    <div class="avail-row"><div class="who">Anna Vogel</div><div class="avail-track"><div class="avail-seg work" style="left:0;width:78%"></div><div class="avail-seg free" style="left:78%;width:22%"></div></div></div>
+    <div class="avail-row"><div class="who">Ben Fischer</div><div class="avail-track"><div class="avail-seg work" style="left:0;width:100%"></div></div></div>
+    <div class="avail-row"><div class="who">Sara Klein</div><div class="avail-track"><div class="avail-seg free" style="left:0;width:100%"></div></div></div>
+    <div class="avail-row"><div class="who">Tom Meier</div><div class="avail-track"><div class="avail-seg work" style="left:0;width:35%"></div><div class="avail-seg free" style="left:35%;width:65%"></div></div></div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <p class="panel-title">Braucht dich jetzt</p>
+      <p class="panel-sub">Gleiche Logik wie Richtung A, kompakter — die Timeline liefert bereits den Kontext.</p>
+      <div class="decision-list">
+        <div class="decision sev-high"><div class="count">11</div><div><div class="title">Keine Kapazität mehr</div><div class="desc">Seit 10:45 spürbar — Trend im Verlauf sichtbar.</div></div></div>
+        <div class="decision sev-mid"><div class="count">7</div><div><div class="title">Topf — wartet auf Zuordnung</div><div class="desc">Unverändert seit Schichtbeginn.</div></div></div>
+        <div class="decision sev-mid"><div class="count">3</div><div><div class="title">Zurück an Bucher</div><div class="desc">Neu seit 12:15-Lauf.</div></div></div>
+      </div>
+    </div>
+    <div class="forecast">
+      <div class="big">16:50</div>
+      <div class="lbl">Prognose: Pool leer bis</div>
+      <div class="line">Bei aktueller Verteilrate (≈ 9 Belege / 30 Min.) und 2 frei werdenden Kapazitäten ab 15:00.</div>
+      <div class="line" style="margin-top:8px; color:var(--warning); font-weight:700;">⚠ 11 „Keine Kapazität"-Fälle bleiben ohne Eingriff bis Schichtende offen.</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
