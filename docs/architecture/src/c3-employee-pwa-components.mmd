@@ -1,59 +1,53 @@
-%% C4 Level 3 — Components: employee-pwa (React + Vite PWA, offline-first)
-%% Verified against apps/employee-pwa/src/* (screens/, workflow/, db/, data/, events/, routes/).
-%% Ein-Screen-Flow (Dustin-Feedback 03.07.2026): Tisch-Login-Gate, Ware holen inline,
-%% Parkposition, kein /collect mehr.
+%% C4 Level 3 — Components: employee-pwa (React + Vite PWA)
+%% Verified against apps/employee-pwa/src/* (screens/, workflow/, data/, routes/) — task-13.
+%% Real employee login (data/auth.ts) gates the app; the backend is the single source of
+%% truth via React Query — the former Dexie-backed db/ (offline-first cache), events/
+%% (local audit log) and seed/sync/repository modules are gone (tasks 10-13).
 flowchart TB
     classDef screen fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef hook fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
-    classDef store fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
 
-    api["backend-api<br/>/api/me/today · /aggregate · next-bundle · park · workstation<br/>/static/pictograms/*"]:::ext
+    api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* · /api/issues · /static/pictograms/*"]:::ext
 
     subgraph pwa["employee-pwa container"]
         direction TB
-        subgraph screens["screens/ (router: routes/paths.ts, App gated by Tisch-Login)"]
-            login["TischLoginScreen<br/><i>A2 — Tisch-Nr. eingeben/scannen, gate vor allem</i>"]:::screen
-            home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten + Rest parken + pullNextBundle()</i>"]:::screen
+        subgraph screens["screens/ (router: routes/paths.ts, App gated by session)"]
+            login["LoginScreen<br/><i>Mitarbeiternummer + PIN → POST /api/auth/login</i>"]:::screen
+            home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten + Rest parken + nächstes Bündel</i>"]:::screen
             process["BelegProcessScreen<br/><i>/case/:id — WE-Hero, Kartons, Prüfstufe, Größen-Zeilen ±</i>"]:::screen
             problem["ProblemMeldenScreen<br/><i>/case/:id/problem — ein Weiter-Pfad</i>"]:::screen
         end
-        subgraph wf["workflow/"]
-            useBundle["useBundle()<br/><i>Ware holen: toggleStop · counts</i>"]:::hook
+        subgraph wf["workflow/ (pure logic + the one live-data hook)"]
             useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · complete · partialComplete · reportIssue</i>"]:::hook
             model["workflowModel.ts<br/><i>guards: canCompleteCase · requiresQuantityCheck · setSkuQuantity</i>"]:::logic
             collectLogic["collect.ts · belegList.ts (partial-Status) · issueTarget.ts"]:::logic
         end
-        subgraph dbl["db/ (offline-first)"]
-            dexie["db.ts — PaketDb (Dexie v5)<br/><i>bundle · collectStops · bundleProgress · belege · aggregates · progress · events</i>"]:::store
-            repo["repository.ts<br/><i>saveProgress(expectedVersion) → OptimisticLockError · reconcileVersion</i>"]:::logic
-            sync["sync.ts<br/><i>loadAssignedWork() · pullNextBundle() · parkRemainingBelege() · LocationKind→GoodsCategory</i>"]:::logic
-            seed["seed.ts<br/><i>seedIfEmpty · cycleDemoScenario (offline demo, gemischtes Bündel)</i>"]:::logic
-        end
-        subgraph data["data/ + events/"]
-            apiClient["data/api.ts → @paket/api-client<br/><i>getApiClient · isBackendEnabled · demoControlsEnabled</i>"]:::logic
-            workstation["data/workstation.ts<br/><i>A2 claimWorkstation() · localStorage-Claim</i>"]:::logic
-            eventLog["events/eventLog.ts<br/><i>append() local append-only log (case.parked_by_employee …)</i>"]:::logic
+        subgraph data["data/ (React Query — backend is the single source of truth)"]
+            apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — fresh client per call, current session token</i>"]:::logic
+            auth["auth.ts · session.ts<br/><i>login()/logout() · JWT claims · onSessionCleared()</i>"]:::logic
+            meToday["useMeToday() · useNextBundle() · useParkRemaining()<br/><i>GET/POST /api/me/* — queryKey ['me','today']</i>"]:::hook
+            caseAgg["useCaseAggregate()<br/><i>GET /api/me/cases/:id/aggregate — queryKey ['me','case',id,'aggregate']</i>"]:::hook
+            mapper["caseAggregateMapper.ts<br/><i>CaseAggregateDto → CaseAggregate (domain/types.ts)</i>"]:::logic
+            persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete/Issue — plain POST, throws on failure</i>"]:::logic
+            focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) on window focus</i>"]:::hook
         end
     end
 
-    login --> workstation
-    home --> useBundle
+    login --> auth
+    auth --> apiClient
+    home --> meToday
     process --> useCaseFlow
     problem --> useCaseFlow
-    useBundle --> collectLogic
     useCaseFlow --> model
-    useCaseFlow --> eventLog
-    useBundle --> repo
-    useCaseFlow --> repo
-    repo --> dexie
-    sync --> dexie
-    seed --> dexie
-    home --> sync
-    sync --> apiClient
-    home --> apiClient
-    workstation --> apiClient
+    useCaseFlow --> collectLogic
+    useCaseFlow --> caseAgg
+    useCaseFlow --> persist
+    caseAgg --> mapper
+    caseAgg --> apiClient
+    meToday --> apiClient
+    persist --> apiClient
+    focus --> meToday
     process -->|"Piktogramm img"| api
     apiClient -->|"REST (Bearer JWT)"| api
-    api -. "SSE /api/me/stream" .-> home
