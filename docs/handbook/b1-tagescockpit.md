@@ -15,8 +15,11 @@ Zu Schichtbeginn, nach jedem Wareneingang-Schub und immer, wenn Sie den Tagessta
 
 ## Aufbau der Seite
 
-Die Seite trägt die Überschrift `'Heute – Logistik Warenauszeichnung'` mit dem Datum. Oben rechts
-finden Sie die Steuerung, darunter Kennzahlen-Blöcke.
+Seit dem Redesign (siehe `docs/mockups/tagescockpit/README.md`) ist das Tagescockpit eine
+Steuerzentrale: jedes Element ist entweder eine Live-Kennzahl mit echter Bedeutung oder eine
+anklickbare Entscheidung — keine reinen Zähl-Kacheln mehr. Die Überschrift ist ein Statussatz
+(`'Läuft rund'` bzw. `'Läuft — <n> Dinge brauchen dich'`), darunter die Eyebrow
+`'Automatik-Dispo · <Datum>'` und die Plan-Status-Zeile. Oben rechts finden Sie die Steuerung.
 
 ### Automatik ein-/ausschalten
 
@@ -38,41 +41,39 @@ finden Sie die Steuerung, darunter Kennzahlen-Blöcke.
 - `'⏳ verteilt …: <n> freier Beleg'` (bei Automatik An) bzw.
   `'⏳ Vorschlag verfügbar: <n> freie Belege'` (bei Automatik Aus) – es wartet Arbeit.
 
-### „Braucht dich"-Leiste
+### Verteilungsstatus (Balken)
 
-Gibt es Ausnahmen, erscheint eine Warnleiste mit `'Braucht dich:'`, z. B. `'<n> Probleme'`,
-`'<Namen> ausgelastet ≥ 90%'` oder `'Überbucht'`, plus Knopf `'Ansehen'` (führt zum Board).
+Ein zweigeteilter Balken zeigt, wie sich die heutigen Belege aufteilen: `'<n> verteilt'` (bereits
+zugeteilt oder fertig) und `'<n> im Pool'` (noch frei, wartet auf die Automatik). Gibt es offene
+Problemfälle, erscheint darunter der Chip `'<n> davon mit offenem Problem'`.
+
+### „Braucht dich jetzt"
+
+Ersetzt die frühere Warnleiste durch eine Liste konkreter, anklickbarer Fälle — nur was wirklich
+eine Entscheidung braucht, z. B.:
+
+| Eintrag | Bedeutung | Ziel |
+|---|---|---|
+| `'Probleme offen'` | Belege mit gemeldetem Problem. | Digitale Ablagen |
+| `'Überbucht'` | Verplant übersteigt Netto-Kapazität. | Mitarbeiterboard |
+| `'Topf — aus Automatik ausgeschlossen'` | Manuell geparkte Belege. | Digitale Ablagen |
+| `'Unvollständige Lieferung(en)'` | Lieferung noch nicht vollständig erfasst. | Digitale Ablagen |
+| `'Ausgelastet ≥ 90%'` | Mitarbeitende nahe/über Kapazitätsgrenze. | Mitarbeiterboard |
+| `'Offen trotz Schichtende'` | Zugeteilter Mitarbeiter hat bereits Feierabend. | Mitarbeiterboard |
+
+Ist die Liste leer: `'Nichts wartet auf dich — die Automatik hat alles verteilt.'`
+
+### „Frei & wartend"
+
+Kurzliste der Mitarbeitenden ohne aktuelles Bündel (Name + Bereiche als Chip). Klick führt zum
+Mitarbeiterboard, wo die Zuteilung im Detail passiert — das Cockpit selbst weist nichts zu.
 
 ## Die Kennzahlen (was sie bedeuten)
 
-**Block `'Kapazität'`**
-
-| Kennzahl | Bedeutung |
-|---|---|
-| `'Geplante MA'` | Anzahl heute eingeplanter Mitarbeitender. |
-| `'Netto-Kapazität'` | Verfügbare Arbeitszeit gesamt (z. B. „2 h 18 min"). |
-| `'Verplant'` | Bereits eingeplante Zeit. |
-| `'Freie Kapazität'` | Noch freie Zeit (rot, wenn ≤ 0). |
-| `'Auslastung'` | Auslastung in Prozent. |
-
-**Block `'Pool'`** (freie, verteilbare Belege)
-
-Ist alles verteilt: `'Kein freier Pool – alle verteilbaren Belege sind zugeteilt.'` Sonst:
-
-| Kennzahl | Bedeutung |
-|---|---|
-| `'Frei (verteilbar)'` | offene, verteilbare Belege. |
-| `'Überfällig'` | überfällige Belege (rot, wenn > 0). |
-| `'Prio'` | priorisierte Belege. |
-| `'CatMan fällig'` | CatMan-fällige Belege (nur Anzeige). |
-| `'Probleme offen'` | offene Problemfälle. |
-
-Sind zugeteilte Belege trotz beendeter Schicht offen, erscheint der Warnhinweis
-`'<n> Beleg(e) noch offen, obwohl die Schicht des zugeteilten Mitarbeiters beendet ist – bitte vor
-Schichtende klären (keine offene Ware über Nacht).'`
-
-**Block `'ZST-Fortschritt'`** – Fortschrittsbalken plus `'Belege fertig'` (`<fertig> / <gesamt>`),
-`'Teile fertig'`, `'Aufwandspunkte'`, `'Teile/h'`, `'Punkte/h'`.
+**Block `'ZST-Fortschritt'`** – Fortschrittsbalken plus `'<fertig> / <gesamt> Belege'` und Prozent,
+darunter `'Teile fertig'`, `'Teile/h'` und `'freie Kapazität'` als schlanke Zeile (die übrigen
+Kapazitäts-/Pool-Kennzahlen im Detail liefern weiterhin Mitarbeiterboard und Digitale Ablagen, um
+Dopplung zu vermeiden).
 
 **Block `'Letzte Eingriffe & Verteilungen'`** – protokollierte manuelle Eingriffe des Tages, oder
 `'Noch keine Eingriffe heute.'`

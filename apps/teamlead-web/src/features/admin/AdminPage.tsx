@@ -8,7 +8,7 @@
  * is edited in {@link ./VerladeplanTab}.
  * Lagerplätze are edited in {@link ./LocationMasterEditor}.
  */
-import { useEffect, useState, type JSX, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useState, type JSX, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -33,8 +33,24 @@ import { EffortPreview } from './EffortPreview.js';
 import { EmployeeSettings } from './EmployeeSettings.js';
 import { SchichtplanTab } from './SchichtplanTab.js';
 import { IntegrationenTab } from './IntegrationenTab.js';
+import { devPanelRuntimeEnabled } from '../../config/devPanel.js';
 
-const TABS = [
+/**
+ * Dev-Panel gate (A1). The build-time expression MUST stay inline here: Vite
+ * replaces `import.meta.env.*` statically and Rollup then drops the dead lazy
+ * `import()` — a production build (DEV=false, no VITE_DEV_PANEL=1) contains no
+ * dev-panel code at all. An explicit VITE_DEV_PANEL=0 disables it even in dev;
+ * `devPanelRuntimeEnabled()` adds the runtime (`window.__ENV__`) opt-out.
+ * Same pattern in components/AppShell.tsx (global time-override badge).
+ */
+const DEV_PANEL_BUILT: boolean =
+  import.meta.env.VITE_DEV_PANEL === '0'
+    ? false
+    : import.meta.env.DEV || import.meta.env.VITE_DEV_PANEL === '1';
+
+const DevScenariosTab = DEV_PANEL_BUILT ? lazy(() => import('./DevScenariosTab.js')) : null;
+
+const BASE_TABS = [
   'Priorität',
   'Bündel',
   'Aufwand',
@@ -46,6 +62,11 @@ const TABS = [
   'Integrationen',
   'Schichtende',
 ];
+
+/** Dev-only tab appended AFTER all positional indices (A1); index = BASE_TABS.length. */
+const DEV_TAB = BASE_TABS.length;
+const showDevTab = DevScenariosTab !== null && devPanelRuntimeEnabled();
+const TABS = showDevTab ? [...BASE_TABS, 'Dev / Szenarien'] : BASE_TABS;
 
 /** Delivery-Group detection tab (Teamlead-Anforderung Punkt 1). */
 const GROUPING_TAB = 3;
@@ -114,7 +135,20 @@ export function AdminPage(): JSX.Element {
         ))}
       </Tabs>
 
-      {tab === INTEGRATIONS_TAB ? (
+      {showDevTab && DevScenariosTab !== null && tab === DEV_TAB ? (
+        <Suspense
+          fallback={
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 2 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Dev-Panel wird geladen…
+              </Typography>
+            </Stack>
+          }
+        >
+          <DevScenariosTab />
+        </Suspense>
+      ) : tab === INTEGRATIONS_TAB ? (
         <IntegrationenTab />
       ) : tab === SCHICHTPLAN_TAB ? (
         <SchichtplanTab />

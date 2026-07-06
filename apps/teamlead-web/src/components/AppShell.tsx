@@ -3,7 +3,7 @@
  * surfaces (§10 Dashboard, §11 Admin). Denser than the Mitarbeiter-App but still
  * keyboard- and filter-friendly (Anhang E.6).
  */
-import type { JSX } from 'react';
+import { Suspense, lazy, type JSX } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
@@ -20,6 +20,21 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import { ltColors } from '@paket/ui';
 import { EMPLOYEE_APP_URL } from '../config/appLinks.js';
+import { devPanelRuntimeEnabled } from '../config/devPanel.js';
+
+/**
+ * Dev-Panel gate (A1/A3): global time-override badge in the app bar. The
+ * build-time expression MUST stay inline (Vite define + Rollup dead-code
+ * elimination strip the lazy chunk from production builds); see
+ * src/config/devPanel.ts and the identical gate in features/admin/AdminPage.tsx.
+ */
+const DEV_PANEL_BUILT: boolean =
+  import.meta.env.VITE_DEV_PANEL === '0'
+    ? false
+    : import.meta.env.DEV || import.meta.env.VITE_DEV_PANEL === '1';
+
+const DevTimeBadge = DEV_PANEL_BUILT ? lazy(() => import('./DevTimeBadge.js')) : null;
+const showDevBadge = DevTimeBadge !== null && devPanelRuntimeEnabled();
 
 interface NavItem {
   to: string;
@@ -102,6 +117,11 @@ export function AppShell(): JSX.Element {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Teamlead-Dashboard
             </Typography>
+            {showDevBadge && DevTimeBadge !== null && (
+              <Suspense fallback={null}>
+                <DevTimeBadge />
+              </Suspense>
+            )}
             <Button
               component="a"
               href={EMPLOYEE_APP_URL}

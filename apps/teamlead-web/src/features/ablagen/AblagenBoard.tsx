@@ -11,12 +11,13 @@
  * C5: cards offer „Weiterleiten an …"; the Weitergeleitet lane groups by
  * recipient and offers „Zurückholen".
  *
- * Each card's teamlead actions come from the single-source {@link CaseActions}
+ * Each card's teamlead actions come from the single-source {@link CaseActionMenu}
  * registry (derived from the §7.1 status) — no per-lane button logic here.
  */
 import { useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
@@ -39,8 +40,13 @@ import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
 import { formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
-import { CaseActions } from '../../components/CaseActions.js';
-import { ForwardMenuButton, forwardRecipientLabel } from '../../components/ForwardMenu.js';
+import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
+import { AttentionDialog } from '../../components/AttentionDialog.js';
+import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
+import { fetchEmployees } from '../../data/employees.js';
+import { useSplits } from '../split/SplitProvider.js';
+import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
 
@@ -94,8 +100,32 @@ export function AblagenBoard(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention,
   } = useCockpitData();
   const navigate = useNavigate();
+
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
+  const [assignCaseId, setAssignCaseId] = useState<string | null>(null);
+  const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
+  const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
+  const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
+  const [splitDone, setSplitDone] = useState<string | null>(null);
+  const { recordSplit } = useSplits();
+  const employeesQuery = useQuery({
+    queryKey: ['admin', 'employees', 'split'],
+    queryFn: () => fetchEmployees(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const splitEmployees = useMemo<SplitDialogEmployee[]>(
+    () =>
+      (employeesQuery.data?.employees ?? [])
+        .filter((e) => e.active && e.netCapacityToday > 0)
+        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+    [employeesQuery.data],
+  );
 
   // C2: display order + collapse, persisted. Bucketing precedence stays fixed in
   // the data layer; this only re-orders/collapses the *display*.
@@ -152,13 +182,37 @@ export function AblagenBoard(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention,
   };
+
+  const allCards = lanes.flatMap((l) => l.cards);
+  const assignCard = allCards.find((c) => c.caseId === assignCaseId) ?? null;
+  const forwardCard = allCards.find((c) => c.caseId === forwardCaseId) ?? null;
+  const attentionCard = allCards.find((c) => c.caseId === attentionCaseId) ?? null;
+  const splitCard = allCards.find((c) => c.caseId === splitCaseId) ?? null;
 
   return (
     <Stack spacing={1.5} sx={{ height: 'calc(100vh - 140px)', minHeight: 360 }}>
       <Typography variant="h5" sx={{ fontWeight: 800 }}>
         Digitale Ablagen
       </Typography>
+
+      {splitDone && (
+        <Alert
+          severity="success"
+          onClose={() => setSplitDone(null)}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
+              Zur Leistung
+            </Button>
+          }
+        >
+          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        </Alert>
+      )}
       {/* C1: the strip scrolls horizontally at viewport height; each lane owns its
           vertical scroll, so the horizontal scrollbar is always in view. */}
       <Box
@@ -186,9 +240,65 @@ export function AblagenBoard(): JSX.Element {
             onOpen={(caseId, tab) =>
               navigate(tab ? `/belege/${caseId}?tab=${tab}` : `/belege/${caseId}`)
             }
+            onAssign={setAssignCaseId}
+            onForward={setForwardCaseId}
+            onAttention={setAttentionCaseId}
+            onSplit={setSplitCaseId}
           />
         ))}
       </Box>
+
+      <AssignFromListDialog
+        open={assignCard !== null}
+        beleg={
+          assignCard && {
+            id: assignCard.caseId,
+            weBelegNo: assignCard.weBelegNo,
+            bereich: assignCard.bereich,
+            quantity: assignCard.totalQuantity,
+            deliveryGroup: assignCard.deliveryGroup,
+            attentionNote: assignCard.attentionNote,
+          }
+        }
+        onClose={() => setAssignCaseId(null)}
+      />
+
+      <ForwardDialog
+        open={forwardCard !== null}
+        weBelegNo={forwardCard?.weBelegNo ?? ''}
+        onConfirm={(recipient) => {
+          if (forwardCard) forwardCase(forwardCard.caseId, recipient);
+        }}
+        onClose={() => setForwardCaseId(null)}
+      />
+
+      <AttentionDialog
+        open={attentionCard !== null}
+        weBelegNo={attentionCard?.weBelegNo ?? ''}
+        onConfirm={(note) => {
+          if (attentionCard) flagAttention(attentionCard.caseId, note);
+        }}
+        onClose={() => setAttentionCaseId(null)}
+      />
+
+      <SplitDialog
+        open={splitCard !== null}
+        beleg={
+          splitCard && {
+            caseId: splitCard.caseId,
+            weBelegNo: splitCard.weBelegNo,
+            totalQuantity: splitCard.totalQuantity,
+            effortPoints: splitCard.effortPoints,
+            estimatedMinutes: splitCard.estimatedMinutes,
+          }
+        }
+        employees={splitEmployees}
+        onConfirm={(input) => {
+          recordSplit(input);
+          setSplitDone(input.weBelegNo);
+        }}
+        onClose={() => setSplitCaseId(null)}
+      />
     </Stack>
   );
 }
@@ -203,6 +313,10 @@ interface LaneColumnProps {
   parkedContext: Map<string, ParkedContext>;
   store: CaseActionCtx['store'];
   onOpen: (caseId: string, tab?: string) => void;
+  onAssign: (caseId: string) => void;
+  onForward: (caseId: string) => void;
+  onAttention: (caseId: string) => void;
+  onSplit: (caseId: string) => void;
 }
 
 function LaneColumn({
@@ -215,6 +329,10 @@ function LaneColumn({
   parkedContext,
   store,
   onOpen,
+  onAssign,
+  onForward,
+  onAttention,
+  onSplit,
 }: LaneColumnProps): JSX.Element {
   if (collapsed) {
     return (
@@ -304,6 +422,10 @@ function LaneColumn({
                 parked={parkedContext.get(c.caseId)}
                 store={store}
                 onOpen={onOpen}
+                onAssign={onAssign}
+                onForward={onForward}
+                onAttention={onAttention}
+                onSplit={onSplit}
               />
             ))}
           </Stack>
@@ -337,12 +459,20 @@ function LaneCardView({
   parked,
   store,
   onOpen,
+  onAssign,
+  onForward,
+  onAttention,
+  onSplit,
 }: {
   card: LaneCard;
   laneId: LaneId;
   parked: ParkedContext | undefined;
   store: CaseActionCtx['store'];
   onOpen: (caseId: string, tab?: string) => void;
+  onAssign: (caseId: string) => void;
+  onForward: (caseId: string) => void;
+  onAttention: (caseId: string) => void;
+  onSplit: (caseId: string) => void;
 }): JSX.Element {
   // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
   // so the same ctx works from every surface — incl. the Problemfälle lane card.
@@ -373,6 +503,11 @@ function LaneCardView({
           ))}
           {card.section !== null && <Chip size="small" label={`Abschnitt ${card.section}`} />}
           {card.issueStatus && <ProblemChip status={card.issueStatus} size="small" />}
+          {card.attentionFlag && (
+            <Tooltip title={card.attentionNote ?? ''}>
+              <Chip size="small" color="warning" variant="outlined" label="Aufmerksamkeit" />
+            </Tooltip>
+          )}
           {card.forwardedTo !== null && (
             <Chip
               size="small"
@@ -395,18 +530,31 @@ function LaneCardView({
         </Typography>
       </CardContent>
       <CardActions sx={{ flexWrap: 'wrap', gap: 0.25, px: 1, py: 0.5 }}>
+        {/* Quiet by design: pure navigation, not an action — should read as
+            lower-priority than the case's actual primary action next to it. */}
         <Button
           size="small"
+          variant="text"
+          sx={{ color: 'text.secondary', fontWeight: 400 }}
           onClick={() => onOpen(card.caseId, laneId === 'probleme' ? 'problem' : undefined)}
         >
           Details
         </Button>
-        <ForwardMenuButton caseId={card.caseId} forwardedTo={card.forwardedTo} />
-        <CaseActions
-          variant="card"
-          case={{ status: card.status, priorityFlags: card.priorityFlags }}
+        <CaseActionMenu
+          density="compact"
+          case={{
+            status: card.status,
+            priorityFlags: card.priorityFlags,
+            assignedTo: card.assignedTo ?? null,
+            forwardedTo: card.forwardedTo,
+            attentionFlag: card.attentionFlag,
+          }}
           weBelegNo={card.weBelegNo}
           ctx={ctx}
+          onAssign={onAssign}
+          onForward={onForward}
+          onAttention={onAttention}
+          onSplit={onSplit}
         />
       </CardActions>
     </Card>

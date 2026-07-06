@@ -2627,6 +2627,195 @@
           "health"
         ]
       }
+    },
+    "/api/dev/scenarios": {
+      "get": {
+        "operationId": "DevController_listScenarios",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevScenariosDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: scenario catalog + active scenario + time-override state.",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
+    "/api/dev/scenarios/{key}/load": {
+      "post": {
+        "operationId": "DevController_loadScenario",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioLoadResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: reset the case graph and seed the scenario deterministically (idempotent; 404 for an unknown key).",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
+    "/api/dev/scenarios/reset": {
+      "post": {
+        "operationId": "DevController_resetScenario",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioLoadResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: 'Zurücksetzen auf Standard' — load the default 'standard' scenario (recorded as the active key).",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
+    "/api/dev/time-override": {
+      "post": {
+        "operationId": "DevController_setTimeOverride",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeOverrideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeOverrideStateDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: freeze the server \"now\" (persisted; recalculate/pull/dashboard/board dates follow it).",
+        "tags": [
+          "dev"
+        ]
+      },
+      "delete": {
+        "operationId": "DevController_clearTimeOverride",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeOverrideStateDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: clear the time override — back to real time.",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
+    "/api/dev/materialize-shifts": {
+      "post": {
+        "operationId": "DevController_materializeShifts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeShiftsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializeShiftsResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "DEV-ONLY: materialize every active employee's shift for a date from their weekly pattern.",
+        "tags": [
+          "dev"
+        ]
+      }
     }
   },
   "info": {
@@ -2655,6 +2844,10 @@
     {
       "name": "health",
       "description": "Liveness & readiness probes"
+    },
+    {
+      "name": "dev",
+      "description": "DEV-ONLY Szenario-/Demo-Werkzeuge — env-gated (DEV_PANEL), answers 404 in production. NOT part of the production API surface."
     }
   ],
   "servers": [],
@@ -5927,6 +6120,156 @@
           "blockedCases",
           "weBelegNos",
           "date"
+        ]
+      },
+      "ScenarioInfoDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Stable catalog key, e.g. 'standard'"
+          },
+          "name": {
+            "type": "string",
+            "description": "Short human name"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this scenario sets up"
+          },
+          "expectedOutcome": {
+            "type": "string",
+            "description": "\"Was man danach sehen sollte\" — headline expectation"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description",
+          "expectedOutcome"
+        ]
+      },
+      "DevScenariosDto": {
+        "type": "object",
+        "properties": {
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioInfoDto"
+            }
+          },
+          "activeScenarioKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Key of the last loaded scenario, or null when the data is not scenario-managed"
+          },
+          "timeOverride": {
+            "type": "string",
+            "nullable": true,
+            "description": "Active server time override (ISO-8601), or null for real time"
+          }
+        },
+        "required": [
+          "scenarios"
+        ]
+      },
+      "ScenarioLoadResultDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "baseDate": {
+            "type": "string",
+            "description": "Calendar day (YYYY-MM-DD) the scenario anchored on"
+          },
+          "users": {
+            "type": "number"
+          },
+          "shifts": {
+            "type": "number",
+            "description": "Active shifts on the base date"
+          },
+          "activeLocations": {
+            "type": "number"
+          },
+          "readyCases": {
+            "type": "number"
+          },
+          "blockedCases": {
+            "type": "number",
+            "description": "Intake-Gate cases (\"zurück an Bucher\")"
+          },
+          "deliveryGroups": {
+            "type": "number",
+            "description": "Distinct delivery notes across the ready pool"
+          },
+          "totalCases": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "baseDate",
+          "users",
+          "shifts",
+          "activeLocations",
+          "readyCases",
+          "blockedCases",
+          "deliveryGroups",
+          "totalCases"
+        ]
+      },
+      "TimeOverrideDto": {
+        "type": "object",
+        "properties": {
+          "now": {
+            "type": "string",
+            "description": "The frozen server \"now\" as an ISO-8601 timestamp",
+            "example": "2026-07-06T09:30:00.000Z"
+          }
+        },
+        "required": [
+          "now"
+        ]
+      },
+      "TimeOverrideStateDto": {
+        "type": "object",
+        "properties": {
+          "timeOverride": {
+            "type": "string",
+            "nullable": true,
+            "description": "Active override (ISO-8601), or null for real time"
+          }
+        }
+      },
+      "MaterializeShiftsDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar day (YYYY-MM-DD)",
+            "example": "2026-07-06"
+          }
+        },
+        "required": [
+          "date"
+        ]
+      },
+      "MaterializeShiftsResultDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "shiftCount": {
+            "type": "number",
+            "description": "Active shifts existing for the date after materialization"
+          }
+        },
+        "required": [
+          "date",
+          "shiftCount"
         ]
       }
     }

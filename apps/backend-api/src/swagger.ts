@@ -20,6 +20,10 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('teamlead', 'Teamlead pool steering & issue resolution')
     .addTag('live', 'SSE live status streams')
     .addTag('health', 'Liveness & readiness probes')
+    .addTag(
+      'dev',
+      'DEV-ONLY Szenario-/Demo-Werkzeuge — env-gated (DEV_PANEL), answers 404 in production. NOT part of the production API surface.',
+    )
     .build();
 
   return SwaggerModule.createDocument(app, config);

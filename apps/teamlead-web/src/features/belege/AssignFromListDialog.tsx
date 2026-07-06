@@ -21,14 +21,28 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { LieferungChip } from '../../components/LieferungChip.js';
 import { CURRENT_TEAMLEAD_ID, useCockpitData } from '../../data/store.js';
-import type { BelegRow } from '../../data/belege.js';
+import type { DeliveryGroupRef } from '../../data/types.js';
 
 /** Sentinel option value for the pinned „Mir zuweisen" entry. */
 const SELF_OPTION = `self:${CURRENT_TEAMLEAD_ID}`;
 
+/**
+ * Minimal shape the dialog needs — structurally satisfied by `BelegRow`,
+ * `BelegDetail` and `LaneCard` alike, so every surface can wire "Zuweisen"
+ * without adapting to a list-specific type.
+ */
+export interface AssignableBeleg {
+  id: string;
+  weBelegNo: string;
+  bereich: string | null;
+  quantity: number;
+  deliveryGroup: DeliveryGroupRef | null;
+  attentionNote: string | null;
+}
+
 export interface AssignFromListDialogProps {
   open: boolean;
-  beleg: BelegRow | null;
+  beleg: AssignableBeleg | null;
   onClose: () => void;
 }
 

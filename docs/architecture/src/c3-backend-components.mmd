@@ -1,6 +1,6 @@
 %% C4 Level 3 — Components: backend-api (NestJS on Fastify)
 %% Verified against apps/backend-api/src/* (app.module.ts, cases/, assignment/, employees/,
-%% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, health/, openapi/).
+%% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, clock/, dev/, health/, openapi/).
 flowchart TB
     classDef ctrl fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef svc fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
@@ -23,6 +23,7 @@ flowchart TB
             events["EventLogService<br/><i>append() · SHA256 hash-chain</i>"]:::cross
             workflow["WorkflowService<br/><i>§7.1 transition() state machine</i>"]:::cross
             live["LiveStatusService + LiveController<br/><i>SSE: /api/me/stream, /api/teamlead/stream</i>"]:::cross
+            clock["ClockService<br/><i>@Global now(): dev Zeit-Override<br/>(AppConfig) oder Systemzeit</i>"]:::cross
         end
 
         subgraph cases["CasesModule"]
@@ -54,6 +55,11 @@ flowchart TB
             phSvc["ProhandelService<br/><i>Mock-Connector (A9): beleg-generator + beleg-persist<br/>(gemeinsame Senke mit prisma/seed.ts)</i>"]:::svc
         end
 
+        subgraph devMod["DevModule (env-gated: DEV_PANEL, 404 in prod)"]
+            devCtrl["DevController<br/>GET /api/dev/scenarios · POST scenarios/:key/load<br/>· POST scenarios/reset · POST/DELETE time-override<br/>· POST materialize-shifts<br/><i>@Roles(Admin) + DevPanelGuard</i>"]:::ctrl
+            scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typed registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
+        end
+
         subgraph dom["Domain cores (src/modules/*)"]
             mods["completion · issue · print<br/>· transport · reporting (CSV)"]:::svc
         end
@@ -76,6 +82,12 @@ flowchart TB
     emplCtrl --> emplSvc
     adminCtrl --> adminSvc
     phCtrl --> phSvc
+    devCtrl --> scenSvc
+    devCtrl --> asgSvc
+    tlCtrl --> clock
+    meCtrl --> clock
+    phCtrl --> clock
+    devCtrl --> clock
 
     casesSvc --> workflow
     tlSvc --> workflow
@@ -98,4 +110,6 @@ flowchart TB
     phSvc --> prisma
     events --> prisma
     workflow --> prisma
+    scenSvc --> prisma
+    clock --> prisma
     prisma --> db

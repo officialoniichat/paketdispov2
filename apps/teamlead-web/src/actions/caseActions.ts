@@ -1,14 +1,18 @@
 /**
  * Single-source case-action registry (§8.4). The §7.1 case status *and* its
- * §8.2 priority flags decide which teamlead actions are offered — every surface
- * (Belege list, Belege detail, Digitale Ablagen) renders from {@link caseActions}
- * so the buttons stay consistent and there is no per-surface availability logic.
+ * §8.2 priority flags — plus the status-neutral assign/forward/attention
+ * flags — decide which teamlead actions are offered. Every surface (Belege
+ * list, Belege detail, Digitale Ablagen) renders from
+ * {@link getAvailableActions} so the buttons stay consistent and there is no
+ * per-surface availability logic.
  *
  * Being flag-aware (not status-only) lets the priority toggle show the right
  * direction: "Priorisieren" only where it would change pool order and only when
  * the case is not already manually prioritised, otherwise "Priorität entfernen".
+ * The same pattern applies to forwarding ("Weiterleiten an…" ↔ "Zurückholen")
+ * and the attention flag ("Besondere Aufmerksamkeit" ↔ "Aufmerksamkeit entfernen").
  */
-import type { CaseStatus, PriorityFlag } from '@paket/domain-types';
+import type { CaseStatus, ForwardRecipient, PriorityFlag } from '@paket/domain-types';
 
 export interface CaseActionCtx {
   caseId: string;
@@ -22,6 +26,10 @@ export interface CaseActionCtx {
     reactivateCase(id: string, reason: string): void; // partially_completed -> ready
     cancelCase(id: string, reason: string): void;
     resolveIssue(id: string, reason: string): void; // issue_open -> in_progress (case-scoped)
+    forwardCase(id: string, recipient: ForwardRecipient, reason?: string): void;
+    unforwardCase(id: string): void;
+    flagAttention(id: string, note?: string): void;
+    unflagAttention(id: string): void;
   };
 }
 
@@ -36,6 +44,11 @@ export type CaseActionId =
   | 'reactivate'
   | 'resolve_issue'
   | 'split'
+  | 'assign'
+  | 'forward'
+  | 'unforward'
+  | 'attention'
+  | 'unattention'
   | 'cancel';
 
 export interface CaseActionDescriptor {
@@ -46,16 +59,29 @@ export interface CaseActionDescriptor {
   reasonSuggestions: string[];
   /**
    * Custom actions are not confirmed through the generic mandatory-reason dialog;
-   * they open their own dialog (which still captures a reason). `run` is a no-op
-   * for them — the surface handles the interaction (see {@link CaseActions} onSplit).
+   * they open their own dialog (which still captures a reason where relevant). `run`
+   * is a no-op for them — the surface handles the interaction via the matching
+   * `onSplit`/`onAssign`/`onForward`/`onAttention` handler (see {@link CaseActionMenu}).
    */
-  custom?: 'split';
+  custom?: 'split' | 'assign' | 'forward' | 'attention';
+  /**
+   * Runs immediately on click with no dialog at all — a one-click reversal
+   * (Zurückholen, Aufmerksamkeit entfernen), matching the reversed action's
+   * own one-click UX rather than gating it behind a reason.
+   */
+  instant?: boolean;
   run(ctx: CaseActionCtx, reason: string): void;
 }
 
 export interface CaseLike {
   status: CaseStatus;
   priorityFlags: readonly PriorityFlag[];
+  /** null/undefined = unassigned. "Zuweisen" only offered on unassigned ready cases. */
+  assignedTo?: string | null;
+  /** C5: forwarding is status-neutral (no §7.1 transition). null = not forwarded. */
+  forwardedTo?: string | null;
+  /** A7 TL-Topf: „Besondere Aufmerksamkeit" is status-neutral. */
+  attentionFlag?: boolean;
 }
 
 const REGISTRY: CaseActionDescriptor[] = [
@@ -82,6 +108,17 @@ const REGISTRY: CaseActionDescriptor[] = [
     primary: true,
     reasonSuggestions: ['Rest heute fertig', 'Kapazität frei'],
     run: (c, r) => c.store.reactivateCase(c.caseId, r),
+  },
+  {
+    id: 'assign',
+    label: 'Zuweisen',
+    tone: 'primary',
+    primary: true,
+    custom: 'assign',
+    reasonSuggestions: [],
+    run: () => {
+      /* custom: handled by the assign dialog */
+    },
   },
   {
     id: 'park',
@@ -128,6 +165,46 @@ const REGISTRY: CaseActionDescriptor[] = [
     run: (c, r) => c.store.deprioritiseCase(c.caseId, r),
   },
   {
+    id: 'forward',
+    label: 'Weiterleiten an…',
+    tone: 'default',
+    primary: false,
+    custom: 'forward',
+    reasonSuggestions: [],
+    run: () => {
+      /* custom: handled by the forward dialog */
+    },
+  },
+  {
+    id: 'unforward',
+    label: 'Zurückholen',
+    tone: 'default',
+    primary: false,
+    instant: true,
+    reasonSuggestions: [],
+    run: (c) => c.store.unforwardCase(c.caseId),
+  },
+  {
+    id: 'attention',
+    label: 'Besondere Aufmerksamkeit',
+    tone: 'warning',
+    primary: false,
+    custom: 'attention',
+    reasonSuggestions: [],
+    run: () => {
+      /* custom: handled by the attention dialog */
+    },
+  },
+  {
+    id: 'unattention',
+    label: 'Aufmerksamkeit entfernen',
+    tone: 'default',
+    primary: false,
+    instant: true,
+    reasonSuggestions: [],
+    run: (c) => c.store.unflagAttention(c.caseId),
+  },
+  {
     id: 'cancel',
     label: 'Stornieren',
     tone: 'error',
@@ -139,7 +216,12 @@ const REGISTRY: CaseActionDescriptor[] = [
 
 const REGISTRY_ORDER = new Map(REGISTRY.map((a, i) => [a.id, i] as const));
 
-export function caseActions(c: CaseLike): CaseActionDescriptor[] {
+/** Terminal statuses have no legal transitions and no status-neutral actions either. */
+function isTerminal(status: CaseStatus): boolean {
+  return status === 'completed' || status === 'zst_done' || status === 'cancelled';
+}
+
+export function getAvailableActions(c: CaseLike): CaseActionDescriptor[] {
   const ids: CaseActionId[] = [];
   switch (c.status) {
     case 'needs_review':
@@ -163,12 +245,23 @@ export function caseActions(c: CaseLike): CaseActionDescriptor[] {
     case 'partially_completed':
       ids.push('reactivate');
       break;
-    // completed / zst_done / cancelled: no actions
+    // completed / zst_done / cancelled: no status-driven actions.
   }
   // Priority toggle only where it has an effect: pool states (the planning queue).
   const isPool = c.status === 'needs_review' || c.status === 'ready' || c.status === 'parked';
   if (isPool) {
     ids.push(c.priorityFlags.includes('manual_teamlead_priority') ? 'deprioritise' : 'prioritise');
+  }
+
+  // Zuweisen: only a free (ready, unassigned) case can be manually assigned.
+  if (c.status === 'ready' && (c.assignedTo === undefined || c.assignedTo === null)) {
+    ids.push('assign');
+  }
+
+  // C5 forwarding + A7 attention are status-neutral — offered on every non-terminal case.
+  if (!isTerminal(c.status)) {
+    ids.push(c.forwardedTo != null ? 'unforward' : 'forward');
+    ids.push(c.attentionFlag === true ? 'unattention' : 'attention');
   }
 
   const allowed = new Set(ids);

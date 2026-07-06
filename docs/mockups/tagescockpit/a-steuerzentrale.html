@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Direction A — Steuerzentrale</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --brand: #0a3d62;
+    --brand-light: #3c6e8f;
+    --accent: #e58e26;
+    --success: #2e7d32;
+    --success-bg: #e8f3e9;
+    --warning: #b26a00;
+    --warning-bg: #fdf1dd;
+    --danger: #c62828;
+    --danger-bg: #fbe9e9;
+    --info: #1565c0;
+    --info-bg: #e8f0fb;
+    --bg: #f5f7fa;
+    --paper: #ffffff;
+    --text: #1a2430;
+    --text-secondary: #516170;
+    --border: #d6dde5;
+    --radius: 14px;
+  }
+  :root[data-theme="dark"] {
+    --brand: #4d90c4;
+    --brand-light: #6fa8d1;
+    --accent: #f0a94a;
+    --success: #6bc27a;
+    --success-bg: #133023;
+    --warning: #e2a94e;
+    --warning-bg: #33280f;
+    --danger: #f08787;
+    --danger-bg: #351515;
+    --info: #7ab0ec;
+    --info-bg: #10233a;
+    --bg: #10161d;
+    --paper: #1a2330;
+    --text: #eef2f6;
+    --text-secondary: #a9b6c3;
+    --border: #2b3847;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand: #4d90c4;
+      --brand-light: #6fa8d1;
+      --accent: #f0a94a;
+      --success: #6bc27a;
+      --success-bg: #133023;
+      --warning: #e2a94e;
+      --warning-bg: #33280f;
+      --danger: #f08787;
+      --danger-bg: #351515;
+      --info: #7ab0ec;
+      --info-bg: #10233a;
+      --bg: #10161d;
+      --paper: #1a2330;
+      --text: #eef2f6;
+      --text-secondary: #a9b6c3;
+      --border: #2b3847;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 0 0 64px;
+  }
+  .annotate {
+    max-width: 1180px;
+    margin: 20px auto 0;
+    padding: 12px 20px;
+    background: var(--info-bg);
+    border: 1px solid var(--info);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .annotate b { color: var(--info); }
+  .shell {
+    max-width: 1180px;
+    margin: 20px auto 0;
+    padding: 28px 32px 36px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(10,61,98,0.06);
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+
+  .automatik-block {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 14px;
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  }
+  .status-pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 18%, transparent);
+    animation: pulse 2.2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: .45; }
+  }
+  .toggle-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .toggle-label { font-size: 12px; color: var(--text-secondary); }
+  .switch {
+    width: 44px; height: 26px; border-radius: 999px; background: var(--success);
+    position: relative; cursor: pointer; flex: none;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  }
+  .btn {
+    border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; font-size: 14px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--brand); border: 1px solid var(--border); }
+  :root[data-theme="dark"] .btn-ghost, @media (prefers-color-scheme: dark){ .btn-ghost { color: var(--brand-light); } }
+
+  .actions-row { display: flex; gap: 10px; margin-top: 10px; }
+
+  /* Health bar */
+  .health {
+    margin-bottom: 28px;
+  }
+  .health-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .health-head h2 { font-size: 15px; margin: 0; font-weight: 700; }
+  .health-head span { font-size: 12.5px; color: var(--text-secondary); }
+  .bar {
+    display: flex; height: 34px; border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: #fff; white-space: nowrap; transition: filter .15s; }
+  .seg:hover { filter: brightness(1.08); }
+  .seg.verteilt { background: var(--success); }
+  .seg.pool { background: var(--brand-light); }
+  .seg.blockiert { background: var(--warning); }
+  .seg.kapazitaet { background: var(--danger); }
+  .legend { display: flex; gap: 22px; margin-top: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+  .legend-item b { color: var(--text); font-size: 15px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; }
+
+  .grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .panel-sub { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+
+  .decision-list { display: flex; flex-direction: column; gap: 10px; }
+  .decision {
+    display: flex; align-items: center; gap: 14px; padding: 13px 16px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
+  }
+  .decision .count {
+    min-width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; flex: none;
+  }
+  .decision.sev-high .count { background: var(--danger-bg); color: var(--danger); }
+  .decision.sev-mid .count { background: var(--warning-bg); color: var(--warning); }
+  .decision.sev-low .count { background: var(--info-bg); color: var(--info); }
+  .decision .body { flex: 1; min-width: 0; }
+  .decision .title { font-weight: 700; font-size: 14px; }
+  .decision .desc { font-size: 12.5px; color: var(--text-secondary); margin-top: 2px; }
+  .decision .go {
+    font-size: 13px; font-weight: 700; color: var(--brand); background: none; border: none; cursor: pointer;
+    white-space: nowrap;
+  }
+  :root[data-theme="dark"] .decision .go { color: var(--brand-light); }
+
+  .idle-strip { display: flex; flex-direction: column; gap: 10px; }
+  .idle-chip {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--bg);
+  }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none;
+  }
+  .idle-chip .name { font-weight: 700; font-size: 13.5px; }
+  .idle-chip .meta { font-size: 11.5px; color: var(--text-secondary); }
+  .idle-chip .assign {
+    margin-left: auto; font-size: 12px; font-weight: 700; color: var(--brand); background: var(--paper);
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+
+  .footer-row {
+    margin-top: 26px; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .zst { flex: 1; }
+  .zst-head { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+  .zst-track { height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
+  .zst-fill { height: 100%; background: var(--brand); border-radius: 5px; width: 61%; }
+  .link { font-size: 13px; font-weight: 700; color: var(--brand); text-decoration: none; white-space: nowrap; }
+  :root[data-theme="dark"] .link { color: var(--brand-light); }
+</style>
+</head>
+<body>
+
+<div class="annotate">
+  <b>Direction A — „Steuerzentrale".</b> Bleibt ein eigener Tab (weiterhin Startseite „/"), aber jedes Element ist eine
+  Entscheidung oder ein Statuswert — keine Vanity-KPI mehr. Health-Bar zeigt in einem Blick, ob die Automatik hinterherkommt.
+  „Braucht dich"-Liste ersetzt die alte Exception-Zeile durch konkrete, klickbare Fälle. Idle-Mitarbeiter sind hier nur als
+  Kurzliste sichtbar (Detail bleibt im Board).
+</div>
+
+<div class="shell">
+  <div class="header">
+    <div>
+      <p class="eyebrow">Automatik-Dispo · Freitag, 06.11.</p>
+      <h1>Läuft rund — 3 Dinge brauchen dich</h1>
+      <p class="sub">Zuletzt verteilt vor 4 Min. · 214 Belege heute · Schicht bis 17:00 (in 3h 20min)</p>
+    </div>
+    <div class="automatik-block">
+      <div class="toggle-wrap">
+        <div class="status-pill"><span class="dot"></span> Automatik An</div>
+        <div class="switch"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-row" style="margin-top:-10px; margin-bottom:24px;">
+    <button class="btn btn-primary">↻ Jetzt neu berechnen</button>
+    <button class="btn btn-ghost">Vorschlag ansehen</button>
+    <button class="btn btn-ghost">Zum Board →</button>
+  </div>
+
+  <div class="health">
+    <div class="health-head">
+      <h2>Verteilungsstatus — 214 freie Belege heute</h2>
+      <span>aktualisiert live</span>
+    </div>
+    <div class="bar">
+      <div class="seg verteilt" style="width:74%">158 verteilt</div>
+      <div class="seg pool" style="width:12%">26 im Pool</div>
+      <div class="seg blockiert" style="width:9%">19 blockiert</div>
+      <div class="seg kapazitaet" style="width:5%">11 keine Kapazität</div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="swatch" style="background:var(--success)"></span> Verteilt <b>158</b></div>
+      <div class="legend-item"><span class="swatch" style="background:var(--brand-light)"></span> Pool-Rest <b>26</b></div>
+      <div class="legend-item"><span class="swatch" style="background:var(--warning)"></span> Blockiert <b>19</b></div>
+      <div class="legend-item"><span class="swatch" style="background:var(--danger)"></span> Keine Kapazität <b>11</b></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <p class="panel-title">Braucht dich jetzt</p>
+      <p class="panel-sub">Alles Übrige läuft automatisch — hier reicht ein Blick, nicht mehr.</p>
+      <div class="decision-list">
+        <div class="decision sev-high">
+          <div class="count">11</div>
+          <div class="body">
+            <div class="title">Keine Kapazität mehr</div>
+            <div class="desc">Belege, für die aktuell kein Mitarbeiter mit passendem Bereich frei ist.</div>
+          </div>
+          <button class="go">Ansehen →</button>
+        </div>
+        <div class="decision sev-mid">
+          <div class="count">7</div>
+          <div class="body">
+            <div class="title">Topf — wartet auf Zuordnung</div>
+            <div class="desc">Manuell geparkte Belege ohne WE-Nr.-Zuordnung.</div>
+          </div>
+          <button class="go">Öffnen →</button>
+        </div>
+        <div class="decision sev-mid">
+          <div class="count">3</div>
+          <div class="body">
+            <div class="title">Zurück an Bucher</div>
+            <div class="desc">Vom Mitarbeiter zurückgegeben, noch nicht neu zugeteilt.</div>
+          </div>
+          <button class="go">Klären →</button>
+        </div>
+        <div class="decision sev-low">
+          <div class="count">2</div>
+          <div class="body">
+            <div class="title">Unvollständige Lieferungen</div>
+            <div class="desc">Lieferung über mehrere Mitarbeiter verteilt (Gruppierung durchbrochen).</div>
+          </div>
+          <button class="go">Prüfen →</button>
+        </div>
+        <div class="decision sev-low">
+          <div class="count">1</div>
+          <div class="body">
+            <div class="title">Groß-Beleg ohne Kapazität</div>
+            <div class="desc">Einzelbeleg > 90 Min. Aufwand, aktuell nicht platzierbar.</div>
+          </div>
+          <button class="go">Zuweisen →</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="panel-title">Frei &amp; wartend</p>
+      <p class="panel-sub">4 Mitarbeiter ohne aktuelles Bündel.</p>
+      <div class="idle-strip">
+        <div class="idle-chip">
+          <div class="avatar">SK</div>
+          <div>
+            <div class="name">Sara Klein</div>
+            <div class="meta">Tier 2 · WA, Retoure · frei seit 12 Min.</div>
+          </div>
+          <button class="assign">Zuteilen</button>
+        </div>
+        <div class="idle-chip">
+          <div class="avatar">TM</div>
+          <div>
+            <div class="name">Tom Meier</div>
+            <div class="meta">Tier 1 · WA · frei seit 6 Min.</div>
+          </div>
+          <button class="assign">Zuteilen</button>
+        </div>
+        <div class="idle-chip">
+          <div class="avatar">JB</div>
+          <div>
+            <div class="name">Jana Berg</div>
+            <div class="meta">Tier 3 · Alle Bereiche · frei seit 31 Min.</div>
+          </div>
+          <button class="assign">Zuteilen</button>
+        </div>
+        <div class="idle-chip">
+          <div class="avatar">RÖ</div>
+          <div>
+            <div class="name">Recep Öz</div>
+            <div class="meta">Tier 1 · Retoure · frei seit 2 Min.</div>
+          </div>
+          <button class="assign">Zuteilen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-row">
+    <div class="zst">
+      <div class="zst-head"><span>ZST-Fortschritt heute</span><span>131 / 214 Belege · 61%</span></div>
+      <div class="zst-track"><div class="zst-fill"></div></div>
+    </div>
+    <a class="link" href="#">Audit &amp; Verlauf →</a>
+  </div>
+</div>
+
+</body>
+</html>

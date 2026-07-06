@@ -5,18 +5,14 @@
  * through the store's audited (§8.4) endpoints and invalidate this view + the
  * cockpit on success.
  */
-import { useState, type JSX, type ReactNode } from 'react';
+import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { DeliveryGroupPanel } from './DeliveryGroupPanel';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
@@ -28,16 +24,12 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import FlagIcon from '@mui/icons-material/Flag';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import {
   fetchBelegDetail,
-  flagAttention,
-  unflagAttention,
   type BelegBox,
   type BelegDetail,
   type BelegHistoryEntry,
@@ -47,8 +39,13 @@ import {
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { EFFORT_COMPONENT_LABEL, EFFORT_COMPONENT_ORDER } from '../../lib/effort.js';
-import { CaseActions } from '../../components/CaseActions.js';
-import { ForwardMenuButton, forwardRecipientLabel } from '../../components/ForwardMenu.js';
+import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
+import { AttentionDialog } from '../../components/AttentionDialog.js';
+import { AssignFromListDialog } from './AssignFromListDialog.js';
+import { fetchEmployees } from '../../data/employees.js';
+import { useSplits } from '../split/SplitProvider.js';
+import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
@@ -83,33 +80,39 @@ export function BelegDetailPage(): JSX.Element {
     reactivateCase,
     cancelCase,
     resolveIssue,
+    forwardCase,
+    unforwardCase,
+    flagAttention,
+    unflagAttention,
   } = useCockpitData();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   // C4 deep-link: /belege/:id?tab=problem opens the Problem tab directly.
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => initialTab(searchParams.get('tab')));
-  // A7 „Besondere Aufmerksamkeit" (Bucherinnen-Inlet mock): flag with optional note.
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-  const [attentionNoteDraft, setAttentionNoteDraft] = useState('');
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitDone, setSplitDone] = useState<string | null>(null);
+  const { recordSplit } = useSplits();
+  const employeesQuery = useQuery({
+    queryKey: ['admin', 'employees', 'split'],
+    queryFn: () => fetchEmployees(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const splitEmployees = useMemo<SplitDialogEmployee[]>(
+    () =>
+      (employeesQuery.data?.employees ?? [])
+        .filter((e) => e.active && e.netCapacityToday > 0)
+        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+    [employeesQuery.data],
+  );
 
   const query = useQuery<BelegDetail, Error>({
     queryKey: ['beleg', caseId],
     queryFn: () => fetchBelegDetail(caseId),
     enabled: caseId !== '',
-  });
-
-  const invalidateBeleg = (): void => {
-    void queryClient.invalidateQueries({ queryKey: ['beleg', caseId] });
-    void queryClient.invalidateQueries({ queryKey: ['belege'] });
-  };
-  const flagMutation = useMutation<void, Error, string | undefined>({
-    mutationFn: (note) => flagAttention(caseId, note),
-    onSettled: invalidateBeleg,
-  });
-  const unflagMutation = useMutation<void, Error, void>({
-    mutationFn: () => unflagAttention(caseId),
-    onSettled: invalidateBeleg,
   });
 
   if (query.isLoading) {
@@ -167,6 +170,10 @@ export function BelegDetailPage(): JSX.Element {
       reactivateCase,
       cancelCase,
       resolveIssue,
+      forwardCase,
+      unforwardCase,
+      flagAttention,
+      unflagAttention,
     },
   };
 
@@ -203,32 +210,38 @@ export function BelegDetailPage(): JSX.Element {
           </Stack>
         </Box>
         <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-          <ForwardMenuButton caseId={c.id} forwardedTo={c.forwardedTo} />
-          <Button
-            size="small"
-            variant={c.attentionFlag ? 'contained' : 'outlined'}
-            color="warning"
-            startIcon={<FlagIcon />}
-            disabled={flagMutation.isPending || unflagMutation.isPending}
-            onClick={() => {
-              if (c.attentionFlag) {
-                unflagMutation.mutate();
-              } else {
-                setAttentionNoteDraft('');
-                setNoteDialogOpen(true);
-              }
+          <CaseActionMenu
+            density="detail"
+            case={{
+              status: c.status,
+              priorityFlags: c.priorityFlags,
+              assignedTo: c.assignedEmployeeName,
+              forwardedTo: c.forwardedTo,
+              attentionFlag: c.attentionFlag,
             }}
-          >
-            {c.attentionFlag ? 'Aufmerksamkeit entfernen' : 'Besondere Aufmerksamkeit'}
-          </Button>
-          <CaseActions
-            variant="header"
-            case={{ status: c.status, priorityFlags: c.priorityFlags }}
             weBelegNo={c.weBelegNo}
             ctx={actionCtx}
+            onAssign={() => setAssignOpen(true)}
+            onForward={() => setForwardOpen(true)}
+            onAttention={() => setAttentionOpen(true)}
+            onSplit={() => setSplitOpen(true)}
           />
         </Stack>
       </Stack>
+
+      {splitDone && (
+        <Alert
+          severity="success"
+          onClose={() => setSplitDone(null)}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
+              Zur Leistung
+            </Button>
+          }
+        >
+          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        </Alert>
+      )}
 
       {/* C4: an open problem is surfaced on EVERY tab, with a jump to the Problem tab. */}
       {c.hasOpenIssue && openIssue && (
@@ -342,37 +355,51 @@ export function BelegDetailPage(): JSX.Element {
         {tab === 7 && <HistoryTab history={c.history} />}
       </Paper>
 
-      {/* A7 flag inlet (mock Bucherinnen-Inlet): optional note, then flag. */}
-      <Dialog open={noteDialogOpen} onClose={() => setNoteDialogOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Besondere Aufmerksamkeit — {c.weBelegNo}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            fullWidth
-            multiline
-            minRows={2}
-            sx={{ mt: 1 }}
-            label="Notiz (optional)"
-            value={attentionNoteDraft}
-            onChange={(e) => setAttentionNoteDraft(e.target.value)}
-            helperText={'Der Beleg erscheint im Belege-Scope „Topf" der Teamleitung.'}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNoteDialogOpen(false)}>Abbrechen</Button>
-          <Button
-            variant="contained"
-            color="warning"
-            disabled={flagMutation.isPending}
-            onClick={() => {
-              flagMutation.mutate(attentionNoteDraft.trim() || undefined);
-              setNoteDialogOpen(false);
-            }}
-          >
-            Markieren
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <AssignFromListDialog
+        open={assignOpen}
+        beleg={{
+          id: c.id,
+          weBelegNo: c.weBelegNo,
+          // Bereich isn't part of the case-detail read; the soft mismatch hint
+          // in the dialog simply stays hidden (only shown when both sides are known).
+          bereich: null,
+          quantity: c.totalQuantity,
+          deliveryGroup: c.deliveryGroup,
+          attentionNote: c.attentionNote,
+        }}
+        onClose={() => setAssignOpen(false)}
+      />
+
+      <ForwardDialog
+        open={forwardOpen}
+        weBelegNo={c.weBelegNo}
+        onConfirm={(recipient) => forwardCase(c.id, recipient)}
+        onClose={() => setForwardOpen(false)}
+      />
+
+      <AttentionDialog
+        open={attentionOpen}
+        weBelegNo={c.weBelegNo}
+        onConfirm={(note) => flagAttention(c.id, note)}
+        onClose={() => setAttentionOpen(false)}
+      />
+
+      <SplitDialog
+        open={splitOpen}
+        beleg={{
+          caseId: c.id,
+          weBelegNo: c.weBelegNo,
+          totalQuantity: c.totalQuantity,
+          effortPoints: c.effortPoints,
+          estimatedMinutes: c.estimatedMinutes,
+        }}
+        employees={splitEmployees}
+        onConfirm={(input) => {
+          recordSplit(input);
+          setSplitDone(input.weBelegNo);
+        }}
+        onClose={() => setSplitOpen(false)}
+      />
     </Stack>
   );
 }

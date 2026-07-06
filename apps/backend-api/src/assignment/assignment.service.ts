@@ -354,8 +354,10 @@ export class AssignmentService {
    * Materialize each active employee's concrete Shift for `dayIso` from their weekly
    * pattern (Wochenplan → capacity). A non-working day drops any existing shift; a
    * working day upserts the derived netCapacity (source='pattern'). Idempotent.
+   * Public: recalculate/assignNextBundle run it implicitly; the dev panel's
+   * quick knob (POST /api/dev/materialize-shifts) calls it directly.
    */
-  private async materializeShiftsForDate(dayIso: string, dayDate: Date): Promise<void> {
+  async materializeShiftsForDate(dayIso: string, dayDate: Date): Promise<void> {
     const users = await this.prisma.user.findMany({
       where: { active: true },
       select: { id: true, productivityFactor: true, weeklyPattern: true },
@@ -403,8 +405,12 @@ export class AssignmentService {
    * proposed plan before committing it via recalculate(). Reads are non-mutating,
    * so no transaction is needed; assignedCaseCount mirrors the would-be persist.
    */
-  async preview(_principal: Principal, date?: string): Promise<RecalculateResultDto> {
-    const day = date ?? new Date().toISOString().slice(0, 10);
+  async preview(
+    _principal: Principal,
+    date?: string,
+    now: Date = new Date(),
+  ): Promise<RecalculateResultDto> {
+    const day = date ?? now.toISOString().slice(0, 10);
     const dayStart = new Date(day + 'T00:00:00.000Z');
     const dayEnd = new Date(day + 'T23:59:59.999Z');
 
@@ -439,7 +445,11 @@ export class AssignmentService {
     };
 
     const t0 = performance.now();
-    const plan = assignWork(input, engineConfigFromRuleConfig(ruleConfig));
+    // Same Schichtende-Cutoff evaluation as recalculate — the preview must predict
+    // exactly what a commit at this `now` would produce.
+    const plan = assignWork(input, engineConfigFromRuleConfig(ruleConfig), {
+      now: now.toISOString(),
+    });
     const durationMs = Math.round(performance.now() - t0);
 
     // Proposed assignment count = cases the engine placed into bundles (no DB write).

@@ -127,6 +127,8 @@ export interface BelegRow {
   deliveryGroup: DeliveryGroupRef | null;
   /** Bündel-Position für „vorbereitet · Pos n" (A5); null ohne Bündel. */
   bundleQueue: BundleQueueRef | null;
+  /** C5 Digitale Ablage: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
+  forwardedTo: string | null;
 }
 
 /** One server page of the Beleg list plus the total for the pagination. */
@@ -513,6 +515,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     attentionNote: item.attentionNote ?? null,
     missingFields: item.missingFields,
     bereich: item.bereich ?? null,
+    forwardedTo: item.forwardedTo ?? null,
     deliveryGroup: item.deliveryGroup
       ? {
           id: item.deliveryGroup.id,
