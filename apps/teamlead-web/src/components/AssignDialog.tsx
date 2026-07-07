@@ -30,6 +30,9 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import { LieferungChip } from './LieferungChip.js';
 import { lookupBeleg, type BelegLookup } from '../data/belege.js';
+import { searchAssignableCases, searchResultToBelegLookup, type CaseSearchResult } from '../data/belege.js';
+import { BelegSearchResultRow } from './BelegSearchResultRow.js';
+import { AssignBrowseDrawer } from './AssignBrowseDrawer.js';
 import { formatMinutes } from '../lib/format.js';
 import type { BoardRow } from '../data/types.js';
 
@@ -67,6 +70,9 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
   const [lookupTerm, setLookupTerm] = useState('');
   const [reason, setReason] = useState('');
   const [selected, setSelected] = useState<BelegLookup[]>([]);
+  const [dropdownIndex, setDropdownIndex] = useState(-1);
+  const [dropdownClosed, setDropdownClosed] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -74,6 +80,9 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
       setLookupTerm('');
       setReason('');
       setSelected([]);
+      setDropdownIndex(-1);
+      setDropdownClosed(false);
+      setBrowseOpen(false);
     }
   }, [open]);
 
@@ -89,12 +98,22 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
     enabled: open && lookupTerm.length > 0,
   });
 
+  const search = useQuery<CaseSearchResult[], Error>({
+    queryKey: ['case-search', lookupTerm],
+    queryFn: () => searchAssignableCases({ q: lookupTerm, limit: 8 }),
+    enabled: open && lookupTerm.length > 0,
+  });
+
   if (!row) return null;
 
   const result = lookupTerm.length > 0 ? (lookup.data ?? null) : null;
   const alreadySelected = result?.caseId != null && selected.some((s) => s.caseId === result.caseId);
   const assignable = result?.assignable === true && result.caseId !== null && !alreadySelected;
   const pendingLookup = lookupTerm.length > 0 && (lookup.isFetching || weBelegNo.trim() !== lookupTerm);
+  const alreadySelectedIds = new Set(selected.map((s) => s.caseId));
+  const searchResults = (search.data ?? []).filter((r) => !alreadySelectedIds.has(r.caseId));
+  const dropdownVisible =
+    !dropdownClosed && lookupTerm.length > 0 && !search.isFetching && searchResults.length > 0;
 
   const isFree = row.bundleId == null;
   const freeMinutes = Math.max(0, row.netCapacityMinutes - row.assignedMinutes);
@@ -123,6 +142,18 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
 
   function removeFromSelection(caseId: string): void {
     setSelected((prev) => prev.filter((s) => s.caseId !== caseId));
+  }
+
+  function addSearchResultToSelection(result: CaseSearchResult): void {
+    setSelected((prev) => [...prev, searchResultToBelegLookup(result)]);
+    setWeBelegNo('');
+    setLookupTerm('');
+    setDropdownIndex(-1);
+  }
+
+  function addBrowseResultsToSelection(results: CaseSearchResult[]): void {
+    setSelected((prev) => [...prev, ...results.map(searchResultToBelegLookup)]);
+    setBrowseOpen(false);
   }
 
   function handleConfirm(): void {
@@ -157,19 +188,48 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
             label="WE-Belegnummer"
             placeholder="z. B. WE-2026-01234"
             value={weBelegNo}
-            onChange={(e) => setWeBelegNo(e.target.value)}
+            onChange={(e) => {
+              setWeBelegNo(e.target.value);
+              setDropdownIndex(-1);
+              setDropdownClosed(false);
+            }}
             helperText={
               pendingLookup
                 ? 'Beleg wird geprüft …'
                 : 'Nummer vom Beleg eingeben — wird live geprüft. Mehrere Belege für ein Bündel: nacheinander hinzufügen.'
             }
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && assignable) {
+              if (e.key === 'ArrowDown' && dropdownVisible) {
                 e.preventDefault();
-                addToSelection();
+                setDropdownIndex((i) => Math.min(i + 1, searchResults.length - 1));
+              } else if (e.key === 'ArrowUp' && dropdownVisible) {
+                e.preventDefault();
+                setDropdownIndex((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Escape' && dropdownVisible) {
+                setDropdownClosed(true);
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (dropdownVisible && dropdownIndex >= 0 && searchResults[dropdownIndex]) {
+                  addSearchResultToSelection(searchResults[dropdownIndex]);
+                } else if (assignable) {
+                  addToSelection();
+                }
               }
             }}
           />
+
+          {dropdownVisible && (
+            <Paper variant="outlined" sx={{ maxHeight: 280, overflowY: 'auto' }}>
+              {searchResults.map((r, i) => (
+                <BelegSearchResultRow
+                  key={r.caseId}
+                  result={r}
+                  highlighted={i === dropdownIndex}
+                  onSelect={() => addSearchResultToSelection(r)}
+                />
+              ))}
+            </Paper>
+          )}
 
           {lookup.isError && (
             <Alert severity="error" variant="outlined">
@@ -187,6 +247,12 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
             <Alert severity={result.found ? 'warning' : 'info'} variant="outlined">
               {lookupMessage(result)}
             </Alert>
+          )}
+
+          {!pendingLookup && result?.reasonCode === 'not_found' && dropdownVisible && (
+            <Typography variant="caption" color="text.secondary">
+              Ähnliche Belege siehe Liste unten.
+            </Typography>
           )}
 
           {!pendingLookup && assignable && result && (
@@ -265,6 +331,17 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
               bewusst entscheiden.
             </Alert>
           )}
+
+          <Button size="small" onClick={() => setBrowseOpen((v) => !v)} sx={{ alignSelf: 'flex-start' }}>
+            {browseOpen ? 'Durchsuchen schließen' : 'Durchsuchen & mehrere auswählen'}
+          </Button>
+
+          <AssignBrowseDrawer
+            open={browseOpen}
+            row={row}
+            excludeCaseIds={selected.map((s) => s.caseId).filter((id): id is string => id !== null)}
+            onBulkAdd={addBrowseResultsToSelection}
+          />
 
           {selected.length > 0 && (
             <Paper
