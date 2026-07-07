@@ -52,6 +52,9 @@ jeden Beleg einzeln nachzuklicken.
    der Dialog `'Beleg zuweisen — <Name>'`.
 2. Geben Sie die **`'WE-Belegnummer'`** ein (Beispiel: `'z. B. WE-2026-01234'`). Der Beleg wird
    **live geprüft** (`'Beleg wird geprüft …'`).
+2a. Während Sie tippen, erscheint darunter eine **Trefferliste** mit ähnlichen Belegen (WE-Nr,
+    Bereich, Teile, Lieferung) — auch bei einer nicht exakten Eingabe. Klick oder Enter fügt den
+    markierten Treffer zur Auswahl hinzu.
 3. Die **Plausibilitätsprüfung** meldet, falls etwas nicht passt:
    - `'Kein Beleg mit dieser WE-Belegnummer gefunden.'`
    - `'Bereits zugeteilt an <Name> — erst entziehen, dann neu zuweisen.'`
@@ -93,6 +96,13 @@ flowchart TD
     F --> H[Grund optional -> Buendel anlegen und zuweisen]
     G --> I[Grund optional -> Zum Buendel hinzufuegen]
 ```
+
+## Durchsuchen & mehrere auswählen
+
+Statt eine WE-Nummer einzutippen, kann auch **`'Durchsuchen & mehrere auswählen'`** geöffnet
+werden: ein Filterbereich (Bereich-Chips, Shop, Filiale, Sortierung) mit einer Liste, in der
+mehrere Belege per Checkbox markiert werden. **`'Auswahl übernehmen'`** überträgt alle markierten
+Belege in dieselbe Auswahl wie oben — Bestätigung erfolgt danach genau wie gewohnt.
 
 ## Beleg zu anderer Person verschieben (B2)
 

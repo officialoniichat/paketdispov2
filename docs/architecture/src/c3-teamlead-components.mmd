@@ -30,7 +30,7 @@ flowchart TB
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
         actions["actions/caseActions.ts<br/><i>getAvailableActions(): single-source registry (status + assign/forward/attention flags)<br/>→ ReasonDialog (reasoned) · custom (assign/forward/attention/split) · instant (Zurückholen, Aufmerksamkeit entfernen)</i>"]:::logic
-        shared["components/<br/><i>CaseActionMenu (density compact/detail, one shared kebab for every surface) · AssignDialog ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (server-mode) · ReasonDialog</i>"]:::logic
+        shared["components/<br/><i>CaseActionMenu (density compact/detail, one shared kebab for every surface) · AssignDialog (live-search combobox + Durchsuchen browse drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (server-mode) · ReasonDialog</i>"]:::logic
         viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen)</i>"]:::logic
     end
 
