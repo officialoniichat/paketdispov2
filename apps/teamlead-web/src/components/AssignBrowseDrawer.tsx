@@ -49,12 +49,19 @@ export function AssignBrowseDrawer({
   const [sortMode, setSortMode] = useState<SortMode>('teile');
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
+  // When the Bereich selection resolves to exactly one value, narrow server-side so
+  // the 50-row cap applies AFTER filtering, not before. Otherwise (all Bereiche, or
+  // zero/multiple checked) keep the existing client-side filter fallback, since the
+  // backend's `bereich` param can't express a multi-value OR.
+  const singleBereich = !allBereiche && bereicheFilter.size === 1 ? [...bereicheFilter][0] : undefined;
+
   const query = useQuery<CaseSearchResult[], Error>({
-    queryKey: ['case-search-browse', shopNo, branchNo],
+    queryKey: ['case-search-browse', shopNo, branchNo, singleBereich],
     queryFn: () =>
       searchAssignableCases({
         shopNo: shopNo.trim() || undefined,
         branchNo: branchNo.trim() || undefined,
+        bereich: singleBereich,
         limit: 50,
       }),
     enabled: open,

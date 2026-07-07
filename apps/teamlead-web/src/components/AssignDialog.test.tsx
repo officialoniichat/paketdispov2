@@ -61,12 +61,12 @@ function searchResult(partial: Partial<CaseSearchResult> & Pick<CaseSearchResult
   };
 }
 
-function renderDialog(onConfirm = vi.fn()) {
+function renderDialog(onConfirm = vi.fn(), row: BoardRow = ROW) {
   const onClose = vi.fn();
   const client = createQueryClient({ retry: 0 });
   render(
     <AppProviders queryClient={client}>
-      <AssignDialog open row={ROW} onConfirm={onConfirm} onClose={onClose} />
+      <AssignDialog open row={row} onConfirm={onConfirm} onClose={onClose} />
     </AppProviders>,
   );
   return { onConfirm, onClose };
@@ -121,5 +121,42 @@ describe('AssignDialog', () => {
     await user.click(screen.getByRole('button', { name: /Auswahl übernehmen/ }));
 
     expect(screen.getByText('Bündel anlegen & zuweisen (2)')).toBeTruthy();
+  });
+
+  it('scopes the live-search dropdown to the employee Bereich when it is unambiguous', async () => {
+    vi.mocked(belege.searchAssignableCases).mockClear();
+    const user = userEvent.setup();
+
+    // ROW has exactly one Bereich ('Regal') → the dropdown query must pass it.
+    renderDialog();
+    await user.type(screen.getByLabelText('WE-Belegnummer'), 'WE-90');
+    await waitFor(() =>
+      expect(vi.mocked(belege.searchAssignableCases).mock.calls.some(([p]) => p.q === 'WE-90')).toBe(
+        true,
+      ),
+    );
+    const singleBereichCall = vi
+      .mocked(belege.searchAssignableCases)
+      .mock.calls.find(([p]) => p.q === 'WE-90');
+    expect(singleBereichCall?.[0].bereich).toBe('Regal');
+  });
+
+  it('does not scope the live-search dropdown when the employee has multiple Bereiche', async () => {
+    vi.mocked(belege.searchAssignableCases).mockClear();
+    const user = userEvent.setup();
+
+    // An employee with multiple (ambiguous) Bereiche must not narrow the search.
+    const multiBereichRow: BoardRow = { ...ROW, bereiche: ['Regal', 'Palette'] };
+    renderDialog(vi.fn(), multiBereichRow);
+    await user.type(screen.getByLabelText('WE-Belegnummer'), 'WE-90');
+    await waitFor(() =>
+      expect(vi.mocked(belege.searchAssignableCases).mock.calls.some(([p]) => p.q === 'WE-90')).toBe(
+        true,
+      ),
+    );
+    const multiBereichCall = vi
+      .mocked(belege.searchAssignableCases)
+      .mock.calls.find(([p]) => p.q === 'WE-90');
+    expect(multiBereichCall?.[0].bereich).toBeUndefined();
   });
 });

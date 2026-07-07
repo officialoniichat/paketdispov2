@@ -98,9 +98,14 @@ export function AssignDialog({ open, row, onConfirm, onClose }: AssignDialogProp
     enabled: open && lookupTerm.length > 0,
   });
 
+  // Scope the live-search dropdown to the employee's Bereich when it's unambiguous
+  // (exactly one). An employee with zero or multiple Bereiche keeps the search
+  // unfiltered — the backend's `bereich` param is single-value only.
+  const searchBereich = row?.bereiche.length === 1 ? row.bereiche[0] : undefined;
+
   const search = useQuery<CaseSearchResult[], Error>({
-    queryKey: ['case-search', lookupTerm],
-    queryFn: () => searchAssignableCases({ q: lookupTerm, limit: 8 }),
+    queryKey: ['case-search', lookupTerm, row?.bereiche.length ?? 0, searchBereich],
+    queryFn: () => searchAssignableCases({ q: lookupTerm, limit: 8, bereich: searchBereich }),
     enabled: open && lookupTerm.length > 0,
   });
 
