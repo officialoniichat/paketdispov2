@@ -336,6 +336,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A1/A2/B1: bounded, ranked search + browse over the assignable pool (ready + unassigned) for AssignDialog */
+        get: operations["TeamleadController_searchCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/cases/{caseId}": {
         parameters: {
             query?: never;
@@ -1579,6 +1596,18 @@ export interface components {
             reasonCode?: "not_found" | "already_assigned" | "wrong_status" | "blocked" | null;
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
         };
+        CaseSearchResultDto: {
+            caseId: string;
+            weBelegNo: string;
+            bereich?: string | null;
+            goodsType?: string | null;
+            /** @description Teile (totalQuantity) */
+            teile: number;
+            estimatedMinutes: number;
+            storageLocationCode?: string | null;
+            priorityFlags: string[];
+            deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
+        };
         EffortComponentsDto: {
             /** @description Grundzeit je Beleg */
             base: number;
@@ -2662,6 +2691,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseLookupResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_searchCases: {
+        parameters: {
+            query?: {
+                /** @description Volltext: WE-Beleg-Nr / Lieferschein-Nr / Lagerplatz-Code / Shop / Filiale (contains) */
+                q?: string;
+                /** @description Filter: fester Bereich (Hängebahn|Palette|Regal) */
+                bereich?: string;
+                /** @description Filter: Shop (primärer Shop, contains) */
+                shopNo?: string;
+                /** @description Filter: Filiale (contains) */
+                branchNo?: string;
+                /** @description Max. Ergebnisse (1-50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseSearchResultDto"][];
                 };
             };
         };

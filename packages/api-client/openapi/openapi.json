@@ -858,6 +858,83 @@
         ]
       }
     },
+    "/api/teamlead/cases/search": {
+      "get": {
+        "operationId": "TeamleadController_searchCases",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Volltext: WE-Beleg-Nr / Lieferschein-Nr / Lagerplatz-Code / Shop / Filiale (contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bereich",
+            "required": false,
+            "in": "query",
+            "description": "Filter: fester Bereich (Hängebahn|Palette|Regal)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shopNo",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Shop (primärer Shop, contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchNo",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Filiale (contains)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Max. Ergebnisse (1-50)",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseSearchResultDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A1/A2/B1: bounded, ranked search + browse over the assignable pool (ready + unassigned) for AssignDialog",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/cases/{caseId}": {
       "get": {
         "operationId": "TeamleadController_caseDetail",
@@ -4350,6 +4427,58 @@
         "required": [
           "found",
           "assignable"
+        ]
+      },
+      "CaseSearchResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "bereich": {
+            "type": "string",
+            "nullable": true
+          },
+          "goodsType": {
+            "type": "string",
+            "nullable": true
+          },
+          "teile": {
+            "type": "number",
+            "description": "Teile (totalQuantity)"
+          },
+          "estimatedMinutes": {
+            "type": "number"
+          },
+          "storageLocationCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "priorityFlags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deliveryGroup": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeliveryGroupRefDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "caseId",
+          "weBelegNo",
+          "teile",
+          "estimatedMinutes",
+          "priorityFlags"
         ]
       },
       "EffortComponentsDto": {

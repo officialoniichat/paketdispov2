@@ -24,6 +24,7 @@ import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './nar
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
 type CaseLookupResultDto = components['schemas']['CaseLookupResultDto'];
+type CaseSearchResultDto = components['schemas']['CaseSearchResultDto'];
 type PoolListDto = components['schemas']['PoolListDto'];
 type CaseDetailDto = components['schemas']['CaseDetailDto'];
 type PositionDetailDto = components['schemas']['PositionDetailDto'];
@@ -422,6 +423,95 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
           released: dto.deliveryGroup.released,
         }
       : null,
+  };
+}
+
+/** One assignable Beleg in the search/browse feed (A1/A2/B1) — always ready + unassigned. */
+export interface CaseSearchResult {
+  caseId: string;
+  weBelegNo: string;
+  bereich: string | null;
+  goodsType: string | null;
+  teile: number;
+  estimatedMinutes: number;
+  storageLocationCode: string | null;
+  priorityFlags: PriorityFlag[];
+  deliveryGroup: DeliveryGroupRef | null;
+}
+
+/** Query params for the assign-flow search/browse endpoint. */
+export interface CaseSearchParams {
+  q?: string;
+  bereich?: string;
+  shopNo?: string;
+  branchNo?: string;
+  limit?: number;
+}
+
+/**
+ * A1/A2/B1: bounded, ranked search + browse over the assignable pool, behind
+ * AssignDialog's live-search combobox and its "Durchsuchen" drawer.
+ */
+export async function searchAssignableCases(params: CaseSearchParams): Promise<CaseSearchResult[]> {
+  const result = await api.GET('/api/teamlead/cases/search', {
+    params: {
+      query: {
+        ...(params.q ? { q: params.q } : {}),
+        ...(params.bereich ? { bereich: params.bereich } : {}),
+        ...(params.shopNo ? { shopNo: params.shopNo } : {}),
+        ...(params.branchNo ? { branchNo: params.branchNo } : {}),
+        ...(params.limit ? { limit: params.limit } : {}),
+      },
+    },
+  });
+  const dto = unwrap<CaseSearchResultDto[]>(result, 'case search');
+  return dto.map(toSearchResult);
+}
+
+function toSearchResult(item: CaseSearchResultDto): CaseSearchResult {
+  return {
+    caseId: item.caseId,
+    weBelegNo: item.weBelegNo,
+    bereich: item.bereich ?? null,
+    goodsType: item.goodsType ?? null,
+    teile: item.teile,
+    estimatedMinutes: item.estimatedMinutes,
+    storageLocationCode: item.storageLocationCode ?? null,
+    priorityFlags: toPriorityFlags(item.priorityFlags),
+    deliveryGroup: item.deliveryGroup
+      ? {
+          id: item.deliveryGroup.id,
+          signal: item.deliveryGroup.signal,
+          confidence: item.deliveryGroup.confidence,
+          presentSize: item.deliveryGroup.presentSize,
+          expectedSize: item.deliveryGroup.expectedSize ?? null,
+          missingCount: item.deliveryGroup.missingCount,
+          locked: item.deliveryGroup.locked,
+          released: item.deliveryGroup.released,
+        }
+      : null,
+  };
+}
+
+/**
+ * Project a search/browse result onto the AssignDialog tray's existing `BelegLookup`
+ * shape. The endpoint's scope IS the assignability verdict, so `found`/`assignable`
+ * are always true and there is no `reasonCode` — this only exists so both entry
+ * points (exact lookup, search, browse) can share one `selected` tray state.
+ */
+export function searchResultToBelegLookup(result: CaseSearchResult): BelegLookup {
+  return {
+    found: true,
+    caseId: result.caseId,
+    weBelegNo: result.weBelegNo,
+    status: 'ready',
+    bereich: result.bereich,
+    teile: result.teile,
+    estimatedMinutes: result.estimatedMinutes,
+    assignedEmployeeName: null,
+    assignable: true,
+    reasonCode: null,
+    deliveryGroup: result.deliveryGroup,
   };
 }
 
