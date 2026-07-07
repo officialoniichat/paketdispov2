@@ -68,6 +68,37 @@ async function seed(): Promise<void> {
   await prisma.goodsReceiptCase.create({
     data: { ...base, weBelegNo: 'WE-SEARCH-PALETTE', storageLocationId: palette.id, status: 'ready' },
   });
+  // Browse-ordering probe: three ready/unassigned Regal cases with DISTINCT
+  // bookingDates (none equal to `DATE`, to avoid tie-break ambiguity against the
+  // other seeded Regal rows above) so the no-`q` browse test has a real, known-
+  // correct order to assert against instead of a vacuous self-comparison.
+  await prisma.goodsReceiptCase.create({
+    data: {
+      ...base,
+      weBelegNo: 'WE-SEARCH-DATE-OLD',
+      bookingDate: asDay('2026-06-17'),
+      storageLocationId: regal.id,
+      status: 'ready',
+    },
+  });
+  await prisma.goodsReceiptCase.create({
+    data: {
+      ...base,
+      weBelegNo: 'WE-SEARCH-DATE-MID',
+      bookingDate: asDay('2026-06-19'),
+      storageLocationId: regal.id,
+      status: 'ready',
+    },
+  });
+  await prisma.goodsReceiptCase.create({
+    data: {
+      ...base,
+      weBelegNo: 'WE-SEARCH-DATE-NEW',
+      bookingDate: asDay('2026-06-23'),
+      storageLocationId: regal.id,
+      status: 'ready',
+    },
+  });
   // Not ready (parked) — must never appear.
   await prisma.goodsReceiptCase.create({
     data: { ...base, weBelegNo: 'WE-SEARCH-PARKED', storageLocationId: regal.id, status: 'parked' },
@@ -131,13 +162,40 @@ describe('searchCases — assign-flow search + browse', () => {
   it('honors limit and caps it at 50 even if a caller requests more', async () => {
     const results = await read.searchCases({ limit: 2 });
     expect(results.length).toBeLessThanOrEqual(2);
+
+    // `seed()` alone only produces ~9 ready/unassigned cases, so `overLimit.length
+    // <= 50` would pass vacuously even if the cap were removed entirely. Seed a
+    // pool well past 50 — scoped to a dedicated Palette-bereich location so it
+    // cannot affect the Regal-scoped browse-ordering test that runs after this
+    // one — then assert the count is EXACTLY 50, which only holds if the cap is
+    // actually enforced against a bigger-than-50 candidate pool.
+    const capLocation = await prisma.location.create({
+      data: { code: 'CAP1', displayName: 'Cap-Test Palette', kind: 'palette_a', sequenceIndex: 99 },
+    });
+    await prisma.goodsReceiptCase.createMany({
+      data: Array.from({ length: 55 }, (_, i) => ({
+        source: 'manual' as const,
+        externalRef: 'search-cap-test',
+        weBelegNo: `WE-CAP-${String(i + 1).padStart(4, '0')}`,
+        bookingDate: asDay('2026-06-21'),
+        branchNo: '1',
+        section: 7,
+        totalQuantity: 10,
+        effortPoints: 5,
+        estimatedMinutes: 15,
+        storageLocationId: capLocation.id,
+        status: 'ready' as const,
+      })),
+    });
+
     const overLimit = await read.searchCases({ limit: 9999 });
-    expect(overLimit.length).toBeLessThanOrEqual(50);
+    expect(overLimit.length).toBe(50);
   });
 
   it('with no q, returns bookingDate-ordered browse results', async () => {
     const results = await read.searchCases({ bereich: 'Regal', limit: 50 });
-    const dates = results.map((_, i) => i);
-    expect(dates).toEqual([...dates].sort((a, b) => a - b));
+    const weBelegNos = results.map((r) => r.weBelegNo);
+    expect(weBelegNos.indexOf('WE-SEARCH-DATE-OLD')).toBeLessThan(weBelegNos.indexOf('WE-SEARCH-DATE-MID'));
+    expect(weBelegNos.indexOf('WE-SEARCH-DATE-MID')).toBeLessThan(weBelegNos.indexOf('WE-SEARCH-DATE-NEW'));
   });
 });
