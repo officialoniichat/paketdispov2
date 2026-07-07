@@ -49,13 +49,22 @@ import { useSplits } from '../split/SplitProvider.js';
 import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
+import { AblagenFilterBar } from './AblagenFilterBar.js';
+import {
+  filterLaneCardsForLane,
+  groupCards,
+  sanitizeAblagenFilterState,
+  type AblagenFilterState,
+  type AblagenGroupBy,
+} from './ablagenFilters.js';
 
 type AuditEventDto = components['schemas']['AuditEventDto'];
 
-/** Persisted board view state (C2): display order + collapsed lanes. */
+/** Persisted board view state (C2): display order + collapsed lanes + active filter/grouping. */
 interface AblagenViewState {
   laneOrder: LaneId[];
   collapsed: LaneId[];
+  filter: AblagenFilterState;
 }
 
 /** C3: who parked a Beleg, when and why (latest `case.parked` event per case). */
@@ -129,13 +138,22 @@ export function AblagenBoard(): JSX.Element {
 
   // C2: display order + collapse, persisted. Bucketing precedence stays fixed in
   // the data layer; this only re-orders/collapses the *display*.
-  const [view, setView] = useState<AblagenViewState>(() =>
-    loadViewState<AblagenViewState>(ABLAGEN_VIEW_KEY, { laneOrder: [], collapsed: [] }),
-  );
+  const [view, setView] = useState<AblagenViewState>(() => {
+    const loaded = loadViewState<Partial<AblagenViewState>>(ABLAGEN_VIEW_KEY, {});
+    return {
+      laneOrder: loaded.laneOrder ?? [],
+      collapsed: loaded.collapsed ?? [],
+      // Sanitized over the default so a stored blob from before the filter
+      // feature — or referencing a since-removed option like the old
+      // groupBy: 'assignedTo' — never yields `undefined` or invalid fields.
+      filter: sanitizeAblagenFilterState(loaded.filter),
+    };
+  });
   const updateView = (next: AblagenViewState): void => {
     setView(next);
     saveViewState(ABLAGEN_VIEW_KEY, next);
   };
+  const updateFilter = (filter: AblagenFilterState): void => updateView({ ...view, filter });
 
   const orderedLanes = useMemo(() => {
     const order = resolveLaneOrder(view.laneOrder, lanes);
@@ -200,6 +218,8 @@ export function AblagenBoard(): JSX.Element {
         Digitale Ablagen
       </Typography>
 
+      <AblagenFilterBar filter={view.filter} onChange={updateFilter} />
+
       {splitDone && (
         <Alert
           severity="success"
@@ -230,6 +250,8 @@ export function AblagenBoard(): JSX.Element {
           <LaneColumn
             key={lane.id}
             lane={lane}
+            filteredCards={filterLaneCardsForLane(lane.cards, view.filter, lane.id)}
+            groupBy={view.filter.groupBy}
             collapsed={view.collapsed.includes(lane.id)}
             canMoveLeft={index > 0}
             canMoveRight={index < orderedLanes.length - 1}
@@ -305,6 +327,10 @@ export function AblagenBoard(): JSX.Element {
 
 interface LaneColumnProps {
   lane: Lane;
+  /** Cards after the global Ablagen filter (README §5) — same order as `lane.cards`. */
+  filteredCards: LaneCard[];
+  /** "Gruppieren nach" (README §5); 'none' preserves the Weitergeleitet-recipient grouping. */
+  groupBy: AblagenGroupBy;
   collapsed: boolean;
   canMoveLeft: boolean;
   canMoveRight: boolean;
@@ -321,6 +347,8 @@ interface LaneColumnProps {
 
 function LaneColumn({
   lane,
+  filteredCards,
+  groupBy,
   collapsed,
   canMoveLeft,
   canMoveRight,
@@ -334,6 +362,8 @@ function LaneColumn({
   onAttention,
   onSplit,
 }: LaneColumnProps): JSX.Element {
+  const isFiltered = filteredCards.length !== lane.cards.length;
+
   if (collapsed) {
     return (
       <Paper
@@ -352,7 +382,7 @@ function LaneColumn({
         }}
       >
         <UnfoldMoreIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
-        <Chip size="small" label={lane.cards.length} />
+        <Chip size="small" label={filteredCards.length} />
         <Typography
           variant="caption"
           sx={{ fontWeight: 700, writingMode: 'vertical-rl', whiteSpace: 'nowrap' }}
@@ -363,11 +393,12 @@ function LaneColumn({
     );
   }
 
-  // C5: the Weitergeleitet lane IS the mocked recipient queue — group by recipient.
+  // C5: the Weitergeleitet lane IS the mocked recipient queue — group by recipient,
+  // unless the TL explicitly chose a different "Gruppieren nach" (README §5).
   const groups: { key: string; label: string | null; cards: LaneCard[] }[] =
-    lane.id === 'weitergeleitet'
-      ? groupByRecipient(lane.cards)
-      : [{ key: 'all', label: null, cards: lane.cards }];
+    groupBy === 'none' && lane.id === 'weitergeleitet'
+      ? groupByRecipient(filteredCards)
+      : groupCards(filteredCards, groupBy);
 
   return (
     <Paper
@@ -389,7 +420,11 @@ function LaneColumn({
         <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>
           {lane.title}
         </Typography>
-        <Chip size="small" label={lane.cards.length} />
+        <Chip
+          size="small"
+          label={isFiltered ? `${filteredCards.length}/${lane.cards.length}` : lane.cards.length}
+          color={isFiltered ? 'warning' : 'default'}
+        />
         <IconButton size="small" onClick={onToggleCollapsed} aria-label="Lane einklappen">
           <UnfoldLessIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
         </IconButton>
@@ -405,6 +440,11 @@ function LaneColumn({
         {lane.cards.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
             Leer.
+          </Typography>
+        )}
+        {lane.cards.length > 0 && filteredCards.length === 0 && (
+          <Typography variant="body2" color="warning.main" sx={{ py: 1, fontWeight: 600 }}>
+            Kein Treffer für aktuelle Filter.
           </Typography>
         )}
         {groups.map((group) => (

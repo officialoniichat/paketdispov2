@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Digitale Ablagen — Re-Gruppierung nach Dimension (Modell B, Alternative)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --brand: #0a3d62;
+    --brand-light: #3c6e8f;
+    --accent: #e58e26;
+    --surface: #f5f7fa;
+    --surface-raised: #ffffff;
+    --text-primary: #1a2430;
+    --text-secondary: #516170;
+    --border: #d6dde5;
+    --danger: #c62828;
+    --warning: #b26a00;
+    --success: #2e7d32;
+    --info: #1565c0;
+    --chip-bg: #eef1f5;
+    color-scheme: light dark;
+  }
+  :root[data-theme="dark"] {
+    --surface: #10161d;
+    --surface-raised: #1a2430;
+    --text-primary: #e8edf2;
+    --text-secondary: #9fb0bf;
+    --border: #2c3947;
+    --chip-bg: #23303c;
+    --brand-light: #5c8aa8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #10161d;
+      --surface-raised: #1a2430;
+      --text-primary: #e8edf2;
+      --text-secondary: #9fb0bf;
+      --border: #2c3947;
+      --chip-bg: #23303c;
+      --brand-light: #5c8aa8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    padding: 20px;
+  }
+  h1 { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+  .badge-alt {
+    display: inline-block;
+    background: var(--warning);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .dim-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .dim-switch .label { font-size: 12.5px; color: var(--text-secondary); font-weight: 700; }
+  .dim-tab {
+    border: 1px solid var(--border);
+    background: var(--chip-bg);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .dim-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .warn-note {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--warning);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 420px;
+    text-align: right;
+  }
+
+  .board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .lane {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    max-height: 78vh;
+  }
+  .lane-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .lane-title { font-weight: 700; font-size: 13.5px; flex: 1; }
+  .lane-count { font-size: 11px; font-weight: 700; background: var(--chip-bg); border-radius: 999px; padding: 2px 8px; }
+  .lane-desc { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+  .lane-cards { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--surface); }
+  .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .card-weBeleg { font-weight: 700; font-size: 12.5px; }
+  .card-storage { font-size: 11px; color: var(--text-secondary); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .chip { font-size: 10px; font-weight: 700; color: #fff; padding: 2px 7px; border-radius: 999px; }
+  .chip.status-ready { background: var(--success); }
+  .chip.status-assigned { background: var(--info); }
+  .chip.status-parked { background: #6b6b6b; }
+  .chip.status-problem { background: var(--danger); }
+  .chip.status-inprogress { background: var(--brand-light); }
+  .chip.prio { background: var(--danger); }
+  .card-meta { font-size: 11px; color: var(--text-secondary); }
+
+  .callout {
+    margin-top: 20px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--warning);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .callout b { color: var(--text-primary); }
+  .callout ul { margin: 6px 0 0; padding-left: 18px; }
+  .callout li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Digitale Ablagen <span class="badge-alt">Alternative — Modell B (nicht empfohlen als Ersatz)</span></h1>
+<p class="subtitle">Lane-Achse wird komplett auf eine wählbare Dimension umgeschaltet (hier: Filiale). Status ist nur noch ein Chip auf der Karte, nicht mehr die Lane-Grenze.</p>
+
+<div class="dim-switch">
+  <span class="label">Lanes gruppieren nach:</span>
+  <button class="dim-tab">Status (Standard)</button>
+  <button class="dim-tab active">Filiale</button>
+  <button class="dim-tab">Bereich</button>
+  <button class="dim-tab">Zugeteilter Mitarbeiter</button>
+  <span class="warn-note">⚠ Problemfälle, Geparkt &amp; Weitergeleitet sind hier nur noch Karten-Chips — leicht zu übersehen.</span>
+</div>
+
+<div class="board">
+
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">042 · Mitte</div>
+      <div class="lane-count">7</div>
+    </div>
+    <div class="lane-desc">318 Teile · 6h 20min</div>
+    <div class="lane-cards">
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88231</span><span class="card-storage">K-14-3</span></div>
+        <div class="chips"><span class="chip status-problem">Problem</span></div>
+        <div class="card-meta">Kühlware · 44 Teile — Problem-Status nur als Chip sichtbar</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88301</span><span class="card-storage">K-11-2</span></div>
+        <div class="chips"><span class="chip prio">Prio</span><span class="chip status-ready">Bereit</span></div>
+        <div class="card-meta">Kühlware · 33 Teile</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88355</span><span class="card-storage">K-05-1</span></div>
+        <div class="chips"><span class="chip status-assigned">Zugewiesen</span></div>
+        <div class="card-meta">Trocken · 18 Teile · M. Berger</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">017 · Nord</div>
+      <div class="lane-count">4</div>
+    </div>
+    <div class="lane-desc">142 Teile · 3h 05min</div>
+    <div class="lane-cards">
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88410</span><span class="card-storage">T-02-1</span></div>
+        <div class="chips"><span class="chip status-parked">Geparkt</span></div>
+        <div class="card-meta">Textil · 20 Teile — Geparkt-Kontext (wer/wann/warum) nicht mehr sofort sichtbar</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88422</span><span class="card-storage">T-06-2</span></div>
+        <div class="chips"><span class="chip status-inprogress">In Arbeit</span></div>
+        <div class="card-meta">Textil · 27 Teile · A. Kranz</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">003 · Ost</div>
+      <div class="lane-count">3</div>
+    </div>
+    <div class="lane-desc">96 Teile · 1h 50min</div>
+    <div class="lane-cards">
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88501</span><span class="card-storage">E-01-1</span></div>
+        <div class="chips"><span class="chip status-ready">Bereit</span></div>
+        <div class="card-meta">Elektro · 12 Teile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-header">
+      <div class="lane-title">— unbekannt —</div>
+      <div class="lane-count">2</div>
+    </div>
+    <div class="lane-desc">Keine Filiale zugeordnet</div>
+    <div class="lane-cards">
+      <div class="card">
+        <div class="card-top"><span class="card-weBeleg">WE-88602</span><span class="card-storage">S-03-1</span></div>
+        <div class="chips"><span class="chip status-ready">Bereit</span></div>
+        <div class="card-meta">Sonstige · 8 Teile</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="callout">
+  <b>Warum das nicht die empfohlene Primärlösung ist:</b>
+  <ul>
+    <li>Problemfälle, Geparkt und Weitergeleitet sind heute eigene Lanes mit eigener Fachlogik
+      (Parked-Tooltip C3 „wer/wann/warum", Weiterleitungs-Empfänger-Gruppierung C5, Deep-Link ins
+      Problem-Tab C4). Sobald die Lane-Achse wechselt, wird dieser Zustand zu einem Chip unter vielen —
+      genau die Fälle, die am dringendsten TL-Aufmerksamkeit brauchen, werden am leichtesten übersehen.</li>
+    <li>`CaseActionMenu`, `groupByRecipient` und der Parked-Kontext sind heute an <code>laneId</code>
+      gekoppelt — ein echtes Umschalten der Lane-Achse würde diese Logik grundlegend umbauen, nicht nur
+      die Anzeige.</li>
+    <li>Beantwortet gut die Lastverteilungs-Frage („wie viel liegt wo"), aber genau dafür würde eine
+      eigene Auswertungs-/Report-Ansicht besser passen als ein Umbau des bestehenden Kanban-Boards.</li>
+  </ul>
+  Siehe README.md Abschnitt 3–4 für die volle Abwägung und die empfohlene leichte Alternative
+  (Sub-Gruppierung <i>innerhalb</i> einer Lane, Mockup A).
+</div>
+
+</body>
+</html>
