@@ -2,10 +2,18 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "pnpm --filter @paket/backend-api build"
+    "buildCommand": "pnpm --filter @paket/backend-api build",
+    "watchPatterns": [
+      "apps/backend-api/**",
+      "packages/assignment-engine/**",
+      "packages/domain-types/**",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "tsconfig.base.json"
+    ]
   },
   "deploy": {
-    "preDeployCommand": "pnpm --filter @paket/backend-api exec sh -c 'prisma migrate deploy && (prisma db seed || echo seed-skipped)'",
+    "preDeployCommand": "pnpm --filter @paket/backend-api exec sh -c 'prisma migrate deploy && if [ \"$SEED_ON_DEPLOY\" = \"1\" ]; then echo \"[deploy] SEED_ON_DEPLOY=1 - running destructive seed\"; prisma db seed; else echo \"[deploy] seed skipped (SEED_ON_DEPLOY is not 1)\"; fi'",
     "startCommand": "pnpm --filter @paket/backend-api start"
   }
 }
