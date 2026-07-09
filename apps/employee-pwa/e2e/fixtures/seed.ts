@@ -11,13 +11,73 @@
  */
 import { PrismaClient } from './prisma-client.js';
 import { hashPin } from './pin-hash.js';
-import { MA_101, MA_102, type SeedEmployeeSpec } from './seed-data.js';
+import {
+  MA_101,
+  MA_102,
+  ONLINE_SIZE_PREFERENCE,
+  type SeedEmployeeSpec,
+  type SeedPositionSpec,
+} from './seed-data.js';
 
 /** Midnight UTC "today" — must match `startOfTodayUtc()` in cases.service.ts
  *  exactly, since `GET /api/me/today` looks up the bundle by this exact date. */
 function todayMidnightUtc(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Positions + Größen (SKU lines) with EK/VK/VK-Etikett prices, plus the work
+ * instruction header the PROCESS screen renders above the Positionen-Tabelle.
+ * Without these a Beleg has no positions at all and the table has nothing to
+ * lay out.
+ */
+async function seedPositions(
+  prisma: PrismaClient,
+  caseId: string,
+  positions: readonly SeedPositionSpec[],
+): Promise<void> {
+  await prisma.workInstructionHeader.create({
+    data: {
+      caseId,
+      priceLabelPrintRequired: true,
+      sortByArticleColorSizeRequired: true,
+      boxLabelRequired: false,
+      zstRequired: true,
+    },
+  });
+
+  for (const spec of positions) {
+    const position = await prisma.receiptPosition.create({
+      data: {
+        caseId,
+        positionNo: spec.positionNo,
+        wgr: spec.wgr,
+        supplierArticleNo: spec.supplierArticleNo,
+        supplierColor: spec.supplierColor,
+        season: spec.season,
+        branchNo: '1',
+        shopNo: spec.shopNo,
+        catMan: spec.catMan,
+        onlineRelevant: spec.onlineRelevant,
+      },
+    });
+    await prisma.positionInstruction.create({
+      data: {
+        positionId: position.id,
+        priceLabelRequired: true,
+        priceLabelAttachRequired: spec.priceLabelAttachLocation !== undefined,
+        priceLabelAttachLocation: spec.priceLabelAttachLocation,
+        securityRequired: spec.securityTypeCode !== undefined,
+        securityTypeCode: spec.securityTypeCode,
+        securityLocation: spec.securityLocation,
+        onlineHandlingRequired: spec.onlineRelevant,
+      },
+    });
+    await prisma.receiptSkuLine.createMany({
+      data: spec.skuLines.map((line) => ({ receiptPositionId: position.id, ...line })),
+    });
+  }
 }
 
 async function seedEmployee(prisma: PrismaClient, spec: SeedEmployeeSpec): Promise<void> {
@@ -78,12 +138,16 @@ async function seedEmployee(prisma: PrismaClient, spec: SeedEmployeeSpec): Promi
     await prisma.assignmentItem.create({
       data: { bundleId: bundle.id, caseId: c.id, sequence: index + 1 },
     });
+    if (index === 0 && spec.positions) await seedPositions(prisma, c.id, spec.positions);
   }
 }
 
 export async function seedDatabase(databaseUrl: string): Promise<void> {
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
   try {
+    // The Online-Größen-Markierung is derived from this preference, so it must
+    // exist before the positions that reference its WGR are read back.
+    await prisma.onlineSizePreference.create({ data: { ...ONLINE_SIZE_PREFERENCE } });
     await seedEmployee(prisma, MA_101);
     await seedEmployee(prisma, MA_102);
   } finally {
