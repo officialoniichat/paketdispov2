@@ -30,6 +30,10 @@ export const ltTheme: Theme = createTheme({
     body1: { fontSize: '1rem' },
   },
   components: {
+    // MUI's built-in strings default to English; the UI language is German (§12.2).
+    MuiAlert: {
+      defaultProps: { closeText: 'Schließen' },
+    },
     MuiButton: {
       defaultProps: { variant: 'contained', disableElevation: true },
       styleOverrides: {

@@ -277,7 +277,7 @@ function ParamsSection({
     <Stack spacing={1.5}>
       <Typography variant="subtitle2">Einsatz-Parameter</Typography>
       <div>
-        <Typography variant="body2">Produktivitätsfaktor: {productivity.toFixed(2)}</Typography>
+        <Typography variant="body2">Produktivitätsfaktor: {productivity.toFixed(2).replace('.', ',')}</Typography>
         <Slider
           value={productivity}
           min={0.5}

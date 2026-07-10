@@ -26,7 +26,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import { assignmentStatusLabels, CaseStatusChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
-import { formatMinutes, formatPct } from '../../lib/format.js';
+import { formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { AssignDialog } from '../../components/AssignDialog.js';
 import { MoveCaseDialog, type MoveCaseTarget } from '../../components/MoveCaseDialog.js';
@@ -218,7 +218,7 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
             color={row.utilisationPct > 95 ? 'warning' : 'default'}
           />
           <Typography variant="caption" color="text.secondary">
-            {row.plannedHours} h geplant
+            {formatNumber(row.plannedHours)} h geplant
           </Typography>
           {row.bereiche.length > 0 && (
             <Typography variant="caption" color="text.secondary">
