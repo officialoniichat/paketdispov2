@@ -14,21 +14,26 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { login, LoginError } from '../data/auth.js';
 import type { Session } from '../data/session.js';
+import { resolveEnv } from '../config/runtimeEnv.js';
 
 export interface LoginScreenProps {
   onLoggedIn: (session: Session) => void;
 }
 
 /**
- * Vorbelegung für die Demo: `ma-108` ist der Seed-Mitarbeiter mit der reichhaltigsten
- * Datenlage — 5 Belege auf 4 Lagerplätzen (Mehrfachauswahl und „Rest parken" sind damit
- * vorführbar), alle mit Etikettendruck und Sicherungstyp, drei davon mit online
- * markierten Größen. Das Feld bleibt frei editierbar.
+ * Vorbelegte Mitarbeiternummer — ausschließlich für den Demo-Link.
+ *
+ * Nur gesetzt, wenn die Umgebung `VITE_DEMO_EMPLOYEE_NO` mitgibt (Railway-Variable →
+ * `/env.js`, siehe `config/runtimeEnv.ts`). Ohne die Variable startet das Feld leer:
+ * ein produktiv genutzter Stand darf keine Nummer vorschlagen, mit der sich jeder
+ * Besucher als dieser Mitarbeiter anmeldet. Für die Vorführung setzt man `ma-108` —
+ * der Seed-Mitarbeiter mit der reichhaltigsten Datenlage (5 Belege auf 4 Lagerplätzen,
+ * Sicherungstyp, drei mit online markierten Größen). Das Feld bleibt stets editierbar.
  */
-const DEMO_EMPLOYEE_NO = 'ma-108';
+const demoEmployeeNo = resolveEnv('VITE_DEMO_EMPLOYEE_NO') ?? '';
 
 export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
-  const [employeeNo, setEmployeeNo] = useState(DEMO_EMPLOYEE_NO);
+  const [employeeNo, setEmployeeNo] = useState(demoEmployeeNo);
   const [error, setError] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
