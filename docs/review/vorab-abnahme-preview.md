@@ -890,3 +890,7 @@ die „Geparkt"-Frage (Klärung mit Dustin, kein Code).
 - Die C4-Diagramme brauchten keine Aktualisierung: kein Container, kein Modul, keine Engine-Stufe,
   kein Prisma-Schema und keine Type-Chain wurde verändert. Die Merges bringen Testdateien, der
   Revert stellt eine Komponente wieder her, das Demo-Flag ist eine Env-Variable.
+
+> **Nachtrag (10.07., nach dem Deploy):** Daniel hat den Prüfstufen-Tooltip ausdrücklich zurückgewollt —
+> `a840643` wurde revertet, `5e8cc3f` gilt wieder. Der Touch-Einwand aus §11.6 bleibt dokumentiert
+> (Tooltip per Hover, Zielgerät 22–24″ Touch) und wandert als offener UX-Punkt in die nächste Runde.
