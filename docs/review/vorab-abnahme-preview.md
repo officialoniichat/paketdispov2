@@ -98,9 +98,14 @@ Danach hat der Demo-Mitarbeiter ein Bündel, und „Ware holen" ist gefüllt. **
 
 | Gefordert | Vorher | Jetzt |
 | --- | --- | --- |
-| Beleg mit `priceLabelPrintRequired` → Chip „Etiketten drucken" | ✅ 195 Belege | unverändert |
+| Beleg mit `priceLabelPrintRequired` → Chip „Etiketten drucken" | ✅ alle 195 Belege | ✅ **125 von 195** — der Chip trägt jetzt Information (`case-builders.ts:152`) |
 | Beleg mit `securityTypeCode` → Sicherungs-Piktogramm | ✅ 196 Positionen (`hard-tag`) | unverändert |
 | Position mit Online-Markierung → farbiger Chip je Größe | ❌ **fehlte im Bündel** | ✅ 96 Positionen |
+
+> **Nachtrag (nach Erstfassung dieses Berichts):** Der Etikettendruck stand ursprünglich auf **jedem**
+> Beleg — damit sagte der Chip „🏷️ Etiketten drucken" nichts aus, obwohl Dustin genau daran erkennen
+> will, ob er zum Drucker muss. Er hängt jetzt an einer deterministischen Teilmenge (zwei von drei
+> Belegen). Nachgemessen im Bündel von `ma-108`: 2 von 3 Belegen tragen den Chip.
 
 **Das dritte fehlte und wurde in den Demodaten korrigiert — nicht im Produktivcode.**
 
@@ -139,7 +144,7 @@ nicht `ReceiptPosition.onlineRelevant`. Dieses Feld blieb `false`.
 | Startseite: je Beleg der Lagerplatz | ✅ | 4 Stops `R5`, `R11`, `R25`, `R27`; je Beleg `storageLocationCode` |
 | Mehrfachauswahl | ✅ | Nach zwei Klicks: „2/4 Plätze", beide Stops „geholt" |
 | „Rest parken" funktioniert | ✅ | `POST /api/me/park → 201`, Meldung **„2 Belege geparkt – kommen ins nächste Bündel."**, Abschnitt 2 danach entsperrt |
-| Chip „Etiketten drucken" | ✅ | `WE 3.540.633 · 🏷️ Etiketten drucken` an jedem Beleg. `screenshots/02-startseite-ware-holen-1920x1080.png` |
+| Chip „Etiketten drucken" | ✅ | `WE 3.540.633 · 🏷️ Etiketten drucken`. Seit der B3-Änderung an einer Teilmenge — im Bündel von `ma-108` an 2 von 3 Belegen, damit der Chip unterscheidet. `screenshots/02-startseite-ware-holen-1920x1080.png` (zeigt den älteren Stand mit Chip an jedem Beleg) |
 | Positionen als Tabelle mit **festen Spaltenüberschriften** | ✅ | Echtes `<table>`: `Pos · EAN · Größe · Online · Soll · Ist · Mehr-/Mindermenge · EK · VK · VK-Etikett` |
 | EK-/VK-Preis **rechts** | ✅ | `EK` ab x=1320, `VK-Etikett` endet bei x=1903 (Viewport 1920). `text-align: right`, `14,50 €` / `34,80 €` |
 | Mehr-/Mindermengen **daneben** | ✅ | Eigene Spalte zwischen `Ist` und `EK` |
@@ -430,9 +435,19 @@ curl -s -X POST localhost:3002/api/teamlead/assignments/recalculate \
 ```
 
 Anmelden in der Mitarbeiter-App: Das Feld ist mit **`ma-108`** vorbelegt — einmal „Anmelden"
-klicken, kein PIN. `ma-108` (Hakan Yilmaz) hat den reichhaltigsten Demo-Datenstand: 5 Belege auf
-4 Lagerplätzen, alle mit Etikettendruck und Sicherungstyp, drei davon mit Online-Chips. Jede andere
-Nummer (`ma-101` … `ma-110`) lässt sich einfach darüberschreiben.
+klicken, kein PIN. Jede andere Nummer (`ma-101` … `ma-110`) lässt sich darüberschreiben.
+
+**Wie viel `ma-108` sieht, hängt am Zeitpunkt des `recalculate`** ([C4](#c4)) — die Bündelgröße wird
+gegen `now` gerechnet. Zwei Messungen desselben Seeds:
+
+| `recalculate` um | `ma-108` |
+| --- | --- |
+| 02:39 (vor Schichtbeginn) | 5 Belege, 4 Lagerplätze, 3 mit Online-Chips |
+| 14:49 (Schicht fast vorbei) | 3 Belege, 3 Lagerplätze, 2 mit Online-Chips, 2 mit Etikett-Chip |
+
+Beides reicht für die Vorführung (Mehrfachauswahl und „Rest parken" brauchen ≥ 2 Lagerplätze).
+Wer den vollen Datenstand will, ruft `recalculate` morgens auf. Welcher Mitarbeiter gerade am
+meisten trägt, kann dabei wechseln — um 14:49 lag `ma-107` mit 5 Belegen vorn.
 
 > **Wenn du 3000 und 5174 freiräumst** (Container `gotenberg-fahrauftrag` stoppen, die beiden
 > `busverwaltung`-Vite-Server beenden), genügt schlicht `pnpm dev` — dann stimmen auch die `.env`-
@@ -480,6 +495,19 @@ Bei (c) laufen die Dev-Server weiter, aber der Worktree zeigt dann nicht mehr au
 C4-Diagramme wurden **nicht** angefasst: kein Container, kein Modul, keine Engine-Pipeline, kein
 Prisma-Schema und keine Type-Chain hat sich geändert. Die Merge-Commits bringen die von den
 Feature-Branches bereits aktualisierten `.mmd`/SVG mit.
+
+### Nach der Erstfassung dieses Berichts hinzugekommen
+
+| Commit | Inhalt |
+| --- | --- |
+| `95e8167` | E2E-Tests für die neun Kundenforderungen aus dem Call; darin die B3-Änderung: Etikettendruck nur noch auf zwei von drei Belegen |
+| `5d45e7d` | E2E der Kundenforderungen im Cockpit gegen ein echtes, geseedetes Backend |
+| `038ea9d` | `fix(cases)`: `/api/me/today` sortiert nach der Bündel-Reihenfolge der Engine |
+| `812d5e9`, `212e4c8` | Merges der beiden Test-Branches |
+
+Gegen diesen Stand erneut geprüft: `typecheck` 13/13, `lint` 0 Fehler, `test` 13/13
+(backend-api 171, teamlead-web 94, employee-pwa 74, assignment-engine 166). Seed und
+`recalculate` laufen, `ma-108` hat ein Bündel. **Die Empfehlung bleibt unverändert.**
 
 ---
 
