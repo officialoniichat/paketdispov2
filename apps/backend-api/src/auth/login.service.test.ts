@@ -5,32 +5,51 @@ import { TokenIssuer } from './token-issuer.js';
 import { hashPin } from './pin.js';
 import { Role } from './rbac.js';
 
-function buildPrismaStub(
-  user: {
-    employeeNo: string;
-    displayName: string;
-    pinHash: string | null;
-    active: boolean;
-    roles: { role: { name: string } }[];
-  } | null,
-): PrismaService {
+interface StubUser {
+  employeeNo: string;
+  displayName: string;
+  pinHash: string | null;
+  active: boolean;
+  roles: { role: { name: string } }[];
+}
+
+function buildPrismaStub(user: StubUser | null): PrismaService {
   return { user: { findUnique: vi.fn().mockResolvedValue(user) } } as unknown as PrismaService;
 }
 
-describe('LoginService', () => {
-  it('returns a token for a correct employeeNo/PIN pair', async () => {
-    const pinHash = await hashPin('4711');
-    const prisma = buildPrismaStub({
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
-      pinHash,
-      active: true,
-      roles: [{ role: { name: 'employee' } }],
-    });
-    const issuer = { issue: vi.fn().mockResolvedValue('signed.jwt.token') } as unknown as TokenIssuer;
-    const service = new LoginService(prisma, issuer);
+function buildIssuerStub(token = 'signed.jwt.token'): TokenIssuer {
+  return { issue: vi.fn().mockResolvedValue(token) } as unknown as TokenIssuer;
+}
 
-    const result = await service.login('ma-101', '4711');
+/** A Mitarbeiter/in: role `employee`, and therefore no `pinHash` at all. */
+function employee(overrides: Partial<StubUser> = {}): StubUser {
+  return {
+    employeeNo: 'ma-101',
+    displayName: 'Mitarbeiter 101',
+    pinHash: null,
+    active: true,
+    roles: [{ role: { name: 'employee' } }],
+    ...overrides,
+  };
+}
+
+async function teamlead(overrides: Partial<StubUser> = {}): Promise<StubUser> {
+  return {
+    employeeNo: 'tl-001',
+    displayName: 'TL Logistik',
+    pinHash: await hashPin('0000'),
+    active: true,
+    roles: [{ role: { name: 'teamlead' } }],
+    ...overrides,
+  };
+}
+
+describe('LoginService — Mitarbeiterrolle (no secret required)', () => {
+  it('issues a token for the Mitarbeiternummer alone', async () => {
+    const issuer = buildIssuerStub();
+    const service = new LoginService(buildPrismaStub(employee()), issuer);
+
+    const result = await service.login('ma-101');
 
     expect(result).toEqual({ token: 'signed.jwt.token' });
     expect(issuer.issue).toHaveBeenCalledWith({
@@ -40,70 +59,89 @@ describe('LoginService', () => {
     });
   });
 
-  it('returns null for a wrong PIN', async () => {
-    const pinHash = await hashPin('4711');
-    const prisma = buildPrismaStub({
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
-      pinHash,
-      active: true,
-      roles: [{ role: { name: 'employee' } }],
-    });
-    const service = new LoginService(prisma, { issue: vi.fn() } as unknown as TokenIssuer);
+  it('issues a token for a user with no role rows at all (defaults to employee)', async () => {
+    const service = new LoginService(buildPrismaStub(employee({ roles: [] })), buildIssuerStub());
 
-    expect(await service.login('ma-101', '0000')).toBeNull();
+    expect(await service.login('ma-101')).toEqual({ token: 'signed.jwt.token' });
+  });
+
+  it('ignores a PIN that is sent anyway', async () => {
+    const service = new LoginService(buildPrismaStub(employee()), buildIssuerStub());
+
+    expect(await service.login('ma-101', '9999')).toEqual({ token: 'signed.jwt.token' });
   });
 
   it('returns null for an unknown employeeNo', async () => {
-    const prisma = buildPrismaStub(null);
-    const service = new LoginService(prisma, { issue: vi.fn() } as unknown as TokenIssuer);
+    const service = new LoginService(buildPrismaStub(null), buildIssuerStub());
 
-    expect(await service.login('ma-999', '4711')).toBeNull();
+    expect(await service.login('ma-999')).toBeNull();
   });
 
   it('returns null for an inactive employee', async () => {
-    const pinHash = await hashPin('4711');
-    const prisma = buildPrismaStub({
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
-      pinHash,
-      active: false,
-      roles: [{ role: { name: 'employee' } }],
-    });
-    const service = new LoginService(prisma, { issue: vi.fn() } as unknown as TokenIssuer);
+    const service = new LoginService(buildPrismaStub(employee({ active: false })), buildIssuerStub());
 
-    expect(await service.login('ma-101', '4711')).toBeNull();
+    expect(await service.login('ma-101')).toBeNull();
+  });
+});
+
+describe('LoginService — privileged roles (PIN required)', () => {
+  it('issues a token for a teamlead with the correct PIN', async () => {
+    const issuer = buildIssuerStub();
+    const service = new LoginService(buildPrismaStub(await teamlead()), issuer);
+
+    const result = await service.login('tl-001', '0000');
+
+    expect(result).toEqual({ token: 'signed.jwt.token' });
+    expect(issuer.issue).toHaveBeenCalledWith({
+      employeeNo: 'tl-001',
+      displayName: 'TL Logistik',
+      roles: [Role.Teamlead],
+    });
   });
 
-  it('returns null when no PIN has been set for the employee', async () => {
-    const prisma = buildPrismaStub({
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
+  it('returns null for a teamlead with a wrong PIN', async () => {
+    const service = new LoginService(buildPrismaStub(await teamlead()), buildIssuerStub());
+
+    expect(await service.login('tl-001', '1234')).toBeNull();
+  });
+
+  it('returns null for a teamlead who sends no PIN — the number alone never suffices', async () => {
+    const service = new LoginService(buildPrismaStub(await teamlead()), buildIssuerStub());
+
+    expect(await service.login('tl-001')).toBeNull();
+  });
+
+  it('returns null for a privileged user with no pinHash — never falls through to a PIN-less login', async () => {
+    const admin: StubUser = {
+      employeeNo: 'admin-001',
+      displayName: 'Admin',
       pinHash: null,
       active: true,
-      roles: [{ role: { name: 'employee' } }],
-    });
-    const service = new LoginService(prisma, { issue: vi.fn() } as unknown as TokenIssuer);
+      roles: [{ role: { name: 'admin' } }],
+    };
 
-    expect(await service.login('ma-101', '4711')).toBeNull();
+    const withoutPin = new LoginService(buildPrismaStub(admin), buildIssuerStub());
+    const withPin = new LoginService(buildPrismaStub(admin), buildIssuerStub());
+
+    expect(await withoutPin.login('admin-001')).toBeNull();
+    expect(await withPin.login('admin-001', '0000')).toBeNull();
   });
 
-  it('returns identical null result whether the employeeNo is unknown or the PIN is wrong (no user enumeration)', async () => {
-    const unknownPrisma = buildPrismaStub(null);
-    const unknownService = new LoginService(unknownPrisma, { issue: vi.fn() } as unknown as TokenIssuer);
+  it('requires the PIN when a user holds both the employee and a privileged role', async () => {
+    const roles = [{ role: { name: 'employee' } }, { role: { name: 'teamlead' } }];
+    const withoutPin = new LoginService(buildPrismaStub(await teamlead({ roles })), buildIssuerStub());
+    const withPin = new LoginService(buildPrismaStub(await teamlead({ roles })), buildIssuerStub());
 
-    const pinHash = await hashPin('4711');
-    const wrongPinPrisma = buildPrismaStub({
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
-      pinHash,
-      active: true,
-      roles: [{ role: { name: 'employee' } }],
-    });
-    const wrongPinService = new LoginService(wrongPinPrisma, { issue: vi.fn() } as unknown as TokenIssuer);
+    expect(await withoutPin.login('tl-001')).toBeNull();
+    expect(await withPin.login('tl-001', '0000')).toEqual({ token: 'signed.jwt.token' });
+  });
 
-    const unknownResult = await unknownService.login('ma-999', '4711');
-    const wrongPinResult = await wrongPinService.login('ma-101', '0000');
+  it('returns an identical null result whether the employeeNo is unknown or the PIN is wrong (no user enumeration)', async () => {
+    const unknownService = new LoginService(buildPrismaStub(null), buildIssuerStub());
+    const wrongPinService = new LoginService(buildPrismaStub(await teamlead()), buildIssuerStub());
+
+    const unknownResult = await unknownService.login('tl-999', '0000');
+    const wrongPinResult = await wrongPinService.login('tl-001', '1234');
 
     expect(unknownResult).toBeNull();
     expect(wrongPinResult).toBeNull();

@@ -13,7 +13,9 @@ import {
   DEFAULT_WGR_CATALOG,
   RULE_CONFIG_KEY,
 } from '@paket/domain-types';
-import { LOCATIONS, USERS, type ShiftModel } from './seed-data.js';
+import { hashPin } from '../../auth/pin.js';
+import { normaliseRole, requiresPin } from '../../auth/rbac.js';
+import { LOCATIONS, PRIVILEGED_DEMO_PIN, USERS, type ShiftModel } from './seed-data.js';
 import type { ScenarioContext, ScenarioPrisma, ScenarioSummary } from './types.js';
 
 // --- Date helpers -----------------------------------------------------------
@@ -116,12 +118,17 @@ export async function seedUsers(
   const idByEmployeeNo: Record<string, string> = {};
   for (const u of USERS) {
     const weeklyPattern = buildWeeklyPattern(u.pattern);
+    // Only the privileged roles carry a secret; a Mitarbeiter's pinHash stays
+    // null, so no dead credential ever lingers in the database.
+    const role = normaliseRole(u.role);
+    const pinHash = role && requiresPin([role]) ? await hashPin(PRIVILEGED_DEMO_PIN) : null;
     const profile = {
       measured: u.measured ?? true,
       bereiche: u.bereiche ?? [],
       productivityFactor: u.productivityFactor ?? 1,
       skillTier: u.skillTier ?? ('profi' as const),
       workstationId: u.workstationCode ? requireId(workstationIds, u.workstationCode, 'workstation') : null,
+      pinHash,
       ...(weeklyPattern ? { weeklyPattern } : {}),
     };
     const user = await prisma.user.upsert({

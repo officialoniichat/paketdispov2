@@ -4,8 +4,9 @@ import { Public } from './rbac.js';
 import { LoginService } from './login.service.js';
 import { LoginRequestDto, LoginResponseDto } from './login.dto.js';
 
-/** Generic message for every invalid-credential case — never distinguishes
- * unknown employeeNo from wrong PIN (no user enumeration). */
+/** Generic message for every invalid-credential case — for the privileged roles
+ * it never distinguishes an unknown employeeNo from a wrong PIN (no user
+ * enumeration). */
 const INVALID_CREDENTIALS_MESSAGE = 'Ungültige Anmeldedaten';
 
 @ApiTags('auth')

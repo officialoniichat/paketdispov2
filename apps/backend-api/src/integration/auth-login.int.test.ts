@@ -9,11 +9,14 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { hashPin } from '../auth/pin.js';
 
 /**
- * POST /api/auth/login (Task 4 of the PIN-login SDD plan) against a REAL Postgres
- * (Testcontainers) AND a real, fully-bootstrapped Nest/Fastify app — this is the one
- * integration test in this directory that boots the actual HTTP layer (via Fastify's
- * `inject()`, no extra `supertest` dependency needed) so it can prove the issued token
- * round-trips through the real `JwtAuthGuard`/`RolesGuard`, not just the pure service.
+ * POST /api/auth/login against a REAL Postgres (Testcontainers) AND a real,
+ * fully-bootstrapped Nest/Fastify app — this is the one integration test in this
+ * directory that boots the actual HTTP layer (via Fastify's `inject()`, no extra
+ * `supertest` dependency needed) so it can prove the issued token round-trips
+ * through the real `JwtAuthGuard`/`RolesGuard`, not just the pure service.
+ *
+ * It pins down the role-dependent credential rule end-to-end: a Mitarbeiter/in
+ * signs in with the Mitarbeiternummer alone, a Teamlead needs their PIN on top.
  *
  * A dev RS256 keypair is generated per-run and injected via AUTH_DEV_PUBLIC_KEY /
  * AUTH_DEV_PRIVATE_KEY *before* anything imports `config.ts` (a module-level, frozen
@@ -26,17 +29,27 @@ let container: StartedPostgreSqlContainer;
 let prisma: PrismaClient;
 let app: NestFastifyApplication;
 
+const TEAMLEAD_PIN = '0000';
+
 async function seed(): Promise<void> {
-  const role = await prisma.role.create({ data: { name: 'employee' } });
-  const user = await prisma.user.create({
+  // Mitarbeiter/in: role `employee`, no PIN at all.
+  const employeeRole = await prisma.role.create({ data: { name: 'employee' } });
+  const employee = await prisma.user.create({
+    data: { employeeNo: 'ma-101', displayName: 'Mitarbeiter 101', active: true },
+  });
+  await prisma.userRole.create({ data: { userId: employee.id, roleId: employeeRole.id } });
+
+  // Teamlead: keeps a PIN.
+  const teamleadRole = await prisma.role.create({ data: { name: 'teamlead' } });
+  const teamlead = await prisma.user.create({
     data: {
-      employeeNo: 'ma-101',
-      displayName: 'Mitarbeiter 101',
+      employeeNo: 'tl-001',
+      displayName: 'TL Logistik',
       active: true,
-      pinHash: await hashPin('4711'),
+      pinHash: await hashPin(TEAMLEAD_PIN),
     },
   });
-  await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+  await prisma.userRole.create({ data: { userId: teamlead.id, roleId: teamleadRole.id } });
 }
 
 function post(url: string, payload: unknown) {
@@ -92,9 +105,9 @@ afterAll(async () => {
   await container?.stop();
 });
 
-describe('POST /api/auth/login', () => {
-  it('returns 200 + a token for correct credentials', async () => {
-    const res = await post('/api/auth/login', { employeeNo: 'ma-101', pin: '4711' });
+describe('POST /api/auth/login — Mitarbeiterrolle', () => {
+  it('returns 200 + a token for the Mitarbeiternummer alone, with no PIN in the payload', async () => {
+    const res = await post('/api/auth/login', { employeeNo: 'ma-101' });
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as { token: string };
@@ -102,27 +115,48 @@ describe('POST /api/auth/login', () => {
     expect(body.token.length).toBeGreaterThan(0);
   });
 
-  it('returns 401 for a wrong PIN', async () => {
-    const res = await post('/api/auth/login', { employeeNo: 'ma-101', pin: '0000' });
+  it('returns 401 for an unknown employeeNo', async () => {
+    const res = await post('/api/auth/login', { employeeNo: 'ma-does-not-exist' });
 
     expect(res.statusCode).toBe(401);
   });
 
-  it('returns an IDENTICAL 401 body for an unknown employeeNo and a wrong PIN (no user enumeration)', async () => {
-    const unknownUser = await post('/api/auth/login', { employeeNo: 'ma-does-not-exist', pin: '4711' });
-    const wrongPin = await post('/api/auth/login', { employeeNo: 'ma-101', pin: '0000' });
-
-    expect(unknownUser.statusCode).toBe(401);
-    expect(wrongPin.statusCode).toBe(401);
-    expect(unknownUser.json()).toEqual(wrongPin.json());
-  });
-
   it('the returned token authorizes a call to GET /api/me/today', async () => {
-    const login = await post('/api/auth/login', { employeeNo: 'ma-101', pin: '4711' });
+    const login = await post('/api/auth/login', { employeeNo: 'ma-101' });
     const { token } = login.json() as { token: string };
 
     const res = await get('/api/me/today', { authorization: `Bearer ${token}` });
 
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('POST /api/auth/login — Teamlead', () => {
+  it('returns 200 + a token for the correct PIN', async () => {
+    const res = await post('/api/auth/login', { employeeNo: 'tl-001', pin: TEAMLEAD_PIN });
+
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { token: string }).token.length).toBeGreaterThan(0);
+  });
+
+  it('returns 401 without a PIN — a teamlead never gets in on the number alone', async () => {
+    const res = await post('/api/auth/login', { employeeNo: 'tl-001' });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 401 for a wrong PIN', async () => {
+    const res = await post('/api/auth/login', { employeeNo: 'tl-001', pin: '1234' });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns an IDENTICAL 401 body for an unknown employeeNo and a wrong PIN (no user enumeration)', async () => {
+    const unknownUser = await post('/api/auth/login', { employeeNo: 'tl-does-not-exist', pin: TEAMLEAD_PIN });
+    const wrongPin = await post('/api/auth/login', { employeeNo: 'tl-001', pin: '1234' });
+
+    expect(unknownUser.statusCode).toBe(401);
+    expect(wrongPin.statusCode).toBe(401);
+    expect(unknownUser.json()).toEqual(wrongPin.json());
   });
 });
