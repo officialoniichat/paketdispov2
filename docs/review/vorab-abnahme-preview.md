@@ -473,6 +473,7 @@ Bei (c) laufen die Dev-Server weiter, aber der Worktree zeigt dann nicht mehr au
 | --- | --- | --- |
 | `apps/backend-api/src/dev/scenarios/case-builders.ts` | Position 1 jedes zweiten Belegs ist `onlineRelevant` | Demodaten-Lücke: ohne das ist der farbige Online-Chip für keinen Mitarbeiter erreichbar (403). Demodaten, kein Produktivcode. |
 | `apps/employee-pwa/src/screens/LoginScreen.tsx` | Feld „Mitarbeiternummer" mit `ma-108` vorbelegt | Auf Wunsch von Daniel: der Demo-Link soll ohne Tippen in den vollen Datenstand führen. Konstante `DEMO_EMPLOYEE_NO`, Feld bleibt editierbar. |
+| `apps/employee-pwa/src/screens/BelegProcessScreen.tsx` | „Was heißt das?"-Button + Aufklappblock → Tooltip an einem Info-Icon | Auf Wunsch von Daniel: der Button blähte die Arbeitsanweisung auf. Die Prüfstufe ist jetzt eine Zeile; die Erklärung liegt im Tooltip (Hover, Tastaturfokus, ein Tipp am Touchdisplay). `screenshots/06-pruefstufe-tooltip-1920x1080.png` |
 | `docs/review/vorab-abnahme-preview.md` | dieser Bericht | |
 | `docs/review/screenshots/*.png` | 5 Belege | |
 
