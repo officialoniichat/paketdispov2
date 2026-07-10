@@ -140,7 +140,7 @@ nicht `ReceiptPosition.onlineRelevant`. Dieses Feld blieb `false`.
 
 | Punkt | Ergebnis | Beleg |
 | --- | --- | --- |
-| Anmeldung allein mit Mitarbeiternummer, **kein PIN-Feld** | ✅ | Login-Screen enthält genau ein Textfeld „Mitarbeiternummer" + „Anmelden". Vorbelegt mit `ma-108` → ein Klick genügt. `screenshots/01-anmeldung-ohne-pin-1920x1080.png` |
+| Anmeldung allein mit Mitarbeiternummer, **kein PIN-Feld** | ✅ | Login-Screen enthält genau ein Textfeld „Mitarbeiternummer" + „Anmelden". Vorbelegt mit `ma-108` **nur, wenn `VITE_DEMO_EMPLOYEE_NO` gesetzt ist** ([§11.6](#116--die-zwei-scope-commits)); sonst startet das Feld leer. `screenshots/01-anmeldung-ohne-pin-1920x1080.png` |
 | Startseite: je Beleg der Lagerplatz | ✅ | 4 Stops `R5`, `R11`, `R25`, `R27`; je Beleg `storageLocationCode` |
 | Mehrfachauswahl | ✅ | Nach zwei Klicks: „2/4 Plätze", beide Stops „geholt" |
 | „Rest parken" funktioniert | ✅ | `POST /api/me/park → 201`, Meldung **„2 Belege geparkt – kommen ins nächste Bündel."**, Abschnitt 2 danach entsperrt |
@@ -434,8 +434,10 @@ curl -s -X POST localhost:3002/api/teamlead/assignments/recalculate \
      -H "Authorization: Bearer $TL" -H 'Content-Type: application/json' -d '{}'
 ```
 
-Anmelden in der Mitarbeiter-App: Das Feld ist mit **`ma-108`** vorbelegt — einmal „Anmelden"
-klicken, kein PIN. Jede andere Nummer (`ma-101` … `ma-110`) lässt sich darüberschreiben.
+Anmelden in der Mitarbeiter-App: **`ma-108`** eintippen, kein PIN. Jede andere Nummer
+(`ma-101` … `ma-110`) tut es auch. Das Feld ist nur dann vorbelegt, wenn
+`VITE_DEMO_EMPLOYEE_NO` gesetzt ist (siehe [§11.6](#116--die-zwei-scope-commits)) — lokal also
+in der Regel nicht.
 
 **Wie viel `ma-108` sieht, hängt am Zeitpunkt des `recalculate`** ([C4](#c4)) — die Bündelgröße wird
 gegen `now` gerechnet. Zwei Messungen desselben Seeds:
@@ -487,7 +489,7 @@ Bei (c) laufen die Dev-Server weiter, aber der Worktree zeigt dann nicht mehr au
 | Datei | Änderung | Warum |
 | --- | --- | --- |
 | `apps/backend-api/src/dev/scenarios/case-builders.ts` | Position 1 jedes zweiten Belegs ist `onlineRelevant` | Demodaten-Lücke: ohne das ist der farbige Online-Chip für keinen Mitarbeiter erreichbar (403). Demodaten, kein Produktivcode. |
-| `apps/employee-pwa/src/screens/LoginScreen.tsx` | Feld „Mitarbeiternummer" mit `ma-108` vorbelegt | Auf Wunsch von Daniel: der Demo-Link soll ohne Tippen in den vollen Datenstand führen. Konstante `DEMO_EMPLOYEE_NO`, Feld bleibt editierbar. |
+| `apps/employee-pwa/src/screens/LoginScreen.tsx` | Feld „Mitarbeiternummer" wird mit `ma-108` vorbelegt, **wenn `VITE_DEMO_EMPLOYEE_NO` gesetzt ist** | Demo-Hilfe: der Demo-Link soll ohne Tippen in den vollen Datenstand führen. Ohne die Variable startet das Feld leer — ein produktiv genutzter Stand darf keinen Account vorschlagen, mit dem sich jeder ohne PIN anmeldet ([§11.6](#116--die-zwei-scope-commits)). |
 | `docs/review/vorab-abnahme-preview.md` | dieser Bericht | |
 | `docs/review/screenshots/*.png` | 5 Belege | |
 
