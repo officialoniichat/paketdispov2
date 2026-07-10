@@ -23,6 +23,7 @@ import {
   MA_102,
   MA_103,
   MA_104,
+  MA_105,
   ONLINE_SIZE_PREFERENCE,
   type SeedBelegSpec,
   type SeedEmployeeSpec,
@@ -109,8 +110,13 @@ async function seedBeleg(
     },
   });
 
+  // `sequence` ist die Reihenfolge der Engine — `/api/me/today` sortiert danach.
   await prisma.assignmentItem.create({
-    data: { bundleId: context.bundleId, caseId: goodsCase.id, sequence: context.sequence },
+    data: {
+      bundleId: context.bundleId,
+      caseId: goodsCase.id,
+      sequence: spec.bundleSequence ?? context.sequence,
+    },
   });
 
   // Kein Header ⇒ `/api/me/today` liefert `priceLabelPrintRequired: null` ⇒ kein Chip.
@@ -179,7 +185,7 @@ export async function seedDatabase(databaseUrl: string): Promise<void> {
     // The Online-Größen-Markierung is derived from this preference, so it must
     // exist before the positions that reference its WGR are read back.
     await prisma.onlineSizePreference.create({ data: { ...ONLINE_SIZE_PREFERENCE } });
-    for (const employee of [MA_101, MA_102, MA_103, MA_104]) {
+    for (const employee of [MA_101, MA_102, MA_103, MA_104, MA_105]) {
       await seedEmployee(prisma, employee);
     }
   } finally {

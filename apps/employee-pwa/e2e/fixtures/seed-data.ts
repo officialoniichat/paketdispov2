@@ -56,6 +56,12 @@ export interface SeedBelegSpec {
   priceLabelPrintRequired?: boolean;
   /** Warenart-Chip auf der Beleg-Zeile in „2 · Bearbeiten" (Prisma `GoodsTypeText`). */
   goodsTypeText?: string;
+  /**
+   * `AssignmentItem.sequence` — die Reihenfolge, die die assignment-engine
+   * beschlossen hat. Ohne Angabe die Einfügereihenfolge. Wird gesetzt, um sie
+   * bewusst GEGEN die Einfügereihenfolge laufen zu lassen (siehe `MA_105`).
+   */
+  bundleSequence?: number;
   /** Nur Belege mit Positionen lassen sich sinnvoll im PROCESS-Screen öffnen. */
   positions?: SeedPositionSpec[];
 }
@@ -222,6 +228,29 @@ export const MA_104: SeedEmployeeSpec = {
     { locationCode: 'E2E-R4-A', belege: [{ weBelegNo: 'WE-E2E-104-1' }] },
     { locationCode: 'E2E-R4-B', belege: [{ weBelegNo: 'WE-E2E-104-2' }] },
     { locationCode: 'E2E-R4-C', belege: [{ weBelegNo: 'WE-E2E-104-3' }] },
+  ],
+};
+
+/**
+ * Reihenfolge-Wächter. Die Engine-Sequenz läuft hier ABSICHTLICH gegen die
+ * Einfügereihenfolge: `WE-E2E-105-2` wird als zweiter Beleg angelegt, trägt aber
+ * Sequenz 1 und muss deshalb zuerst kommen.
+ *
+ * Nur so diskriminiert der Test überhaupt: sortierte `/api/me/today` weiterhin
+ * nach `bookingDate` (beide Belege tragen dasselbe Datum), käme `105-1` zuerst.
+ * Ein Mitarbeiter mit „normaler" Sequenz würde auch ohne Fix zufällig grün.
+ */
+export const MA_105: SeedEmployeeSpec = {
+  employeeNo: 'ma-105',
+  displayName: 'Mitarbeiter 105',
+  stops: [
+    {
+      locationCode: 'E2E-R5',
+      belege: [
+        { weBelegNo: 'WE-E2E-105-1', bundleSequence: 2 },
+        { weBelegNo: 'WE-E2E-105-2', bundleSequence: 1 },
+      ],
+    },
   ],
 };
 

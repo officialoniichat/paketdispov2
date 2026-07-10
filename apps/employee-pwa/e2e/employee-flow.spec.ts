@@ -5,6 +5,7 @@ import {
   MA_102,
   MA_103,
   MA_104,
+  MA_105,
   UNKNOWN_EMPLOYEE_NO,
   belegNos,
   locationCodes,
@@ -75,14 +76,11 @@ function stopRows(page: Page): Locator {
 }
 
 /**
- * Die Beleg-Zeile aus „2 · Bearbeiten" zu einer WE-Nummer.
- *
- * Bewusst NICHT über den Footer-Button „Start Bearbeitung WE …": der benennt
- * `cases.find(c => !isCaseClosed(c.status))`, und `/api/me/today` sortiert die
- * Belege allein nach `bookingDate` (cases.service.ts). Bei gleichem Buchungsdatum
- * ist die Reihenfolge damit undefiniert und kippt, sobald ein Beleg einmal
- * geschrieben wurde (`start-preparation`). BundleHomeScreen.tsx:242-246 hält
- * genau diese Lücke fest. Ein Test darf sich darauf nicht stützen.
+ * Die Beleg-Zeile aus „2 · Bearbeiten" zu einer WE-Nummer — so, wie ein
+ * Mitarbeiter sie anklickt. Bewusst NICHT über den Footer-Button
+ * „Start Bearbeitung WE …": welcher Beleg dort steht, hängt zusätzlich vom
+ * Status ab (`cases.find(c => !isCaseClosed(c.status))`). Dass die Reihenfolge
+ * selbst stabil ist, sichert der Test „Beleg-Reihenfolge" separat ab.
  */
 function belegRow(page: Page, weBelegNo: string): Locator {
   return page
@@ -267,6 +265,45 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
 
     // Genau ein Beleg dieses Bündels verlangt Etikettendruck.
     expect(stopText.match(/Etiketten drucken/g)).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- *
+ * Beleg-Reihenfolge — der „Start Bearbeitung"-Vorschlag darf nicht springen
+ * ------------------------------------------------------------------------- */
+test.describe('Beleg-Reihenfolge', () => {
+  test('die Belege kommen in der Reihenfolge der assignment-engine, nicht in der des Buchungsdatums', async ({
+    page,
+  }) => {
+    // ma-105 ist so geseedet, dass die Engine-Sequenz der Einfügereihenfolge
+    // WIDERSPRICHT: 105-2 trägt Sequenz 1. Sortierte `/api/me/today` weiter nach
+    // `bookingDate` (beide Belege: heute), stünde 105-1 vorn. Genau daran
+    // sprang der „Start Bearbeitung"-Vorschlag, sobald eine Zeile geschrieben wurde.
+    const [zweiterInDerEngine, ersterInDerEngine] = belegNos(MA_105);
+
+    await loginAndWaitForHome(page, MA_105.employeeNo);
+
+    // Serverseitig: die Engine-Sequenz gewinnt.
+    expect((await fetchBundleFromBackend(page)).weBelegNos).toEqual([
+      ersterInDerEngine,
+      zweiterInDerEngine,
+    ]);
+
+    // Und der Bündel-Home schlägt genau diesen Beleg vor.
+    await stopRows(page).first().click();
+    await expect(
+      page.getByRole('button', { name: `Start Bearbeitung WE ${ersterInDerEngine}` }),
+    ).toBeVisible();
+
+    // Auch nachdem eine Zeile geschrieben wurde (`start-preparation`), bleibt es dabei.
+    await openBeleg(page, ersterInDerEngine);
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
+
+    expect((await fetchBundleFromBackend(page)).weBelegNos).toEqual([
+      ersterInDerEngine,
+      zweiterInDerEngine,
+    ]);
   });
 });
 

@@ -61,6 +61,27 @@ function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Bündel-Reihenfolge, wie die assignment-engine sie beschlossen hat
+ * (`AssignmentItem.sequence`). Vorher sortierte `/api/me/today` allein nach
+ * `bookingDate`; alle Belege eines Tages tragen dasselbe Datum, die Reihenfolge
+ * war damit undefiniert und kippte, sobald eine Zeile geschrieben wurde. Der
+ * Bündel-Home leitet daraus „Start Bearbeitung WE …" ab — der Vorschlag sprang.
+ *
+ * Ein Beleg hat wegen `@@unique([caseId])` höchstens EIN Item. Fehlt es (ein
+ * reaktivierter `partially_completed`-Beleg behält seine Bündel-Bindung, verliert
+ * aber sein Item — siehe `clearPriorPlanForDate`), sortiert er ans Ende. Die
+ * WE-Nummer bricht jeden verbleibenden Gleichstand, damit die Ordnung total ist.
+ */
+function byBundleSequence(
+  a: { weBelegNo: string; assignmentItems: { sequence: number }[] },
+  b: { weBelegNo: string; assignmentItems: { sequence: number }[] },
+): number {
+  const seqA = a.assignmentItems[0]?.sequence ?? Number.MAX_SAFE_INTEGER;
+  const seqB = b.assignmentItems[0]?.sequence ?? Number.MAX_SAFE_INTEGER;
+  return seqA !== seqB ? seqA - seqB : a.weBelegNo.localeCompare(b.weBelegNo);
+}
+
 function startOfTodayUtc(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -110,8 +131,10 @@ export class CasesService {
             // A1/A3 summary fields: Etiketten (derived) + Mehr-Shop list.
             workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
             positions: { select: { shopNo: true }, orderBy: { positionNo: 'asc' } },
+            // Die Bündel-Reihenfolge der Engine. Prisma kann nicht über eine
+            // To-many-Relation sortieren — deshalb unten in JS.
+            assignmentItems: { select: { sequence: true } },
           },
-          orderBy: { bookingDate: 'asc' },
         },
       },
     });
@@ -125,7 +148,9 @@ export class CasesService {
     return {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
-      cases: bundle.cases.map((c) => this.mapSummary(c, assignedEmployeeName)),
+      cases: [...bundle.cases]
+        .sort(byBundleSequence)
+        .map((c) => this.mapSummary(c, assignedEmployeeName)),
       workstation,
     };
   }
