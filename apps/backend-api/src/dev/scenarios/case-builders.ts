@@ -169,6 +169,11 @@ export async function seedCaseDetails(
     // WGRs kommen aus dem gesäten WGR-Katalog (A2), damit Katalog-Beschreibung und
     // A8-Größen-Präferenzen auf echten Positionen greifen.
     const POSITION_WGRS = ['218110', '111130', '214520', '312400', '415210'] as const;
+    // A8: Jeder zweite Beleg führt eine online-relevante Position 1. Deren WGR 218110
+    // hat eine Größen-Präferenz (38 bevorzugt, 40 Ausweich), und genau 38/40 werden
+    // geliefert — die PWA zeigt damit je Größe einen grünen und einen roten Chip.
+    // Nicht auf jedem Beleg, sonst wäre in der Demo jeder Artikel ein Onlineartikel.
+    const onlineDemoCase = Number(c.weBelegNo.replace(/\D/g, '').slice(-1)) % 2 === 0;
     const posMeta = Array.from({ length: positionCount }, (_, idx) => ({
       positionNo: idx + 1,
       wgr: POSITION_WGRS[idx] ?? '218110',
@@ -179,6 +184,7 @@ export async function seedCaseDetails(
       // A4: Position 1 trägt CatMan + Sicherungstyp-Piktogramm, Folgepositionen nicht.
       catMan: idx === 0,
       securityTypeCode: idx === 0 ? 'hard-tag' : null,
+      onlineRelevant: idx === 0 && onlineDemoCase,
     }));
 
     // Ältere Seed-Generationen hinterlassen überzählige Positionen (upsert löscht nie)
@@ -193,6 +199,7 @@ export async function seedCaseDetails(
         update: {
           wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor,
           floor: p.floor, catMan: p.catMan, shopNo: '21', branchNo: '001',
+          onlineRelevant: p.onlineRelevant,
         },
         create: {
           caseId: c.id,
@@ -204,6 +211,7 @@ export async function seedCaseDetails(
           shopNo: c.primaryShopAreaNo ?? '21',
           floor: p.floor,
           catMan: p.catMan,
+          onlineRelevant: p.onlineRelevant,
         },
       });
 
