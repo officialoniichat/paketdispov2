@@ -7,10 +7,10 @@
  *
  * `LoginService.login()` defaults an employee with no `UserRole` rows to
  * `Role.Employee` (see `apps/backend-api/src/auth/login.service.ts`), so this
- * seed does not need to create `Role`/`UserRole` rows at all.
+ * seed does not need to create `Role`/`UserRole` rows at all — and since the
+ * Mitarbeiterrolle needs no secret, it seeds no `pinHash` either.
  */
 import { PrismaClient } from './prisma-client.js';
-import { hashPin } from './pin-hash.js';
 import { MA_101, MA_102, type SeedEmployeeSpec } from './seed-data.js';
 
 /** Midnight UTC "today" — must match `startOfTodayUtc()` in cases.service.ts
@@ -28,7 +28,6 @@ async function seedEmployee(prisma: PrismaClient, spec: SeedEmployeeSpec): Promi
       employeeNo: spec.employeeNo,
       displayName: spec.displayName,
       active: true,
-      pinHash: await hashPin(spec.pin),
     },
   });
 

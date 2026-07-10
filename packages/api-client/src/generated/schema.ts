@@ -1158,7 +1158,8 @@ export interface components {
     schemas: {
         LoginRequestDto: {
             employeeNo: string;
-            pin: string;
+            /** @description Nur für Teamlead/Admin/IT. Mitarbeiter melden sich ohne PIN an. */
+            pin?: string;
         };
         LoginResponseDto: {
             token: string;

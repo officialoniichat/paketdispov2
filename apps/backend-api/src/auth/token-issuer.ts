@@ -15,7 +15,7 @@ export interface IssuePrincipal {
 }
 
 /**
- * Mints RS256 JWTs for real employee login (employeeNo + PIN). Mirror-image of
+ * Mints RS256 JWTs for the first-party login (`POST /api/auth/login`). Mirror-image of
  * {@link OidcTokenVerifier}: the claim shape here (`employee_no`,
  * `realm_access.roles`, `name`) must match exactly what that verifier expects.
  */

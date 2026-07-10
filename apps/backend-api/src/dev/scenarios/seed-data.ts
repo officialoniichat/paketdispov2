@@ -111,6 +111,14 @@ export interface SeedUser {
 const FRUEH: ShiftModel = { model: 'Frühschicht', start: '06:00', end: '14:00', breakMinutes: 30 };
 const SPAET: ShiftModel = { model: 'Spätschicht', start: '10:00', end: '18:00', breakMinutes: 30 };
 
+/**
+ * PIN every seeded user whose role demands one (Teamlead/Admin/IT) gets. These
+ * are demo data on a pre-pilot deployment and the PIN is handed to the customer
+ * as-is; it protects nothing and is not meant to. Mitarbeiter get no PIN at all
+ * — see `requiresPin` in `auth/rbac.ts`.
+ */
+export const PRIVILEGED_DEMO_PIN = '0000';
+
 // A realistic team for ~170–315 Belege/day: 10 working heads across both shifts
 // and all three Bereiche, plus two temporäre Kräfte (measured=false). tl-001 and
 // ma-101..103 keep their identities so the existing dev login tokens still resolve.

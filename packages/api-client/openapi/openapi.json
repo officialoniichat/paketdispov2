@@ -2955,12 +2955,12 @@
             "type": "string"
           },
           "pin": {
-            "type": "string"
+            "type": "string",
+            "description": "Nur für Teamlead/Admin/IT. Mitarbeiter melden sich ohne PIN an."
           }
         },
         "required": [
-          "employeeNo",
-          "pin"
+          "employeeNo"
         ]
       },
       "LoginResponseDto": {

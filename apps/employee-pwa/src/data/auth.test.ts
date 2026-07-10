@@ -17,7 +17,7 @@ describe('auth', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token }) });
     vi.stubGlobal('fetch', fetchMock);
 
-    const session = await login('ma-202', '1234');
+    const session = await login('ma-202');
 
     expect(session.token).toBe(token);
     expect(session.employeeNo).toBe('ma-202');
@@ -27,23 +27,35 @@ describe('auth', () => {
       expect.stringContaining('/api/auth/login'),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ employeeNo: 'ma-202', pin: '1234' }),
+        body: JSON.stringify({ employeeNo: 'ma-202' }),
       }),
     );
+  });
+
+  it('sends the Mitarbeiternummer as the only credential — never a PIN', async () => {
+    const token = await makeToken({ employee_no: 'ma-202', name: 'Test Tester' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await login('ma-202');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    const body = JSON.parse(init.body) as Record<string, unknown>;
+    expect(body).toEqual({ employeeNo: 'ma-202' });
   });
 
   it('throws LoginError and does not persist a session on a 401', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(login('ma-202', 'wrong')).rejects.toBeInstanceOf(LoginError);
+    await expect(login('ma-unknown')).rejects.toBeInstanceOf(LoginError);
     expect(getSession()).toBeNull();
   });
 
   it('logout clears the persisted session', async () => {
     const token = await makeToken({ employee_no: 'ma-202', name: 'Test Tester' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token }) }));
-    await login('ma-202', '1234');
+    await login('ma-202');
 
     logout();
 

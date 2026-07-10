@@ -15,7 +15,7 @@ flowchart TB
     subgraph pwa["employee-pwa container"]
         direction TB
         subgraph screens["screens/ (router: routes/paths.ts, App gated by session)"]
-            login["LoginScreen<br/><i>Mitarbeiternummer + PIN → POST /api/auth/login</i>"]:::screen
+            login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
             home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten + Rest parken + nächstes Bündel</i>"]:::screen
             process["BelegProcessScreen<br/><i>/case/:id — WE-Hero, Kartons, Prüfstufe, Größen-Zeilen ±</i>"]:::screen
             problem["ProblemMeldenScreen<br/><i>/case/:id/problem — ein Weiter-Pfad</i>"]:::screen

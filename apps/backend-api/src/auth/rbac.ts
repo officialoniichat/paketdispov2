@@ -42,6 +42,25 @@ export function normaliseRole(raw: string): Role | undefined {
 }
 
 /**
+ * Roles that must present a secret (PIN) at login.
+ *
+ * The Mitarbeiterrolle deliberately needs **no secret**: a worker signs in with
+ * their Mitarbeiternummer alone. Impersonating a colleague only means doing that
+ * colleague's work, so there is nothing to gain — the customer ruled the PIN out
+ * for this role. Every other role steers the disposition of the whole warehouse
+ * and keeps its PIN.
+ *
+ * This is a rule about roles, not a fallback for missing data: a privileged user
+ * without a `pinHash` cannot log in at all (see `LoginService`).
+ */
+const ROLES_REQUIRING_PIN: readonly Role[] = [Role.Teamlead, Role.Admin, Role.It];
+
+/** True if any of the given roles must authenticate with a PIN. */
+export function requiresPin(roles: readonly Role[]): boolean {
+  return roles.some((role) => ROLES_REQUIRING_PIN.includes(role));
+}
+
+/**
  * Authenticated principal attached to each request after JWT verification.
  * `roles` are canonical; `claims` keeps the raw token for the technical log only.
  */

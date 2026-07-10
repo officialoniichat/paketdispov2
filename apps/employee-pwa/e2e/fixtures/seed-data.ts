@@ -7,7 +7,6 @@
  */
 export interface SeedEmployeeSpec {
   employeeNo: string;
-  pin: string;
   displayName: string;
   locationCode: string;
   weBelegNos: string[];
@@ -15,7 +14,6 @@ export interface SeedEmployeeSpec {
 
 export const MA_101: SeedEmployeeSpec = {
   employeeNo: 'ma-101',
-  pin: '4711',
   displayName: 'Mitarbeiter 101',
   locationCode: 'E2E-R1',
   weBelegNos: ['WE-E2E-101-1', 'WE-E2E-101-2'],
@@ -23,8 +21,10 @@ export const MA_101: SeedEmployeeSpec = {
 
 export const MA_102: SeedEmployeeSpec = {
   employeeNo: 'ma-102',
-  pin: '4712',
   displayName: 'Mitarbeiter 102',
   locationCode: 'E2E-R2',
   weBelegNos: ['WE-E2E-102-1'],
 };
+
+/** No seeded employee has this number — used to prove an unknown one is rejected. */
+export const UNKNOWN_EMPLOYEE_NO = 'ma-999';

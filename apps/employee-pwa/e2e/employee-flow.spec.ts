@@ -1,23 +1,21 @@
 import { test, expect, type Page } from '@playwright/test';
-import { MA_101, MA_102 } from './fixtures/seed-data.js';
+import { MA_101, MA_102, UNKNOWN_EMPLOYEE_NO } from './fixtures/seed-data.js';
 
 /**
- * Mitarbeiter-App E2E — real backend + real seeded Postgres (Task 16 of the
- * PIN-login SDD plan). Replaces the former offline/Dexie-demo-scenario suite,
- * which tested UI concepts (Tisch-Anmeldung, DEMO_SCENARIOS) that no longer
- * exist in the app (see commits e25b465 / 030d9f6: real PIN login +
- * `/api/me/today`).
+ * Mitarbeiter-App E2E — real backend + real seeded Postgres. Replaces the former
+ * offline/Dexie-demo-scenario suite, which tested UI concepts (Tisch-Anmeldung,
+ * DEMO_SCENARIOS) that no longer exist in the app.
  *
  * `e2e/fixtures/global-setup.ts` boots a real backend-api against a
  * Testcontainers Postgres and seeds two employees (`fixtures/seed-data.ts`),
  * each with their own bundle + Belege, so this suite proves actual
  * per-employee isolation end-to-end rather than against mocked data.
  *
- * Scope: a real login + home-screen render, the load-bearing C2 multi-employee
- * isolation check, and a negative-auth check. This intentionally does not
- * reproduce every assertion of the old demo spec (printed labels, boxing,
- * Teilabschluss, …) — those exercise UI concepts that would need much richer
- * seed data to test meaningfully, and are not the point of this task.
+ * Scope: a real login (Mitarbeiternummer only — the Mitarbeiterrolle has no
+ * PIN), the load-bearing C2 multi-employee isolation check, and a negative-auth
+ * check. This intentionally does not reproduce every assertion of the old demo
+ * spec (printed labels, boxing, Teilabschluss, …) — those exercise UI concepts
+ * that would need much richer seed data to test meaningfully.
  */
 
 const GREETING = /Guten (Morgen|Tag|Abend)/;
@@ -25,17 +23,18 @@ const GREETING = /Guten (Morgen|Tag|Abend)/;
 // Mobile viewport — this is a phone-first PWA.
 test.use({ viewport: { width: 390, height: 844 } });
 
-async function loginAs(page: Page, employeeNo: string, pin: string): Promise<void> {
+async function loginAs(page: Page, employeeNo: string): Promise<void> {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Anmeldung' })).toBeVisible();
   await page.getByLabel('Mitarbeiternummer').fill(employeeNo);
-  await page.getByLabel('PIN').fill(pin);
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
 }
 
 test.describe('Anmeldung + Bündel-Home (real backend)', () => {
-  test('ma-101 logs in and sees their own seeded Belege + Lagerplatz', async ({ page }) => {
-    await loginAs(page, MA_101.employeeNo, MA_101.pin);
+  test('ma-101 logs in with the Mitarbeiternummer alone and sees their own seeded Belege + Lagerplatz', async ({
+    page,
+  }) => {
+    await loginAs(page, MA_101.employeeNo);
 
     await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
     await expect(page.getByText(MA_101.displayName).first()).toBeVisible();
@@ -46,12 +45,19 @@ test.describe('Anmeldung + Bündel-Home (real backend)', () => {
     await expect(page.getByText(MA_101.locationCode, { exact: false }).first()).toBeVisible();
   });
 
-  test('wrong PIN is rejected and never reaches the home screen', async ({ page }) => {
-    await loginAs(page, MA_101.employeeNo, '0000');
+  test('the login screen asks for no PIN', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Anmeldung' })).toBeVisible();
 
-    await expect(
-      page.getByText('Mitarbeiternummer oder PIN ist falsch.'),
-    ).toBeVisible();
+    await expect(page.getByLabel('PIN')).toHaveCount(0);
+  });
+
+  test('an unknown Mitarbeiternummer is rejected and never reaches the home screen', async ({
+    page,
+  }) => {
+    await loginAs(page, UNKNOWN_EMPLOYEE_NO);
+
+    await expect(page.getByText('Mitarbeiternummer ist unbekannt.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Anmeldung' })).toBeVisible();
     await expect(page.getByRole('heading', { name: GREETING })).not.toBeVisible();
   });
@@ -69,8 +75,8 @@ test.describe('Anmeldung + Bündel-Home (real backend)', () => {
     const pageB = await contextB.newPage();
 
     try {
-      await loginAs(pageA, MA_101.employeeNo, MA_101.pin);
-      await loginAs(pageB, MA_102.employeeNo, MA_102.pin);
+      await loginAs(pageA, MA_101.employeeNo);
+      await loginAs(pageB, MA_102.employeeNo);
 
       await expect(pageA.getByRole('heading', { name: GREETING })).toBeVisible();
       await expect(pageB.getByRole('heading', { name: GREETING })).toBeVisible();

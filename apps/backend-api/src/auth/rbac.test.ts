@@ -8,6 +8,7 @@ import {
   Role,
   hasAnyRole,
   normaliseRole,
+  requiresPin,
   type Principal,
 } from './rbac.js';
 import { JwtAuthGuard, RolesGuard } from './guards.js';
@@ -181,5 +182,25 @@ describe('RolesGuard (§16.1)', () => {
   it('rejects when no principal is present on a guarded route', () => {
     const guard = new RolesGuard(makeReflector({ roles: [Role.Employee] }));
     expect(() => guard.canActivate(makeContext({}))).toThrow(UnauthorizedException);
+  });
+});
+
+describe('requiresPin', () => {
+  it('demands no secret from the Mitarbeiterrolle', () => {
+    expect(requiresPin([Role.Employee])).toBe(false);
+  });
+
+  it('demands a PIN from teamlead, admin and IT', () => {
+    expect(requiresPin([Role.Teamlead])).toBe(true);
+    expect(requiresPin([Role.Admin])).toBe(true);
+    expect(requiresPin([Role.It])).toBe(true);
+  });
+
+  it('demands a PIN as soon as one privileged role is present', () => {
+    expect(requiresPin([Role.Employee, Role.Teamlead])).toBe(true);
+  });
+
+  it('demands no PIN for an empty role list', () => {
+    expect(requiresPin([])).toBe(false);
   });
 });

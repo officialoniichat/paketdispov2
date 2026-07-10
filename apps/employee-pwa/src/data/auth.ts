@@ -1,5 +1,9 @@
 /**
- * Real employee login against `POST /api/auth/login` (see backend Task 4).
+ * Employee login against `POST /api/auth/login`.
+ *
+ * A Mitarbeiter/in signs in with their Mitarbeiternummer alone — the backend
+ * demands no secret for this role (see `requiresPin` in the backend's
+ * `auth/rbac.ts`), so this app never collects or sends a PIN.
  *
  * The backend returns a signed bearer JWT; we decode (not verify — the backend
  * verifies the RS256 signature on every request) its `employee_no`/`name`/`exp`
@@ -21,11 +25,11 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-export async function login(employeeNo: string, pin: string): Promise<Session> {
+export async function login(employeeNo: string): Promise<Session> {
   const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ employeeNo, pin }),
+    body: JSON.stringify({ employeeNo }),
   });
   if (!response.ok) {
     throw new LoginError('Ungültige Anmeldedaten');

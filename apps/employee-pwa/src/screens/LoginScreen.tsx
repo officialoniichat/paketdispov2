@@ -1,9 +1,10 @@
 /**
- * Real employee login (replaces the former Tisch-Anmeldung gate). The worker
- * authenticates with their Mitarbeiternummer + PIN against
- * `POST /api/auth/login` (see `data/auth.ts`); the resulting session gates the
- * whole app in `App.tsx`. Arbeitsplatz/Tisch is now admin-assigned server-side
- * (`User.workstationId`), not claimed client-side.
+ * Employee login (replaces the former Tisch-Anmeldung gate). The worker signs in
+ * with their Mitarbeiternummer alone against `POST /api/auth/login` (see
+ * `data/auth.ts`) — no PIN: impersonating a colleague would only mean doing that
+ * colleague's work. The resulting session gates the whole app in `App.tsx`.
+ * Arbeitsplatz/Tisch is admin-assigned server-side (`User.workstationId`), not
+ * claimed client-side.
  */
 import { useState, type FormEvent, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -20,7 +21,6 @@ export interface LoginScreenProps {
 
 export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
   const [employeeNo, setEmployeeNo] = useState('');
-  const [pin, setPin] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,11 +29,11 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
     setError(undefined);
     setSubmitting(true);
     try {
-      const session = await login(employeeNo.trim(), pin);
+      const session = await login(employeeNo.trim());
       onLoggedIn(session);
     } catch (err) {
       if (err instanceof LoginError) {
-        setError('Mitarbeiternummer oder PIN ist falsch.');
+        setError('Mitarbeiternummer ist unbekannt.');
       } else {
         setError('Anmeldung fehlgeschlagen. Bitte erneut versuchen.');
       }
@@ -63,24 +63,9 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
         fullWidth
         autoFocus
         disabled={submitting}
-        sx={{ mb: 2 }}
-      />
-      <TextField
-        label="PIN"
-        type="password"
-        inputMode="numeric"
-        value={pin}
-        onChange={(e) => setPin(e.target.value)}
-        fullWidth
-        disabled={submitting}
         sx={{ mb: 3 }}
       />
-      <Button
-        type="submit"
-        variant="contained"
-        fullWidth
-        disabled={submitting || !employeeNo.trim() || !pin}
-      >
+      <Button type="submit" variant="contained" fullWidth disabled={submitting || !employeeNo.trim()}>
         {submitting ? 'Anmelden…' : 'Anmelden'}
       </Button>
     </Box>
