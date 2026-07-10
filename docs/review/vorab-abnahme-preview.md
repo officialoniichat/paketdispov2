@@ -483,7 +483,107 @@ Feature-Branches bereits aktualisierten `.mmd`/SVG mit.
 
 ---
 
-## 9 · Fazit
+## 9 · Automatisierte Abnahme
+
+Jede Forderung des Kunden an das Teamlead-Cockpit ist jetzt ein Playwright-Test gegen ein **echtes,
+geseedetes Backend** — kein Mock. Lauf:
+
+```bash
+pnpm --filter @paket/teamlead-web e2e     # 25 passed, exit 0
+```
+
+`e2e/fixtures/global-setup.ts` startet eine Postgres per Testcontainers, migriert, spielt den
+echten Szenario-Seed ein (`prisma db seed` → 189 ready-Belege) und ruft einmal
+`POST /api/teamlead/assignments/recalculate`. Das Cockpit hat keinen Login; die Suite holt sich
+den Bearer-Token über den echten `POST /api/auth/login` und schiebt ihn — genau wie die Produktion
+über `scripts/write-runtime-env.mjs` — als `/env.js` in die Seite (`e2e/fixtures/test.ts`).
+Ports 3098/5184, damit die Suite weder den Dev-Stack noch die `employee-pwa`-Suite (3099/5185)
+verdrängt.
+
+### Welcher Test deckt welche Forderung ab
+
+| # | Kundenforderung | Test | Status |
+| --- | --- | --- | --- |
+| 1 | Eva: Admin & Regelpflege speichert in **jedem** Tab | `admin-regelpflege.spec.ts` — 6 Tests, je ein Tab (Priorität, Bündel, Aufwand, Lieferungen, Verladeplan, Schichtende) | 🟢 6/6 |
+| 2 | Eva: „Ich möchte euch bitten, **alles auf Deutsch** zu machen." | `deutsche-texte.spec.ts` — 8 Tests | 🟢 8/8 |
+| 3 | Dustin: „Der Rest wird dann im **Geparkt** stehen." | `geparkt.spec.ts` | 🔴 **1 rot** (`test.fail()`) |
+| 4 | Dustin: „Könnte ich auch nur das **Mittelstück** eingeben, 0-0-3-0-5?" | `belegsuche.spec.ts` — API + Zuweisen-Dialog | 🟢 2/2 |
+| 5 | Anmeldung auf API-Ebene (das Dashboard hat bewusst keinen Login) | `login-api.spec.ts` — 4 Tests | 🟢 4/4 |
+
+Zu **1**: Alle sechs Tabs teilen sich einen `PUT /api/admin/rules`. Jeder Test ist ein Roundtrip —
+Wert ändern → speichern → **HTTP-Status der PUT-Antwort** prüfen (nicht nur den grünen Toast) →
+Seite neu laden → Persistenz beweisen. Genau das war der alte Bug: die globale ValidationPipe mit
+`whitelist: true` verwarf DTO-Felder ohne class-validator-Dekorator still, die Zod-Prüfung im
+Service antwortete mit `400 Ungültige Regelkonfiguration`. Die `@Allow()`-Dekoratoren an
+`handlingClassFactors`/`wgrFactors` (`admin.dto.ts`) halten das heute; der Aufwand-Tab ist der
+eigentliche Wächter.
+
+Zu **2**: geprüft über Tagescockpit, Belege, Digitale Ablagen, Mitarbeiterboard und die sechs
+Regel-Tabs — keine englischen Wortmarken, keine rohen Enum-Schlüssel (`snake_case`/`SCREAMING_SNAKE`),
+de-DE-Datum, Prozent mit Leerzeichen, kein ISO-/US-Datum. Ein Test provoziert einen Backend-Fehler
+und belegt, dass die Meldung deutsch ist („Laden der Regeln fehlgeschlagen …") — der alte Wortlaut
+`Backend request failed: rules (…)` aus `http.ts:31` ist weg. `DevScenariosTab` ist ausgenommen: der
+Production-Build enthält den Code nicht (`AdminPage.tsx:46-51`).
+
+Zu **5**: Teamlead `tl-001` + PIN `0000` → 200, Rolle `teamlead`. Mitarbeiter **ohne `pin`-Feld** →
+200, Rolle `employee`. Unbekannte Nummer → 401. Teamlead mit falscher PIN → 401, **und** Teamlead
+ohne PIN → 401: der PIN-Wegfall für Mitarbeiter hat den privilegierten Pfad nicht mitgeöffnet.
+
+### Was rot ist — und warum
+
+<a id="d1"></a>
+#### D1 — „Rest parken" landet **nicht** im Geparkt (Dustins Forderung ist unerfüllt)
+
+`geparkt.spec.ts` ist mit `test.fail()` als bekannter Fehlschlag markiert. Er ist **nicht
+weichgespült**: der Test behauptet weiterhin genau das, was Dustin verlangt hat, und schlägt fehl.
+
+Ursache, verifiziert:
+
+- `POST /api/me/park` (`cases.service.ts:222`) setzt den Beleg auf **`status: 'ready'`**, hängt ihn
+  vom Bündel ab und emittiert `case.parked_by_employee`. Der Beleg wandert also zurück in den
+  freien Pool und wird ins nächste Bündel eingeplant.
+- Die Spalte „Geparkt" der Digitalen Ablagen nimmt aber **ausschließlich** Belege mit
+  `status === 'parked'` auf (`remoteDataset.ts:253`).
+- Ergebnis: ein vom Mitarbeiter geparkter Beleg erscheint je nach Prio-Kennzeichen in „Prio" oder
+  „Sonstige" — **nie** in „Geparkt". Nur der Teamlead-Pfad
+  (`POST /api/teamlead/cases/:id/park`) setzt `parked`.
+
+Der Test wurde beim Lauf konkret mit Beleg `3.540.310` widerlegt, der nach dem Parken in der
+Prio-Spalte stand, während der Zähler von „Geparkt" auf 1 (dem Seed-Beleg) stehen blieb.
+
+Entscheidung nötig: entweder der Mitarbeiter-Park-Pfad setzt künftig `parked`, oder Dustin bekommt
+gesagt, dass „der Rest" bewusst in den Pool zurückfällt. Sobald jemand es umstellt, meldet Playwright
+den Test als „passed unexpectedly" — das `test.fail()` muss dann weg.
+
+### Zwei Befunde am Rande, die beim Bauen der Suite aufgefallen sind
+
+1. **Die alte Spec war bereits rot.** `e2e/teamlead-flow.spec.ts` prüfte eine Oberfläche, die es
+   nicht mehr gibt (`Heute – Logistik Warenauszeichnung`, `Netto-Kapazität`, Button `Neu berechnen`),
+   und `playwright.config.ts` behauptete im Kommentar, die Suite laufe „against the seeded in-memory
+   cockpit store … without any backend" — während `store.tsx:2` seit Längerem „backed by the live
+   backend" sagt. Ohne Backend konnte die Spec nie grün sein. Beides ist korrigiert.
+2. **Der §8.4-Grundzwang beim Verteilungs-Commit existiert nicht mehr.** Der alte Test verlangte für
+   „Live zuweisen" einen Pflichtgrund. Heute heißt der Dialog „Verteilungs-Vorschlag" und
+   `SimulationPanel.handleCommit` (`SimulationPanel.tsx:50`) ruft `recalculate.mutate()` **ohne
+   Grund**. Für Park/Priorisieren greift das Audit-Gate unverändert (`teamlead-flow.spec.ts`
+   beweist es). Ob der Commit einen Grund braucht, ist eine Produktentscheidung — nicht stillschweigend
+   von mir wegtestbar, deshalb hier benannt.
+
+### Was die Suite **nicht** abdeckt
+
+- **Befund [B1](#b1)** (de-DE-Zahlen) bleibt ungeprüft: `MitarbeiterBoard.tsx:221` zeigt
+  `{row.plannedHours} h geplant` nur dann mit Punkt, wenn die Stundenzahl gebrochen ist — im
+  aktuellen Seed ist sie es nicht; `EmployeeDetailPanel.tsx:280` (`toFixed(2)`) liegt im Admin-Tab
+  „Mitarbeiter", der nicht zu den sechs beauftragten Regel-Tabs gehört.
+- Die Admin-Tabs **Lagerplätze, Mitarbeiter, Schichtplan, Integrationen** sind weder im Speicher-
+  noch im Sprach-Test — beauftragt waren die sechs Regel-Tabs.
+- `e2e/` liegt außerhalb von `tsconfig.json#include` (`["src", "vite.config.ts"]`) und wird damit von
+  `pnpm typecheck` nicht erfasst. Das ist die bestehende Konvention, `employee-pwa` handhabt es
+  identisch — hier bewusst nicht geändert.
+
+---
+
+## 10 · Fazit
 
 **`6aa9b` darf starten.** Zwei Nachbesserungen empfehle ich vorher, beide winzig:
 
@@ -493,3 +593,8 @@ Feature-Branches bereits aktualisierten `.mmd`/SVG mit.
 Und eine Betriebsauflage, die wichtiger ist als beide Fixes zusammen:
 **nach dem Deploy `recalculate` aufrufen — früh am Tag** ([C4](#c4)). Sonst steht Dustin wieder vor
 einem leeren „Ware holen" und hält ein Feature für fehlend, das seit dem 07.07. funktioniert.
+
+Offen bleibt eine **Produktentscheidung, kein Bug im Code**: „Rest parken" schiebt die Belege
+zurück in den Pool statt in die Spalte „Geparkt" ([D1](#d1)). Dustin erwartet laut Call das
+Gegenteil. Vor der Feedback-Runde mit Eva klären — der Playwright-Test hält die Forderung
+so lange rot fest.
