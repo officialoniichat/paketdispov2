@@ -1,14 +1,20 @@
 import { defineConfig, devices } from '@playwright/test';
+import { APP_PORT } from './e2e/fixtures/ports.js';
 
 /**
  * Playwright E2E config for the Teamlead-Dashboard (teamlead-web).
  *
- * Pilot-acceptance harness (§17.1 / §8.4). Runs the built app via `pnpm preview`
- * on port 5174 against the seeded in-memory cockpit store so the cockpit and the
- * override audit gate work without any backend. Chromium-only and headless.
+ * Vorab-Abnahme-Harness: runs the built app via `vite preview` against a REAL
+ * backend-api instance on a REAL, seeded Postgres (Testcontainers) — see
+ * `e2e/fixtures/global-setup.ts`. The cockpit's data layer (`src/data/store.tsx`,
+ * `belege.ts`, `admin.ts`) reads the live `/api/teamlead/*` and `/api/admin/*`
+ * endpoints; there is no in-memory cockpit dataset left to test against.
+ *
+ * Each test injects the backend URL + a freshly minted bearer token by stubbing
+ * `/env.js` (see `e2e/fixtures/test.ts`), so nothing is baked into the build.
  */
 // 5184 (not the dev 5174): isolates the E2E preview from any running dev server.
-const PORT = 5184;
+const PORT = APP_PORT;
 
 export default defineConfig({
   testDir: './e2e',
@@ -17,10 +23,20 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
+  // Testcontainers (cold Docker pull), a workspace build and the scenario seed
+  // can together exceed a minute on a cold cache; `globalSetup` is NOT bounded
+  // by `webServer.timeout`, so give the whole run generous headroom.
+  globalTimeout: 15 * 60_000,
+  globalSetup: './e2e/fixtures/global-setup.ts',
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
     headless: true,
+    // Der Kunde arbeitet auf deutschen Rechnern. Die App formatiert selbst in
+    // de-DE (src/lib/format.ts), aber native Controls — vor allem
+    // `<input type="date">` im Verladeplan — folgen der Browser-Locale.
+    locale: 'de-DE',
+    timezoneId: 'Europe/Berlin',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
