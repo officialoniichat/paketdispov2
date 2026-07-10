@@ -145,8 +145,13 @@ export async function seedCaseDetails(
 
   for (const c of cases) {
     const params = detailParamsFor(specByWeBelegNo.get(c.weBelegNo), c.totalQuantity);
+    // B3: Etikettendruck NICHT auf jedem Beleg — sonst trägt der Chip „🏷️ Etiketten
+    // drucken" am Bündel-Home keine Information mehr. Dustin will genau daran
+    // erkennen, ob er zum Drucker muss. Deterministische Teilmenge (zwei von drei
+    // Belegen), analog zu `onlineDemoCase` weiter unten.
+    const printDemoCase = Number(c.weBelegNo.replace(/\D/g, '').slice(-1)) % 3 !== 0;
     const headerData = {
-      priceLabelPrintRequired: true,
+      priceLabelPrintRequired: printDemoCase,
       goodsReceiptCheckMode: params.checkMode,
       goodsReceiptCheckPercentage: params.checkPercentage,
       // A5: Prüfstufe aus dem Katalog, konsistent zum Prüfmodus des Belegs.
