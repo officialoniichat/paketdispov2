@@ -135,7 +135,7 @@ nicht `ReceiptPosition.onlineRelevant`. Dieses Feld blieb `false`.
 
 | Punkt | Ergebnis | Beleg |
 | --- | --- | --- |
-| Anmeldung allein mit Mitarbeiternummer, **kein PIN-Feld** | ✅ | Login-Screen enthält genau ein Textfeld „Mitarbeiternummer" + „Anmelden". `screenshots/01-anmeldung-ohne-pin-1920x1080.png` |
+| Anmeldung allein mit Mitarbeiternummer, **kein PIN-Feld** | ✅ | Login-Screen enthält genau ein Textfeld „Mitarbeiternummer" + „Anmelden". Vorbelegt mit `ma-108` → ein Klick genügt. `screenshots/01-anmeldung-ohne-pin-1920x1080.png` |
 | Startseite: je Beleg der Lagerplatz | ✅ | 4 Stops `R5`, `R11`, `R25`, `R27`; je Beleg `storageLocationCode` |
 | Mehrfachauswahl | ✅ | Nach zwei Klicks: „2/4 Plätze", beide Stops „geholt" |
 | „Rest parken" funktioniert | ✅ | `POST /api/me/park → 201`, Meldung **„2 Belege geparkt – kommen ins nächste Bündel."**, Abschnitt 2 danach entsperrt |
@@ -429,8 +429,10 @@ curl -s -X POST localhost:3002/api/teamlead/assignments/recalculate \
      -H "Authorization: Bearer $TL" -H 'Content-Type: application/json' -d '{}'
 ```
 
-Anmelden in der Mitarbeiter-App: **nur die Nummer**, z. B. `ma-108` (5 Belege, 3 mit Online-Chips)
-oder `ma-101`. Kein PIN.
+Anmelden in der Mitarbeiter-App: Das Feld ist mit **`ma-108`** vorbelegt — einmal „Anmelden"
+klicken, kein PIN. `ma-108` (Hakan Yilmaz) hat den reichhaltigsten Demo-Datenstand: 5 Belege auf
+4 Lagerplätzen, alle mit Etikettendruck und Sicherungstyp, drei davon mit Online-Chips. Jede andere
+Nummer (`ma-101` … `ma-110`) lässt sich einfach darüberschreiben.
 
 > **Wenn du 3000 und 5174 freiräumst** (Container `gotenberg-fahrauftrag` stoppen, die beiden
 > `busverwaltung`-Vite-Server beenden), genügt schlicht `pnpm dev` — dann stimmen auch die `.env`-
@@ -470,6 +472,7 @@ Bei (c) laufen die Dev-Server weiter, aber der Worktree zeigt dann nicht mehr au
 | Datei | Änderung | Warum |
 | --- | --- | --- |
 | `apps/backend-api/src/dev/scenarios/case-builders.ts` | Position 1 jedes zweiten Belegs ist `onlineRelevant` | Demodaten-Lücke: ohne das ist der farbige Online-Chip für keinen Mitarbeiter erreichbar (403). Demodaten, kein Produktivcode. |
+| `apps/employee-pwa/src/screens/LoginScreen.tsx` | Feld „Mitarbeiternummer" mit `ma-108` vorbelegt | Auf Wunsch von Daniel: der Demo-Link soll ohne Tippen in den vollen Datenstand führen. Konstante `DEMO_EMPLOYEE_NO`, Feld bleibt editierbar. |
 | `docs/review/vorab-abnahme-preview.md` | dieser Bericht | |
 | `docs/review/screenshots/*.png` | 5 Belege | |
 

@@ -19,8 +19,16 @@ export interface LoginScreenProps {
   onLoggedIn: (session: Session) => void;
 }
 
+/**
+ * Vorbelegung für die Demo: `ma-108` ist der Seed-Mitarbeiter mit der reichhaltigsten
+ * Datenlage — 5 Belege auf 4 Lagerplätzen (Mehrfachauswahl und „Rest parken" sind damit
+ * vorführbar), alle mit Etikettendruck und Sicherungstyp, drei davon mit online
+ * markierten Größen. Das Feld bleibt frei editierbar.
+ */
+const DEMO_EMPLOYEE_NO = 'ma-108';
+
 export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
-  const [employeeNo, setEmployeeNo] = useState('');
+  const [employeeNo, setEmployeeNo] = useState(DEMO_EMPLOYEE_NO);
   const [error, setError] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
