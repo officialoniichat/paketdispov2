@@ -21,14 +21,27 @@ export function hasFetchError<T>(result: FetchResult<T>): boolean {
 }
 
 /**
+ * Render an openapi-fetch error channel value as German prose for a user-facing
+ * message. Shared with the mutation layer ({@link ./mutations}) so a failed read
+ * and a failed write read identically in the cockpit.
+ */
+export function describeCause(cause: unknown): string {
+  if (cause instanceof Error) return cause.message;
+  if (typeof cause === 'string') return cause;
+  if (cause === undefined || cause === null) return 'unbekannter Fehler';
+  return JSON.stringify(cause);
+}
+
+/**
  * Unwrap an openapi-fetch result, throwing on failure so React Query sees it.
  * A failure is the error channel being set or a missing body. `label` names the
- * endpoint for the thrown message. Mutations wrap the failure in their own error
- * type instead via {@link hasFetchError}.
+ * failed operation as a German noun phrase („Laden der Belege"), because the
+ * feature screens render `error.message` straight into an Alert. Mutations wrap
+ * the failure in their own error type instead via {@link hasFetchError}.
  */
 export function unwrap<T>(result: FetchResult<T>, label: string): T {
   if (hasFetchError(result) || result.data === undefined) {
-    throw new Error(`Backend request failed: ${label} (${JSON.stringify(result.error)})`);
+    throw new Error(`${label} fehlgeschlagen (${describeCause(result.error)})`);
   }
   return result.data;
 }

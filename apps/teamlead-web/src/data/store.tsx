@@ -42,6 +42,7 @@ import {
   assignToEmployee as assignToEmployeeRequest,
   commitAssignment,
   moveCase as moveCaseRequest,
+  MutationError,
   pauseBundle as pauseBundleRequest,
   previewAssignment,
   reorderBundle as reorderBundleRequest,
@@ -267,7 +268,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const exportZst = useMutation<ZstExportResultDto, Error, void>({
     mutationFn: async () => {
       const { data, error } = await api.POST('/api/teamlead/assignments/export-zst', {});
-      if (error || !data) throw new Error(`export failed (${JSON.stringify(error)})`);
+      if (error || !data) throw new MutationError('ZST-Export', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -279,7 +280,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`prioritize failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Priorisieren', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -291,7 +292,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`deprioritize failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Priorität aufheben', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -303,7 +304,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`approve failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Freigeben', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -315,7 +316,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`reactivate failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Reaktivieren', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -327,7 +328,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`park failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Parken', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -339,7 +340,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: undefined,
       });
-      if (error) throw new Error(`unpark failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Entparken', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -351,7 +352,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { reason },
       });
-      if (error) throw new Error(`cancel failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Stornieren', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -363,7 +364,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         params: { path: { caseId } },
         body: { resolution: reason },
       });
-      if (error) throw new Error(`resolve failed (${JSON.stringify(error)})`);
+      if (error) throw new MutationError('Problem freigeben', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,

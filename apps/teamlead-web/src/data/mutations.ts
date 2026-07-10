@@ -6,7 +6,7 @@
  * snackbar can surface the message. No `any`, no non-null assertions.
  */
 import type { PaketApiClient, components } from '@paket/api-client';
-import { hasFetchError } from './http.js';
+import { describeCause, hasFetchError } from './http.js';
 import type { PreviewResult } from './types.js';
 
 type WithdrawDto = components['schemas']['WithdrawDto'];
@@ -29,13 +29,6 @@ export class MutationError extends Error {
     super(`${operation} fehlgeschlagen (${describeCause(cause)})`);
     this.name = 'MutationError';
   }
-}
-
-function describeCause(cause: unknown): string {
-  if (cause instanceof Error) return cause.message;
-  if (typeof cause === 'string') return cause;
-  if (cause === undefined || cause === null) return 'unbekannter Fehler';
-  return JSON.stringify(cause);
 }
 
 /** Throw on the openapi-fetch error channel or a missing body; otherwise return data. */

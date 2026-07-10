@@ -288,7 +288,7 @@ export function IntegrationenTab(): JSX.Element {
             <StatusRow label="Letzter Pull">
               {status.lastPullAt} {status.lastPullOk ? '· ✓ erfolgreich' : '· ✗ Fehler'}
             </StatusRow>
-            <StatusRow label="Cursor">
+            <StatusRow label="Lesestand">
               <Box component="span" sx={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
                 {status.cursorLabel}
               </Box>
@@ -349,7 +349,7 @@ export function IntegrationenTab(): JSX.Element {
                     onClick={() => retry.mutate(q.weBelegNo)}
                     disabled={retry.isPending}
                   >
-                    Retry
+                    Erneut versuchen
                   </Button>
                 </Box>
               ))}

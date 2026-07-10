@@ -6,7 +6,13 @@
  * @paket/api-client read endpoints, mapping each DTO field-by-field so the
  * feature components stay free of transport concerns.
  */
-import type { GoodsReceiptCase, SkillTier, WorkIssue } from '@paket/domain-types';
+import type {
+  AssignmentStatus,
+  GoodsReceiptCase,
+  IssueType,
+  SkillTier,
+  WorkIssue,
+} from '@paket/domain-types';
 
 // ---------------------------------------------------------------------------
 // §10.1 Tagescockpit
@@ -79,7 +85,7 @@ export interface LaneCard {
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];
   /** C4: latest OPEN problem (kind + note preview); null without an open issue. */
-  openIssue: { kind: string; note: string | null } | null;
+  openIssue: { kind: IssueType; note: string | null } | null;
   /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
   /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */
@@ -146,8 +152,8 @@ export interface BoardRow {
   currentCaseIndex?: number;
   bundleSize?: number;
   bundleId?: string;
-  /** AssignmentStatus of the current Bündel (created/assigned/accepted/active/paused/…); undefined if free. */
-  bundleStatus?: string;
+  /** AssignmentStatus of the current Bündel; undefined if free. */
+  bundleStatus?: AssignmentStatus;
   paused: boolean;
   /** Fixed Bereiche/skills of the employee (shown on idle rows too). */
   bereiche: string[];

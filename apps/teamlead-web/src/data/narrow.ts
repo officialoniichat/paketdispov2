@@ -12,19 +12,35 @@
  */
 import {
   actorTypeSchema,
+  assignmentStatusSchema,
   caseStatusSchema,
+  employeeRoleSchema,
+  issueScopeSchema,
+  issueStatusSchema,
+  issueTypeSchema,
   locationKindSchema,
   priorityFlagSchema,
   sectionCodeSchema,
+  shiftSourceSchema,
   skillTierSchema,
+  skuLineStatusSchema,
   workflowEventTypeSchema,
+  zstSourceSchema,
   type ActorType,
+  type AssignmentStatus,
   type CaseStatus,
+  type EmployeeRole,
+  type IssueScope,
+  type IssueStatus,
+  type IssueType,
   type LocationKind,
   type PriorityFlag,
   type SectionCode,
+  type ShiftSource,
   type SkillTier,
+  type SkuLineStatus,
   type WorkflowEventType,
+  type ZstSource,
 } from '@paket/domain-types';
 
 /** Narrow a DTO status string to the domain `CaseStatus`, throwing on an unknown value. */
@@ -50,6 +66,46 @@ export function toSkillTier(value: string): SkillTier {
 /** Narrow a DTO `kind` string to the domain `LocationKind`, throwing on an unknown value. */
 export function toLocationKind(value: string): LocationKind {
   return locationKindSchema.parse(value);
+}
+
+/** Narrow a DTO issueType string to the domain `IssueType`, throwing on an unknown value. */
+export function toIssueType(value: string): IssueType {
+  return issueTypeSchema.parse(value);
+}
+
+/** Narrow a DTO scope string to the domain `IssueScope`, throwing on an unknown value. */
+export function toIssueScope(value: string): IssueScope {
+  return issueScopeSchema.parse(value);
+}
+
+/** Narrow a DTO issue status string to the domain `IssueStatus`, throwing on an unknown value. */
+export function toIssueStatus(value: string): IssueStatus {
+  return issueStatusSchema.parse(value);
+}
+
+/** Narrow a DTO SKU-line status string to the domain `SkuLineStatus`, throwing on an unknown value. */
+export function toSkuLineStatus(value: string): SkuLineStatus {
+  return skuLineStatusSchema.parse(value);
+}
+
+/** Narrow a DTO ZST source string to the domain `ZstSource`, throwing on an unknown value. */
+export function toZstSource(value: string): ZstSource {
+  return zstSourceSchema.parse(value);
+}
+
+/** Narrow a DTO role string to the domain `EmployeeRole`, throwing on an unknown value. */
+export function toEmployeeRole(value: string): EmployeeRole {
+  return employeeRoleSchema.parse(value);
+}
+
+/** Narrow a DTO shift source string to the domain `ShiftSource`, throwing on an unknown value. */
+export function toShiftSource(value: string): ShiftSource {
+  return shiftSourceSchema.parse(value);
+}
+
+/** Narrow a DTO bundle status string to the domain `AssignmentStatus`, throwing on an unknown value. */
+export function toAssignmentStatus(value: string): AssignmentStatus {
+  return assignmentStatusSchema.parse(value);
 }
 
 /**

@@ -20,7 +20,14 @@ import Typography from '@mui/material/Typography';
 import DownloadIcon from '@mui/icons-material/Download';
 import { formatMinutes, formatNumber } from '../../lib/format.js';
 import { useSplits, type RecordedSplit } from './SplitProvider.js';
+import type { CaptureMode } from './splitMath.js';
 import { splitsToCsv } from './splitCsv.js';
+
+/** Wie der Anteil eines Mitarbeiters an einem geteilten Beleg erfasst wurde. */
+const CAPTURE_MODE_LABELS: Record<CaptureMode, string> = {
+  getrennt: 'getrennt erfasst',
+  anteilig: 'anteilig angerechnet',
+};
 
 function downloadCsv(splits: readonly RecordedSplit[]): void {
   const csv = splitsToCsv(splits);
@@ -94,7 +101,7 @@ function SplitLeistungCard({ split }: { split: RecordedSplit }): JSX.Element {
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {formatNumber(split.totalQuantity)} Teile · {split.shares.length} Anteile ·{' '}
-          {split.captureMode === 'getrennt' ? 'getrennt erfasst' : 'anteilig angerechnet'}
+          {CAPTURE_MODE_LABELS[split.captureMode]}
         </Typography>
         <Box sx={{ ml: 'auto' }}>
           <Chip
@@ -120,7 +127,7 @@ function SplitLeistungCard({ split }: { split: RecordedSplit }): JSX.Element {
             <TableRow key={s.employeeId}>
               <TableCell sx={{ fontWeight: 600 }}>{s.employeeName}</TableCell>
               <TableCell>
-                <Chip size="small" variant="outlined" label={split.captureMode} />
+                <Chip size="small" variant="outlined" label={CAPTURE_MODE_LABELS[split.captureMode]} />
               </TableCell>
               <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatNumber(s.quantity)}

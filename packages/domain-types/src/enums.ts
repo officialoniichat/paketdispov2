@@ -143,6 +143,14 @@ export type IssueStatus = z.infer<typeof issueStatusSchema>;
 export const issueScopeSchema = z.enum(['case', 'position', 'sku_line', 'transport_box']);
 export type IssueScope = z.infer<typeof issueScopeSchema>;
 
+/** Erfassungsstand einer Größenzeile (Prisma `SkuLineStatus`). */
+export const skuLineStatusSchema = z.enum(['open', 'confirmed', 'deviation']);
+export type SkuLineStatus = z.infer<typeof skuLineStatusSchema>;
+
+/** Herkunft der Schichtwerte eines Mitarbeiters (Prisma `ShiftSource`). */
+export const shiftSourceSchema = z.enum(['seak', 'pattern', 'teamlead']);
+export type ShiftSource = z.infer<typeof shiftSourceSchema>;
+
 export const issueTypeSchema = z.enum([
   'missing_quantity',
   'overdelivery',

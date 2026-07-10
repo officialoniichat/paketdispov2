@@ -27,6 +27,7 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { LocationKind, LocationMaster } from '@paket/domain-types';
+import { locationKindLabels } from '@paket/ui';
 import { fetchLocations, saveLocations } from '../../data/admin.js';
 
 const KINDS: LocationKind[] = [
@@ -169,7 +170,7 @@ export function LocationMasterEditor(): JSX.Element {
                 >
                   {KINDS.map((k) => (
                     <MenuItem key={k} value={k}>
-                      {k}
+                      {locationKindLabels[k]}
                     </MenuItem>
                   ))}
                 </TextField>

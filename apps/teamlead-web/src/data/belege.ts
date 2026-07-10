@@ -11,16 +11,31 @@
 import type {
   CaseStatus,
   ForwardRecipient,
+  IssueScope,
+  IssueStatus,
+  IssueType,
   PriorityFlag,
   SectionCode,
+  SkuLineStatus,
   WorkflowEventType,
+  ZstSource,
 } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import type { EffortComponents } from '@paket/assignment-engine';
 import type { DeliveryGroupRef } from './types';
 import { api } from './api.js';
 import { unwrap } from './http.js';
-import { toCaseStatus, toEventType, toPriorityFlags, toSectionCode } from './narrow.js';
+import {
+  toCaseStatus,
+  toEventType,
+  toIssueScope,
+  toIssueStatus,
+  toIssueType,
+  toPriorityFlags,
+  toSectionCode,
+  toSkuLineStatus,
+  toZstSource,
+} from './narrow.js';
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
 type CaseLookupResultDto = components['schemas']['CaseLookupResultDto'];
@@ -182,7 +197,7 @@ export interface BelegSkuLine {
   size: string;
   expectedQuantity: number;
   confirmedQuantity: number | null;
-  status: string;
+  status: SkuLineStatus;
 }
 
 export interface BelegPosition {
@@ -211,9 +226,9 @@ export interface BelegBox {
 
 export interface BelegIssue {
   id: string;
-  scope: string;
-  issueType: string;
-  status: string;
+  scope: IssueScope;
+  issueType: IssueType;
+  status: IssueStatus;
   description: string | null;
   resolution: string | null;
   reportedAt: string;
@@ -225,7 +240,7 @@ export interface BelegZst {
   effortPoints: number;
   completedAt: string;
   exportedAt: string | null;
-  source: string;
+  source: ZstSource;
 }
 
 export interface BelegHistoryEntry {
@@ -320,7 +335,7 @@ export async function mergeDeliveryGroup(caseIds: string[]): Promise<void> {
   const result = await api.POST('/api/teamlead/delivery-groups/merge', {
     body: { caseIds },
   });
-  unwrap(result, 'merge delivery group');
+  unwrap(result, 'Zusammenführen der Lieferung');
 }
 
 /** Teamlead-Punkt 1: split/remove Belege out of a Lieferung (each becomes solo). */
@@ -328,7 +343,7 @@ export async function splitDeliveryGroup(caseIds: string[]): Promise<void> {
   const result = await api.POST('/api/teamlead/delivery-groups/split', {
     body: { caseIds },
   });
-  unwrap(result, 'split delivery group');
+  unwrap(result, 'Auftrennen der Lieferung');
 }
 
 /** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben). */
@@ -336,7 +351,7 @@ export async function releaseDeliveryGroup(caseIds: string[]): Promise<void> {
   const result = await api.POST('/api/teamlead/delivery-groups/release', {
     body: { caseIds },
   });
-  unwrap(result, 'release delivery group');
+  unwrap(result, 'Freigeben der Lieferung');
 }
 
 /**
@@ -367,7 +382,7 @@ export async function fetchBelegeList(
       },
     },
   });
-  const dto = unwrap<PoolListDto>(result, 'cases');
+  const dto = unwrap<PoolListDto>(result, 'Laden der Belege');
   return { rows: dto.items.map(toBelegRow), total: dto.total, page: dto.page, limit: dto.limit };
 }
 
@@ -399,7 +414,7 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
   const result = await api.GET('/api/teamlead/cases/lookup', {
     params: { query: { weBelegNo } },
   });
-  const dto = unwrap<CaseLookupResultDto>(result, 'case lookup');
+  const dto = unwrap<CaseLookupResultDto>(result, 'Belegabfrage');
   return {
     found: dto.found,
     caseId: dto.caseId ?? null,
@@ -464,7 +479,7 @@ export async function searchAssignableCases(params: CaseSearchParams): Promise<C
       },
     },
   });
-  const dto = unwrap<CaseSearchResultDto[]>(result, 'case search');
+  const dto = unwrap<CaseSearchResultDto[]>(result, 'Belegsuche');
   return dto.map(toSearchResult);
 }
 
@@ -525,7 +540,7 @@ export async function forwardCase(
     params: { path: { caseId } },
     body: reason ? { recipient, reason } : { recipient },
   });
-  unwrap(result, 'forward case');
+  unwrap(result, 'Weiterleiten des Belegs');
 }
 
 /** C5 Digitale Ablage: Weiterleitung „Zurückholen" (Flag löschen). */
@@ -534,7 +549,7 @@ export async function unforwardCase(caseId: string): Promise<void> {
     params: { path: { caseId } },
     body: undefined,
   });
-  unwrap(result, 'unforward case');
+  unwrap(result, 'Zurückholen des Belegs');
 }
 
 /** A7 TL-Topf: Beleg für „Besondere Aufmerksamkeit" markieren (Bucherinnen-Inlet mock). */
@@ -543,7 +558,7 @@ export async function flagAttention(caseId: string, note?: string): Promise<void
     params: { path: { caseId } },
     body: note ? { note } : {},
   });
-  unwrap(result, 'flag attention');
+  unwrap(result, 'Markieren des Belegs');
 }
 
 /** A7 TL-Topf: Aufmerksamkeitsflag entfernen („aus Topf entlassen"). */
@@ -552,7 +567,7 @@ export async function unflagAttention(caseId: string): Promise<void> {
     params: { path: { caseId } },
     body: undefined,
   });
-  unwrap(result, 'unflag attention');
+  unwrap(result, 'Aufheben der Markierung');
 }
 
 /**
@@ -565,7 +580,7 @@ export async function releaseIntake(caseId: string): Promise<CaseStatus> {
     params: { path: { caseId } },
     body: {},
   });
-  const dto = unwrap<{ status: string }>(result, 'complete intake');
+  const dto = unwrap<{ status: string }>(result, 'Abschließen der Erfassung');
   return toCaseStatus(dto.status);
 }
 
@@ -574,7 +589,7 @@ export async function fetchBelegDetail(caseId: string): Promise<BelegDetail> {
   const result = await api.GET('/api/teamlead/cases/{caseId}', {
     params: { path: { caseId } },
   });
-  const dto = unwrap<CaseDetailDto>(result, 'case detail');
+  const dto = unwrap<CaseDetailDto>(result, 'Laden der Belegdetails');
   return toBelegDetail(dto);
 }
 
@@ -726,7 +741,7 @@ function toBelegSkuLine(s: SkuLineDto): BelegSkuLine {
     size: s.size,
     expectedQuantity: s.expectedQuantity,
     confirmedQuantity: s.confirmedQuantity ?? null,
-    status: s.status,
+    status: toSkuLineStatus(s.status),
   };
 }
 
@@ -745,9 +760,9 @@ function toBelegBox(b: TransportBoxTargetDto): BelegBox {
 function toBelegIssue(i: IssueSummaryDto): BelegIssue {
   return {
     id: i.id,
-    scope: i.scope,
-    issueType: i.issueType,
-    status: i.status,
+    scope: toIssueScope(i.scope),
+    issueType: toIssueType(i.issueType),
+    status: toIssueStatus(i.status),
     description: i.description ?? null,
     resolution: i.resolution ?? null,
     reportedAt: i.reportedAt,
@@ -761,7 +776,7 @@ function toBelegZst(z: ZstSummaryDto): BelegZst {
     effortPoints: z.effortPoints,
     completedAt: z.completedAt,
     exportedAt: z.exportedAt ?? null,
-    source: z.source,
+    source: toZstSource(z.source),
   };
 }
 

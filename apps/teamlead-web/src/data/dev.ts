@@ -42,7 +42,7 @@ const devApi = createApiClient({
 
 /** Catalog + active scenario + time-override state (single backend source). */
 export async function fetchDevState(): Promise<DevScenariosDto> {
-  return unwrap(await devApi.GET('/api/dev/scenarios'), 'dev state');
+  return unwrap(await devApi.GET('/api/dev/scenarios'), 'Laden des Dev-Status');
 }
 
 /** One-click load: reset the case graph + seed the scenario deterministically. */

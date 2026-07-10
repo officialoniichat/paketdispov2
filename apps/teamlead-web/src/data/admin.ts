@@ -49,7 +49,7 @@ function toUpsertDto(loc: LocationMaster): LocationUpsertDto {
 /** §11.2 Read the location master. */
 export async function fetchLocations(): Promise<LocationMaster[]> {
   const result = await api.GET('/api/admin/locations');
-  const dtos = unwrap<LocationDto[]>(result, 'locations');
+  const dtos = unwrap<LocationDto[]>(result, 'Laden der Lagerplätze');
   return dtos.map(toLocationMaster);
 }
 
@@ -57,7 +57,7 @@ export async function fetchLocations(): Promise<LocationMaster[]> {
 export async function saveLocations(locations: LocationMaster[]): Promise<LocationMaster[]> {
   const body = locations.map(toUpsertDto);
   const result = await api.PUT('/api/admin/locations', { body });
-  const dtos = unwrap<LocationDto[]>(result, 'save locations');
+  const dtos = unwrap<LocationDto[]>(result, 'Speichern der Lagerplätze');
   return dtos.map(toLocationMaster);
 }
 
@@ -70,7 +70,7 @@ export async function saveLocations(locations: LocationMaster[]): Promise<Locati
  */
 export async function fetchRuleConfig(): Promise<RuleConfig> {
   const result = await api.GET('/api/admin/rules');
-  const dto = unwrap<RuleConfigDto>(result, 'rules');
+  const dto = unwrap<RuleConfigDto>(result, 'Laden der Regeln');
   return ruleConfigSchema.parse(dto);
 }
 
@@ -83,6 +83,6 @@ export async function fetchRuleConfig(): Promise<RuleConfig> {
 export async function saveRuleConfig(config: RuleConfig): Promise<RuleConfig> {
   const body: RuleConfigDto = ruleConfigSchema.parse(config);
   const result = await api.PUT('/api/admin/rules', { body });
-  const dto = unwrap<RuleConfigDto>(result, 'save rules');
+  const dto = unwrap<RuleConfigDto>(result, 'Speichern der Regeln');
   return ruleConfigSchema.parse(dto);
 }

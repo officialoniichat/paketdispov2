@@ -14,8 +14,10 @@ import { unwrap } from './http.js';
 import { toOverrideAction, type AuditPayload } from './audit.js';
 import {
   toActorType,
+  toAssignmentStatus,
   toCaseStatus,
   toEventType,
+  toIssueType,
   toPriorityFlags,
   toSectionCode,
   toSkillTier,
@@ -83,12 +85,12 @@ export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
     api.GET('/api/teamlead/cases', { params: { query: { page: 1, limit: 200 } } }),
   ]);
 
-  const capacityDto = unwrap<CapacityDto>(capacity, 'capacity');
-  const dashboardDto = unwrap<DashboardDto>(dashboard, 'dashboard');
-  const kpiDto = unwrap<KpiDto>(kpis, 'kpis');
-  const boardDto = unwrap<BoardDto>(board, 'board');
-  const eventDtos = unwrap<AuditEventDto[]>(events, 'events');
-  const poolDto = unwrap<PoolListDto>(pool, 'cases');
+  const capacityDto = unwrap<CapacityDto>(capacity, 'Laden der Kapazität');
+  const dashboardDto = unwrap<DashboardDto>(dashboard, 'Laden der Übersicht');
+  const kpiDto = unwrap<KpiDto>(kpis, 'Laden der Kennzahlen');
+  const boardDto = unwrap<BoardDto>(board, 'Laden der Mitarbeiterübersicht');
+  const eventDtos = unwrap<AuditEventDto[]>(events, 'Laden der Ereignisse');
+  const poolDto = unwrap<PoolListDto>(pool, 'Laden der Belege');
 
   return {
     cockpit: {
@@ -176,7 +178,10 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     currentCaseIndex: currentCaseIndex >= 0 ? currentCaseIndex : undefined,
     bundleSize: row.cases.length,
     bundleId: row.bundleId ?? undefined,
-    bundleStatus: row.bundleId != null ? row.bundleStatus : undefined,
+    bundleStatus:
+      row.bundleId != null && row.bundleStatus != null
+        ? toAssignmentStatus(row.bundleStatus)
+        : undefined,
     paused: row.bundleStatus === 'paused',
     bereiche: row.bereiche,
     cases: row.cases.map(toBoardCase),
@@ -308,7 +313,9 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     estimatedMinutes: item.estimatedMinutes,
     storageCode: item.storageLocationCode ?? '–',
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
-    openIssue: item.openIssue ? { kind: item.openIssue.kind, note: item.openIssue.note ?? null } : null,
+    openIssue: item.openIssue
+      ? { kind: toIssueType(item.openIssue.kind), note: item.openIssue.note ?? null }
+      : null,
     forwardedTo: item.forwardedTo ?? null,
     bereich: item.bereich ?? null,
     attentionFlag: item.attentionFlag,
