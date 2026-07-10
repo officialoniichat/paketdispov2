@@ -625,3 +625,266 @@ Offen bleibt eine **Produktentscheidung, kein Bug im Code**: „Rest parken" sch
 zurück in den Pool statt in die Spalte „Geparkt" ([D1](#d1)). Dustin erwartet laut Call das
 Gegenteil. Vor der Feedback-Runde mit Eva klären — der Playwright-Test hält die Forderung
 so lange rot fest.
+
+---
+
+# 11 · Abnahme vor dem Deploy
+
+> **KANN `6aa9b` DEPLOYEN? — JA, aber genau diesen Branch und nicht den Stand von vorhin:**
+> `preview/vor-release` trug die beiden E2E-Suiten nicht, und mit ihnen fehlten zwei Fixes, die
+> nirgendwo sonst existieren — die Belegreihenfolge und der Etikettendruck im Demo-Seed; nach dem
+> Deploy sind ein **einmaliger Reseed** (`SEED_ON_DEPLOY=1`) und ein **frühes `recalculate`**
+> Pflicht, sonst zeigt der Link Dustin genau die zwei Dinge nicht, nach denen er gefragt hat.
+
+**Datum:** 10.07.2026 · **Geprüft auf:** `preview/vor-release` = `a84d50d`
+**Es wurde nichts deployt und nichts nach `main` gepusht.**
+
+---
+
+## 11.1 · Ist Arbeit verloren gegangen?
+
+Alle **11 Worktrees** einzeln geprüft (`git status --porcelain`), dazu die repo-weite Stash-Liste.
+
+| Befund | Ergebnis |
+| --- | --- |
+| Uncommittete Änderungen | **keine** — alle 11 Worktrees `dirty = 0` |
+| Stashes | **keine** — `git stash list` ist leer |
+| Ungemergte Commits | **zwei** (siehe unten) |
+
+**Ungemergter Commit 1 — inhaltlich gerettet, kein Handlungsbedarf.**
+Der Worktree `0a328` steht detached auf `36d08fa` („prevent P2002 on recalculate…"), das nicht in
+`origin/main` liegt. Derselbe Fix steckt aber als `85670d2` in `preview/vor-release`
+(`assignment.service.ts`, `deleteMany` über `poolCaseIds`, dort Zeile 144–147 verifiziert). Es ist
+ein Rebase-Duplikat, kein verlorener Stand.
+
+**Ungemergter Commit 2 — echt herrenlos, NICHT von mir angefasst.**
+`fix/pnpm-dev-clean-start` = `9f5ac75` („make `pnpm dev` boot cleanly from a clean checkout",
+15.06.2026) ist in **keinem** Branch enthalten — nicht in `main`, nicht in `preview/vor-release`,
+nicht in den Test-Branches. Er ändert `apps/backend-api/src/main.ts`, `src/config.ts`,
+`turbo.json`, `README.md` und `pnpm-lock.yaml` (+329/−6).
+
+> Ich habe ihn **bewusst nicht** in den Release gezogen: er fasst den Backend-Start und die
+> Lockfile an, und dafür ist der Tag vor einem Deploy der falsche Zeitpunkt. Er ist auch in keinem
+> Task erwähnt. **Er darf nur nicht vergessen werden** — sonst ist er beim nächsten Aufräumen weg.
+
+---
+
+## 11.2 · Sind alle Branches, wo sie hingehören?
+
+Vorher enthielt `preview/vor-release` die vier Feature-Branches
+(`fix/railway-deploy-safety`, `feat/positionen-tabelle`, `feat/employee-login-without-pin`,
+`feat/deutsche-texte`), aber **keine der beiden Test-Suiten**. Beide sind jetzt gemergt
+(`812d5e9`, `212e4c8`, konfliktfrei).
+
+**Das war kein Formalismus — der Merge hat zwei Dinge gerettet, die es sonst nirgends gibt:**
+
+1. **`038ea9d` — ein Backend-Fix, der nur auf `test/e2e-kundenforderungen` lag.**
+   `cases.service.ts` sortiert `/api/me/today` jetzt nach `AssignmentItem.sequence` statt nach
+   `bookingDate`. Ohne ihn schlägt „Start Bearbeitung WE …" wechselnde Belege vor. Ein Deploy von
+   `preview/vor-release` in seinem alten Zustand hätte diesen Fix stillschweigend weggeworfen.
+2. **Der Etikettendruck-Fix im Demo-Seed**, siehe direkt unten.
+
+---
+
+## 11.3 · Die vier kritischen Forderungen
+
+Beide Suiten selbst ausgeführt, Ergebnisse **nicht** aus der Zusammenfassungszeile gelesen, sondern
+aus dem JSON-Reporter (`expected` / `unexpected`), weil die Zusammenfassung täuscht (§11.5).
+
+| Kundenforderung | Test | Ergebnis | Beleg |
+| --- | --- | --- | --- |
+| **Etikettendruck-Chip nur bei `priceLabelPrintRequired`** (Dustin: „muss ich zum Drucker?") | `employee-flow.spec.ts:245` | 🟢 | Fixture hat einen Beleg mit und einen ohne; Test prüft `.not.toContain` und genau **einen** Chip. **Demo-Seed empirisch geprüft: 125 `true` / 70 `false` / 5 ohne Header.** |
+| **Positionen-Tabelle nutzt die rechte Bildhälfte, 1920 *und* 2560** (Dustins einzige Bedingung) | `employee-flow.spec.ts:429` (2 Läufe) | 🟢 | Echte Geometrie: `boundingBox().x > width/2` **und** `x + width > width*0.9`, kein DOM-Trick. Screenshot je Auflösung als Artefakt. |
+| **Alle sechs Regel-Tabs speichern und überleben einen Reload** | `admin-regelpflege.spec.ts:72–107` | 🟢 | Nicht nur der Toast: `waitForResponse` prüft **PUT → 200**, danach `page.goto('/admin')` (echter Reload) und `toHaveValue` / `toBeChecked`. Alle 6 Tabs einzeln. |
+| **Teamlead mit FALSCHER PIN → 401** | `login-api.spec.ts:46` | 🟢 | `wrongPin.status === 401` **und** `noPin.status === 401` — der PIN-Wegfall für Mitarbeiter (`066aee5`) hat den Teamlead-Pfad nicht mitgeöffnet. |
+
+### Der Etikettendruck-Chip — der Befund, der den Merge rechtfertigt
+
+Die Aufgabe vermutete, das Flag sei „bei ALLEN gesetzt". **Das stimmte — und zwar genau bis zu
+diesem Merge.** Auf `origin/main` *und* auf `preview/vor-release` vor dem Merge steht in
+`apps/backend-api/src/dev/scenarios/case-builders.ts:149` hart:
+
+```ts
+priceLabelPrintRequired: true,     // für JEDEN handgebauten Beleg
+```
+
+Der Fix liegt in `95e8167` — auf dem Test-Branch, der nicht gemergt war:
+
+```ts
+// B3: Etikettendruck NICHT auf jedem Beleg — sonst trägt der Chip keine Information mehr.
+const printDemoCase = Number(c.weBelegNo.replace(/\D/g, '').slice(-1)) % 3 !== 0;
+```
+
+Nicht aus dem Code geschlossen, sondern **gemessen**: Standard-Szenario in eine Wegwerf-Postgres
+geseedet und ausgezählt → **125 Belege mit Chip, 70 ohne, 5 ohne Header.** Der Chip trägt wieder
+Information.
+
+> **Wäre `preview/vor-release` so deployt worden, wie es heute Mittag stand, hätte Dustin auf jedem
+> einzelnen Beleg „🏷️ Etiketten drucken" gesehen** — genau die Unterscheidung, nach der er im Call
+> gefragt hat, wäre unsichtbar gewesen. Der grüne E2E-Test hätte ihn nicht geschützt: er bringt
+> seinen eigenen Fixture-Seed mit und sagt über die Demodaten nichts aus.
+
+### Aber: das Flag allein genügt nicht — die Uhrzeit entscheidet mit
+
+`recalculate` wurde gegen einen **frisch geseedeten** Stand je Uhrzeit einmal ausgeführt
+(`emp:NB(mitChip/ohneChip)`, `*` = Bündel mischt beide Sorten):
+
+```
+06:00 UTC | 10 Bündel, gemischt 9 | ma-108:6B(4/2)*  ma-101:5B(4/1)*  ma-103:6B(4/2)* …
+08:00 UTC | 10 Bündel, gemischt 8 | ma-108:4B(3/1)*  ma-102:6B(4/2)*  ma-110:1B(1/0)
+13:00 UTC |  4 Bündel, gemischt 2 | ma-102:1B(1/0)   ma-106:1B(1/0)   ma-107:3B(2/1)*
+```
+
+Früh am Tag mischen 8–9 von 10 Bündeln; **am Nachmittag entstehen nur noch 4 Bündel, und mehrere
+Mitarbeiter bekommen einen einzigen Beleg.** Bei einem Ein-Beleg-Bündel lassen sich weder der
+Chip-Unterschied noch Mehrfachauswahl noch „Rest parken" vorführen. Das bestätigt [C4](#c4) und
+macht die Betriebsauflage aus §10 zur **Bedingung**, nicht zur Empfehlung.
+
+*(Nebenbeobachtung, nicht isoliert: zwei Läufe um ~13:00 UTC ergaben unterschiedliche Verteilungen
+bei gleicher Bündelzahl. Nahe Schichtende ist der Plan klein und reagiert empfindlich auf die
+Restkapazität. Kein Blocker, aber nichts, worauf man eine Vorführung stellt.)*
+
+---
+
+## 11.4 · Vollständige Testlage
+
+| Lauf | Ergebnis | Anmerkung |
+| --- | --- | --- |
+| `pnpm typecheck` | 🟢 **13/13** | **`TURBO_FORCE=1` erzwungen** — siehe Fallstrick unten |
+| `pnpm lint` | 🟢 8/8, **0 errors** | 57 Style-Warnungen (`consistent-type-imports`), vorbestehend |
+| `pnpm test` | 🟢 13/13 Tasks | backend-api 171, teamlead-web 94 Tests |
+| `pnpm --filter @paket/employee-pwa e2e` | 🟢 **17/17 echt** | JSON: `expected 17, unexpected 0, flaky 0` |
+| `pnpm --filter @paket/teamlead-web e2e` | 🟡 **24 grün + 1 erklärt-rot** | Exit 0, meldet „25 passed" — siehe §11.5 |
+| `pnpm --filter @paket/backend-api test:int` | 🔴 **16 rot / 104 grün** | **Kein Regress:** identisch auf `origin/main` |
+
+### Fallstrick 1 — „13/13 grün" war beim ersten Mal wertlos
+
+Der erste `pnpm typecheck` meldete 13/13, **8 davon `cache hit, replaying logs`**, und die Logzeilen
+zeigten Pfade aus *fremden* Worktrees (`…/7bbe0/…`, `…/39f0f/…`). Grund: `node_modules/` ist in jedem
+Worktree ein **Symlink auf den Haupt-Workspace**, der Turbo-Cache also geteilt. Es lief kein einziges
+`tsc` gegen den gemergten Stand. Erst `TURBO_FORCE=1` (`0 cached, 13 total`) ist ein echter Beweis.
+**Wer hier nur die Schlusszeile liest, unterschreibt einen Lauf, den es nie gab.**
+
+### Fallstrick 2 — `pnpm test` fährt die Integrationstests gar nicht
+
+`vitest.config.ts` schließt sie aus (`exclude: ['**/*.int.test.ts']`). Die 21 Int-Tests laufen nur
+über `test:int` (Docker). Genau dort liegen die `me/*`-Endpunkte, die der Reihenfolge-Fix anfasst.
+
+---
+
+## 11.5 · Was rot ist — und ob Test oder Feature schuld ist
+
+### 🔴 R1 — 16 Integrationstests: **schlechte Tests, kein kaputtes Feature. Kein Regress.**
+
+Gemessen an drei Ständen, jeweils frisch:
+
+| Stand | Ergebnis | Rote Dateien |
+| --- | --- | --- |
+| `origin/main` = `35d93c3` (**deployt!**) | 16 rot / 100 grün | `capacity`, `events`, `lifecycle`, `manual-overrides`, `preview` |
+| `preview` vor dem Merge (`5e8cc3f`) | 16 rot / 104 grün | dieselben fünf |
+| `preview` nach dem Merge (`212e4c8`) | 16 rot / 104 grün | dieselben fünf |
+
+**Der Merge bringt null neue Fehler.** Die Ursache ist in allen fünf Dateien dieselbe: sie legen
+`User` ohne `weeklyPattern` an, dann löscht `materializeShiftsForDate` deren Schicht
+(`assignment.service.ts:383-386`: kein Wochenplan → `shift.deleteMany`), und die Assertions sehen
+`plannedEmployees = 0` statt `2`. Jede Datei startet ihren **eigenen** Postgres-Container — es ist
+also keine Test-Verschmutzung, sondern deterministisch veraltete Fixtures. `weeklyPattern` ist
+`Json?` ohne Default; der echte Seed setzt ihn (`dev/scenarios/lib.ts:120`), diese Fixtures nicht.
+Die grüne `recalculate-idempotent.int.test.ts` ist die einzige, die ihn setzt.
+
+**Kein Deploy-Blocker** (der deployte Stand hat sie heute schon rot), aber die Int-Suite schützt
+derzeit nichts. Eigener Task, nicht dieser.
+
+### 🟡 R2 — Die Teamlead-Suite meldet „25 passed" und verschweigt eine unerfüllte Forderung
+
+`geparkt.spec.ts:76` ruft `test.fail()`. Playwright wertet den Fehlschlag als *erwartet*, zählt ihn
+als „passed" und beendet mit **Exit 0**. Der JSON-Reporter zeigt die Wahrheit:
+`ok=true, status=failed`, `expected: 25, unexpected: 0`.
+
+Der Testautor war ehrlich — der Dateikopf sagt wörtlich „**BEFUND: die Forderung ist NICHT erfüllt.
+Der Test ist absichtlich rot.**" Nur sieht das niemand, der die Suite in CI laufen lässt.
+
+Fachlich: `POST /api/me/park` setzt `status: 'ready'` (Beleg zurück in den Pool), die Cockpit-Spalte
+„Geparkt" zeigt nur `status === 'parked'`. **Ob das ein Bug ist, ist offen** — im Transkript (Z. 2045)
+beschreibt Moritz genau das Ist-Verhalten („*dann wird das wieder in den Pool getan*"), Dustin
+paraphrasiert es als „*der Rest wird dann im Geparkt stehen*" und sagt „*Sehr gut, das ist schon mal
+implementiert*". Es ist eine **Namenskollision**, keine saubere Forderung: „Geparkt" heißt im Cockpit
+„aus der Automatik ausgeschlossen" — dorthin *dürfen* die Belege gar nicht, sie sollen ins nächste
+Bündel.
+
+**Nicht bauen. Mit Dustin klären**, bevor er am 17.07. weg ist. Ich habe nichts geändert.
+
+**Sonst ist nichts stillgelegt:** `test.fail` / `skip` / `fixme` / `only` kommen im ganzen Repo
+ausschließlich an dieser einen Stelle vor.
+
+---
+
+## 11.6 · Die zwei Scope-Commits
+
+### `5e8cc3f` Prüfstufen-Tooltip → **zurückgenommen** (`a840643`)
+
+- Das Wort „Prüfstufe" fällt im Transkript vom 07.07. **kein einziges Mal**. Auch „Tooltip",
+  „Info-Icon" oder eine Bitte um eine andere Erklärdarstellung kommen nicht vor.
+- Die Gap-Analyse zum Call kennt den Punkt ebenfalls nicht (0 Treffer).
+- Moritz *führt* die Erklärung vor („genauso, wie man hier sehen kann, was bedeutet eine
+  Vollprüfung") — niemand widerspricht.
+- Dustins einzige Layout-Kritik („*es ist alles sehr geballt an Infos … zu viel auf der linken
+  Bildhälfte*") folgt direkt auf „*kannst du mal runterscrollen zu den Positionen*" und meint die
+  **Positionen**. Die deckt `feat/positionen-tabelle` bereits ab.
+- Der Commit selbst nennt als Quelle „*Auf Wunsch von Daniel*", nicht den Kunden.
+
+Dazu ein fachliches Argument, das schwerer wiegt als die Regel: Die Erklärung sagt, dass „Nein"
+**nicht** heißt, dass nichts geprüft wird. Dustin hat im selben Call festgelegt, dass die App auf
+einem **22–24″-Touchdisplay** läuft. Ein Tooltip wird primär per Hover entdeckt — auf einem
+Touchdisplay gibt es kein Hover. Der sichtbare Button „Was heißt das?" ist dort die robustere
+Affordanz für eine sicherheitsrelevante Information.
+
+Kein Test hängt daran (17/17 grün vor und nach dem Revert).
+
+### `1f8bc5e` Vorbelegung `ma-108` → **behalten, aber hinter ein Demo-Flag** (`a84d50d`)
+
+Eine fest vorbelegte Mitarbeiternummer ist als Demo-Hilfe richtig und als Default falsch: Mitarbeiter
+brauchen seit `066aee5` **keine PIN**, der Anmeldescreen schlägt also jedem Besucher einen Account
+vor, als der er sich sofort anmelden kann.
+
+Die Vorbelegung liegt jetzt hinter `VITE_DEMO_EMPLOYEE_NO`. Ohne die Variable startet das Feld leer.
+**Kein neuer Mechanismus**: `resolveEnv()` liest `window.__ENV__` aus `/env.js`, das
+`write-runtime-env.mjs` beim Containerstart aus den Railway-Variablen erzeugt; der Key steht dort in
+der Allowlist, dokumentiert in `.env.example`.
+
+> Damit der Link seine Bequemlichkeit behält, muss `6aa9b` auf dem `employee-pwa`-Service
+> **`VITE_DEMO_EMPLOYEE_NO=ma-108`** setzen. Ohne die Variable ist der Link funktional identisch,
+> nur das Feld leer.
+
+---
+
+## 11.7 · Auflagen für `6aa9b`
+
+1. **Diesen Branch deployen**, nicht den Stand von heute Mittag — sonst fehlen der
+   Reihenfolge-Fix (`038ea9d`) und der Etikettendruck im Seed (`95e8167`).
+2. **Einmalig reseeden.** Der Code-Deploy allein repariert die Demodaten **nicht**: `railway.json`
+   führt den Seed nur bei `SEED_ON_DEPLOY=1` aus, sonst bleiben die alten Zeilen mit
+   `priceLabelPrintRequired = true` auf *jedem* Beleg stehen. Der Reseed ist **destruktiv** (löscht
+   Belege und deaktiviert Lagerplätze außerhalb des Seed-Sets) — das ist Daniels Entscheidung, nicht
+   meine.
+3. **`recalculate` früh am Tag** aufrufen ([C4](#c4), belegt in §11.3). Nachmittags entstehen
+   Ein-Beleg-Bündel, an denen sich nichts vorführen lässt.
+4. **`VITE_DEMO_EMPLOYEE_NO=ma-108`** setzen, wenn der Ein-Klick-Login gewünscht ist.
+5. **`fix/pnpm-dev-clean-start` (`9f5ac75`) nicht vergessen** — der Commit hängt nirgends.
+
+Was **nicht** vor dem Link passieren muss: die 16 roten Integrationstests (auf `main` schon rot) und
+die „Geparkt"-Frage (Klärung mit Dustin, kein Code).
+
+---
+
+## 11.8 · Nebenbefunde
+
+- `node_modules/` ist in **allen** Worktrees ein Symlink auf `~/Documents/packetdispov2/node_modules`.
+  Ein `pnpm install` im Worktree schreibt in den Haupt-Workspace, und der Turbo-Cache ist geteilt.
+  Zusammen mit dem geteilten `dist/` ([C3](#c3)) ist das die zweite Stolperfalle derselben Art.
+- `apps/employee-pwa/.env.example` dokumentiert noch `VITE_DEMO_CONTROLS` und einen
+  „offline-demo seed". Beides existiert nach dem Dexie-Rückbau nicht mehr — im Quellcode gibt es
+  **null** Treffer auf `VITE_DEMO_CONTROLS`. Legacy-Doku, gegen CLAUDE.md, hier nicht angefasst.
+- Die C4-Diagramme brauchten keine Aktualisierung: kein Container, kein Modul, keine Engine-Stufe,
+  kein Prisma-Schema und keine Type-Chain wurde verändert. Die Merges bringen Testdateien, der
+  Revert stellt eine Komponente wieder her, das Demo-Flag ist eine Env-Variable.
