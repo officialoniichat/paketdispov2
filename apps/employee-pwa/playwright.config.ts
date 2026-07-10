@@ -8,9 +8,9 @@ import { APP_PORT, BACKEND_PORT } from './e2e/fixtures/ports.js';
  * `pnpm preview` against a REAL backend-api instance + a REAL, seeded
  * Postgres (Testcontainers) — see `e2e/fixtures/global-setup.ts`. The former
  * offline/Dexie-demo-scenario harness is gone: the app no longer has Dexie,
- * demo scenarios, or Tisch-Anmeldung (real PIN login + `/api/me/today`
- * replaced them, see commits e25b465 / 030d9f6), so there is no offline path
- * left to test against.
+ * demo scenarios, or Tisch-Anmeldung (a real login against `/api/auth/login`
+ * plus `/api/me/today` replaced them), so there is no offline path left to
+ * test against.
  */
 // 5185 (not the dev 5175): keeps the E2E preview isolated from any running dev
 // server so the suite always tests this app's fresh build.

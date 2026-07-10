@@ -26,7 +26,7 @@ export function handleApiResponse<T>(result: ApiResult<T>): T {
     throw new SessionExpiredError('Sitzung abgelaufen');
   }
   if (result.error) {
-    throw new Error('API request failed');
+    throw new Error('Die Anfrage an den Server ist fehlgeschlagen.');
   }
   return result.data as T;
 }

@@ -8,10 +8,10 @@ C4Container
     Person(teamlead, "Teamlead / Admin", "Pool steering & config")
 
     System_Ext(prohandel, "ProHandel ERP", "System of record (delta-pull = concept-stage)")
-    System_Ext(oidc, "OIDC Provider", "Keycloak / Entra (JWKS) — teamlead-web / admin login only. Employees never hop out to this IdP: employee-pwa authenticates first-party via backend-api's own POST /api/auth/login (employeeNo+PIN), which mints an RS256 JWT with the same claim shape the shared JwtAuthGuard verifies.")
+    System_Ext(oidc, "OIDC Provider", "Keycloak / Entra (JWKS) — teamlead-web / admin login only. Employees never hop out to this IdP: employee-pwa authenticates first-party via backend-api's own POST /api/auth/login (employeeNo alone; only teamlead/admin/it add a PIN), which mints an RS256 JWT with the same claim shape the shared JwtAuthGuard verifies.")
 
     Container_Boundary(paket, "Paketlagerdispo") {
-        Container(pwa, "employee-pwa", "React + Vite PWA, React Query", "Live-backend mobile app (no offline cache). Mitarbeiternummer+PIN login, bundle collect/process flow, keyboard-wedge scanner, SSE live-updates.")
+        Container(pwa, "employee-pwa", "React + Vite PWA, React Query", "Live-backend mobile app (no offline cache). Login with the Mitarbeiternummer alone, bundle collect/process flow, keyboard-wedge scanner, SSE live-updates.")
         Container(web, "teamlead-web", "React + Vite + MUI, TanStack Query", "Cockpit, Digitale Ablagen (Kanban), Mitarbeiter-Board, Belege, Aufteilungen, Admin (Regeln + Stammdaten).")
         Container(api, "backend-api", "NestJS on Fastify, Prisma", "Modular monolith. REST + SSE, OIDC/RBAC guards, §7.1 state machine, §7.2 hash-chain audit log, OpenAPI.")
         ContainerDb(db, "PostgreSQL", "PostgreSQL 16", "System of record for cases, bundles, shifts, locations, rules (AppConfig), immutable WorkflowEvent log.")
@@ -24,7 +24,7 @@ C4Container
     Rel(employee, pwa, "Uses", "HTTPS")
     Rel(teamlead, web, "Uses", "HTTPS")
 
-    Rel(pwa, api, "POST /api/auth/login (employeeNo+PIN); GET /api/me/*, POST next-bundle; SSE /api/me/stream", "REST + SSE (Bearer JWT)")
+    Rel(pwa, api, "POST /api/auth/login (employeeNo, no PIN); GET /api/me/*, POST next-bundle; SSE /api/me/stream", "REST + SSE (Bearer JWT)")
     Rel(web, api, "GET/POST /api/teamlead/*, /api/admin/*; SSE /api/teamlead/stream", "REST + SSE (Bearer JWT)")
 
     Rel(pwa, apiclient, "calls", "in-process")

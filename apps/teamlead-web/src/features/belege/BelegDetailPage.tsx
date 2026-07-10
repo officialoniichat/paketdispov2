@@ -26,7 +26,15 @@ import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
 import Typography from '@mui/material/Typography';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
+import {
+  CaseStatusChip,
+  issueScopeLabels,
+  issueTypeLabels,
+  PriorityChip,
+  ProblemChip,
+  skuLineStatusLabels,
+  zstSourceLabels,
+} from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import {
   fetchBelegDetail,
@@ -253,7 +261,7 @@ export function BelegDetailPage(): JSX.Element {
             </Button>
           }
         >
-          Offenes Problem: <strong>{openIssue.issueType}</strong>
+          Offenes Problem: <strong>{issueTypeLabels[openIssue.issueType]}</strong>
           {openIssue.description ? ` — „${openIssue.description}"` : ''}
         </Alert>
       )}
@@ -452,7 +460,7 @@ function PositionsTab({ positions }: { positions: BelegPosition[] }): JSX.Elemen
                   <TableCell>{s.size}</TableCell>
                   <TableCell align="right">{s.expectedQuantity}</TableCell>
                   <TableCell align="right">{s.confirmedQuantity ?? '–'}</TableCell>
-                  <TableCell>{s.status}</TableCell>
+                  <TableCell>{skuLineStatusLabels[s.status]}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -558,7 +566,7 @@ function AbschlussTab({
               <TableCell align="right">{z.effortPoints}</TableCell>
               <TableCell>{formatDateTime(z.completedAt)}</TableCell>
               <TableCell>{z.exportedAt ? formatDateTime(z.exportedAt) : '–'}</TableCell>
-              <TableCell>{z.source}</TableCell>
+              <TableCell>{zstSourceLabels[z.source]}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -580,13 +588,9 @@ function IssuesTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
       {issues.map((i) => (
         <Box key={i.id}>
           <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
-            <Typography sx={{ fontWeight: 700 }}>{i.issueType}</Typography>
-            <Chip size="small" label={i.scope} />
-            <Chip
-              size="small"
-              color={i.status === 'open' ? 'error' : i.status === 'in_review' ? 'warning' : 'default'}
-              label={i.status}
-            />
+            <Typography sx={{ fontWeight: 700 }}>{issueTypeLabels[i.issueType]}</Typography>
+            <Chip size="small" label={issueScopeLabels[i.scope]} />
+            <ProblemChip status={i.status} size="small" />
             <Typography variant="caption" color="text.secondary">
               {formatDateTime(i.reportedAt)}
             </Typography>

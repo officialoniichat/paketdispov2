@@ -20,24 +20,9 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { CaseCardSkeleton, issueTypeLabels, TouchButton } from '@paket/ui';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { parseScope, resolveIssueTarget } from '../workflow/issueTarget.js';
-
-/** German labels for every domain IssueType (exhaustive — compile error if one is added). */
-const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
-  missing_quantity: 'Minderlieferung',
-  overdelivery: 'Mehrlieferung',
-  wrong_article: 'falscher Artikel',
-  wrong_color: 'falsche Farbe',
-  wrong_size: 'falsche Größe',
-  damaged_goods: 'beschädigt',
-  missing_package: 'Paket fehlt',
-  label_problem: 'Etikettenproblem',
-  security_problem: 'Sicherungsproblem',
-  printer_problem: 'Druckerproblem',
-  other: 'Sonstiges',
-};
 
 /**
  * D2: Mengenabweichungen laufen über die +/- Erfassung an der Position — sie
@@ -45,7 +30,7 @@ const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
  */
 const QUANTITY_TYPES: ReadonlySet<IssueType> = new Set(['missing_quantity', 'overdelivery']);
 
-const ISSUE_TYPES = (Object.keys(ISSUE_TYPE_LABELS) as IssueType[]).filter(
+const ISSUE_TYPES = (Object.keys(issueTypeLabels) as IssueType[]).filter(
   (t) => !QUANTITY_TYPES.has(t),
 );
 
@@ -160,7 +145,7 @@ export function ProblemMeldenScreen(): JSX.Element {
         >
           {ISSUE_TYPES.map((t) => (
             <MenuItem key={t} value={t}>
-              {ISSUE_TYPE_LABELS[t]}
+              {issueTypeLabels[t]}
             </MenuItem>
           ))}
         </TextField>

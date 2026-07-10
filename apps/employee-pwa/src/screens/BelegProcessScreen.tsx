@@ -10,12 +10,16 @@
  * per-position check and "no open problem"; printing is upstream (vorgelagert),
  * Karton öffnen is no work step (C4). Boxing never gates.
  *
- * Positions show every Größe as its own line — EAN, EK/VK/VK-Etikett + Menge
- * like the WE-Beleg paper (D1) — with +/- Mehr-/Mindermengen capture per Größe
- * (D2, no Problem-screen detour for quantity deviations), Shop/WGR-Klartext/
- * Catman (D3) and the Online-Größen-Markierung rot/grün (D4). „Position
- * geprüft" is un-checkable (D5); the Teilabschluss dialog explains what happens
- * to the Beleg afterwards (D7).
+ * Positions are ONE table with fixed column headers (A1), so every Größe-row
+ * carries its values at the same x-position and EK/VK/VK-Etikett sit
+ * right-aligned in their own columns at the right edge — the screen is a
+ * stationary 22–24" touch display at the Packtisch, not a phone. Each Größe is
+ * its own row — EAN, EK/VK/VK-Etikett + Menge like the WE-Beleg paper (D1) —
+ * with +/- Mehr-/Mindermengen capture per Größe (D2, no Problem-screen detour
+ * for quantity deviations), Shop/WGR-Klartext/Catman (D3) and the
+ * Online-Größen-Markierung rot/grün (D4). „Position geprüft" is un-checkable
+ * (D5); the Teilabschluss dialog explains what happens to the Beleg afterwards
+ * (D7).
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -30,12 +34,18 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
 import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
-import { CaseCardSkeleton } from '@paket/ui';
+import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { apiBaseUrl } from '../data/api.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
@@ -116,6 +126,50 @@ const FLAG_CHIPS = [
   { key: 'redPriceRequired', label: '🔴 Rotpreis', color: 'error' as const },
 ] as const;
 
+/** Eine Spalte der Positionen-Tabelle; `weight` wird zur Prozentbreite normalisiert. */
+interface PositionColumn {
+  key: string;
+  label: string;
+  align?: 'right' | 'center';
+  weight: number;
+}
+
+/**
+ * Feste Spalten der Positionen-Tabelle (A1). Die Online-Spalte entfällt, wenn der
+ * Beleg keine online-relevante Position hat — innerhalb eines Belegs bleibt die
+ * Geometrie damit konstant.
+ */
+function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
+  const columns: PositionColumn[] = [
+    { key: 'pos', label: 'Pos', weight: 8 },
+    { key: 'ean', label: 'EAN', weight: 13 },
+    { key: 'size', label: 'Größe', weight: 7 },
+    { key: 'expected', label: 'Soll', align: 'right', weight: 6 },
+    { key: 'actual', label: 'Ist', align: 'center', weight: 14 },
+    { key: 'deviation', label: 'Mehr-/Mindermenge', weight: 15 },
+    { key: 'ek', label: 'EK', align: 'right', weight: 11 },
+    { key: 'vk', label: 'VK', align: 'right', weight: 11 },
+    { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 12 },
+  ];
+  if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 13 });
+  return columns;
+}
+
+/** Ziffern in Zahlenspalten laufen einspurig, sonst wandert das Komma je Zeile. */
+const NUMERIC_CELL = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } as const;
+
+/** Die Tabelle wird dichter, die Touch-Ziele nicht: bedient wird ggf. mit Handschuhen. */
+const TOUCH_TARGET_MIN = touchTarget.min;
+
+const STEPPER_BUTTON = {
+  width: TOUCH_TARGET_MIN,
+  height: TOUCH_TARGET_MIN,
+  fontSize: '1.5rem',
+  fontWeight: 700,
+  border: '1px solid',
+  borderColor: 'divider',
+} as const;
+
 export function BelegProcessScreen(): JSX.Element {
   const { caseId = '' } = useParams();
   const navigate = useNavigate();
@@ -170,6 +224,14 @@ export function BelegProcessScreen(): JSX.Element {
   // Warenart je Position: NOS ist positions-getrieben (nosFlag), sonst gilt der Beleg-Kopf.
   const positionWarenart = (pos: (typeof aggregate.positions)[number]): string | undefined =>
     pos.nosFlag ? 'NOS' : (c.goodsTypeText ?? undefined);
+
+  const hasOnlineMarks = aggregate.positions.some((pos) =>
+    pos.skuLines.some((s) => aggregate.onlineMarks[s.id]),
+  );
+  const columns = positionColumns(hasOnlineMarks);
+  const totalWeight = columns.reduce((sum, col) => sum + col.weight, 0);
+  const widthOf = (col: PositionColumn): string =>
+    `${((col.weight / totalWeight) * 100).toFixed(3)}%`;
 
   const finish = async (): Promise<void> => {
     const ok = await flow.complete();
@@ -280,191 +342,282 @@ export function BelegProcessScreen(): JSX.Element {
           Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" sichert
           ihn dauerhaft.
         </Typography>
-        {aggregate.positions.map((pos) => {
-          const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
-          const isChecked = checked.has(pos.id);
-          const flags = FLAG_CHIPS.filter(
-            (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
-          );
-          const i = pos.instruction;
-          const instructionLines = [
-            i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
-            i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
-            i.onlineHandlingRequired && i.onlineHandlingLocation
-              ? `Online: ${i.onlineHandlingLocation}`
-              : null,
-            i.notes ? `Hinweis: ${i.notes}` : null,
-          ].filter((line): line is string => line !== null);
-          return (
-            <Paper key={pos.id} variant="outlined" sx={{ p: 1.5 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                <Box sx={{ minWidth: 0, pr: 1 }}>
-                  <Typography sx={{ fontWeight: 700 }}>Pos {pos.positionNo}</Typography>
-                  {/* D3: Artikel-Nr. direkt unter 'Pos N'; Farbe in derselben Schriftgröße. */}
-                  <Typography noWrap>{pos.supplierArticleNo}</Typography>
-                  <Typography noWrap>{pos.supplierColor}</Typography>
-                  {/* Warenbezeichnung = Artikel-Identität: WGR mit Klartext (+ Saison) + Shop. */}
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    WGR {pos.wgr}
-                    {WGR_DESCRIPTION.get(pos.wgr) ? ` ${WGR_DESCRIPTION.get(pos.wgr)}` : ''}
-                    {pos.season ? ` · Saison ${pos.season}` : ''}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    Shop {pos.shopNo}
-                  </Typography>
-                </Box>
-                <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Soll {soll}</Typography>
-              </Stack>
-
-              {flags.length > 0 || pos.nosFlag || pos.catMan || positionWarenart(pos) ? (
-                <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                  {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
-                  {/* Warenart je Position (NOS hat schon sein Badge). */}
-                  {!pos.nosFlag && positionWarenart(pos) ? (
-                    <Chip size="small" color="secondary" variant="outlined" label={positionWarenart(pos)} />
-                  ) : null}
-                  {pos.catMan ? <Chip size="small" variant="outlined" label="Catman" /> : null}
-                  {flags.map((f) => (
-                    <Chip key={f.key} size="small" color={f.color} label={f.label} />
-                  ))}
-                </Stack>
-              ) : null}
-
-              {instructionLines.length > 0 ? (
-                <Stack spacing={0.25} sx={{ mt: 1 }}>
-                  {instructionLines.map((line) => (
-                    <Typography key={line} variant="body2" color="text.secondary">
-                      {line}
-                    </Typography>
-                  ))}
-                </Stack>
-              ) : null}
-
-              {/* C6: Sicherungstyp als Piktogramm (Backend-Asset) neben der Etikett-Platzierung. */}
-              {i.securityRequired && i.securityTypeCode ? (
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                  {pictogramUrl(i.securityTypeCode) ? (
-                    <Box
-                      component="img"
-                      src={pictogramUrl(i.securityTypeCode)}
-                      alt={PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
-                      sx={{ width: 40, height: 40 }}
-                    />
-                  ) : null}
-                  <Typography variant="body2" color="text.secondary">
-                    Sicherungstyp: {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
-                  </Typography>
-                </Stack>
-              ) : null}
-
-              {/* D1: jede Größe als eigene Zeile — EAN, EK/VK/VK-Etikett + Menge wie
-                  auf dem WE-Beleg-Papier. D2: +/- Mehr-/Mindermengen direkt hier.
-                  D4: Rot/Grün-Markierung der Online-Größen. */}
-              <Stack spacing={0.75} sx={{ mt: 1 }}>
-                {pos.skuLines.map((s) => {
-                  const ist = progress.confirmedQuantities[s.id] ?? s.expectedQuantity;
-                  const deviates = ist !== s.expectedQuantity;
-                  const mark = aggregate.onlineMarks[s.id];
-                  const prices = [
-                    price(s.ekPrice) ? `EK ${price(s.ekPrice)}` : null,
-                    price(s.vkPrice) ? `VK ${price(s.vkPrice)}` : null,
-                    price(s.vkLabelPrice) ? `VK-Etikett ${price(s.vkLabelPrice)}` : null,
-                  ]
-                    .filter((x): x is string => x !== null)
-                    .join(' · ');
-                  return (
-                    <Box
-                      key={s.id}
-                      sx={{ borderTop: '1px dashed', borderColor: 'divider', pt: 0.75 }}
+        {/* A1: EINE Tabelle über alle Positionen — feste Spaltenüberschriften, jede
+            Größen-Zeile trägt ihre Werte an derselben x-Position. EK/VK/VK-Etikett
+            stehen rechtsbündig ganz rechts (Dustin: „dass die Daten wie Verkaufspreis,
+            EK-Preis weiter rechts stehen"), Mehr-/Mindermengen direkt daneben. Jede
+            Position ist ein <tbody>: eine Kopfzeile mit Artikel-Identität, Chips,
+            Arbeitsanweisung und Aktionen, darunter je Größe eine Zeile (D1/D2/D4). */}
+        <Paper variant="outlined">
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table
+              aria-label="Positionen"
+              sx={{
+                tableLayout: 'fixed',
+                minWidth: 1360,
+                '& .MuiTableCell-root': { fontSize: '1.0625rem', py: 1 },
+              }}
+            >
+              <colgroup>
+                {columns.map((col) => (
+                  <col key={col.key} style={{ width: widthOf(col) }} />
+                ))}
+              </colgroup>
+              <TableHead>
+                <TableRow>
+                  {columns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      align={col.align}
+                      sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
                     >
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Größe {s.size}
+                      {col.label}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              {aggregate.positions.map((pos) => {
+                const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
+                const isChecked = checked.has(pos.id);
+                const flags = FLAG_CHIPS.filter(
+                  (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
+                );
+                const i = pos.instruction;
+                const instructionLines = [
+                  i.priceLabelAttachLocation
+                    ? `Etikett anbringen: ${i.priceLabelAttachLocation}`
+                    : null,
+                  i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
+                  i.onlineHandlingRequired && i.onlineHandlingLocation
+                    ? `Online: ${i.onlineHandlingLocation}`
+                    : null,
+                  i.notes ? `Hinweis: ${i.notes}` : null,
+                ].filter((line): line is string => line !== null);
+                return (
+                  <TableBody key={pos.id}>
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell sx={{ verticalAlign: 'top' }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
+                          Pos {pos.positionNo}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          EAN {s.ean}
-                        </Typography>
-                        {mark ? (
-                          <Chip size="small" color={ONLINE_MARK[mark].color} label={ONLINE_MARK[mark].label} />
-                        ) : null}
-                      </Stack>
-                      {prices ? (
-                        <Typography variant="body2" color="text.secondary">
-                          {prices}
-                        </Typography>
-                      ) : null}
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
-                        <Typography variant="body2">Soll {s.expectedQuantity}</Typography>
-                        <IconButton
-                          size="small"
-                          aria-label={`Größe ${s.size}: Menge verringern`}
-                          onClick={() =>
-                            void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
-                          }
+                      </TableCell>
+                      <TableCell colSpan={columns.length - 1} sx={{ verticalAlign: 'top' }}>
+                        <Stack
+                          direction="row"
+                          spacing={2}
+                          justifyContent="space-between"
+                          alignItems="flex-start"
                         >
-                          −
-                        </IconButton>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700, color: deviates ? 'error.main' : 'text.primary' }}
-                        >
-                          Ist {ist}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          aria-label={`Größe ${s.size}: Menge erhöhen`}
-                          onClick={() =>
-                            void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
-                          }
-                        >
-                          +
-                        </IconButton>
-                        {deviates ? (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            label={ist > s.expectedQuantity ? 'Mehrmenge' : 'Mindermenge'}
-                          />
-                        ) : null}
-                      </Stack>
-                    </Box>
-                  );
-                })}
-              </Stack>
+                          {/* Die Kopfzeile liegt breit statt hoch: sonst frisst allein die
+                              Artikel-Identität den sichtbaren Bereich, bevor die erste
+                              Größen-Zeile beginnt. */}
+                          <Box sx={{ minWidth: 0 }}>
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              sx={{ flexWrap: 'wrap', gap: 0.75 }}
+                            >
+                              {/* D3: Artikel-Nr. + Farbe in derselben Schriftgröße. */}
+                              <Typography sx={{ fontWeight: 700 }}>
+                                {pos.supplierArticleNo} · {pos.supplierColor}
+                              </Typography>
+                              {pos.nosFlag ? (
+                                <Chip size="small" color="success" label="♻️ NOS" />
+                              ) : null}
+                              {/* Warenart je Position (NOS hat schon sein Badge). */}
+                              {!pos.nosFlag && positionWarenart(pos) ? (
+                                <Chip
+                                  size="small"
+                                  color="secondary"
+                                  variant="outlined"
+                                  label={positionWarenart(pos)}
+                                />
+                              ) : null}
+                              {pos.catMan ? (
+                                <Chip size="small" variant="outlined" label="Catman" />
+                              ) : null}
+                              {flags.map((f) => (
+                                <Chip key={f.key} size="small" color={f.color} label={f.label} />
+                              ))}
+                            </Stack>
 
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                {/* D5: 'Position geprüft' — wieder abwählbar (Toggle). */}
-                {isChecked ? (
-                  <Chip
-                    color="success"
-                    size="small"
-                    label="Position geprüft ✓"
-                    onClick={() => void flow.togglePositionChecked(pos.id)}
-                  />
-                ) : (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={() => void flow.togglePositionChecked(pos.id)}
-                  >
-                    Position geprüft
-                  </Button>
-                )}
-                <Box sx={{ flex: 1 }} />
-                <Button
-                  color="error"
-                  variant="text"
-                  size="small"
-                  onClick={() =>
-                    navigate(problemPath(caseId, { scope: 'position', scopeId: pos.id }))
-                  }
-                >
-                  Problem
-                </Button>
-              </Stack>
-            </Paper>
-          );
-        })}
+                            {/* Warenbezeichnung = Artikel-Identität: WGR mit Klartext (+ Saison) + Shop. */}
+                            <Typography variant="body2" color="text.secondary">
+                              WGR {pos.wgr}
+                              {WGR_DESCRIPTION.get(pos.wgr)
+                                ? ` ${WGR_DESCRIPTION.get(pos.wgr)}`
+                                : ''}
+                              {pos.season ? ` · Saison ${pos.season}` : ''}
+                              {` · Shop ${pos.shopNo}`}
+                            </Typography>
+
+                            {instructionLines.length > 0 || (i.securityRequired && i.securityTypeCode) ? (
+                              <Stack
+                                direction="row"
+                                alignItems="center"
+                                sx={{ mt: 0.5, flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}
+                              >
+                                {/* C6: Sicherungstyp als Piktogramm (Backend-Asset). */}
+                                {i.securityRequired && i.securityTypeCode ? (
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    {pictogramUrl(i.securityTypeCode) ? (
+                                      <Box
+                                        component="img"
+                                        src={pictogramUrl(i.securityTypeCode)}
+                                        alt={
+                                          PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode
+                                        }
+                                        sx={{ width: 40, height: 40 }}
+                                      />
+                                    ) : null}
+                                    <Typography variant="body2" color="text.secondary">
+                                      Sicherungstyp:{' '}
+                                      {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
+                                    </Typography>
+                                  </Stack>
+                                ) : null}
+                                {instructionLines.map((line) => (
+                                  <Typography key={line} variant="body2" color="text.secondary">
+                                    {line}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            ) : null}
+                          </Box>
+
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{ flexShrink: 0 }}
+                          >
+                            <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              Soll gesamt {soll}
+                            </Typography>
+                            {/* D5: 'Position geprüft' — wieder abwählbar (Toggle). Der Chip ist
+                                im geprüften Zustand das EINZIGE Abwähl-Ziel und muss darum
+                                dieselbe Trefferfläche haben wie der Button darunter. */}
+                            {isChecked ? (
+                              <Chip
+                                color="success"
+                                label="Position geprüft ✓"
+                                onClick={() => void flow.togglePositionChecked(pos.id)}
+                                sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
+                              />
+                            ) : (
+                              <Button
+                                variant="contained"
+                                onClick={() => void flow.togglePositionChecked(pos.id)}
+                              >
+                                Position geprüft
+                              </Button>
+                            )}
+                            <Button
+                              color="error"
+                              variant="text"
+                              onClick={() =>
+                                navigate(problemPath(caseId, { scope: 'position', scopeId: pos.id }))
+                              }
+                            >
+                              Problem
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+
+                    {pos.skuLines.map((s) => {
+                      const ist = progress.confirmedQuantities[s.id] ?? s.expectedQuantity;
+                      const delta = ist - s.expectedQuantity;
+                      const mark = aggregate.onlineMarks[s.id];
+                      return (
+                        <TableRow key={s.id} hover>
+                          <TableCell />
+                          <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
+                          {hasOnlineMarks ? (
+                            <TableCell>
+                              {mark ? (
+                                <Chip
+                                  size="small"
+                                  color={ONLINE_MARK[mark].color}
+                                  label={ONLINE_MARK[mark].label}
+                                />
+                              ) : null}
+                            </TableCell>
+                          ) : null}
+                          <TableCell align="right" sx={NUMERIC_CELL}>
+                            {s.expectedQuantity}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <IconButton
+                                sx={STEPPER_BUTTON}
+                                aria-label={`Größe ${s.size}: Menge verringern`}
+                                onClick={() =>
+                                  void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
+                                }
+                              >
+                                −
+                              </IconButton>
+                              <Typography
+                                sx={{
+                                  ...NUMERIC_CELL,
+                                  minWidth: 36,
+                                  fontWeight: 700,
+                                  fontSize: '1.0625rem',
+                                  color: delta !== 0 ? 'error.main' : 'text.primary',
+                                }}
+                              >
+                                {ist}
+                              </Typography>
+                              <IconButton
+                                sx={STEPPER_BUTTON}
+                                aria-label={`Größe ${s.size}: Menge erhöhen`}
+                                onClick={() =>
+                                  void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
+                                }
+                              >
+                                +
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            {delta !== 0 ? (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                label={
+                                  delta > 0
+                                    ? `+${delta} Mehrmenge`
+                                    : `−${Math.abs(delta)} Mindermenge`
+                                }
+                              />
+                            ) : null}
+                          </TableCell>
+                          <TableCell align="right" sx={NUMERIC_CELL}>
+                            {price(s.ekPrice) ?? '—'}
+                          </TableCell>
+                          <TableCell align="right" sx={NUMERIC_CELL}>
+                            {price(s.vkPrice) ?? '—'}
+                          </TableCell>
+                          <TableCell align="right" sx={NUMERIC_CELL}>
+                            {price(s.vkLabelPrice) ?? '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                );
+              })}
+            </Table>
+          </TableContainer>
+        </Paper>
 
         {/* Boxzettel (§G.1 Punkt 9) — what goes on each box label. Info only, no gate. */}
         {aggregate.boxTargets.length > 0 ? (

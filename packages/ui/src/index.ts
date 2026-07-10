@@ -21,6 +21,16 @@ export {
   type ChipIconKey,
   type SyncState,
 } from './theme/tokens.js';
+export {
+  issueTypeLabels,
+  issueScopeLabels,
+  locationKindLabels,
+  employeeRoleLabels,
+  assignmentStatusLabels,
+  skuLineStatusLabels,
+  zstSourceLabels,
+  shiftSourceLabels,
+} from './theme/labels.js';
 export { ltTheme } from './theme/theme.js';
 export { LtThemeProvider, type LtThemeProviderProps } from './theme/LtThemeProvider.js';
 

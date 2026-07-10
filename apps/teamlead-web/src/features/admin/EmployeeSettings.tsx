@@ -32,7 +32,8 @@ import {
   type EmployeeListResponse,
 } from '../../data/employees.js';
 import { TierChip } from '../../components/TierChip.js';
-import { toSkillTier } from '../../data/narrow.js';
+import { employeeRoleLabels } from '@paket/ui';
+import { toEmployeeRole, toSkillTier } from '../../data/narrow.js';
 import { EmployeeDetailPanel } from './EmployeeDetailPanel.js';
 
 function todayIso(): string {
@@ -63,7 +64,7 @@ export function EmployeeSettings(): JSX.Element {
             Mitarbeiter
           </Typography>
           <Button size="small" variant="outlined" onClick={() => setCreateOpen(true)}>
-            + Temp-Mitarbeiter
+            + Temporäre Kraft
           </Button>
         </Stack>
         <TempEmployeeDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onCreated} />
@@ -153,7 +154,7 @@ function EmployeeRow({
           )}
         </Stack>
       </TableCell>
-      <TableCell>{emp.roles.join(', ')}</TableCell>
+      <TableCell>{emp.roles.map((r) => employeeRoleLabels[toEmployeeRole(r)]).join(', ')}</TableCell>
       <TableCell>
         <TierChip tier={toSkillTier(emp.skillTier)} />
       </TableCell>

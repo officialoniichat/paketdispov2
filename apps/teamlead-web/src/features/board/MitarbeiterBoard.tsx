@@ -24,7 +24,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
-import { CaseStatusChip, ProblemChip } from '@paket/ui';
+import { assignmentStatusLabels, CaseStatusChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
@@ -144,16 +144,6 @@ export function MitarbeiterBoard(): JSX.Element {
 }
 
 /** German label for a Bündel's AssignmentStatus (B1 — status at a glance). */
-const BUNDLE_STATUS_LABELS: Record<string, string> = {
-  created: 'Neu',
-  assigned: 'Zugeteilt',
-  accepted: 'Angenommen',
-  active: 'In Bearbeitung',
-  paused: 'Pausiert',
-  completed: 'Abgeschlossen',
-  cancelled: 'Storniert',
-};
-
 interface EmployeeRowProps {
   row: BoardRow;
   requestReason: (a: PendingAction) => void;
@@ -213,7 +203,7 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
             <Chip
               size="small"
               variant="outlined"
-              label={BUNDLE_STATUS_LABELS[row.bundleStatus] ?? row.bundleStatus}
+              label={assignmentStatusLabels[row.bundleStatus]}
             />
           )}
           {/* Teile-first (B3): die Stückzahl ist die primäre Last-Anzeige, Minuten treten zurück. */}

@@ -34,6 +34,6 @@ describe('handleApiResponse', () => {
   it('throws a generic error when the response carries an error payload', () => {
     expect(() =>
       handleApiResponse({ response: makeResponse(500), error: { message: 'boom' } }),
-    ).toThrow('API request failed');
+    ).toThrow('Die Anfrage an den Server ist fehlgeschlagen.');
   });
 });

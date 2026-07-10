@@ -1,6 +1,6 @@
 /**
  * Mitarbeiter-Stammdaten (concept §d Screen 2). WHO + per-head capacity params only:
- * Rolle (read-only), aktiv, Bereich/Skill, Produktivität, Employee-App-PIN.
+ * Rolle (read-only), aktiv, Bereich/Skill, Produktivität, Mitarbeiter-App-PIN.
  * Arbeitszeit/Schichten live in the separate Schichtplan tab — not here.
  */
 import { useEffect, useState, type JSX } from 'react';
@@ -33,7 +33,8 @@ import {
 } from '../../data/employees.js';
 import { useBereichCatalog } from '../../data/bereichCatalog.js';
 import { formatAuditAction } from '../../data/audit.js';
-import { toEventType } from '../../data/narrow.js';
+import { employeeRoleLabels, shiftSourceLabels } from '@paket/ui';
+import { toEmployeeRole, toEventType, toShiftSource } from '../../data/narrow.js';
 
 /** PIN-Login: 4–8 Ziffern (matches the backend's Length(4,8) validation). */
 const PIN_PATTERN = /^\d{4,8}$/;
@@ -101,11 +102,13 @@ export function EmployeeDetailPanel({
           {emp.displayName} · #{emp.employeeNo}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Rolle: {emp.roles.join(', ')}
+          Rolle: {emp.roles.map((r) => employeeRoleLabels[toEmployeeRole(r)]).join(', ')}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           Heute geplant: {emp.netCapacityToday} min{' '}
-          {emp.todayShift ? `(${emp.todayShift.source})` : '· keine Schicht'}
+          {emp.todayShift
+            ? `(${shiftSourceLabels[toShiftSource(emp.todayShift.source)]})`
+            : '· keine Schicht'}
           {' '}· Arbeitszeit im Tab „Schichtplan“
         </Typography>
       </div>
@@ -298,7 +301,7 @@ function ParamsSection({
 }
 
 /**
- * Employee-App-Login (Auth Task 4/5): admin setzt/setzt zurück die PIN, mit der
+ * Mitarbeiter-App-Login (Auth Task 4/5): admin setzt/setzt zurück die PIN, mit der
  * sich diese Person am Mitarbeiter-Tablet anmeldet (Mitarbeiternummer + PIN).
  * Die PIN selbst wird nie angezeigt oder vom Backend zurückgegeben — nur ob
  * eine gesetzt ist (`hasPinSet`).
@@ -348,7 +351,7 @@ function PinSection({
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="subtitle2">Employee-App-Anmeldung</Typography>
+      <Typography variant="subtitle2">Mitarbeiter-App-Anmeldung</Typography>
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Chip
           size="small"

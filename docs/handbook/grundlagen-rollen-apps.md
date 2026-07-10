@@ -10,14 +10,14 @@ unterschiedliche Sichten.
 | **Titel** | `'L&T Warenauszeichnung'` | `'Teamlead-Dashboard'` |
 | **Gerät** | Handy / Tablet am Tisch | Desktop |
 | **Zweck** | Ware holen, Belege bearbeiten, abschließen, Probleme melden | Überblick, verteilen, eingreifen, Regeln pflegen, Tagesabschluss |
-| **Anmeldung** | Mitarbeiternummer + PIN | Über den Arbeitsplatz-Login der Teamleitung |
+| **Anmeldung** | Nur die Mitarbeiternummer, ohne PIN | Über den Arbeitsplatz-Login der Teamleitung |
 
 Oben rechts kann jederzeit gewechselt werden: `'Zur Teamlead-App'` (aus der Mitarbeiter-App) bzw.
 `'Zur Mitarbeiter-App'` (aus dem Cockpit).
 
 ## Anmeldung Mitarbeiter-App
 
-Die Mitarbeiter-App startet immer mit der Anmeldung über Mitarbeiternummer und PIN. Erst danach
+Die Mitarbeiter-App startet immer mit der Anmeldung über die Mitarbeiternummer. Erst danach
 erscheint der eigentliche Arbeitsbildschirm, mit dem von der Teamleitung hinterlegten Arbeitsplatz
 (Tisch) automatisch angezeigt – ein eigener Tisch-Auswahlschritt entfällt. Details stehen in
 **Kapitel A1**.

@@ -50,7 +50,7 @@ export const config = {
     // (a common dashboard paste form), so the verifier configures reliably.
     devPublicKeyPem: (process.env.AUTH_DEV_PUBLIC_KEY ?? '').replace(/\\n/g, '\n'),
     // Dev/CI only: PEM-encoded RS256 private key, sibling of devPublicKeyPem, used
-    // by TokenIssuer to mint tokens for real employee login (Task 4, employeeNo + PIN).
+    // by TokenIssuer to mint tokens for the first-party login (POST /api/auth/login).
     devPrivateKeyPem: (process.env.AUTH_DEV_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
   },
   swagger: {

@@ -34,7 +34,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import type { components } from '@paket/api-client';
-import { CaseStatusChip, PriorityChip, ProblemChip } from '@paket/ui';
+import { CaseStatusChip, issueTypeLabels, PriorityChip, ProblemChip } from '@paket/ui';
 import { api } from '../../data/api.js';
 import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
@@ -186,7 +186,7 @@ export function AblagenBoard(): JSX.Element {
       const result = await api.GET('/api/teamlead/events', {
         params: { query: { eventType: 'case.parked', limit: 200 } },
       });
-      return indexParkedEvents(unwrap<AuditEventDto[]>(result, 'parked events'));
+      return indexParkedEvents(unwrap<AuditEventDto[]>(result, 'Laden der geparkten Belege'));
     },
   });
   const parkedContext = parkedEventsQuery.data ?? new Map<string, ParkedContext>();
@@ -414,7 +414,7 @@ function LaneColumn({
       }}
     >
       <Stack direction="row" alignItems="center" gap={0.5}>
-        <IconButton size="small" disabled={!canMoveLeft} onClick={() => onMove(-1)} aria-label="Lane nach links">
+        <IconButton size="small" disabled={!canMoveLeft} onClick={() => onMove(-1)} aria-label="Spalte nach links">
           <ChevronLeftIcon fontSize="small" />
         </IconButton>
         <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>
@@ -425,10 +425,10 @@ function LaneColumn({
           label={isFiltered ? `${filteredCards.length}/${lane.cards.length}` : lane.cards.length}
           color={isFiltered ? 'warning' : 'default'}
         />
-        <IconButton size="small" onClick={onToggleCollapsed} aria-label="Lane einklappen">
+        <IconButton size="small" onClick={onToggleCollapsed} aria-label="Spalte einklappen">
           <UnfoldLessIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
         </IconButton>
-        <IconButton size="small" disabled={!canMoveRight} onClick={() => onMove(1)} aria-label="Lane nach rechts">
+        <IconButton size="small" disabled={!canMoveRight} onClick={() => onMove(1)} aria-label="Spalte nach rechts">
           <ChevronRightIcon fontSize="small" />
         </IconButton>
       </Stack>
@@ -560,7 +560,7 @@ function LaneCardView({
         {/* C4: open-problem preview (kind + note) directly on the card. */}
         {card.openIssue && (
           <Typography variant="caption" color="error.main" noWrap sx={{ display: 'block' }}>
-            {card.openIssue.kind}
+            {issueTypeLabels[card.openIssue.kind]}
             {card.openIssue.note ? ` — „${card.openIssue.note}"` : ''}
           </Typography>
         )}

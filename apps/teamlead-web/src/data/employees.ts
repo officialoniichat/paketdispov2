@@ -5,7 +5,7 @@
  */
 import type { components } from '@paket/api-client';
 import { api } from './api.js';
-import { hasFetchError, unwrap } from './http.js';
+import { describeCause, hasFetchError, unwrap } from './http.js';
 
 export type EmployeeListResponse = components['schemas']['EmployeeListResponseDto'];
 export type EmployeeListItem = components['schemas']['EmployeeListItemDto'];
@@ -20,7 +20,7 @@ export async function fetchEmployees(date?: string): Promise<EmployeeListRespons
   const result = await api.GET('/api/admin/employees', {
     params: { query: date ? { date } : {} },
   });
-  return unwrap<EmployeeListResponse>(result, 'employees');
+  return unwrap<EmployeeListResponse>(result, 'Laden der Mitarbeiter');
 }
 
 /** Employee detail incl. weekly pattern + recent audit. */
@@ -28,19 +28,19 @@ export async function fetchEmployee(id: string, date?: string): Promise<Employee
   const result = await api.GET('/api/admin/employees/{id}', {
     params: { path: { id }, query: date ? { date } : {} },
   });
-  return unwrap<EmployeeDetail>(result, 'employee');
+  return unwrap<EmployeeDetail>(result, 'Laden des Mitarbeiters');
 }
 
 /** Active workstations (Tische) — Arbeitsplatz options for the employee detail select. */
 export async function fetchWorkstations(): Promise<Workstation[]> {
   const result = await api.GET('/api/admin/employees/workstations');
-  return unwrap<Workstation[]>(result, 'workstations');
+  return unwrap<Workstation[]>(result, 'Laden der Arbeitsplätze');
 }
 
 /** Create an employee — by default a temporäre Kraft (measured=false, ohne Messung). */
 export async function createEmployee(body: EmployeeCreate): Promise<EmployeeDetail> {
   const result = await api.POST('/api/admin/employees', { body });
-  return unwrap<EmployeeDetail>(result, 'create employee');
+  return unwrap<EmployeeDetail>(result, 'Anlegen des Mitarbeiters');
 }
 
 /** Patch profile (active, areaTags, productivity, overtime, pattern). */
@@ -52,7 +52,7 @@ export async function updateEmployeeProfile(
     params: { path: { id } },
     body: patch,
   });
-  return unwrap<EmployeeDetail>(result, 'update employee');
+  return unwrap<EmployeeDetail>(result, 'Speichern des Mitarbeiterprofils');
 }
 
 /**
@@ -66,6 +66,6 @@ export async function resetEmployeePin(id: string, pin: string): Promise<void> {
     body: { pin },
   });
   if (hasFetchError(result)) {
-    throw new Error(`Backend request failed: reset employee PIN (${JSON.stringify(result.error)})`);
+    throw new Error(`Zurücksetzen der PIN fehlgeschlagen (${describeCause(result.error)})`);
   }
 }

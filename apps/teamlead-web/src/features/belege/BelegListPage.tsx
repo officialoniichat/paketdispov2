@@ -28,7 +28,7 @@ import type { ColumnDef, SortingState } from '@tanstack/react-table';
 import DownloadIcon from '@mui/icons-material/Download';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { CaseStatus } from '@paket/domain-types';
-import { CaseStatusChip, PriorityChip } from '@paket/ui';
+import { caseStatusMeta, CaseStatusChip, PriorityChip } from '@paket/ui';
 import {
   BELEGE_PAGE_LIMIT,
   casePhase,
@@ -604,7 +604,7 @@ export function BelegListPage(): JSX.Element {
           <MenuItem value="">Alle</MenuItem>
           {STATUS_OPTIONS.map((s) => (
             <MenuItem key={s} value={s}>
-              {s}
+              {caseStatusMeta[s].label}
             </MenuItem>
           ))}
         </TextField>
