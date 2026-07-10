@@ -24,7 +24,6 @@ const PUBLIC_KEYS = [
   'VITE_API_BASE_URL',
   'VITE_EMPLOYEE_APP_URL',
   'VITE_TEAMLEAD_APP_URL',
-  'VITE_DEV_TOKEN',
   // Demo-only: prefills the Mitarbeiternummer on the login screen (see
   // src/screens/LoginScreen.tsx). Leave unset on any environment a customer uses
   // productively — the field then starts empty.

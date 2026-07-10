@@ -52,6 +52,14 @@ which drives the same scenario framework without a deploy.
 > Verladeplan, Lagerplätze) and enter Belege from now on — a deploy leaves them alone. The only
 > ways back to the demo scenario are the explicit `SEED_ON_DEPLOY=1` switch and the admin panel.
 
+## Healthcheck — a deploy only counts once `/healthz` answers
+
+`apps/backend-api/railway.json` sets `deploy.healthcheckPath: "/healthz"`. Railway now
+promotes a backend deploy only after `GET /healthz` returns `200`; a build that crashes on
+boot no longer counts as a successful deploy. The endpoints live unprefixed (`/healthz`,
+`/readyz` — `src/health/health.module.ts`; `main.ts` sets no global prefix), so
+`/api/health` intentionally does not exist.
+
 ## Watch paths — which changes trigger which deploy
 
 Each service's `railway.json` declares `build.watchPatterns`. Watching only `apps/<name>/**`
@@ -120,7 +128,10 @@ actual Railway domains (Settings → Networking → Public Networking).
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `https://backend-api-production.up.railway.app` | Backend the app fetches. **Unset ⇒ offline-demo mode** (no backend calls). |
 | `VITE_TEAMLEAD_APP_URL` | `https://teamlead-web-production.up.railway.app` | "Zur Teamlead-App" button target. Fixes localhost:5174. |
-| `VITE_DEV_TOKEN` | `<rs256-jwt>` | Employee dev bearer token (until OIDC). |
+| `VITE_DEMO_EMPLOYEE_NO` | `ma-108` | Demo only: prefills the Mitarbeiternummer on the login screen. Leave unset on any productively used environment — the field then starts empty. |
+
+The PWA carries no `VITE_DEV_TOKEN`: employees authenticate through `POST /api/auth/login`
+(Mitarbeiternummer, no PIN) and the app stores the token it receives.
 
 > The two frontend ↔ backend URLs are circular: `teamlead-web`/`employee-pwa` need the
 > backend URL, and the backend's `CORS_ORIGINS` needs both frontend URLs. Deploy the
