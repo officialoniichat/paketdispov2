@@ -4,9 +4,8 @@
  * The WE Beleg-Nr. is the hero (C1); the Kopf shows Kartons (C2 — multi-carton
  * shipments must be searched on the cart) and the Warenart wording instead of
  * Abschnitt numbers (C3). The Arbeitsanweisung is ordered Prüfung Wareneingang →
- * Rotpreis → Boxzettel (C4); the Prüfstufe is explained in a tooltip on an info
- * icon (C5 — "Nein" does NOT mean nothing is checked), so the instruction list
- * stays one line per point. Positions carry the Preisetikett
+ * Rotpreis → Boxzettel (C4) with the Prüfstufe explained expandably (C5 —
+ * "Nein" does NOT mean nothing is checked). Positions carry the Preisetikett
  * placement with the Sicherungsetikett pictogram (C6). The only gates are the
  * per-position check and "no open problem"; printing is upstream (vorgelagert),
  * Karton öffnen is no work step (C4). Boxing never gates.
@@ -43,9 +42,8 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import Tooltip from '@mui/material/Tooltip';
+import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
@@ -178,6 +176,7 @@ export function BelegProcessScreen(): JSX.Element {
   const flow = useCaseFlow(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [inspectionOpen, setInspectionOpen] = useState(false);
 
   if (flow.isError) {
     return (
@@ -289,46 +288,34 @@ export function BelegProcessScreen(): JSX.Element {
                       {index + 1}
                     </Typography>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}
-                      >
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {point.label}
                         {isInspection && aggregate.inspectionLevelLabel
                           ? ` · ${aggregate.inspectionLevelLabel}`
                           : ''}
-                        {/* C5: die Prüfstufe erklärt — „Nein“ heißt NICHT: nichts prüfen. Der Hinweis
-                            hängt am Icon, statt die Arbeitsanweisung um Button + Aufklappblock zu
-                            verbreitern. enterTouchDelay=0: auf dem Touchdisplay genügt ein Tipp. */}
-                        {isInspection && aggregate.inspectionDescription ? (
-                          <Tooltip
-                            title={aggregate.inspectionDescription}
-                            arrow
-                            enterTouchDelay={0}
-                            leaveTouchDelay={8000}
-                          >
-                            <InfoOutlinedIcon
-                              fontSize="small"
-                              tabIndex={0}
-                              aria-label={`Was heißt das? ${aggregate.inspectionDescription}`}
-                              sx={{
-                                color: 'text.secondary',
-                                cursor: 'help',
-                                // Glyphe bleibt 20 px, die Trefferfläche wächst auf 32 px:
-                                // ein Hinweis ist keine Primäraktion (touchTarget.min = 48), muss
-                                // am Touchdisplay aber sicher zu treffen sein.
-                                p: '6px',
-                                boxSizing: 'content-box',
-                              }}
-                            />
-                          </Tooltip>
-                        ) : null}
                       </Typography>
                       {/* Wert nicht doppeln, wenn er bereits im Titel steht (Prüfstufe). */}
                       {!(isInspection && aggregate.inspectionLevelLabel === point.value) ? (
                         <Typography variant="body2" color="text.secondary">
                           {point.value}
                         </Typography>
+                      ) : null}
+                      {/* C5: die Prüfstufe erklärt — „Nein“ heißt NICHT: nichts prüfen. */}
+                      {isInspection && aggregate.inspectionDescription ? (
+                        <>
+                          <Button
+                            size="small"
+                            sx={{ px: 0, minWidth: 0 }}
+                            onClick={() => setInspectionOpen((open) => !open)}
+                          >
+                            {inspectionOpen ? 'Weniger' : 'Was heißt das?'}
+                          </Button>
+                          <Collapse in={inspectionOpen}>
+                            <Typography variant="body2" color="text.secondary">
+                              {aggregate.inspectionDescription}
+                            </Typography>
+                          </Collapse>
+                        </>
                       ) : null}
                     </Box>
                   </Box>
