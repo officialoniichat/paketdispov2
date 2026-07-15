@@ -384,7 +384,9 @@ export function BelegProcessScreen(): JSX.Element {
                 ]
                   .filter((part): part is string => part !== null)
                   .join(' · ');
-                const catManChipLabel = catManLabel ?? (pos.catMan ? 'Termin' : null);
+                // CatMan-Chip nur mit echtem Termin-Datum — ein bloßes Kennzeichen
+                // ohne Datum wäre nur Rauschen (Nachtrag 15.07.2026).
+                const catManChipLabel = catManLabel;
                 const instructionLines = [
                   i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
                   i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,

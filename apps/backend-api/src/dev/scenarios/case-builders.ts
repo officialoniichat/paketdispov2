@@ -199,9 +199,15 @@ export async function seedCaseDetails(
     });
     const positionIdsByFloor = new Map<string, string[]>();
     for (const p of posMeta) {
-      // CatMan-Termin (Kundenfeedback 14.07.2026): auf der CatMan-Position der
-      // Load-Plan-Tag des Belegs (fällt sichtbar in der PWA-Positionszeile).
-      const catManDate = p.catMan ? c.loadPlanDate ?? null : null;
+      // CatMan-Termin (Kundenfeedback 14.07.2026): ein echter, deterministischer
+      // Termin ein paar Tage nach dem Buchungstag — NICHT der (oft leere) Load-Plan-Tag,
+      // sonst zeigt die PWA-Positionszeile ein leeres CatMan-Datum.
+      const catManDate = p.catMan
+        ? offsetDate(
+            c.bookingDate.toISOString().slice(0, 10),
+            5 + (Number(c.weBelegNo.replace(/\D/g, '').slice(-2)) % 18),
+          )
+        : null;
       const position = await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
         update: {
