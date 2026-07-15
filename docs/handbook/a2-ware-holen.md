@@ -2,8 +2,8 @@
 
 ## Zweck
 
-Bevor du Belege bearbeitest, holst du zuerst **die ganze Ware** deines Bündels zusammen. Erst wenn
-alles geholt ist, gibt die App die Bearbeitung frei.
+Bevor du einen Beleg bearbeitest, holst du zuerst **seine Ware**. Jeder abgehakte Stop schaltet
+seine Belege unten in `'2 · Bearbeiten'` frei — du musst nicht warten, bis alles geholt ist.
 
 ## Wann anwenden
 
@@ -52,11 +52,20 @@ Nur die noch nicht geholten Stops werden geparkt – was du schon auf dem Wagen 
 
 ## Was passiert danach
 
-- Solange **nicht alles** geholt ist, ist der Abschnitt `'2 · Bearbeiten'` gesperrt. Dort steht
-  dann `'Erst Ware holen, dann bearbeiten.'` und die Belege sind ausgegraut.
-- Unten zeigt der Hauptknopf `'Erst Ware holen (<geholt>/<gesamt>)'` und ist grau.
-- Sobald **alles geholt** ist, wird die Bearbeitung frei und der Hauptknopf wechselt zu
-  `'Start Bearbeitung WE <Nummer>'` → weiter mit Kapitel A3.
+- Jeder abgehakte Stop schaltet **seine** Belege in `'2 · Bearbeiten'` frei — du bestimmst die
+  Reihenfolge der Bearbeitung selbst (Kapitel A3).
+- Belege von noch **nicht** geholten Stops bleiben ausgegraut. Solange es solche gibt, steht über
+  der Liste: `'Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
+  starten.'`
+
+## Weiteres Bündel anfordern
+
+Unten steht immer der Hauptknopf **`'Weiteres Bündel anfordern'`** (bzw.
+`'Nächstes Bündel holen'`, wenn dein Bündel fertig oder keines zugeteilt ist). Du entscheidest
+selbst, ob du dir zusätzliche Arbeit holst — auch wenn dein Bündel noch offen ist. Die neuen
+Belege werden an dein offenes Bündel angehängt: Neue Lagerplätze erscheinen unter
+`'1 · Ware holen'`, die neuen Belege unter `'2 · Bearbeiten'`. Gibt es gerade nichts zu holen,
+sagt dir die App den Grund (z. B. `'Aktuell nichts frei zum Holen.'`).
 
 ## Häufige Fehler / FAQ
 
