@@ -14,21 +14,31 @@ unter `'Positionen'`.
 
 - Beleg ist geöffnet, Ware liegt vor dir.
 
-## Eine Position lesen
+## Die Positionen-Tabelle (eine Tabelle, fixierte Kopfzeile)
+
+Alle Positionen stehen in **einer** Tabelle. Die **Spaltenüberschriften bleiben beim Scrollen oben
+stehen** – auch bei vielen Größenzeilen weißt du in jeder Zeile, welche Spalte du liest. Die Spalten
+sind: `'Pos'`, `'EAN'`, `'Größe'`, (`'Online'`,) `'Soll'`, `'Ist'`, `'Mehr-/Mindermenge'`, `'EK'`,
+`'VK'`, `'VK-Etikett'` und **`'VK korrigiert'`**.
 
 Steht oben der Hinweis `'Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".'`, gilt: Du
 gehst **jede** Position durch, egal welche Prüfstufe.
 
-Jede Positions-Karte zeigt:
+## Eine Position lesen
 
-- **`'Pos <Nr>'`**, darunter Artikelnummer und Farbe des Lieferanten;
+Jede Position hat oben einen Kopfblock, der zeigt:
+
+- **`'Pos <Nr>'`**, Artikelnummer · Farbe des Lieferanten;
+- **`'HShop <Nr> · Shop <Nr>'`** (Hauptshop und Shopnummer) und **`'Order <Nr>'`** (Ordernummer –
+  hilft der Teamleitung beim Klären von Problemen);
 - `'WGR <Nummer> <Bezeichnung>'` (Warengruppe im Klartext), ggf. `'· Saison <…>'`;
-- `'Shop <Nr>'`;
-- rechts die Sollmenge `'Soll <Menge>'`.
+- rechts die Sollmenge `'Soll gesamt <Menge>'`, den Knopf **`'Position geprüft'`** und den roten
+  Knopf **`'Problem'`**.
 
-Zusätzliche Kennzeichen erscheinen nur, wenn sie zutreffen, z. B. `'♻️ NOS'`, `'Catman'`,
-`'🏷️ Etikett'`, `'🔒 Sicherung'`, `'🌐 Online'`, `'🔴 Rotpreis'`. Dazu ggf. Hinweiszeilen wie
-`'Etikett anbringen: <Ort>'`, `'Sichern: <Ort>'`, `'Online: <Ort>'`, `'Hinweis: <Text>'`.
+Zusätzliche Kennzeichen erscheinen nur, wenn sie zutreffen, z. B. `'♻️ NOS'`, den **CatMan-Termin**
+mit Datum **`'CatMan <TT.MM.JJJJ>'`**, `'🏷️ Etikett'`, `'🔒 Sicherung'`, `'🌐 Online'`,
+`'🔴 Rotpreis'`. Dazu ggf. Hinweiszeilen wie `'Etikett anbringen: <Ort>'`, `'Sichern: <Ort>'`,
+`'Online: <Ort>'`, `'Hinweis: <Text>'`.
 
 ## Preisetikett & Sicherungs-Piktogramm
 
@@ -49,20 +59,28 @@ Behandle die markierten Größen entsprechend der Online-Vorgabe (`'Online: <Ort
 
 ## Mengen erfassen (Mehr-/Mindermengen pro Größe)
 
-Jede Größe ist eine eigene Zeile: `'Größe <…>'` und `'EAN <…>'`. Sind Preise hinterlegt, steht dort
-`'EK … · VK … · VK-Etikett …'`.
+Jede Größe ist eine eigene Zeile mit den Spalten `'EAN'`, `'Größe'`, `'Soll'`, `'Ist'`,
+`'Mehr-/Mindermenge'`, `'EK'`, `'VK'`, `'VK-Etikett'`, `'VK korrigiert'`.
 
 So zählst du:
 
-1. Neben der Sollmenge `'Soll <…>'` stehen ein **`'−'`**- und ein **`'+'`**-Knopf, dazwischen deine
-   erfasste Menge `'Ist <…>'`.
+1. In der Spalte `'Ist'` stehen ein **`'−'`**- und ein **`'+'`**-Knopf, dazwischen deine erfasste
+   Menge.
 2. Zähle die tatsächliche Menge und stelle sie mit **`'−'`** / **`'+'`** ein.
-3. Weicht `'Ist'` von `'Soll'` ab, wird die Zahl **rot** und es erscheint ein Hinweis:
-   - **`'Mehrmenge'`** (mehr geliefert als Soll)
-   - **`'Mindermenge'`** (weniger geliefert als Soll)
+3. Weicht `'Ist'` von `'Soll'` ab, wird die Zahl **rot**, die **ganze Zeile wird rot markiert** und
+   in der Spalte `'Mehr-/Mindermenge'` erscheint ein Chip:
+   - **`'+<n> Mehrmenge'`** (mehr geliefert als Soll)
+   - **`'−<n> Mindermenge'`** (weniger geliefert als Soll)
 
-> **Wichtig:** Mengenabweichungen erfasst du **hier** mit `'−'`/`'+'`, **nicht** über „Problem
-> melden". Fehlmengen/Mehrmengen sind im Problem-Bildschirm bewusst nicht auswählbar.
+> **Wichtig:** Mengenabweichungen erfasst du **hier** mit `'−'`/`'+'`, **nicht** über „Problem".
+> Eine Mengenabweichung ist **automatisch ein Problem** – der Beleg lässt sich dann nur noch über den
+> **`'Teilabschluss (Problem melden)'`** abschließen (Kapitel A5/A6).
+
+## Preis korrigieren (Spalte „VK korrigiert")
+
+Weicht der tatsächliche Kassenpreis vom Etikett ab, trägst du ihn **in derselben Zeile** in der
+Spalte **`'VK korrigiert'`** ein (Feld `'Preis'`). Auch das markiert die Zeile **rot** und ist
+**automatisch ein Problem** – ohne separaten Dialog.
 
 ## „Position geprüft" setzen und zurücknehmen
 
@@ -81,6 +99,8 @@ So zählst du:
 
 - **Ich kann den Beleg nicht abschließen** – wahrscheinlich ist noch eine Position ungeprüft. Es
   erscheint `'Noch offen: Noch nicht alle Positionen geprüft'`.
-- **Falsche Menge geliefert** – mit `'−'`/`'+'` erfassen (ergibt `'Mehrmenge'`/`'Mindermenge'`),
-  nicht als Problem melden.
+- **Falsche Menge geliefert** – mit `'−'`/`'+'` erfassen (ergibt `'+<n> Mehrmenge'`/
+  `'−<n> Mindermenge'`); das ist automatisch ein Problem, du musst es nicht zusätzlich melden.
+- **Preis am Etikett falsch** – in der Spalte `'VK korrigiert'` den echten Preis eintragen; auch das
+  ist automatisch ein Problem.
 - **Größe/Artikel/Farbe falsch oder Ware beschädigt** – roter Knopf `'Problem'` an der Position.

@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mitarbeiterapp — Neue Abläufe · Kundenfeedback 14.07.2026</title>
+    <style>
+      :root {
+        --bg:#eef1f5; --panel:#ffffff; --panel-2:#f5f7fa; --ink:#1a2430; --muted:#5b6472;
+        --line:#dbe0e8; --radius:16px;
+        --brand:#0a3d62; --brand-light:#3c6e8f;
+        --danger:#c62828; --danger-soft:#fdecea; --danger-ink:#611a15;
+        --success:#2e7d32; --success-soft:#eaf3ea; --success-ink:#1b3a1c;
+        --warning:#b26a00; --warning-soft:#fff4e5; --info:#1565c0; --info-soft:#e8f1fb;
+        --accent:#c9a227;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg:#0f1216; --panel:#161b22; --panel-2:#1d232c; --ink:#eef1f6; --muted:#9aa4b2; --line:#2a313d; }
+      }
+      * { box-sizing:border-box; }
+      html { scroll-behavior:smooth; }
+      body { margin:0; background:var(--bg); color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased; }
+
+      /* ---------- page chrome ---------- */
+      header.hero { padding:56px 40px 28px; max-width:1180px; margin:0 auto; }
+      .eyebrow { letter-spacing:.22em; text-transform:uppercase; font-size:11px; color:var(--brand-light); font-weight:800; }
+      header.hero h1 { margin:10px 0 6px; font-size:clamp(28px,3vw,42px); font-weight:850; letter-spacing:-.02em; }
+      header.hero p.lead { margin:0; color:var(--muted); font-size:17px; max-width:80ch; }
+      .brandbar { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+      .brandbar .logo { width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff; display:grid; place-items:center; font-weight:850; font-size:15px; }
+      .brandbar .app { font-weight:800; font-size:15px; }
+
+      nav.toc { position:sticky; top:0; z-index:50; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }
+      nav.toc .inner { max-width:1180px; margin:0 auto; padding:12px 40px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      nav.toc a { text-decoration:none; color:var(--ink); font-size:13px; font-weight:700; padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:var(--panel); white-space:nowrap; }
+      nav.toc a:hover { border-color:var(--brand-light); color:var(--brand-light); }
+      nav.toc a .n { color:var(--brand-light); }
+
+      main { max-width:1180px; margin:0 auto; padding:8px 40px 120px; }
+      @media (max-width:720px){ header.hero, nav.toc .inner, main { padding-left:20px; padding-right:20px; } }
+
+      /* ---------- overview cards ---------- */
+      .overview { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; margin:26px 0 10px; }
+      @media (max-width:820px){ .overview { grid-template-columns:1fr; } }
+      .ovcard { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; text-decoration:none; color:inherit; display:block; transition:transform .12s ease, border-color .12s ease; }
+      .ovcard:hover { transform:translateY(-2px); border-color:var(--brand-light); }
+      .ovcard .k { font-size:12px; font-weight:800; color:var(--brand-light); letter-spacing:.08em; }
+      .ovcard h3 { margin:6px 0 6px; font-size:19px; font-weight:820; }
+      .ovcard p { margin:0; color:var(--muted); font-size:14px; }
+
+      /* ---------- sections ---------- */
+      section.flow { margin-top:64px; scroll-margin-top:70px; }
+      .flow-head { border-left:5px solid var(--brand); padding-left:16px; margin-bottom:8px; }
+      .flow-head .k { font-size:12px; font-weight:800; color:var(--brand-light); letter-spacing:.1em; text-transform:uppercase; }
+      .flow-head h2 { margin:4px 0 6px; font-size:28px; font-weight:840; letter-spacing:-.01em; }
+      .flow-head p { margin:0; color:var(--muted); font-size:15.5px; max-width:90ch; }
+
+      h4.block { font-size:13px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:800; margin:30px 0 12px; }
+
+      /* vorher/nachher */
+      table.vn { border-collapse:collapse; width:100%; font-size:14px; background:var(--panel); border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+      table.vn th, table.vn td { padding:11px 14px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+      table.vn thead th { background:var(--panel-2); font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
+      table.vn td.was { color:var(--danger); }
+      table.vn td.now { color:var(--success); font-weight:600; }
+      table.vn tr:last-child td { border-bottom:none; }
+
+      /* two-column compare */
+      .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+      @media (max-width:900px){ .grid2 { grid-template-columns:1fr; } }
+      .visual { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+      .visual .cap { font-size:12px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+      .visual.before .cap { color:var(--danger); }
+      .visual.after .cap { color:var(--success); }
+      .visual .cap .dot { width:9px; height:9px; border-radius:50%; }
+      .visual.before .dot { background:var(--danger); }
+      .visual.after .dot { background:var(--success); }
+      .visual img { width:100%; height:auto; border-radius:10px; border:1px solid var(--line); display:block; }
+
+      .mermaid { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; overflow-x:auto; text-align:center; }
+
+      /* steps */
+      ol.steps { counter-reset:s; list-style:none; padding:0; margin:6px 0 0; }
+      ol.steps li { position:relative; padding:4px 0 14px 44px; }
+      ol.steps li::before { counter-increment:s; content:counter(s); position:absolute; left:0; top:2px; width:30px; height:30px; border-radius:50%; background:var(--brand); color:#fff; font-weight:800; font-size:14px; display:grid; place-items:center; }
+      ol.steps li:not(:last-child)::after { content:""; position:absolute; left:14px; top:34px; bottom:2px; width:2px; background:var(--line); }
+      ol.steps b { color:var(--ink); }
+      .lbl { display:inline-block; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:1px 7px; font-size:.9em; font-weight:700; white-space:nowrap; }
+
+      .why { background:var(--info-soft); border:1px solid color-mix(in srgb, var(--info) 30%, transparent); border-radius:12px; padding:14px 18px; margin-top:22px; }
+      @media (prefers-color-scheme: dark){ .why { background:color-mix(in srgb, var(--info) 16%, transparent); } }
+      .why h4 { margin:0 0 6px; font-size:14px; color:var(--info); font-weight:820; }
+      .why ul { margin:0; padding-left:18px; font-size:14.5px; }
+
+      /* ===================================================================
+         APP MOCKUP — mimics the L&T "Warenauszeichnung" employee PWA (light).
+         =================================================================== */
+      .app { background:#eef1f5; color:#1a2430; border:1px solid #cfd6e0; border-radius:18px; overflow:hidden; box-shadow:0 10px 34px rgba(10,61,98,.14); font-size:13px; }
+      .app * { box-sizing:border-box; }
+      .app .appbar { background:#fff; border-bottom:1px solid #e2e7ee; padding:11px 16px; display:flex; align-items:center; justify-content:space-between; }
+      .app .appbar .title { font-weight:800; color:#0a3d62; font-size:13.5px; }
+      .app .appbar .right { display:flex; gap:10px; align-items:center; color:#5b6472; font-size:12px; }
+      .app .appbar .btn-ghost { border:1px solid #0a3d62; color:#0a3d62; border-radius:8px; padding:5px 10px; font-weight:700; font-size:11.5px; }
+      .app .body { padding:16px; }
+      .app h1 { font-size:20px; margin:0 0 2px; font-weight:820; }
+      .app .sub { color:#5b6472; margin:0 0 14px; }
+      .app .sect { font-weight:800; margin:16px 0 8px; font-size:14px; }
+      .app .sect .count { color:#5b6472; font-weight:600; font-size:12px; margin-left:6px; }
+
+      .app .card { background:#fff; border:1px solid #e2e7ee; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+      .app .card.red { background:#fdecea; border-color:#f1b0ab; }
+      .app .card.green { background:#eaf3ea; border-color:#a9cdab; }
+      .app .row { display:flex; align-items:center; gap:12px; }
+      .app .stopnum { width:30px; height:30px; border-radius:50%; background:#e6ebf1; color:#1a2430; font-weight:800; display:grid; place-items:center; flex:0 0 auto; }
+      .app .stopnum.done { background:#2e7d32; color:#fff; }
+      .app .loc { font-weight:800; font-size:16px; }
+      .app .we { font-weight:800; }
+      .app .meta { color:#5b6472; font-size:12.5px; }
+      .app .grow { flex:1 1 auto; min-width:0; }
+
+      .chip { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:2px 9px; font-size:11.5px; font-weight:700; line-height:1.7; white-space:nowrap; }
+      .chip.out { background:#fff; border:1px solid #cfd6e0; color:#1a2430; }
+      .chip.gray { background:#e6ebf1; color:#3a4453; }
+      .chip.brand { background:#3c6e8f; color:#fff; }
+      .chip.red { background:#c62828; color:#fff; }
+      .chip.redf { background:#c62828; color:#fff; }
+      .chip.green { background:#2e7d32; color:#fff; }
+      .chip.warn { background:#b26a00; color:#fff; }
+      .chip.info { background:#1565c0; color:#fff; }
+      .chip.sec { background:#fff; border:1px solid #7a4fa3; color:#5e3a80; }
+      .chip.catman { background:#fff; border:1px solid #cfd6e0; color:#1a2430; }
+
+      .btn { border-radius:9px; padding:8px 14px; font-weight:800; font-size:13px; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid transparent; }
+      .btn.primary { background:#0a3d62; color:#fff; }
+      .btn.primary.disabled { background:#c8cfd8; color:#8a93a0; }
+      .btn.text { background:transparent; color:#0a3d62; }
+      .btn.text.red { color:#c62828; }
+      .btn.out { background:#fff; border-color:#0a3d62; color:#0a3d62; }
+      .btn.full { width:100%; }
+
+      .app .fixedbar { border-top:1px solid #e2e7ee; background:#fff; padding:12px 16px; }
+
+      /* positions table */
+      .ptable-wrap { border:1px solid #e2e7ee; border-radius:12px; overflow:hidden; background:#fff; }
+      .ptable-scroll { max-height:420px; overflow:auto; }
+      table.pt { border-collapse:collapse; width:100%; min-width:860px; font-size:12.5px; }
+      table.pt th { position:sticky; top:0; background:#fff; z-index:2; font-weight:800; text-align:left; padding:10px 10px; border-bottom:2px solid #e2e7ee; white-space:nowrap; box-shadow:0 1px 0 #e2e7ee; }
+      table.pt th.r, table.pt td.r { text-align:right; }
+      table.pt th.c, table.pt td.c { text-align:center; }
+      table.pt td { padding:9px 10px; border-bottom:1px solid #eef1f5; vertical-align:middle; }
+      table.pt tr.poshead td { background:#f2f5f9; }
+      table.pt tr.problem td { background:#fdecea; }
+      table.pt tr.problem td:first-child { border-left:3px solid #c62828; }
+      .num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+      .stepper { display:inline-flex; align-items:center; gap:6px; }
+      .stepbtn { width:26px; height:26px; border:1px solid #cfd6e0; border-radius:7px; display:inline-grid; place-items:center; font-weight:800; font-size:15px; background:#fff; }
+      .istval { min-width:22px; text-align:center; font-weight:800; }
+      .istval.dev { color:#c62828; }
+      .vkinput { border:1px solid #cfd6e0; border-radius:7px; padding:5px 8px; width:92px; text-align:right; font-size:12.5px; color:#c62828; font-weight:700; background:#fff; }
+      .vkinput.empty { color:#9aa4b2; font-weight:400; }
+      .poshead .arttitle { font-weight:800; }
+      .poshead .muted2 { color:#5b6472; }
+
+      /* dialog */
+      .dialog { background:#fff; border:1px solid #dbe0e8; border-radius:14px; box-shadow:0 18px 50px rgba(10,61,98,.22); overflow:hidden; max-width:460px; margin:0 auto; }
+      .dialog .dtitle { font-weight:820; font-size:16px; padding:16px 18px 6px; }
+      .dialog .dbody { padding:4px 18px 8px; }
+      .dialog .dactions { padding:12px 18px 16px; display:flex; justify-content:flex-end; gap:10px; }
+      .field { border:1px solid #cfd6e0; border-radius:8px; padding:9px 11px; margin:10px 0; background:#fff; position:relative; }
+      .field .flabel { position:absolute; top:-8px; left:10px; background:#fff; padding:0 5px; font-size:11px; color:#5b6472; font-weight:700; }
+      .field .fval { font-size:13.5px; }
+      .field .req { color:#c62828; }
+      .dlist { margin:8px 0; padding:0; list-style:none; }
+      .dlist li { padding:8px 0; border-bottom:1px solid #eef1f5; }
+      .dlist li:last-child { border-bottom:none; }
+      .dlist .p { font-weight:700; }
+      .dlist .s { color:#5b6472; font-size:12px; }
+      .hint { color:#5b6472; font-size:12.5px; }
+      .alert { border-radius:9px; padding:9px 12px; font-size:12.5px; margin:8px 0; }
+      .alert.info { background:#e8f1fb; border:1px solid #b6d3f2; color:#0f3f74; }
+      .alert.warn { background:#fff4e5; border:1px solid #f2d199; color:#7a4a00; }
+      .alert.success { background:#eaf3ea; border:1px solid #a9cdab; color:#1b3a1c; }
+
+      /* admin table */
+      table.admin { border-collapse:collapse; width:100%; font-size:12.5px; background:#fff; }
+      table.admin th, table.admin td { padding:9px 10px; border-bottom:1px solid #eef1f5; text-align:left; }
+      table.admin th { font-weight:800; background:#f2f5f9; }
+      .switch { width:34px; height:18px; border-radius:999px; background:#2e7d32; position:relative; display:inline-block; }
+      .switch.off { background:#c8cfd8; }
+      .switch::after { content:""; position:absolute; top:2px; right:2px; width:14px; height:14px; border-radius:50%; background:#fff; }
+      .switch.off::after { right:auto; left:2px; }
+
+      /* barcode */
+      .barcode { background:#fff; border-radius:8px; padding:10px; text-align:center; border:1px solid #e2e7ee; }
+      .barcode svg { width:100%; height:56px; }
+      .barcode .code { letter-spacing:3px; color:#000; font-size:13px; margin-top:4px; font-weight:600; }
+
+      footer { max-width:1180px; margin:0 auto; padding:30px 40px 80px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); }
+      footer code { background:var(--panel-2); padding:1px 6px; border-radius:5px; }
+      .kbd-note { font-size:12.5px; color:var(--muted); margin-top:8px; }
+    </style>
+  </head>
+  <body>
+    <nav class="toc">
+      <div class="inner">
+        <a href="#top"><span class="n">◆</span> Übersicht</a>
+        <a href="#flow1"><span class="n">1</span> Positionen-Tabelle</a>
+        <a href="#flow2"><span class="n">2</span> Problem-Workflow</a>
+        <a href="#flow3"><span class="n">3</span> Teilabschluss-Loop</a>
+        <a href="#flow4"><span class="n">4</span> Bündel / Home</a>
+      </div>
+    </nav>
+
+    <header class="hero" id="top">
+      <div class="brandbar">
+        <div class="logo">L&amp;T</div>
+        <div class="app">Warenauszeichnung · Digitale Belegverteilung</div>
+      </div>
+      <div class="eyebrow">Kundenfeedback · 14.07.2026 · „Mitarbeiterapp ändern"</div>
+      <h1>Die neuen Abläufe in der Mitarbeiter-App</h1>
+      <p class="lead">Diese Seite zeigt die vier überarbeiteten Abläufe aus dem Kundengespräch —
+        jeweils mit Ablaufdiagramm, App-Ansicht und einer Erklärung Schritt für Schritt aus Sicht
+        der Mitarbeiterin bzw. des Mitarbeiters. Wo es hilft, steht die alte Ansicht (Vorher) neben
+        der neuen (Nachher).</p>
+
+      <div class="overview">
+        <a class="ovcard" href="#flow1">
+          <div class="k">FLOW 1</div>
+          <h3>Positionen-Tabelle neu</h3>
+          <p>CatMan-Termin pro Position, Hauptshop/Shop in der Kopfzeile, fixierte Tabellen-Kopfzeile
+             und Preisabweichung direkt an der EAN.</p>
+        </a>
+        <a class="ovcard" href="#flow2">
+          <div class="k">FLOW 2</div>
+          <h3>Problem-Workflow neu</h3>
+          <p>Frei definierbare Problemarten, Problem je Position/Größe mit Farbmarkierung, kein
+             beleg-weites Melden, automatische Probleme bei Menge/Preis.</p>
+        </a>
+        <a class="ovcard" href="#flow3">
+          <div class="k">FLOW 3</div>
+          <h3>Teilabschluss-Loop neu</h3>
+          <p>Teilabschluss ohne Freitext → Vorgang geht an die Teamleitung → rot geparkt beim selben
+             Mitarbeiter → nach Klärung grün → fertig.</p>
+        </a>
+        <a class="ovcard" href="#flow4">
+          <div class="k">FLOW 4</div>
+          <h3>Bündel / Home-Screen neu</h3>
+          <p>Weiteres Bündel selbst anfordern, Beleg-Übersicht mit Filiale/Shopbereich/Etikettenart,
+             WE-Nr als Code-128-Barcode, freie Reihenfolge.</p>
+        </a>
+      </div>
+    </header>
+
+    <main>
+
+      <!-- ================= FLOW 1 ================= -->
+      <section class="flow" id="flow1">
+        <div class="flow-head">
+          <div class="k">Flow 1</div>
+          <h2>Positionen-Tabelle neu</h2>
+          <p>Alle Positionen eines Belegs in einer Tabelle — jetzt mit CatMan-Termin, Hauptshop/Shop
+             und Ordernummer an der Position, fixierter Kopfzeile beim Scrollen und der neuen Spalte
+             „VK korrigiert" direkt hinter „VK-Etikett".</p>
+        </div>
+
+        <h4 class="block">Vorher / Nachher</h4>
+        <table class="vn">
+          <thead><tr><th>Aspekt</th><th>Vorher</th><th>Nachher</th></tr></thead>
+          <tbody>
+            <tr><td>CatMan</td><td class="was">nur Chip „Catman" ohne Datum</td><td class="now">Chip mit Datum „CatMan 17.06.2026"</td></tr>
+            <tr><td>Shop-Zuordnung</td><td class="was">nur „Shop &lt;Nr&gt;"</td><td class="now">„HShop &lt;Nr&gt; · Shop &lt;Nr&gt;" + „Order &lt;Nr&gt;"</td></tr>
+            <tr><td>Kopfzeile</td><td class="was">scrollt mit weg</td><td class="now">bleibt beim Scrollen oben stehen</td></tr>
+            <tr><td>Preiskorrektur</td><td class="was">nicht an der Zeile möglich</td><td class="now">Spalte „VK korrigiert" direkt hinter „VK-Etikett"</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="block">Ablauf</h4>
+        <div class="mermaid">
+flowchart TD
+    A[Beleg öffnen] --> B[Positionen-Tabelle<br/>Kopfzeile bleibt beim Scrollen oben]
+    B --> C{Menge stimmt?}
+    C -- ja --> D[Mit − / + bestätigen]
+    C -- nein --> E[Mehr-/Mindermenge<br/>wird automatisch markiert]
+    B --> F{Preis am Etikett falsch?}
+    F -- ja --> G["Preis in Spalte<br/>'VK korrigiert' eintragen"]
+    F -- nein --> H[nichts tun]
+    D --> I[Position geprüft]
+    G --> I
+    I --> J{Alle geprüft<br/>und keine Abweichung?}
+    J -- ja --> K["'Beleg erledigt'"]
+    J -- nein --> L["'Teilabschluss<br/>(Problem melden)'"]
+        </div>
+
+        <h4 class="block">App-Ansicht</h4>
+        <div class="grid2">
+          <div class="visual before">
+            <div class="cap"><span class="dot"></span>Vorher — echte App</div>
+            <img src="assets/vorher-positionen-tabelle.png" alt="Alte Positionen-Tabelle: keine Spalte VK korrigiert, CatMan ohne Datum, kein HShop, beleg-weiter Problem-Knopf" loading="lazy" />
+          </div>
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Nachher — neue App</div>
+            <!-- ---------- Nachher mockup: positions table ---------- -->
+            <div class="app">
+              <div class="appbar">
+                <div class="title">L&amp;T Warenauszeichnung</div>
+                <div class="right"><span>Hakan Yilmaz</span><span class="btn-ghost">Zur Teamlead-App</span></div>
+              </div>
+              <div class="body" style="padding-bottom:8px">
+                <div style="font-size:11px;color:#5b6472;font-weight:700">R5</div>
+                <h1>WE 3.540.634</h1>
+                <div class="sub">📦 1 Karton – alle auf dem Karren suchen!</div>
+                <div class="sect">Positionen</div>
+                <div class="hint" style="margin:-4px 0 8px">Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".</div>
+                <div class="ptable-wrap">
+                  <div class="ptable-scroll">
+                    <table class="pt">
+                      <thead>
+                        <tr>
+                          <th>Pos</th><th>EAN</th><th>Größe</th><th class="r">Soll</th>
+                          <th class="c">Ist</th><th>Mehr-/Mindermenge</th>
+                          <th class="r">EK</th><th class="r">VK</th><th class="r">VK-Etikett</th><th class="r">VK korrigiert</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="poshead">
+                          <td class="arttitle">Pos 1</td>
+                          <td colspan="9">
+                            <span class="arttitle">ART-001 · schwarz</span>
+                            <span class="muted2" style="font-weight:800">&nbsp;· HShop 100 · Shop 31</span>
+                            <span class="muted2" style="font-weight:800">&nbsp;· Order 4711</span>
+                            <span class="chip catman">CatMan 17.06.2026</span>
+                            <span class="chip green">♻️ NOS</span>
+                            <span class="chip warn">🔒 Sicherung</span>
+                            <div class="muted2" style="font-size:11.5px;margin-top:3px">WGR 218110 D-Bermuda · Saison HW26 &nbsp;·&nbsp; Soll gesamt 7 &nbsp; <span class="btn primary" style="padding:4px 10px;font-size:11.5px">Position geprüft</span> &nbsp; <span class="btn text red" style="padding:4px 8px;font-size:11.5px">Problem</span></div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td></td><td class="num">401231040634</td><td style="font-weight:800">38</td>
+                          <td class="r num">4</td>
+                          <td class="c"><span class="stepper"><span class="stepbtn">−</span><span class="istval">4</span><span class="stepbtn">+</span></span></td>
+                          <td></td>
+                          <td class="r num">14,50 €</td><td class="r num">34,80 €</td><td class="r num">34,80 €</td>
+                          <td class="r"><span class="vkinput empty">Preis</span></td>
+                        </tr>
+                        <tr class="problem">
+                          <td></td><td class="num">401231140634</td><td style="font-weight:800">40</td>
+                          <td class="r num">3</td>
+                          <td class="c"><span class="stepper"><span class="stepbtn">−</span><span class="istval dev">2</span><span class="stepbtn">+</span></span></td>
+                          <td><span class="chip warn">−1 Mindermenge</span></td>
+                          <td class="r num">14,50 €</td><td class="r num">34,80 €</td><td class="r num">34,80 €</td>
+                          <td class="r"><span class="vkinput">29,90</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="fixedbar">
+                <div style="display:flex;gap:10px">
+                  <span class="btn primary disabled full">Beleg erledigt</span>
+                  <span class="btn out full">Teilabschluss (Problem melden)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h4 class="block">Schritt für Schritt</h4>
+        <ol class="steps">
+          <li>Beleg öffnen — oben groß die <b>WE-Beleg-Nr.</b> (<span class="lbl">WE 3.540.634</span>), darunter die Kartonzahl.</li>
+          <li>Positionen-Tabelle abarbeiten. Die <b>Kopfzeile bleibt beim Scrollen oben</b>. An jeder Position stehen <span class="lbl">HShop 100 · Shop 31</span>, <span class="lbl">Order 4711</span> und der <span class="lbl">CatMan 17.06.2026</span>.</li>
+          <li>Menge je Größe mit <span class="lbl">−</span>/<span class="lbl">+</span> erfassen. Weicht sie ab, erscheint <span class="lbl">−1 Mindermenge</span> und die Zeile wird rot.</li>
+          <li>Falscher Etikettenpreis? In der Spalte <b>VK korrigiert</b> den echten Preis eintragen — auch das markiert die Zeile rot (automatisch ein Problem).</li>
+          <li>Jede Position mit <span class="lbl">Position geprüft</span> abschließen (wird zum grünen <span class="lbl">Position geprüft ✓</span>).</li>
+          <li>Ohne Abweichung wird <span class="lbl">Beleg erledigt</span> aktiv; sonst bleibt <span class="lbl">Teilabschluss (Problem melden)</span>.</li>
+        </ol>
+
+        <div class="why">
+          <h4>Warum das für L&amp;T besser ist</h4>
+          <ul>
+            <li>Weniger Suchen: HShop/Shop/Order und CatMan-Datum stehen direkt an der Ware.</li>
+            <li>Kein Verrutschen: die fixierte Kopfzeile hält die Spalten auch bei langen Belegen im Blick.</li>
+            <li>Preiskorrektur ohne Umweg: ein Feld an genau der Zeile, zu der es gehört.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ================= FLOW 2 ================= -->
+      <section class="flow" id="flow2">
+        <div class="flow-head">
+          <div class="k">Flow 2</div>
+          <h2>Problem-Workflow neu</h2>
+          <p>Probleme hängen jetzt an der konkreten Position/Größe, die Problemarten pflegt die
+             Teamleitung selbst, und Mengen- oder Preisabweichungen sind automatisch ein Problem.
+             Alles wird gesammelt und erst beim Teilabschluss gesendet.</p>
+        </div>
+
+        <h4 class="block">Vorher / Nachher</h4>
+        <table class="vn">
+          <thead><tr><th>Aspekt</th><th>Vorher</th><th>Nachher</th></tr></thead>
+          <tbody>
+            <tr><td>Problemarten</td><td class="was">feste Liste im Code</td><td class="now">frei pflegbarer Katalog (Admin → Problemarten)</td></tr>
+            <tr><td>Einstieg</td><td class="was">beleg-weiter Knopf „Problem melden"</td><td class="now">roter Knopf „Problem" an der Position</td></tr>
+            <tr><td>Menge / Preis</td><td class="was">separat gemeldet</td><td class="now">automatisch ein Problem</td></tr>
+            <tr><td>Senden</td><td class="was">sofort einzeln</td><td class="now">gesammelt beim Teilabschluss</td></tr>
+            <tr><td>Sichtbarkeit</td><td class="was">Liste ohne Bezug zur Ware</td><td class="now">betroffene Zeile/Position rot markiert</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="block">Ablauf</h4>
+        <div class="mermaid">
+flowchart TD
+    A[Position in der Tabelle] --> B{Was stimmt nicht?}
+    B -- "Menge falsch" --> C[Mit − / + korrigieren<br/>→ automatisch Problem]
+    B -- "Preis falsch" --> D["Feld 'VK korrigiert'<br/>→ automatisch Problem"]
+    B -- "Anderes (Schaden, fehlt…)" --> E["Roter Knopf 'Problem'<br/>an der Position"]
+    E --> F[Dialog: Problemart wählen<br/>+ Größe optional + Notiz]
+    F --> G["'Problem erfassen'<br/>→ roter Chip an der Position"]
+    C --> H[Alle Probleme lokal gesammelt]
+    D --> H
+    G --> H
+    H --> I[Beim Teilabschluss gesammelt<br/>an die Teamleitung senden]
+        </div>
+
+        <h4 class="block">App-Ansicht</h4>
+        <div class="grid2">
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Mitarbeiter — „Problem melden" (Dialog)</div>
+            <div class="app" style="max-width:460px;margin:0 auto">
+              <div class="body" style="padding:14px">
+                <div class="dialog" style="box-shadow:none;border:none">
+                  <div class="dtitle">Problem melden – Position 1</div>
+                  <div class="dbody">
+                    <div class="hint">Das Problem wird beim Teilabschluss gesammelt an die Teamleitung gesendet.</div>
+                    <div class="field"><span class="flabel">Problemart <span class="req">*</span></span><div class="fval">Beschädigt / Bruch ▾</div></div>
+                    <div class="field"><span class="flabel">Größe (optional)</span><div class="fval">40 · 401231140634 ▾</div></div>
+                    <div class="field"><span class="flabel">Notiz (optional)</span><div class="fval hint">Karton eingedrückt, 1 Teil betroffen</div></div>
+                  </div>
+                  <div class="dactions">
+                    <span class="btn text">Abbrechen</span>
+                    <span class="btn primary">Problem erfassen</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Teamleitung — „Admin → Problemarten"</div>
+            <div class="app">
+              <div class="appbar"><div class="title">L&amp;T · Teamlead-Cockpit</div><div class="right"><span>Admin</span></div></div>
+              <div class="body">
+                <div class="sect">Problemarten</div>
+                <div class="hint" style="margin:-4px 0 10px">Frei definierbare Gründe, die der Mitarbeiter beim Melden eines Positions-Problems auswählen kann. Inaktive Gründe sind in der App nicht wählbar.</div>
+                <table class="admin">
+                  <thead><tr><th>Reihenfolge</th><th>Bezeichnung</th><th>Aktiv</th><th style="text-align:right">Aktion</th></tr></thead>
+                  <tbody>
+                    <tr><td>↑ ↓</td><td>Beschädigt / Bruch</td><td><span class="switch"></span></td><td style="text-align:right">🗑</td></tr>
+                    <tr><td>↑ ↓</td><td>Falscher Artikel</td><td><span class="switch"></span></td><td style="text-align:right">🗑</td></tr>
+                    <tr><td>↑ ↓</td><td>Paket fehlt</td><td><span class="switch"></span></td><td style="text-align:right">🗑</td></tr>
+                    <tr><td>↑ ↓</td><td>Etikettenproblem</td><td><span class="switch off"></span></td><td style="text-align:right">🗑</td></tr>
+                  </tbody>
+                </table>
+                <div style="display:flex;gap:10px;margin-top:12px">
+                  <span class="btn text">＋ Neue Problemart</span>
+                  <span class="btn primary">Speichern</span>
+                </div>
+                <div class="alert success" style="margin-top:10px">Problemarten gespeichert.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h4 class="block">Schritt für Schritt — Mitarbeiter</h4>
+        <ol class="steps">
+          <li>Für ein <b>anderes</b> Problem (kein Mengen-/Preisfall) den roten Knopf <span class="lbl">Problem</span> an der Position tippen → Dialog <span class="lbl">Problem melden – Position &lt;Nr&gt;</span>.</li>
+          <li><span class="lbl">Problemart</span> wählen (Katalog der Teamleitung), optional <span class="lbl">Größe</span> und <span class="lbl">Notiz</span>.</li>
+          <li>Mit <span class="lbl">Problem erfassen</span> speichern → roter Chip an der Position (per <span class="lbl">×</span> entfernbar).</li>
+          <li><b>Mengen-/Preisabweichungen</b> nicht über den Dialog — sie werden an der Zeile erfasst und sind <b>automatisch</b> ein Problem.</li>
+        </ol>
+
+        <h4 class="block">Schritt für Schritt — Teamleitung (Katalog pflegen)</h4>
+        <ol class="steps">
+          <li>Cockpit → <span class="lbl">Admin → Problemarten</span>.</li>
+          <li><span class="lbl">Neue Problemart</span> anlegen, <span class="lbl">Bezeichnung</span> eintragen, mit ↑/↓ sortieren.</li>
+          <li>Schalter <span class="lbl">Aktiv</span> gibt einen Grund für die App frei oder blendet ihn aus.</li>
+          <li><span class="lbl">Speichern</span> → <span class="lbl">Problemarten gespeichert.</span> — die App lädt den Katalog automatisch neu.</li>
+        </ol>
+
+        <div class="why">
+          <h4>Warum das für L&amp;T besser ist</h4>
+          <ul>
+            <li>L&amp;T pflegt die Problemarten selbst — ohne Entwickler.</li>
+            <li>Jedes Problem hängt an der konkreten Ware — die Teamleitung sieht sofort, worum es geht.</li>
+            <li>Nichts geht verloren: Mengen-/Preisabweichungen sind automatisch Probleme.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ================= FLOW 3 ================= -->
+      <section class="flow" id="flow3">
+        <div class="flow-head">
+          <div class="k">Flow 3 · zentraler Kreislauf</div>
+          <h2>Teilabschluss-Loop neu</h2>
+          <p>Der Teilabschluss braucht keinen Freitext mehr. Der Vorgang geht an die Teamleitung und
+             bleibt beim <b>selben</b> Mitarbeiter <b>rot</b> geparkt und gesperrt — nach der Klärung
+             kommt er <b>grün</b> zurück, und derselbe Mitarbeiter arbeitet ihn fertig.</p>
+        </div>
+
+        <h4 class="block">Der Kreislauf: Mitarbeiter ↔ Teamleitung</h4>
+        <div class="mermaid">
+flowchart LR
+    subgraph MA["👤 Mitarbeiter"]
+        A[Beleg in Arbeit<br/>Problem erfasst] --> B["'Teilabschluss<br/>(Problem melden)'"]
+        B --> C["Dialog: 'Teilabschluss<br/>mit Problemen'<br/>Zusammenfassung"]
+        C --> D["'An Teamleitung senden'"]
+        F[Beleg ROT geparkt<br/>'Problem gemeldet'<br/>nicht bearbeitbar]
+        H[Beleg GRÜN zurück<br/>'Geklärt' freigegeben]
+        H --> I["'Beleg erledigt'<br/>fertig arbeiten"]
+    end
+    subgraph TL["🧑‍💼 Teamleitung"]
+        E["Beleg in 'Problemfälle'<br/>Tab 'Probleme':<br/>Grund/Order/Delta/Preis"]
+        E --> G["'Probleme geklärt'"]
+    end
+    D ==> E
+    D -.parkt beim MA.-> F
+    G ==> H
+    F -.wartet auf Klärung.-> H
+    classDef red fill:#fdecea,stroke:#c62828,color:#611a15;
+    classDef green fill:#eaf3ea,stroke:#2e7d32,color:#1b3a1c;
+    class F red;
+    class H green;
+        </div>
+
+        <h4 class="block">App-Ansicht</h4>
+        <div class="grid2">
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Mitarbeiter — Teilabschluss-Dialog</div>
+            <div class="app" style="max-width:460px;margin:0 auto">
+              <div class="body" style="padding:14px">
+                <div class="dialog" style="box-shadow:none;border:none">
+                  <div class="dtitle">Teilabschluss mit Problemen</div>
+                  <div class="dbody">
+                    <div class="hint">Der Vorgang geht mit den folgenden Problemen zur Fehlerbehebung an die Teamleitung. Bis zur Klärung bleibt er in deiner Liste rot geparkt und ist nicht bearbeitbar. Sobald die Teamleitung geklärt hat, kommt er grün markiert zu dir zurück.</div>
+                    <ul class="dlist">
+                      <li><div class="p">Beschädigt / Bruch — Position 1 · 40 · 401231140634</div><div class="s">Karton eingedrückt, 1 Teil betroffen</div></li>
+                      <li><div class="p">Minderlieferung −1 — Position 1 · 40</div><div class="s">Soll 4 · Ist 3 · 401231140634</div></li>
+                      <li><div class="p">Preisabweichung — Position 1 · 40</div><div class="s">VK-Etikett 34,80 € → korrigiert 29,90 €</div></li>
+                    </ul>
+                  </div>
+                  <div class="dactions">
+                    <span class="btn text">Abbrechen</span>
+                    <span class="btn primary">An Teamleitung senden</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Mitarbeiter — Startbildschirm: rot geparkt → grün geklärt</div>
+            <div class="app">
+              <div class="body">
+                <div class="sect">2 · Bearbeiten</div>
+                <div class="card red">
+                  <div class="row">
+                    <div style="font-size:20px">🗄️</div>
+                    <div class="grow">
+                      <div class="we">WE 3.540.634</div>
+                      <div class="meta">Filiale 12 · Shopbereich 3</div>
+                      <div class="meta">🏷️ Etikettendruck</div>
+                      <div style="color:#c62828;font-weight:700;margin-top:3px">Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.</div>
+                    </div>
+                    <span class="chip red">Problem gemeldet</span>
+                  </div>
+                </div>
+                <div class="card green">
+                  <div class="row">
+                    <div style="font-size:20px">🗄️</div>
+                    <div class="grow">
+                      <div class="we">WE 3.540.412</div>
+                      <div class="meta">Filiale 12 · Shopbereich 5</div>
+                      <div class="meta">Digitale Etiketten</div>
+                      <div style="color:#2e7d32;font-weight:700;margin-top:3px">Geklärt – zur Weiterbearbeitung freigegeben.</div>
+                    </div>
+                    <span class="chip green">Geklärt</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:24px">
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Teamleitung — Beleg-Tab „Probleme"</div>
+            <div class="app">
+              <div class="body">
+                <div class="row" style="justify-content:space-between">
+                  <div style="font-weight:820;font-size:18px">3.540.634</div>
+                  <div><span class="chip red">Problem</span> <span class="btn primary" style="padding:5px 12px">Probleme geklärt</span></div>
+                </div>
+                <div class="alert info" style="margin-top:10px">WE-Nr: <b>3.540.634</b> &nbsp;·&nbsp; Lieferschein: <b>LS-88012</b> &nbsp; <span class="hint">Ordernummer je Position bei den einzelnen Problemen.</span></div>
+                <div class="hint" style="margin:2px 0 10px">Nach „Probleme geklärt" geht der Beleg grün markiert zurück an den Mitarbeiter zur Weiterbearbeitung.</div>
+                <div style="border-top:1px solid #eef1f5;padding-top:10px">
+                  <div><b>Beschädigt / Bruch</b> <span class="chip gray">Position</span> <span class="chip red">Offen</span></div>
+                  <div class="hint">Position 1 · Order 4711 · 40 · 401231140634</div>
+                  <div>„Karton eingedrückt, 1 Teil betroffen"</div>
+                </div>
+                <div style="border-top:1px solid #eef1f5;padding-top:10px;margin-top:8px">
+                  <div><b>Minderlieferung</b> <span class="chip gray">Größenzeile</span> <span class="chip red">Offen</span></div>
+                  <div>Minderlieferung −1 Teile</div>
+                </div>
+                <div style="border-top:1px solid #eef1f5;padding-top:10px;margin-top:8px">
+                  <div><b>Preisabweichung</b> <span class="chip gray">Größenzeile</span> <span class="chip red">Offen</span></div>
+                  <div>Preis: VK-Etikett 34,80 € → korrigiert 29,90 €</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Status-Fluss im Hintergrund</div>
+            <div class="mermaid">
+stateDiagram-v2
+    in_progress --> issue_open: Teilabschluss<br/>'An Teamleitung senden'
+    issue_open --> problem_resolved: Teamleitung<br/>'Probleme geklärt'
+    problem_resolved --> in_progress: MA nimmt<br/>Beleg wieder auf
+    in_progress --> completed: 'Beleg erledigt'
+    note right of issue_open
+      rot geparkt beim MA,
+      nicht bearbeitbar
+    end note
+    note right of problem_resolved
+      grün beim MA,
+      freigegeben
+    end note
+            </div>
+          </div>
+        </div>
+
+        <h4 class="block">Schritt für Schritt</h4>
+        <ol class="steps">
+          <li><b>Mitarbeiter:</b> <span class="lbl">Teilabschluss (Problem melden)</span> → Dialog <span class="lbl">Teilabschluss mit Problemen</span> zeigt alle gesammelten Probleme → <span class="lbl">An Teamleitung senden</span>.</li>
+          <li>Der Beleg liegt <b>rot</b> als <span class="lbl">Problem gemeldet</span> in <b>seiner</b> Liste und ist <b>nicht</b> zu öffnen.</li>
+          <li><b>Teamleitung:</b> Beleg in <span class="lbl">Problemfälle</span>, Tab <span class="lbl">Probleme</span> → prüft Grund/Order/Delta/Preis → <span class="lbl">Probleme geklärt</span>.</li>
+          <li>Der Beleg kommt <b>grün</b> als <span class="lbl">Geklärt</span> zum <b>selben</b> Mitarbeiter zurück.</li>
+          <li>Derselbe Mitarbeiter arbeitet fertig und schließt mit <span class="lbl">Beleg erledigt</span> ab.</li>
+        </ol>
+
+        <div class="why">
+          <h4>Warum das für L&amp;T besser ist</h4>
+          <ul>
+            <li>Ein geschlossener Kreis: derselbe Mitarbeiter, der das Problem kennt, macht den Beleg fertig.</li>
+            <li>Nichts bleibt liegen: rot geparkt heißt eindeutig, dass die Teamleitung dran ist.</li>
+            <li>Kein Freitext-Zwang: der Teilabschluss zeigt genau, was gemeldet wird.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ================= FLOW 4 ================= -->
+      <section class="flow" id="flow4">
+        <div class="flow-head">
+          <div class="k">Flow 4</div>
+          <h2>Bündel &amp; Home-Screen neu</h2>
+          <p>Selbst ein weiteres Bündel anfordern, mehr Info je Beleg (Filiale, Shopbereich,
+             Etikettenart), die WE-Nr als aufklappbarer Code-128-Barcode zum Etiketten-Anfordern und
+             freie Abarbeitungsreihenfolge ohne „Start Bearbeitung"-Zwang.</p>
+        </div>
+
+        <h4 class="block">Vorher / Nachher</h4>
+        <table class="vn">
+          <thead><tr><th>Aspekt</th><th>Vorher</th><th>Nachher</th></tr></thead>
+          <tbody>
+            <tr><td>Weiteres Bündel</td><td class="was">nicht möglich</td><td class="now">„Weiteres Bündel anfordern" jederzeit</td></tr>
+            <tr><td>Beleg-Karte</td><td class="was">nur WE-Nr + Lagerplatz</td><td class="now">WE-Nr + Filiale + Shopbereich + Etikettenart</td></tr>
+            <tr><td>Etikett anfordern</td><td class="was">—</td><td class="now">„Barcode anzeigen" → Code-128 der WE-Nr</td></tr>
+            <tr><td>Reihenfolge</td><td class="was">Zwang „Erst Ware holen (0/4)"</td><td class="now">frei — jeder geholte Beleg direkt startbar</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="block">Ablauf</h4>
+        <div class="mermaid">
+flowchart TD
+    A["Startbildschirm<br/>'1 · Ware holen' / '2 · Bearbeiten'"] --> B["Plätze abhaken 'geholt'"]
+    B --> C{Beleg geholt?}
+    C -- ja --> D[direkt startbar<br/>freie Reihenfolge]
+    C -- nein --> E[ausgegraut]
+    D --> F{Etiketten nötig?}
+    F -- ja --> G["'Barcode anzeigen'<br/>→ Code-128 scannen"]
+    F -- nein --> H[Beleg bearbeiten]
+    A --> I{Mehr Arbeit gewünscht?}
+    I -- ja --> J["'Weiteres Bündel anfordern'<br/>hängt an offenes Bündel an"]
+    J --> A
+        </div>
+
+        <h4 class="block">App-Ansicht</h4>
+        <div class="grid2">
+          <div class="visual before">
+            <div class="cap"><span class="dot"></span>Vorher — echte App</div>
+            <img src="assets/vorher-startseite.png" alt="Alte Startseite: unten gesperrter Knopf 'Erst Ware holen (0/4)', Belege nur mit WE-Nr und Lagerplatz, kein Weiteres Bündel, kein Barcode" loading="lazy" />
+          </div>
+          <div class="visual after">
+            <div class="cap"><span class="dot"></span>Nachher — neue App</div>
+            <div class="app">
+              <div class="appbar">
+                <div class="title">L&amp;T Warenauszeichnung</div>
+                <div class="right"><span>Hakan Yilmaz</span><span class="btn-ghost">Zur Teamlead-App</span></div>
+              </div>
+              <div class="body">
+                <h1>Guten Tag, Hakan Yilmaz</h1>
+                <div class="sub">Arbeitsplatz: Tisch 8</div>
+
+                <div class="sect">1 · Ware holen <span class="count">1/4 Plätze</span></div>
+                <div class="card">
+                  <div class="row">
+                    <div class="stopnum done">✓</div>
+                    <div class="grow"><div class="loc">R5</div>
+                      <div><span class="chip out">WE 3.540.634 · 🏷️ Etiketten drucken</span></div></div>
+                    <span class="chip green">geholt</span>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="row">
+                    <div class="stopnum">2</div>
+                    <div class="grow"><div class="loc">R11</div>
+                      <div><span class="chip out">WE 3.540.835 · 🏷️ Etiketten drucken</span></div></div>
+                    <span class="chip gray">offen</span>
+                  </div>
+                </div>
+
+                <div class="sect">2 · Bearbeiten</div>
+                <div class="alert info">Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge starten.</div>
+                <div class="card">
+                  <div class="row">
+                    <div style="font-size:20px">🗄️</div>
+                    <div class="grow">
+                      <div class="we">WE 3.540.634</div>
+                      <div class="meta">Filiale 12 · Shopbereich 3</div>
+                      <div class="meta">🏷️ Etikettendruck</div>
+                    </div>
+                    <span class="chip out">Vororder</span>
+                    <span class="chip gray">Offen</span>
+                  </div>
+                  <div style="margin-top:8px"><span class="btn text" style="padding:4px 8px">Barcode ausblenden</span></div>
+                  <div class="barcode" style="margin-top:6px">
+                    <svg viewBox="0 0 200 56" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="Barcode WE 3.540.634">
+                      <rect x="0" y="0" width="200" height="56" fill="#fff"/>
+                      <g fill="#000">
+                        <rect x="6" y="0" width="2" height="56"/><rect x="10" y="0" width="1" height="56"/>
+                        <rect x="14" y="0" width="3" height="56"/><rect x="20" y="0" width="1" height="56"/>
+                        <rect x="24" y="0" width="2" height="56"/><rect x="29" y="0" width="1" height="56"/>
+                        <rect x="33" y="0" width="1" height="56"/><rect x="37" y="0" width="3" height="56"/>
+                        <rect x="43" y="0" width="1" height="56"/><rect x="47" y="0" width="2" height="56"/>
+                        <rect x="52" y="0" width="1" height="56"/><rect x="56" y="0" width="2" height="56"/>
+                        <rect x="61" y="0" width="3" height="56"/><rect x="67" y="0" width="1" height="56"/>
+                        <rect x="71" y="0" width="1" height="56"/><rect x="75" y="0" width="2" height="56"/>
+                        <rect x="80" y="0" width="1" height="56"/><rect x="84" y="0" width="3" height="56"/>
+                        <rect x="90" y="0" width="1" height="56"/><rect x="94" y="0" width="2" height="56"/>
+                        <rect x="99" y="0" width="1" height="56"/><rect x="103" y="0" width="1" height="56"/>
+                        <rect x="107" y="0" width="3" height="56"/><rect x="113" y="0" width="1" height="56"/>
+                        <rect x="117" y="0" width="2" height="56"/><rect x="122" y="0" width="1" height="56"/>
+                        <rect x="126" y="0" width="2" height="56"/><rect x="131" y="0" width="3" height="56"/>
+                        <rect x="137" y="0" width="1" height="56"/><rect x="141" y="0" width="1" height="56"/>
+                        <rect x="145" y="0" width="2" height="56"/><rect x="150" y="0" width="1" height="56"/>
+                        <rect x="154" y="0" width="3" height="56"/><rect x="160" y="0" width="1" height="56"/>
+                        <rect x="164" y="0" width="2" height="56"/><rect x="169" y="0" width="1" height="56"/>
+                        <rect x="173" y="0" width="1" height="56"/><rect x="177" y="0" width="3" height="56"/>
+                        <rect x="183" y="0" width="1" height="56"/><rect x="187" y="0" width="2" height="56"/>
+                        <rect x="192" y="0" width="2" height="56"/>
+                      </g>
+                    </svg>
+                    <div class="code">3.540.634</div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="row">
+                    <div style="font-size:20px">🟧</div>
+                    <div class="grow">
+                      <div class="we">WE 3.540.412</div>
+                      <div class="meta">Filiale 12 · Shopbereich 5</div>
+                      <div class="meta">Digitale Etiketten</div>
+                    </div>
+                    <span class="chip brand">In Arbeit</span>
+                  </div>
+                  <div style="margin-top:8px"><span class="btn text" style="padding:4px 8px">Barcode anzeigen</span></div>
+                </div>
+              </div>
+              <div class="fixedbar">
+                <span class="btn primary full">Weiteres Bündel anfordern</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h4 class="block">Schritt für Schritt</h4>
+        <ol class="steps">
+          <li>Abschnitt <span class="lbl">1 · Ware holen</span>: Lagerplätze abhaken (Zähler <span class="lbl">1/4 Plätze</span>); voller Karren → <span class="lbl">Rest parken</span>.</li>
+          <li>Abschnitt <span class="lbl">2 · Bearbeiten</span>: jede Karte zeigt <span class="lbl">WE &lt;Nr&gt;</span>, <span class="lbl">Filiale 12 · Shopbereich 3</span> und <span class="lbl">🏷️ Etikettendruck</span> bzw. <span class="lbl">Digitale Etiketten</span>.</li>
+          <li>Etiketten anfordern: <span class="lbl">Barcode anzeigen</span> → Code-128 der WE-Nr aufklappen und scannen.</li>
+          <li>Jeden <b>geholten</b> Beleg direkt öffnen — in beliebiger Reihenfolge. Ausgegraute erst holen.</li>
+          <li>Unten fest: <span class="lbl">Weiteres Bündel anfordern</span> (bei offenem Bündel) bzw. <span class="lbl">Nächstes Bündel holen</span>; fertig → <span class="lbl">Bündel fertig 🎉</span>.</li>
+        </ol>
+
+        <div class="why">
+          <h4>Warum das für L&amp;T besser ist</h4>
+          <ul>
+            <li>Selbstbestimmtes Tempo: wer schneller ist, fordert selbst nach.</li>
+            <li>Weniger Rückfragen: Filiale/Shopbereich/Etikettenart stehen direkt auf der Karte.</li>
+            <li>Etiketten per Scan: der aufklappbare Barcode ersetzt manuelles Nachschlagen.</li>
+            <li>Keine Wartezeit: man startet den ersten geholten Beleg sofort.</li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>
+      <div>Präsentationsdoku zu den neuen Mitarbeiterapp-Abläufen · Kundenfeedback 14.07.2026.
+        Alle Bezeichnungen entsprechen den On-Screen-Labels der App. Die „Vorher"-Bilder sind echte
+        Screenshots der alten Version; die „Nachher"-Ansichten sind maßstabsgetreue App-Mockups im
+        L&amp;T-Design.</div>
+      <div class="kbd-note">Lokal ansehen: aus <code>docs/presentation/kundenfeedback-14-07/</code>
+        einen kleinen Webserver starten (z. B. <code>python3 -m http.server</code>) und
+        <code>index.html</code> im Browser öffnen — direktes <code>file://</code> lädt die
+        Mermaid-Diagramme nicht.</div>
+    </footer>
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+      const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });
+    </script>
+  </body>
+</html>

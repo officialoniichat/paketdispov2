@@ -26,7 +26,9 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
   nacheinander abarbeiten;
 - **`'🏷️ Etikettendruck'`** oder **`'Digitale Etiketten'`**;
 - optional eine Warenart wie `'Vororder'`, `'Nachorder'`, `'NOS'`, `'Extrabestellung'`;
-- einen Status: `'Offen'`, `'In Arbeit'`, `'Fertig'`, `'Teilabschluss'` oder `'Problem'`.
+- einen Status: `'Offen'`, `'In Arbeit'`, `'Fertig'`, `'Problem gemeldet'` (rot) oder `'Geklärt'`
+  (grün). Ein rot geparkter Beleg (`'Problem gemeldet'`) lässt sich nicht öffnen – er wartet auf die
+  Klärung durch die Teamleitung (Kapitel A5).
 
 ## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
 

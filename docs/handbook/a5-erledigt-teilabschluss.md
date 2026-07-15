@@ -11,54 +11,71 @@ Wenn du mit einem Beleg fertig bist (ganz oder teilweise).
 
 ## Voraussetzungen für „Beleg erledigt"
 
-Der Knopf **`'Beleg erledigt'`** ist erst aktiv, wenn beide Bedingungen erfüllt sind. Sonst steht
-oben `'Noch offen: …'`, z. B.:
-
-- `'Noch nicht alle Positionen geprüft'` – setze alle Positionen auf `'Position geprüft ✓'`.
-- `'Offenes Problem – erst klären'` – ein gemeldetes Problem blockiert; das klärt die Teamleitung.
+Der Knopf **`'Beleg erledigt'`** ist nur aktiv, wenn **alle** Positionen als `'Position geprüft ✓'`
+markiert sind **und keine Abweichung/kein Problem** vorliegt. Sonst steht oben `'Noch offen: …'`
+(z. B. `'Noch nicht alle Positionen geprüft'`). Liegt ein Problem vor (auch eine automatische
+Mengen- oder Preisabweichung, Kapitel A4), bleibt nur der **`'Teilabschluss (Problem melden)'`**.
 
 ## Beleg ganz abschließen
 
-1. Alle Positionen geprüft, kein offenes Problem.
+1. Alle Positionen geprüft, keine Abweichung, kein Problem.
 2. Tippe unten auf **`'Beleg erledigt'`**.
 3. Der Beleg wird abgeschlossen (Tagwerk/ZST wird gesetzt) und du kommst zurück zum Startbildschirm.
    In deiner Liste steht der Beleg jetzt als **`'Fertig'`** (grün).
 
-## Teilabschluss – nur einen Teil abschließen
+## Teilabschluss – Problem melden und weiterarbeiten
 
-Nutze das, wenn du **nur einen Teil** schaffst und der Rest später (meist am Folgetag) bearbeitet
-wird.
+Nutze das, wenn ein **Problem** vorliegt (manuell erfasst oder automatisch durch eine Mengen-/
+Preisabweichung). Der Knopf **`'Teilabschluss (Problem melden)'`** ist nur aktiv, wenn mindestens ein
+Problem erfasst ist.
 
-1. Tippe unten auf **`'Teilabschluss'`**.
-2. Es öffnet sich der Dialog `'Teilabschluss'` mit der Erklärung:
-   `'Du schließt nur den bearbeiteten Teil ab. Der Beleg geht mit deinem Grund an die Teamleitung
-   und kommt mit der Restware zurück in die Planung (in der Regel am nächsten Tag). In deiner Liste
-   zählt er nicht als „Fertig", sondern als „Teilabschluss".'`
-3. Trage optional im Feld `'Grund'` etwas ein (leer = „Teilabschluss").
-4. Tippe **`'Teil abschließen'`** (oder `'Abbrechen'` zum Verwerfen).
-5. Der Beleg steht danach als **`'Teilabschluss'`** (gelb) in deiner Liste – **nicht** als „Fertig".
+1. Tippe unten auf **`'Teilabschluss (Problem melden)'`**.
+2. Es öffnet sich der Dialog **`'Teilabschluss mit Problemen'`** mit dem Hinweis:
+   `'Der Vorgang geht mit den folgenden Problemen zur Fehlerbehebung an die Teamleitung. Bis zur
+   Klärung bleibt er in deiner Liste rot geparkt und ist nicht bearbeitbar. Sobald die Teamleitung
+   geklärt hat, kommt er grün markiert zu dir zurück.'`
+3. Darunter siehst du **alle gesammelten Probleme** – manuelle Gründe **und** automatische
+   (`'Mehrlieferung +<n>'`, `'Minderlieferung −<n>'`, `'Preisabweichung … VK-Etikett → korrigiert …'`).
+4. Tippe **`'An Teamleitung senden'`** (oder `'Abbrechen'`). Ohne Problem steht hier der Hinweis
+   `'Es ist noch kein Problem erfasst. Ohne Problem bitte „Beleg erledigt" verwenden.'`
+5. Der Beleg liegt danach **rot** als **`'Problem gemeldet'`** in **deiner** Liste, mit dem Zusatz
+   `'Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.'` – du kannst ihn **nicht** öffnen.
+
+## Der Kreislauf: rot geparkt → grün geklärt → fertig
 
 ```mermaid
 flowchart TD
-    A[Beleg bearbeitet] --> B{Ganz fertig?}
-    B -- Ja, alles geprüft,<br/>kein Problem --> C[Beleg erledigt<br/>Status: Fertig]
-    B -- Nur ein Teil geschafft --> D[Teilabschluss<br/>Grund optional]
-    D --> E[Status: Teilabschluss<br/>Rest zurück in Planung]
-    B -- Problem offen --> F[Erst Problem klären<br/>oder Teilabschluss]
+    A[Beleg bearbeitet] --> B{Ganz fertig, keine Abweichung?}
+    B -- Ja --> C["'Beleg erledigt'<br/>Status: Fertig"]
+    B -- Nein, Problem/Abweichung --> D["'Teilabschluss (Problem melden)'<br/>→ 'An Teamleitung senden'"]
+    D --> E[ROT geparkt: 'Problem gemeldet'<br/>nicht bearbeitbar]
+    E --> F[Teamleitung klärt<br/>'Probleme geklärt']
+    F --> G[GRÜN zurück: 'Geklärt'<br/>freigegeben]
+    G --> H[Du arbeitest fertig<br/>→ 'Beleg erledigt']
 ```
+
+## Wenn der Beleg grün zurückkommt
+
+1. Nach der Klärung liegt der Beleg **grün** als **`'Geklärt'`** in deiner Liste, mit dem Zusatz
+   `'Geklärt – zur Weiterbearbeitung freigegeben.'`
+2. Öffne ihn, arbeite den Rest ab und schließe ihn mit **`'Beleg erledigt'`** ab. Es ist derselbe
+   Beleg beim selben Mitarbeiter – nichts wandert an fremde Kollegen.
 
 ## Was passiert danach
 
 - **`'Beleg erledigt'`**: Beleg ist fertig, zählt in den Tagesfortschritt und wird beim
   Tagesabschluss übergeben.
-- **`'Teilabschluss'`**: Der bearbeitete Teil ist gebucht, die Restware kommt zurück in die Planung
-  (Teamleitung sieht das).
-- Sind **alle** Belege deines Bündels geschlossen, zeigt der Startbildschirm `'Bündel fertig 🎉'`
-  und den Knopf `'Nächstes Bündel holen'` (siehe Kapitel A7).
+- **`'Teilabschluss (Problem melden)'`**: die Probleme sind bei der Teamleitung, der Beleg bleibt rot
+  geparkt bei dir, bis geklärt ist.
+- Sind **alle** Belege deines Bündels geschlossen (fertig oder rot geparkt), zeigt der
+  Startbildschirm `'Bündel fertig 🎉'` und den Knopf `'Nächstes Bündel holen'` bzw.
+  `'Weiteres Bündel anfordern'` (siehe Kapitel A2/A7).
 
 ## Häufige Fehler / FAQ
 
 - **`'Beleg erledigt'` ist grau** – lies die Zeile `'Noch offen: …'`. Meist fehlt eine geprüfte
-  Position oder es gibt ein offenes Problem.
-- **Ich habe zu früh „Teilabschluss" gewählt** – der Rest kommt zurück in die Planung; sprich mit
-  der Teamleitung, wenn du doch weitermachen willst.
+  Position, oder es gibt eine Abweichung/ein Problem – dann geht es nur über den Teilabschluss.
+- **`'Teilabschluss (Problem melden)'` ist grau** – es ist noch kein Problem erfasst. Ohne Problem
+  nutzt du `'Beleg erledigt'`.
+- **Der rote Beleg lässt sich nicht öffnen** – das ist so gewollt: er wartet auf die Klärung durch
+  die Teamleitung und kommt danach grün zu dir zurück.

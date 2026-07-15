@@ -5,70 +5,71 @@
 
 ## Zweck
 
-Der Teamleitung melden, dass mit einem Beleg, einer Position oder einer Box etwas nicht stimmt –
-und danach mit der Restware direkt weiterarbeiten.
+An einer **Position** melden, dass etwas nicht stimmt (Schaden, falscher Artikel, fehlendes Paket,
+Sonstiges). Die Probleme werden **gesammelt** und beim Teilabschluss an die Teamleitung gesendet
+(Kapitel A5).
 
 ## Wann anwenden
 
-Wenn etwas nicht zur Vorgabe passt: falscher Artikel/Farbe/Größe, Schaden, fehlendes Paket,
-Etiketten-, Sicherungs- oder Druckerproblem, oder Sonstiges.
+Wenn etwas an einer Position nicht zur Vorgabe passt und **kein** reiner Mengen- oder Preisfall ist.
 
-> **Nicht** über „Problem melden" laufen **Mengenabweichungen** (zu viel/zu wenig geliefert). Die
-> erfasst du direkt an der Position mit `'−'`/`'+'` (Kapitel A4).
+> **Automatisch ein Problem** – ohne diesen Dialog – sind eine **Mengenabweichung** (`'−'`/`'+'`) und
+> eine **Preisabweichung** (Spalte `'VK korrigiert'`). Beides erfasst du direkt an der Position
+> (Kapitel A4); die betroffene Zeile wird rot markiert.
 
 ## Voraussetzungen
 
-- Der betroffene Beleg ist geöffnet.
+- Der betroffene Beleg ist geöffnet, die Position ist sichtbar.
 
 ## Schritt für Schritt
 
-Du erreichst den Problem-Bildschirm auf zwei Wegen:
+Ein **beleg-weiter** „Problem melden"-Knopf existiert nicht mehr. Ein Problem gehört immer zu einer
+**Position**:
 
-- unten am Beleg über **`'Problem melden'`** (betrifft den ganzen Beleg), **oder**
-- an einer Position über den roten Knopf **`'Problem'`** (schon auf diese Position eingestellt).
-
-Im Bildschirm `'Problem melden'`:
-
-1. Oben siehst du unter **`'Betrifft:'`** worauf sich das Problem bezieht, z. B.
-   `'Ganzer Beleg · WE <Nummer>'` oder `'Position <Nr> · <Artikel>'`.
-2. Hat die Position mehrere Größen, kannst du über `'Genauer (optional)'` eine bestimmte Größe
-   wählen (`'Ganze Position'` oder `'Größe <…> · EAN <…>'`).
-3. Wähle bei **`'Problemart'`** den Grund. Zur Auswahl stehen: `'falscher Artikel'`,
-   `'falsche Farbe'`, `'falsche Größe'`, `'beschädigt'`, `'Paket fehlt'`, `'Etikettenproblem'`,
-   `'Sicherungsproblem'`, `'Druckerproblem'`, `'Sonstiges'`.
-4. Optional: Schreibe etwas in `'Kommentar (optional)'`.
-5. Tippe **`'An Teamlead senden'`** (erst aktiv, wenn eine Problemart gewählt ist).
-
-Unten steht als Erinnerung: `'Nach dem Senden arbeitest du direkt mit der Restware weiter.'`
+1. Tippe in der Positions-Kopfzeile den roten Knopf **`'Problem'`**. Es öffnet sich der Dialog
+   **`'Problem melden – Position <Nr>'`**.
+2. Oben steht der Hinweis:
+   `'Das Problem wird beim Teilabschluss gesammelt an die Teamleitung gesendet.'`
+3. Wähle bei **`'Problemart'`** (Pflichtfeld) den Grund. Die Auswahl kommt aus dem Katalog, den die
+   **Teamleitung** pflegt (Cockpit → `'Admin → Problemarten'`) – z. B. `'Beschädigt / Bruch'`,
+   `'Falscher Artikel'`, `'Paket fehlt'`. Inaktive Gründe erscheinen nicht.
+4. Optional bei **`'Größe (optional)'`** eine bestimmte Größe wählen (`'Ganze Position'` oder
+   `'<Größe> · <EAN>'`).
+5. Optional **`'Notiz (optional)'`** ausfüllen.
+6. Tippe **`'Problem erfassen'`** (oder `'Abbrechen'`). An der Position erscheint danach ein **roter
+   Chip** mit dem Grund (und ggf. der Notiz); über das `'×'` am Chip kannst du ihn wieder entfernen.
 
 ```mermaid
 flowchart TD
-    A[Etwas stimmt nicht] --> B{Menge zu viel/<br/>zu wenig?}
-    B -- Ja --> C[Nicht hier!<br/>An der Position mit − / + erfassen]
-    B -- Nein --> D[Problem melden öffnen]
-    D --> E[Betrifft prüfen<br/>ggf. Größe wählen]
-    E --> F[Problemart wählen]
-    F --> G[Kommentar optional]
-    G --> H[An Teamlead senden]
-    H --> I[Weiter mit der Restware]
+    A[Etwas stimmt an der Position nicht] --> B{Menge oder Preis?}
+    B -- Ja --> C["Automatisch ein Problem<br/>an der Position erfassen (A4)"]
+    B -- "Nein (Schaden, fehlt, …)" --> D["Roter Knopf 'Problem'<br/>an der Position"]
+    D --> E[Problemart wählen<br/>+ Größe optional + Notiz]
+    E --> F["'Problem erfassen'<br/>→ roter Chip an der Position"]
+    C --> G[Alle Probleme werden gesammelt]
+    F --> G
+    G --> H["Beim Teilabschluss<br/>'An Teamleitung senden' (A5)"]
 ```
 
 ## Was passiert danach
 
-- Das Problem geht an die Teamleitung (erscheint in deren Cockpit).
-- Du kommst zum Beleg zurück und **arbeitest mit der Restware weiter**.
-- Ein offenes Problem **blockiert** `'Beleg erledigt'` (`'Offenes Problem – erst klären'`), bis die
-  Teamleitung es freigibt. Schaffst du den Rest schon fertig, kannst du stattdessen
-  `'Teilabschluss'` nutzen.
+- Die erfassten Probleme werden **lokal gesammelt** und **nicht sofort** gesendet.
+- Beim **`'Teilabschluss (Problem melden)'`** gehen alle gesammelten Probleme gebündelt an die
+  Teamleitung (Kapitel A5). Der Beleg liegt danach **rot** als `'Problem gemeldet'` bei dir und ist
+  gesperrt, bis die Teamleitung `'Probleme geklärt'` hat.
+- Solange ein Problem vorliegt, ist **`'Beleg erledigt'`** gesperrt – nur der Teilabschluss bleibt.
 
 ## Was du hier **nicht** kannst
 
 - Du kannst ein Problem **nicht selbst auflösen** – das macht die Teamleitung.
 - Du kannst den Beleg **nicht selbst umverteilen oder stornieren**.
-- Ein Foto-Upload ist nicht verfügbar; es steht nur der Hinweis `'Foto: optional'`.
 
 ## Häufige Fehler / FAQ
 
-- **`'An Teamlead senden'` ist grau** – du hast noch keine `'Problemart'` gewählt.
-- **Ich wollte eine Fehlmenge melden, finde sie aber nicht** – richtig: Fehl-/Mehrmengen gehören an
-  die Position (`'−'`/`'+'`), nicht in diesen Bildschirm.
+- **`'Problem erfassen'` ist grau** – du hast noch keine `'Problemart'` gewählt.
+- **Ich finde meine Problemart nicht** – die Teamleitung pflegt den Katalog (`'Admin → Problemarten'`);
+  inaktive Gründe sind nicht wählbar.
+- **Ich wollte eine Fehlmenge/Preisabweichung melden** – die erfasst du direkt an der Position
+  (`'−'`/`'+'` bzw. `'VK korrigiert'`), sie ist automatisch ein Problem.
+- **Es gibt keinen „Problem melden"-Knopf unten am Beleg mehr** – richtig: Probleme gehören immer an
+  eine Position (roter Knopf `'Problem'`).
