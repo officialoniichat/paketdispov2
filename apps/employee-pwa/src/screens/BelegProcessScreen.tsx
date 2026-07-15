@@ -9,10 +9,13 @@
  *
  * Positions are ONE table with a STICKY column header (A1 + Kundenfeedback
  * 14.07.2026, Punkt 3), so every Größe-row carries its values at the same
- * x-position and EK/VK/VK-Etikett/VK korrigiert sit right-aligned at the right
- * edge. Each Größe is its own row with +/- Mehr-/Mindermengen capture (D2), the
- * corrected VK price input (Punkt 4), Shop/Hauptshop (Punkt 2), WGR-Klartext,
- * CatMan-Termin (Punkt 1) and the Online-Größen-Markierung rot/grün (D4).
+ * x-position and EK/VK/VK-Etikett/Etikettpreis sit right-aligned at the right
+ * edge. Each Größe is its own row with +/- Mehr-/Mindermengen capture (D2) and
+ * the Etikettpreis input (Punkt 4). Die Positions-Kopfzelle stapelt unter der
+ * Pos-Nr. die Kontextfelder (Nachtrag 15.07.2026): HS, Shop, CatMan-Termin,
+ * Etage, Filiale, Shopbereich. Der frühere Boxzettel-Abschnitt entfällt — seine
+ * Infos (Filiale, Shopbereich, Shop, Etage, Warenart) stehen jetzt an der
+ * Position; die Ordernummer ist nur noch in der Teamlead-UX sichtbar.
  *
  * Probleme werden pro Position/Größe im Dialog erfasst (Punkt 5), lokal
  * gesammelt und farblich markiert (Punkt 9); der beleg-weite Problem-Einstieg
@@ -26,7 +29,6 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -80,17 +82,6 @@ const PICTOGRAM_LABEL: Record<string, string> = {
   'cable-lock': 'Kabelschloss',
 };
 
-/** Boxzettel-Warenart in Klartext (interne Enum-Werte nie roh anzeigen). */
-const BOX_GOODS_TYPE_LABEL: Record<string, string> = {
-  vororder: 'Vororder',
-  nachorder: 'Nachorder',
-  sopo: 'Sonderposten',
-  nos: 'NOS',
-  extrabestellung: 'Extrabestellung',
-  nos_nachorder: 'NOS-Nachorder',
-  prio: 'Prio',
-};
-
 /** WGR-Klartext (D3) — resolved from the same mock master data the backend uses. */
 const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
 
@@ -138,7 +129,7 @@ interface PositionColumn {
 /**
  * Feste Spalten der Positionen-Tabelle (A1). Die Online-Spalte entfällt, wenn der
  * Beleg keine online-relevante Position hat — innerhalb eines Belegs bleibt die
- * Geometrie damit konstant. „VK korrigiert" steht direkt hinter „VK-Etikett".
+ * Geometrie damit konstant. „Etikettpreis" steht direkt hinter „VK-Etikett".
  */
 function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
   const columns: PositionColumn[] = [
@@ -151,7 +142,7 @@ function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
     { key: 'ek', label: 'EK', align: 'right', weight: 9 },
     { key: 'vk', label: 'VK', align: 'right', weight: 9 },
     { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 10 },
-    { key: 'vkCorrected', label: 'VK korrigiert', align: 'right', weight: 13 },
+    { key: 'vkCorrected', label: 'Etikettpreis', align: 'right', weight: 13 },
   ];
   if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 11 });
   return columns;
@@ -218,7 +209,6 @@ export function BelegProcessScreen(): JSX.Element {
   const infoPoints = [...aggregate.instructionPoints]
     .filter((p) => !ACTION_POINT_KEYS.has(p.key))
     .sort((a, b) => (POINT_DISPLAY_ORDER[a.key] ?? 99) - (POINT_DISPLAY_ORDER[b.key] ?? 99));
-  const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
   const c = aggregate.case;
   const positionWarenart = (pos: PositionView): string | undefined =>
     pos.nosFlag ? 'NOS' : (c.goodsTypeText ?? undefined);
@@ -344,7 +334,7 @@ export function BelegProcessScreen(): JSX.Element {
         </Typography>
         {/* A1: EINE Tabelle über alle Positionen mit STICKY Kopfzeile (Punkt 3). Die
             Tabelle scrollt vertikal in ihrem Container; die Spaltenüberschriften
-            bleiben oben stehen. EK/VK/VK-Etikett/VK korrigiert stehen rechts. */}
+            bleiben oben stehen. EK/VK/VK-Etikett/Etikettpreis stehen rechts. */}
         <Paper variant="outlined">
           <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100dvh - 340px)' }}>
             <Table
@@ -394,10 +384,46 @@ export function BelegProcessScreen(): JSX.Element {
                 return (
                   <TableBody key={pos.id}>
                     <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      {/* Nachtrag 15.07.2026: Kontextfelder gestapelt unter der Pos-Nr.
+                          — HS, Shop, CatMan, Etage, Filiale, Shopbereich. */}
                       <TableCell sx={{ verticalAlign: 'top' }}>
-                        <Typography sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
-                          Pos {pos.positionNo}
-                        </Typography>
+                        <Stack spacing={0.25}>
+                          <Typography sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
+                            Pos {pos.positionNo}
+                          </Typography>
+                          {pos.hShopNo ? (
+                            <Typography variant="body2" color="text.secondary">
+                              HS {pos.hShopNo}
+                            </Typography>
+                          ) : null}
+                          <Typography variant="body2" color="text.secondary">
+                            Shop {pos.shopNo}
+                          </Typography>
+                          {catManLabel ? (
+                            <Typography variant="body2" color="text.secondary">
+                              CatMan {catManLabel}
+                            </Typography>
+                          ) : pos.catMan ? (
+                            <Typography variant="body2" color="text.secondary">
+                              CatMan
+                            </Typography>
+                          ) : null}
+                          {pos.floor ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Etage {pos.floor}
+                            </Typography>
+                          ) : null}
+                          {pos.branchNo ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Filiale {pos.branchNo}
+                            </Typography>
+                          ) : null}
+                          {c.primaryShopAreaNo ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Shopbereich {c.primaryShopAreaNo}
+                            </Typography>
+                          ) : null}
+                        </Stack>
                       </TableCell>
                       <TableCell colSpan={columns.length - 1} sx={{ verticalAlign: 'top' }}>
                         <Stack
@@ -412,16 +438,6 @@ export function BelegProcessScreen(): JSX.Element {
                               <Typography sx={{ fontWeight: 700 }}>
                                 {pos.supplierArticleNo} · {pos.supplierColor}
                               </Typography>
-                              {/* Punkt 2: Hauptshop + Shop in derselben Schriftgröße wie die Art-Nr. */}
-                              <Typography sx={{ fontWeight: 700 }} color="text.secondary">
-                                {pos.hShopNo ? `HShop ${pos.hShopNo} · ` : ''}Shop {pos.shopNo}
-                              </Typography>
-                              {/* Ordernummer zur Fehlerlösung (Kundenfeedback 14.07.2026). */}
-                              {pos.orderNo ? (
-                                <Typography sx={{ fontWeight: 700 }} color="text.secondary">
-                                  Order {pos.orderNo}
-                                </Typography>
-                              ) : null}
                               {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
                               {!pos.nosFlag && positionWarenart(pos) ? (
                                 <Chip
@@ -430,12 +446,6 @@ export function BelegProcessScreen(): JSX.Element {
                                   variant="outlined"
                                   label={positionWarenart(pos)}
                                 />
-                              ) : null}
-                              {/* Punkt 1: CatMan-Termin (Datum) statt bloßem Kennzeichen. */}
-                              {catManLabel ? (
-                                <Chip size="small" variant="outlined" label={`CatMan ${catManLabel}`} />
-                              ) : pos.catMan ? (
-                                <Chip size="small" variant="outlined" label="CatMan" />
                               ) : null}
                               {flags.map((f) => (
                                 <Chip key={f.key} size="small" color={f.color} label={f.label} />
@@ -601,7 +611,7 @@ export function BelegProcessScreen(): JSX.Element {
                           <TableCell align="right" sx={NUMERIC_CELL}>
                             {price(s.vkLabelPrice) ?? '—'}
                           </TableCell>
-                          {/* Punkt 4: Preiskorrektur direkt hinter der VK-Etikett-Spalte. */}
+                          {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte. */}
                           <TableCell align="right">
                             <TextField
                               size="small"
@@ -620,7 +630,7 @@ export function BelegProcessScreen(): JSX.Element {
                                 min: 0,
                                 step: '0.01',
                                 inputMode: 'decimal',
-                                'aria-label': `Größe ${s.size}: VK korrigieren`,
+                                'aria-label': `Größe ${s.size}: Etikettpreis erfassen`,
                                 style: { textAlign: 'right' },
                               }}
                               sx={{ width: 120 }}
@@ -635,57 +645,6 @@ export function BelegProcessScreen(): JSX.Element {
             </Table>
           </TableContainer>
         </Paper>
-
-        {/* Boxzettel (§G.1 Punkt 9) — what goes on each box label. Info only, no gate. */}
-        {aggregate.boxTargets.length > 0 ? (
-          <>
-            <Divider />
-            <Typography variant="subtitle2">Boxzettel</Typography>
-            {aggregate.boxTargets.map((t, i) => {
-              const boxPositions = t.positionIds
-                .map((id) => positionsById.get(id))
-                .filter((p): p is PositionView => Boolean(p));
-              const posNos = boxPositions.map((p) => p.positionNo).sort((a, b) => a - b);
-              const warenartLabel = (() => {
-                if (!t.goodsType) return null;
-                if (t.goodsType !== 'mixed') return BOX_GOODS_TYPE_LABEL[t.goodsType] ?? t.goodsType;
-                const parts = [
-                  ...new Set(boxPositions.map((p) => positionWarenart(p)).filter((w): w is string => Boolean(w))),
-                ];
-                return parts.length > 0 ? `Gemischt: ${parts.join(' + ')}` : 'Gemischt';
-              })();
-              const shopLine = [
-                `Filiale ${t.branchNo}`,
-                `Shopbereich ${t.shopAreaNo}`,
-                t.shopNo ? `Shop ${t.shopNo}` : null,
-                t.floor ? `Etage ${t.floor}` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ');
-              return (
-                <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="baseline">
-                    <Typography sx={{ fontWeight: 700 }}>Box {i + 1}</Typography>
-                    <Chip size="small" label={`${t.plannedQuantity} Teile`} />
-                  </Stack>
-                  <Stack spacing={0.25} sx={{ mt: 0.5 }}>
-                    <Typography variant="body2">{shopLine}</Typography>
-                    {warenartLabel ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Warenart: {warenartLabel}
-                      </Typography>
-                    ) : null}
-                    {posNos.length > 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Positionen: {posNos.join(', ')}
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                </Paper>
-              );
-            })}
-          </>
-        ) : null}
 
         {/* Why the close is blocked, if it is. */}
         {!gate.ok ? (

@@ -987,6 +987,7 @@ export class TeamleadReadService {
   private mapPositionDetail(p: {
     id: string;
     positionNo: number;
+    orderNo?: string | null;
     wgr: string;
     supplierColor: string;
     status: string;
@@ -1029,6 +1030,7 @@ export class TeamleadReadService {
     return {
       id: p.id,
       positionNo: p.positionNo,
+      orderNo: p.orderNo ?? null,
       wgr: p.wgr,
       wgrDescription: wgrDescription(p.wgr),
       catMan: p.catMan ?? null,

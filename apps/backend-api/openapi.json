@@ -4617,6 +4617,11 @@
           "positionNo": {
             "type": "number"
           },
+          "orderNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ordernummer (ERP-Referenz zur Fehlerlösung durch den Teamlead, Nachtrag 15.07.2026)"
+          },
           "wgr": {
             "type": "string",
             "description": "Warengruppe"

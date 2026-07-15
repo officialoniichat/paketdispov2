@@ -90,7 +90,7 @@ export function collectProblemSummary(
     lines.push({
       key: `price-${skuLineId}`,
       primary: `Preisabweichung — Position ${sku.positionNo} · ${sku.size}`,
-      secondary: `VK-Etikett ${from} → korrigiert ${EUR.format(corrected)}`,
+      secondary: `VK-Etikett ${from} → Etikettpreis ${EUR.format(corrected)}`,
     });
   }
 

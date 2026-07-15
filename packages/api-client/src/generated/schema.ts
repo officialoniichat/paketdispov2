@@ -1654,6 +1654,8 @@ export interface components {
         PositionDetailDto: {
             id: string;
             positionNo: number;
+            /** @description Ordernummer (ERP-Referenz zur Fehlerlösung durch den Teamlead, Nachtrag 15.07.2026) */
+            orderNo?: string | null;
             /** @description Warengruppe */
             wgr: string;
             /** @description WGR-Klartext, z. B. "D-Bermuda" (A2) */

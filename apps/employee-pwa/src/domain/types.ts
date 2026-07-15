@@ -21,7 +21,6 @@ import type {
   GoodsTypeText,
   OnlineSizeMark,
   ReceiptPosition,
-  TransportBoxTarget,
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
@@ -100,13 +99,12 @@ export interface PositionView extends ReceiptPosition {
   catManDate?: string;
 }
 
-/** Everything needed to work one Beleg (case + instruction + positions + box targets). */
+/** Everything needed to work one Beleg (case + instruction + positions). */
 export interface CaseAggregate {
   caseId: string;
   case: GoodsReceiptCase;
   workInstruction: WorkInstructionHeader;
   positions: PositionView[];
-  boxTargets: TransportBoxTarget[];
   /** Ordered Arbeitsanweisung points (derived projection from the engine/backend). */
   instructionPoints: WorkInstructionPoint[];
   /**

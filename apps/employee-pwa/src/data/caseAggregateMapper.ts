@@ -7,7 +7,7 @@
  * The two shapes are close but not 1:1 (see `domain/types.ts`'s module doc):
  * - `CaseAggregateDto.case` is the shallower `CaseSummaryDto`, not the full
  *   `GoodsReceiptCase` — the handful of `GoodsReceiptCase` fields neither
- *   screen ever reads (source/externalRef/deliveryNoteNo/primaryShopAreaNo/
+ *   screen ever reads (source/externalRef/deliveryNoteNo/
  *   primaryFloor/catManDate/loadPlanDate/effortPoints/version/
  *   assignedBundleId/deliveryGroupReleased) are filled with inert placeholders
  *   below (TODO(task-13+): drop the placeholders if a screen ever needs the
@@ -31,7 +31,6 @@ import type {
   PriorityFlag,
   ReceiptPosition,
   SectionCode,
-  TransportBoxTarget,
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
@@ -39,7 +38,6 @@ import type { CaseAggregate, PositionView } from '../domain/types.js';
 
 type CaseAggregateDto = components['schemas']['CaseAggregateDto'];
 type ReceiptPositionDto = components['schemas']['ReceiptPositionDto'];
-type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
 type WorkInstructionPointDto = components['schemas']['WorkInstructionPointDto'];
 
@@ -100,7 +98,6 @@ function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
     supplierColor: dto.supplierColor,
     season: dto.season ?? undefined,
     nosFlag: dto.nosFlag ?? undefined,
-    orderNo: dto.orderNo ?? undefined,
     branchNo: dto.branchNo,
     shopNo: dto.shopNo,
     hShopNo: dto.hShopNo ?? undefined,
@@ -121,22 +118,6 @@ function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
       status: s.status as ReceiptPosition['skuLines'][number]['status'],
     })),
     status: dto.status as ReceiptPosition['status'],
-  };
-}
-
-function mapBoxTarget(caseId: string, dto: TransportBoxTargetDto): TransportBoxTarget {
-  return {
-    id: dto.id,
-    caseId,
-    branchNo: dto.branchNo,
-    shopAreaNo: dto.shopAreaNo,
-    shopNo: dto.shopNo ?? undefined,
-    floor: dto.floor ?? undefined,
-    goodsType: (dto.goodsType ?? 'mixed') as TransportBoxTarget['goodsType'],
-    positionIds: dto.positionIds,
-    plannedQuantity: dto.plannedQuantity,
-    actualQuantity: dto.quantity,
-    labelStatus: dto.labelStatus as TransportBoxTarget['labelStatus'],
   };
 }
 
@@ -176,7 +157,9 @@ export function mapCaseAggregate(caseId: string, dto: CaseAggregateDto): CaseAgg
       deliveryNoteNo: undefined,
       bookingDate: c.bookingDate,
       branchNo: c.branchNo,
-      primaryShopAreaNo: undefined,
+      // Nachtrag 15.07.2026: Shopbereich wird jetzt an der Position gezeigt
+      // (Boxzettel entfällt) und kommt aus dem Beleg-Kopf.
+      primaryShopAreaNo: c.primaryShopAreaNo ?? undefined,
       primaryShopNo: c.primaryShopNo ?? undefined,
       primaryFloor: undefined,
       inboundCartonCount: c.inboundCartonCount ?? undefined,
@@ -209,7 +192,6 @@ export function mapCaseAggregate(caseId: string, dto: CaseAggregateDto): CaseAgg
     },
     workInstruction: mapWorkInstruction(caseId, dto.workInstruction),
     positions: dto.positions.map((p) => mapPosition(caseId, p)),
-    boxTargets: dto.boxTargets.map((b) => mapBoxTarget(caseId, b)),
     instructionPoints: dto.instructionPoints.map(mapInstructionPoint),
     onlineMarks: collectOnlineMarks(dto.positions),
     inspectionLevelLabel: dto.workInstruction?.inspectionLevelLabel ?? undefined,

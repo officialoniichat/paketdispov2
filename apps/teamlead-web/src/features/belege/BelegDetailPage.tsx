@@ -439,6 +439,8 @@ function PositionsTab({ positions }: { positions: BelegPosition[] }): JSX.Elemen
             <Typography sx={{ fontWeight: 700 }}>
               Position {p.positionNo} · WGR {p.wgr} · {p.supplierColor}
             </Typography>
+            {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
+            {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
             {p.priceLabelRequired && <Chip size="small" label="Etikett" />}
             {p.securityRequired && <Chip size="small" color="warning" label="Sichern" />}
             {p.onlineHandlingRequired && <Chip size="small" label="Online" />}
@@ -653,7 +655,7 @@ function IssuesTab({
             {i.correctedVkPrice !== null && (
               <Typography variant="body2">
                 Preis: VK-Etikett {i.expectedVkPrice !== null ? ISSUE_EUR.format(i.expectedVkPrice) : '–'} →
-                korrigiert {ISSUE_EUR.format(i.correctedVkPrice)}
+                Etikettpreis {ISSUE_EUR.format(i.correctedVkPrice)}
               </Typography>
             )}
             {i.description && (

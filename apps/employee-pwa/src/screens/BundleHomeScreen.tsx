@@ -24,7 +24,9 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Collapse from '@mui/material/Collapse';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -157,7 +159,8 @@ export function BundleHomeScreen(): JSX.Element {
   const [seededBundleId, setSeededBundleId] = useState<string | undefined>(undefined);
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
   const [parkMsg, setParkMsg] = useState<string | undefined>(undefined);
-  // Punkt 3: which Beleg currently shows its WE-Nr as inline Code-128 barcode.
+  // Punkt 3 / Nachtrag 15.07.2026: welcher Beleg seine WE-Nr als Code-128 im
+  // Pop-up (Modal) zeigt — kein neuer Tab/Fenster, kein QR.
   const [barcodeCaseId, setBarcodeCaseId] = useState<string | undefined>(undefined);
 
   const bundle = data?.bundle;
@@ -263,6 +266,8 @@ export function BundleHomeScreen(): JSX.Element {
   // (`AssignmentItem.sequence`, sortiert in `getToday()`). Die UI ordnet nicht
   // selbst um — die Engine entscheidet, der Screen zeigt nur an.
   const ordered = cases;
+  // Nachtrag 15.07.2026: der Beleg, dessen WE-Nr aktuell im Barcode-Pop-up steht.
+  const barcodeCase = cases.find((c) => c.id === barcodeCaseId);
   // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
   // der MA kann sie nicht weiter bearbeiten (Kundenfeedback 14.07.2026, Punkt 10).
   const allDone =
@@ -407,7 +412,6 @@ export function BundleHomeScreen(): JSX.Element {
           <Stack spacing={1}>
             {ordered.map((b) => {
               const chip = statusChipFor(b.status);
-              const barcodeOpen = barcodeCaseId === b.id;
               const parked = isCaseParked(b.status);
               const resolved = b.status === 'problem_resolved';
               // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
@@ -458,20 +462,12 @@ export function BundleHomeScreen(): JSX.Element {
                     ) : null}
                     <Chip size="small" color={chip.color} label={chip.label} />
                   </Box>
-                  {/* Punkt 3: WE-Nr als Code-128 inline aufklappen (Etiketten per Scanner
-                      anfordern) — bei JEDEM Beleg, unabhängig von der Etiketten-Pflicht. */}
-                  <Button
-                    size="small"
-                    sx={{ mt: 0.5 }}
-                    onClick={() => setBarcodeCaseId(barcodeOpen ? undefined : b.id)}
-                  >
-                    {barcodeOpen ? 'Barcode ausblenden' : 'Barcode anzeigen'}
+                  {/* Punkt 3 / Nachtrag 15.07.2026: WE-Nr als Code-128 im Pop-up öffnen
+                      (Etiketten per Scanner anfordern) — bei JEDEM Beleg, unabhängig von
+                      der Etiketten-Pflicht. */}
+                  <Button size="small" sx={{ mt: 0.5 }} onClick={() => setBarcodeCaseId(b.id)}>
+                    Barcode anzeigen
                   </Button>
-                  <Collapse in={barcodeOpen} unmountOnExit>
-                    <Box sx={{ mt: 1 }}>
-                      <Code128Barcode value={b.weBelegNo} />
-                    </Box>
-                  </Collapse>
                 </Paper>
               );
             })}
@@ -523,6 +519,18 @@ export function BundleHomeScreen(): JSX.Element {
           </TouchButton>
         </Stack>
       </Box>
+
+      {/* Nachtrag 15.07.2026: WE-Nr als Code-128-Pop-up (Modal in der App) —
+          kein neuer Tab/Fenster, kein QR. */}
+      <Dialog open={barcodeCase !== undefined} onClose={() => setBarcodeCaseId(undefined)}>
+        <DialogTitle>WE {barcodeCase?.weBelegNo}</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          {barcodeCase ? <Code128Barcode value={barcodeCase.weBelegNo} /> : null}
+          <Button fullWidth sx={{ mt: 2 }} onClick={() => setBarcodeCaseId(undefined)}>
+            Schließen
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

@@ -608,6 +608,12 @@ export class AuditEventDto {
 export class PositionDetailDto {
   @ApiProperty() id!: string;
   @ApiProperty() positionNo!: number;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Ordernummer (ERP-Referenz zur Fehlerlösung durch den Teamlead, Nachtrag 15.07.2026)',
+  })
+  orderNo!: string | null;
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)' })
   wgrDescription!: string | null;

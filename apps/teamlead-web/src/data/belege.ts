@@ -204,6 +204,8 @@ export interface BelegSkuLine {
 export interface BelegPosition {
   id: string;
   positionNo: number;
+  /** Ordernummer (ERP-Referenz) — nur in der Teamlead-UX zur Fehlerlösung (Nachtrag 15.07.2026). */
+  orderNo: string | null;
   wgr: string;
   supplierColor: string;
   expectedQuantity: number;
@@ -745,6 +747,7 @@ function toBelegPosition(p: PositionDetailDto): BelegPosition {
   return {
     id: p.id,
     positionNo: p.positionNo,
+    orderNo: p.orderNo ?? null,
     wgr: p.wgr,
     supplierColor: p.supplierColor,
     expectedQuantity: p.expectedQuantity,
