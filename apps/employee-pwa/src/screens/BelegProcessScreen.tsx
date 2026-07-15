@@ -100,10 +100,13 @@ function catManDateLabel(iso: string | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : CATMAN_DATE.format(d);
 }
 
-/** D4: chip colour + wording of the Online-Größen-Markierung. */
+/**
+ * D4: chip colour + wording of the Online-Größen-Markierung. Bewusst kurz, damit
+ * der Chip in der „Online"-Spalte vollständig lesbar bleibt (nie abgeschnitten).
+ */
 const ONLINE_MARK: Record<OnlineSizeMark, { label: string; color: 'success' | 'error' }> = {
-  green: { label: 'Onlineartikel-Highlight', color: 'success' },
-  red: { label: 'Onlineartikel', color: 'error' },
+  green: { label: 'Online-Highlight', color: 'success' },
+  red: { label: 'Online', color: 'error' },
 };
 
 /** Pictogram asset URL (backend-served); undefined in offline-demo mode. */
@@ -206,7 +209,7 @@ function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
     { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 10 },
     { key: 'vkCorrected', label: 'Etikettpreis', align: 'right', weight: 13 },
   ];
-  if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 11 });
+  if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 14 });
   return columns;
 }
 
@@ -630,9 +633,14 @@ export function BelegProcessScreen(): JSX.Element {
                           <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
                           {hasOnlineMarks ? (
-                            <TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
                               {mark ? (
-                                <Chip size="small" color={ONLINE_MARK[mark].color} label={ONLINE_MARK[mark].label} />
+                                <Chip
+                                  size="small"
+                                  color={ONLINE_MARK[mark].color}
+                                  label={ONLINE_MARK[mark].label}
+                                  sx={{ maxWidth: 'none', '& .MuiChip-label': { overflow: 'visible' } }}
+                                />
                               ) : null}
                             </TableCell>
                           ) : null}
