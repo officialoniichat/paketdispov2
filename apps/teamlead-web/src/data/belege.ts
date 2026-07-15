@@ -13,8 +13,8 @@ import type {
   ForwardRecipient,
   IssueScope,
   IssueStatus,
-  IssueType,
   PriorityFlag,
+  ProblemKind,
   SectionCode,
   SkuLineStatus,
   WorkflowEventType,
@@ -30,8 +30,8 @@ import {
   toEventType,
   toIssueScope,
   toIssueStatus,
-  toIssueType,
   toPriorityFlags,
+  toProblemKind,
   toSectionCode,
   toSkuLineStatus,
   toZstSource,
@@ -171,7 +171,8 @@ const PHASE_BY_STATUS: Record<CaseStatus, CasePhase> = {
   assigned: 'arbeit',
   in_progress: 'arbeit',
   issue_open: 'arbeit',
-  partially_completed: 'abgeschlossen',
+  // Geklärt: der Beleg liegt wieder beim SELBEN Mitarbeiter zur Weiterbearbeitung.
+  problem_resolved: 'arbeit',
   completed: 'abgeschlossen',
   zst_done: 'erledigt',
   cancelled: 'erledigt',
@@ -224,10 +225,32 @@ export interface BelegBox {
   sealed: boolean;
 }
 
+/**
+ * One gesammeltes Problem eines Belegs (Kundenfeedback 14.07.2026). Manuelle
+ * Probleme tragen den `reasonLabel`-Snapshot aus dem Problemarten-Katalog;
+ * implizite (Mehr-/Minderlieferung, Preisabweichung) tragen Mengen-Delta bzw.
+ * Preis-Korrektur.
+ */
 export interface BelegIssue {
   id: string;
   scope: IssueScope;
-  issueType: IssueType;
+  kind: ProblemKind;
+  /** Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual). */
+  reasonLabel: string | null;
+  /** Mengen-Delta Ist−Soll (Mehr-/Minderlieferung); signiert. */
+  deviationQty: number | null;
+  /** VK-Etikett-Preis laut Beleg. */
+  expectedVkPrice: number | null;
+  /** Vom Mitarbeiter korrigierter VK (Preisabweichung). */
+  correctedVkPrice: number | null;
+  /** Positions-Nr, auf die sich das Problem bezieht. */
+  positionNo: number | null;
+  /** EAN der betroffenen Größenzeile. */
+  ean: string | null;
+  /** Größe der betroffenen Größenzeile. */
+  size: string | null;
+  /** Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung). */
+  orderNo: string | null;
   status: IssueStatus;
   description: string | null;
   resolution: string | null;
@@ -761,7 +784,15 @@ function toBelegIssue(i: IssueSummaryDto): BelegIssue {
   return {
     id: i.id,
     scope: toIssueScope(i.scope),
-    issueType: toIssueType(i.issueType),
+    kind: toProblemKind(i.kind),
+    reasonLabel: i.reasonLabel ?? null,
+    deviationQty: i.deviationQty ?? null,
+    expectedVkPrice: i.expectedVkPrice ?? null,
+    correctedVkPrice: i.correctedVkPrice ?? null,
+    positionNo: i.positionNo ?? null,
+    ean: i.ean ?? null,
+    size: i.size ?? null,
+    orderNo: i.orderNo ?? null,
     status: toIssueStatus(i.status),
     description: i.description ?? null,
     resolution: i.resolution ?? null,

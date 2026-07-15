@@ -23,6 +23,11 @@ export interface ReasonDialogProps {
   confirmLabel?: string;
   /** Quick-pick reasons to speed up common overrides. */
   suggestions?: string[];
+  /**
+   * true = the note is OPTIONAL („Anmerkung"): confirm is always enabled and an
+   * empty note is passed through as ''. Default is the mandatory §8.4 reason.
+   */
+  optional?: boolean;
   onConfirm: (reason: string) => void;
   onClose: () => void;
 }
@@ -33,6 +38,7 @@ export function ReasonDialog({
   description,
   confirmLabel = 'Bestätigen',
   suggestions = [],
+  optional = false,
   onConfirm,
   onClose,
 }: ReasonDialogProps): JSX.Element {
@@ -41,7 +47,7 @@ export function ReasonDialog({
     if (open) setReason('');
   }, [open]);
 
-  const valid = isValidReason(reason);
+  const valid = optional || isValidReason(reason);
 
   function handleConfirm(): void {
     if (!valid) return;
@@ -59,15 +65,17 @@ export function ReasonDialog({
           fullWidth
           multiline
           minRows={2}
-          required
-          label="Grund (Pflichtfeld)"
+          required={!optional}
+          label={optional ? 'Anmerkung (optional)' : 'Grund (Pflichtfeld)'}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           error={reason.length > 0 && !valid}
           helperText={
             reason.length > 0 && !valid
               ? `Bitte mindestens ${MIN_REASON_LENGTH} Zeichen angeben.`
-              : 'Wird mit vorheriger und neuer Zuordnung auditiert (§8.4).'
+              : optional
+                ? 'Sichtbar für den Mitarbeiter; wird auditiert (§8.4).'
+                : 'Wird mit vorheriger und neuer Zuordnung auditiert (§8.4).'
           }
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleConfirm();

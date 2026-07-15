@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -15,6 +16,10 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { proratedEffort } from '../modules/completion/completion-logic.js';
+import {
+  deriveImplicitProblems,
+  type ReportedSkuState,
+} from '../modules/issue/derive-problems.js';
 import type { Principal } from '../auth/rbac.js';
 import { assertCanAccessCase, canAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
 import {
@@ -22,13 +27,14 @@ import {
   type CaseSummaryDto,
   type ClaimWorkstationDto,
   type CompleteDto,
-  type CreateIssueDto,
   type CurrentBundleDto,
   type MeWorkstationDto,
   type ParkRemainingDto,
   type ParkRemainingResultDto,
   type PartialCompleteDto,
   type ReceiptPositionDto,
+  type ReportedProblemDto,
+  type SkuQuantityDto,
   type TodayResponseDto,
   type TransitionResultDto,
 } from './cases.dto.js';
@@ -53,7 +59,7 @@ interface CaseOwnership {
 }
 
 /** A case in one of these is "done" for bundle-completion purposes (§ continuation). */
-const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
+const TERMINAL_CASE_STATUSES = ['completed', 'zst_done', 'cancelled'] as const;
 /** A bundle in one of these is already closed — don't re-complete it. */
 const TERMINAL_BUNDLE_STATUSES: string[] = ['completed', 'cancelled'];
 
@@ -69,8 +75,8 @@ function isoDay(date: Date): string {
  * Bündel-Home leitet daraus „Start Bearbeitung WE …" ab — der Vorschlag sprang.
  *
  * Ein Beleg hat wegen `@@unique([caseId])` höchstens EIN Item. Fehlt es (ein
- * reaktivierter `partially_completed`-Beleg behält seine Bündel-Bindung, verliert
- * aber sein Item — siehe `clearPriorPlanForDate`), sortiert er ans Ende. Die
+ * Beleg kann seine Bündel-Bindung behalten, aber sein Item verlieren — siehe
+ * `clearPriorPlanForDate`), sortiert er ans Ende. Die
  * WE-Nummer bricht jeden verbleibenden Gleichstand, damit die Ordnung total ist.
  */
 function byBundleSequence(
@@ -362,12 +368,15 @@ export class CasesService {
       supplierColor: string;
       season: string | null;
       nosFlag: boolean | null;
+      orderNo?: string | null;
       onlineRelevant?: boolean | null;
       branchNo: string;
       shopNo: string;
+      hShopNo: string | null;
       floor: string | null;
       status: string;
       catMan?: boolean | null;
+      catManDate?: Date | null;
       instruction: PositionInstructionRow | null;
       skuLines: SkuLineRow[];
     },
@@ -387,12 +396,15 @@ export class CasesService {
       wgr: p.wgr,
       wgrDescription: wgrDescription(p.wgr),
       catMan: p.catMan ?? null,
+      catManDate: p.catManDate ? isoDay(p.catManDate) : null,
       supplierArticleNo: p.supplierArticleNo,
       supplierColor: p.supplierColor,
       season: p.season,
       nosFlag: p.nosFlag,
+      orderNo: p.orderNo ?? null,
       branchNo: p.branchNo,
       shopNo: p.shopNo,
+      hShopNo: p.hShopNo,
       floor: p.floor,
       status: p.status,
       instruction: p.instruction ? mapPositionInstruction(p.instruction) : null,
@@ -402,10 +414,12 @@ export class CasesService {
 
   async startPreparation(principal: Principal, caseId: string): Promise<TransitionResultDto> {
     const owned = await this.requireOwnedCase(principal, caseId);
+    // problem_resolved → in_progress: derselbe MA setzt nach der Teamlead-Klärung fort.
+    const resuming = owned.status === 'problem_resolved';
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'in_progress',
-      eventType: 'case.started',
+      eventType: resuming ? 'case.resumed' : 'case.started',
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
     });
@@ -422,6 +436,22 @@ export class CasesService {
       where: { id: owned.id },
       select: { totalQuantity: true, effortPoints: true },
     });
+    // Punkt 7 (Kundenfeedback 14.07.2026): Mehr-/Minderlieferung oder Preis-
+    // abweichung ist AUTOMATISCH ein Problem und erzwingt den Teilabschluss —
+    // „Beleg erledigt" (voll) ist dann nicht erlaubt.
+    const skuStates = await this.resolveSkuStates(owned.id, dto.skuQuantities ?? []);
+    const implicit = deriveImplicitProblems(skuStates);
+    if (implicit.length > 0) {
+      throw new BadRequestException(
+        'Beleg hat Mengen-/Preisabweichungen – Teilabschluss verwenden',
+      );
+    }
+    const openIssues = await this.prisma.issue.count({
+      where: { caseId: owned.id, status: 'open' },
+    });
+    if (openIssues > 0) {
+      throw new BadRequestException('Beleg hat offene Probleme – Teilabschluss verwenden');
+    }
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'completed',
@@ -429,19 +459,30 @@ export class CasesService {
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
     });
+    await this.persistSkuConfirmations(skuStates);
     // §17.1 ZST: digital completion produces the ZST record + KPI basis. Uses the
-    // employee's actual counted quantity (incl. Mehr-/Mindermengen) when supplied,
-    // falling back to the case's Soll total for callers that omit it.
-    const completedQuantity = dto.completedQuantity ?? caseRow.totalQuantity;
+    // employee's actual counted quantities when supplied, else the Soll total.
+    const completedQuantity =
+      skuStates.length > 0
+        ? skuStates.reduce((sum, s) => sum + s.confirmedQuantity, 0)
+        : caseRow.totalQuantity;
     await this.writeZst(principal, owned.id, employee.id, {
-      completedQuantity,
-      effortPoints: proratedEffort(caseRow.totalQuantity, completedQuantity, caseRow.effortPoints),
+      countedQuantity: completedQuantity,
+      caseTotalQuantity: caseRow.totalQuantity,
+      caseEffortPoints: caseRow.effortPoints,
     });
     // §continuation: if this was the bundle's last open case, close the bundle.
     await this.closeBundleIfDone(principal, owned.id);
     return this.finish(principal, result);
   }
 
+  /**
+   * Teilabschluss (Kundenfeedback 14.07.2026): schickt die während der Bearbeitung
+   * gesammelten Probleme gebündelt an den Teamlead. Manuelle Probleme kommen aus
+   * dem Problemarten-Katalog; Mehr-/Minderlieferungen und Preisabweichungen werden
+   * hier aus den gemeldeten SKU-Mengen abgeleitet (implizite Probleme). Der Beleg
+   * bleibt beim SELBEN Mitarbeiter rot geparkt (issue_open), bis der Teamlead klärt.
+   */
   async partialComplete(
     principal: Principal,
     caseId: string,
@@ -453,46 +494,176 @@ export class CasesService {
       where: { id: owned.id },
       select: { totalQuantity: true, effortPoints: true },
     });
-    const result = await this.workflow.transition({
-      caseId: owned.id,
-      toStatus: 'partially_completed',
-      eventType: 'case.partially_completed',
-      actor: { actorType: 'employee', actorId: principal.sub },
-      payload: { reason: dto.reason, completedQuantity: dto.completedQuantity },
-      expectedVersion: owned.version,
+    const skuStates = await this.resolveSkuStates(owned.id, dto.skuQuantities);
+    const implicit = deriveImplicitProblems(skuStates);
+    const manual = await this.validateManualProblems(owned.id, dto.problems);
+    if (implicit.length === 0 && manual.length === 0) {
+      throw new BadRequestException(
+        'Teilabschluss braucht mindestens ein Problem – sonst „Beleg erledigt" verwenden',
+      );
+    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      for (const p of manual) {
+        await tx.issue.create({
+          data: {
+            caseId: owned.id,
+            scope: p.skuLineId ? 'sku_line' : 'position',
+            scopeId: p.skuLineId ?? p.positionId,
+            employeeId: employee.id,
+            kind: 'manual',
+            reasonId: p.reasonId,
+            reasonLabel: p.reasonLabel,
+            description: p.note,
+          },
+        });
+      }
+      for (const p of implicit) {
+        await tx.issue.create({
+          data: {
+            caseId: owned.id,
+            scope: 'sku_line',
+            scopeId: p.skuLineId,
+            employeeId: employee.id,
+            kind: p.kind,
+            deviationQty: p.deviationQty,
+            expectedVkPrice: p.expectedVkPrice,
+            correctedVkPrice: p.correctedVkPrice,
+          },
+        });
+      }
+      return this.workflow.transition({
+        caseId: owned.id,
+        toStatus: 'issue_open',
+        eventType: 'case.problems_reported',
+        actor: { actorType: 'employee', actorId: principal.sub },
+        payload: {
+          manualCount: manual.length,
+          implicitCount: implicit.length,
+          kinds: [...new Set([...manual.map(() => 'manual'), ...implicit.map((p) => p.kind)])],
+        },
+        expectedVersion: owned.version,
+      });
     });
+    await this.persistSkuConfirmations(skuStates);
     // Partial ZST: prorate the effort by the completed share (§4.6, §15).
-    const completedQuantity = dto.completedQuantity ?? 0;
+    const completedQuantity = skuStates.reduce((sum, s) => sum + s.confirmedQuantity, 0);
     await this.writeZst(principal, owned.id, employee.id, {
-      completedQuantity,
-      effortPoints: proratedEffort(caseRow.totalQuantity, completedQuantity, caseRow.effortPoints),
+      countedQuantity: completedQuantity,
+      caseTotalQuantity: caseRow.totalQuantity,
+      caseEffortPoints: caseRow.effortPoints,
     });
-    // §continuation: a partial close also frees the bundle once nothing is left open.
-    await this.closeBundleIfDone(principal, owned.id);
     return this.finish(principal, result);
   }
 
   /**
+   * Löst die gemeldeten SKU-Stände gegen die Beleg-Daten auf (Soll, Etikettpreis).
+   * Unbekannte skuLineIds sind ein Client-Fehler.
+   */
+  private async resolveSkuStates(
+    caseId: string,
+    skuQuantities: SkuQuantityDto[],
+  ): Promise<ReportedSkuState[]> {
+    if (skuQuantities.length === 0) return [];
+    const lines = await this.prisma.receiptSkuLine.findMany({
+      where: { position: { caseId } },
+      select: {
+        id: true,
+        expectedQuantity: true,
+        vkLabelPrice: true,
+        receiptPositionId: true,
+      },
+    });
+    const byId = new Map(lines.map((l) => [l.id, l]));
+    return skuQuantities.map((q) => {
+      const line = byId.get(q.skuLineId);
+      if (!line) {
+        throw new BadRequestException(`Größenzeile ${q.skuLineId} gehört nicht zu diesem Beleg`);
+      }
+      return {
+        skuLineId: line.id,
+        positionId: line.receiptPositionId,
+        expectedQuantity: line.expectedQuantity,
+        confirmedQuantity: q.confirmedQuantity,
+        vkLabelPrice: line.vkLabelPrice,
+        correctedVkPrice: q.correctedVkPrice ?? null,
+      };
+    });
+  }
+
+  /** Validates the reported problems against the case + active reason catalog. */
+  private async validateManualProblems(
+    caseId: string,
+    problems: ReportedProblemDto[],
+  ): Promise<Array<ReportedProblemDto & { reasonLabel: string }>> {
+    if (problems.length === 0) return [];
+    const [positions, reasons] = await Promise.all([
+      this.prisma.receiptPosition.findMany({ where: { caseId }, select: { id: true } }),
+      this.prisma.problemReason.findMany({
+        where: { id: { in: [...new Set(problems.map((p) => p.reasonId))] }, active: true },
+        select: { id: true, label: true },
+      }),
+    ]);
+    const positionIds = new Set(positions.map((p) => p.id));
+    const labelById = new Map(reasons.map((r) => [r.id, r.label]));
+    return problems.map((p) => {
+      if (!positionIds.has(p.positionId)) {
+        throw new BadRequestException(`Position ${p.positionId} gehört nicht zu diesem Beleg`);
+      }
+      const reasonLabel = labelById.get(p.reasonId);
+      if (!reasonLabel) {
+        throw new BadRequestException(`Problemart ${p.reasonId} ist unbekannt oder inaktiv`);
+      }
+      return { ...p, reasonLabel };
+    });
+  }
+
+  /** Persists the counted Ist per SKU line (`deviation` when Ist≠Soll). */
+  private async persistSkuConfirmations(skuStates: ReportedSkuState[]): Promise<void> {
+    if (skuStates.length === 0) return;
+    await this.prisma.$transaction(
+      skuStates.map((s) =>
+        this.prisma.receiptSkuLine.update({
+          where: { id: s.skuLineId },
+          data: {
+            confirmedQuantity: s.confirmedQuantity,
+            status: s.confirmedQuantity === s.expectedQuantity ? 'confirmed' : 'deviation',
+          },
+        }),
+      ),
+    );
+  }
+
+  /**
    * Persists the ZST completion record + zst.created audit event (§15.1).
-   * Idempotent per (case, quantity) so a retried completion does not double-count.
+   * Bucht nur das DELTA zum bereits verbuchten Stand des Belegs: nach einem
+   * Teilabschluss (Problem-Loop) zählt der spätere Abschluss desselben Belegs
+   * nur die restliche Menge — keine Doppelzählung in der KPI-Basis.
+   * Idempotent per (case, kumulierte Menge) so a retry does not double-count.
    */
   private async writeZst(
     principal: Principal,
     caseId: string,
     employeeId: string,
-    zst: { completedQuantity: number; effortPoints: number },
+    zst: { countedQuantity: number; caseTotalQuantity: number; caseEffortPoints: number },
   ): Promise<void> {
-    const idempotencyKey = `zst:${caseId}:${zst.completedQuantity}`;
+    const idempotencyKey = `zst:${caseId}:${zst.countedQuantity}`;
     const existing = await this.prisma.zstRecord.findUnique({ where: { idempotencyKey } });
     if (existing) return;
+    const booked = await this.prisma.zstRecord.aggregate({
+      where: { caseId },
+      _sum: { completedQuantity: true },
+    });
+    const deltaQuantity = zst.countedQuantity - (booked._sum.completedQuantity ?? 0);
+    if (deltaQuantity <= 0) return;
+    const effortPoints = proratedEffort(zst.caseTotalQuantity, deltaQuantity, zst.caseEffortPoints);
     await this.prisma.$transaction(async (tx) => {
       const record = await tx.zstRecord.create({
         data: {
           idempotencyKey,
           caseId,
           employeeId,
-          completedQuantity: zst.completedQuantity,
-          effortPoints: zst.effortPoints,
+          completedQuantity: deltaQuantity,
+          effortPoints,
           completedAt: new Date(),
           source: 'mobile_app',
         },
@@ -504,44 +675,12 @@ export class CasesService {
           entityId: record.id,
           actorType: 'employee',
           actorId: principal.sub,
-          payload: { caseId, effortPoints: zst.effortPoints },
+          payload: { caseId, completedQuantity: deltaQuantity, effortPoints },
           idempotencyKey: `zst-evt:${record.id}`,
         },
         tx,
       );
     });
-  }
-
-  async reportIssue(
-    principal: Principal,
-    caseId: string,
-    dto: CreateIssueDto,
-  ): Promise<TransitionResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
-    const employee = await this.resolveEmployee(principal);
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.issue.create({
-        data: {
-          caseId: owned.id,
-          scope: dto.scope as never,
-          scopeId: dto.scopeId,
-          employeeId: employee.id,
-          issueType: dto.issueType as never,
-          description: dto.description,
-          photoKeys: dto.photoKeys ?? [],
-        },
-      });
-      return this.workflow.transition({
-        caseId: owned.id,
-        toStatus: 'issue_open',
-        eventType: 'issue.created',
-        actor: { actorType: 'employee', actorId: principal.sub },
-        payload: { scope: dto.scope, issueType: dto.issueType },
-        expectedVersion: owned.version,
-      });
-    });
-    return this.finish(principal, result);
   }
 
   /** Mark the case's bundle `active` once work starts (assigned → active). No-op otherwise. */

@@ -17,9 +17,9 @@ import {
   employeeRoleSchema,
   issueScopeSchema,
   issueStatusSchema,
-  issueTypeSchema,
   locationKindSchema,
   priorityFlagSchema,
+  problemKindSchema,
   sectionCodeSchema,
   shiftSourceSchema,
   skillTierSchema,
@@ -32,9 +32,9 @@ import {
   type EmployeeRole,
   type IssueScope,
   type IssueStatus,
-  type IssueType,
   type LocationKind,
   type PriorityFlag,
+  type ProblemKind,
   type SectionCode,
   type ShiftSource,
   type SkillTier,
@@ -68,9 +68,9 @@ export function toLocationKind(value: string): LocationKind {
   return locationKindSchema.parse(value);
 }
 
-/** Narrow a DTO issueType string to the domain `IssueType`, throwing on an unknown value. */
-export function toIssueType(value: string): IssueType {
-  return issueTypeSchema.parse(value);
+/** Narrow a DTO problem `kind` string to the domain `ProblemKind`, throwing on an unknown value. */
+export function toProblemKind(value: string): ProblemKind {
+  return problemKindSchema.parse(value);
 }
 
 /** Narrow a DTO scope string to the domain `IssueScope`, throwing on an unknown value. */

@@ -45,7 +45,9 @@ describe('cardNeedsDecision', () => {
   });
 
   it('is true for an open problem', () => {
-    expect(cardNeedsDecision(makeCard({ openIssue: { kind: 'damaged_goods', note: null } }))).toBe(true);
+    expect(
+      cardNeedsDecision(makeCard({ openIssue: { kind: 'manual', reasonLabel: 'beschädigt', note: null } })),
+    ).toBe(true);
   });
 
   it('is true for besondere Aufmerksamkeit', () => {

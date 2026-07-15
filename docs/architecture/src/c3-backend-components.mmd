@@ -28,8 +28,8 @@ flowchart TB
 
         subgraph cases["CasesModule"]
             meCtrl["MeController<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle<br/>· POST park (B4) · POST workstation (A2)"]:::ctrl
-            casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation<br/>· complete · partial-complete · /api/issues"]:::ctrl
-            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/search (A1/A2/B1 assign-flow search+browse) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
+            casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation (auch resume)<br/>· complete (skuQuantities) · partial-complete (Probleme→issue_open)"]:::ctrl
+            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· cases/:id/resolve-problems (Problemfall→problem_resolved)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/search (A1/A2/B1 assign-flow search+browse) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
             casesSvc["CasesService<br/><i>getToday · aggregate · start · complete<br/>· parkRemaining · claimWorkstation</i>"]:::svc
             tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>assignToEmployee/assignBundleToEmployee (find-or-create) · moveCase</i>"]:::svc
             tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool (server-filter/sort/pagination) · lookup · search (ranked, assignable-only) · detail</i>"]:::svc
@@ -49,6 +49,11 @@ flowchart TB
             adminSvc["AdminService<br/><i>RuleConfig (AppConfig singleton) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
         end
 
+        subgraph problemMod["ProblemReasonsModule"]
+            prCtrl["ProblemReasonsController<br/>GET /api/problem-reasons (aktiv, PWA)<br/>· GET·PUT /api/admin/problem-reasons (Katalog-Pflege)"]:::ctrl
+            prSvc["ProblemReasonsService<br/><i>admin-verwalteter Problemarten-Katalog<br/>(Replace-all-Upsert; referenzierte Gründe nur deaktivieren)</i>"]:::svc
+        end
+
         subgraph prohandel["ProhandelModule"]
             phCtrl["ProhandelController<br/>POST /api/admin/integrations/prohandel/pull"]:::ctrl
             pictoCtrl["PictogramsController<br/>GET /static/pictograms/:code.svg"]:::ctrl
@@ -61,16 +66,18 @@ flowchart TB
         end
 
         subgraph dom["Domain cores (src/modules/*)"]
-            mods["completion · issue · print<br/>· transport · reporting (CSV)"]:::svc
+            mods["completion · issue/derive-problems (implizite Probleme)<br/>· print · transport · reporting (CSV)"]:::svc
         end
     end
 
     pwa -->|"REST + SSE"| meCtrl
     pwa --> casesCtrl
+    pwa -->|"Problemarten (aktiv)"| prCtrl
     pwa -->|"Piktogramme"| pictoCtrl
     web -->|"REST + SSE"| tlCtrl
     web --> emplCtrl
     web --> adminCtrl
+    web -->|"Problemarten-Katalog"| prCtrl
     web -->|"Jetzt pullen"| phCtrl
 
     meCtrl --> casesSvc
@@ -81,6 +88,8 @@ flowchart TB
     meCtrl --> asgSvc
     emplCtrl --> emplSvc
     adminCtrl --> adminSvc
+    prCtrl --> prSvc
+    casesSvc --> prSvc
     phCtrl --> phSvc
     devCtrl --> scenSvc
     devCtrl --> asgSvc
@@ -107,6 +116,7 @@ flowchart TB
     asgSvc --> prisma
     emplSvc --> prisma
     adminSvc --> prisma
+    prSvc --> prisma
     phSvc --> prisma
     events --> prisma
     workflow --> prisma

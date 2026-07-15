@@ -81,17 +81,27 @@ const STATUS_CHIP: Record<string, { label: string; color: ChipColor }> = {
   in_progress: { label: 'In Arbeit', color: 'primary' },
   completed: { label: 'Fertig', color: 'success' },
   zst_done: { label: 'Fertig', color: 'success' },
-  partially_completed: { label: 'Teilabschluss', color: 'warning' },
-  issue_open: { label: 'Problem', color: 'error' },
+  // Problem-Loop (Kundenfeedback 14.07.2026): rot geparkt beim MA (wartet auf
+  // Klärung) bzw. grün geklärt (zur Weiterbearbeitung freigegeben).
+  issue_open: { label: 'Problem gemeldet', color: 'error' },
+  problem_resolved: { label: 'Geklärt', color: 'success' },
 };
 
 function statusChipFor(status: string): { label: string; color: ChipColor } {
   return STATUS_CHIP[status] ?? { label: 'Offen', color: 'default' };
 }
 
-/** A Beleg needs no more work today once fertig or teil-abgeschlossen (D7). */
+/** A Beleg needs no more work today once fertig (completed/zst_done). */
 function isCaseClosed(status: string): boolean {
-  return status === 'completed' || status === 'zst_done' || status === 'partially_completed';
+  return status === 'completed' || status === 'zst_done';
+}
+
+/**
+ * Problemfall (Kundenfeedback 14.07.2026): rot geparkt, wartet auf die Klärung
+ * durch die Teamleitung — NICHT bearbeitbar, bis er grün zurückkommt.
+ */
+function isCaseParked(status: string): boolean {
+  return status === 'issue_open';
 }
 
 /** B6: Icon je Lagerplatz-Art (LocationKind-abgeleitet): Regal / Palette / Kleiderbügel. */
@@ -243,11 +253,19 @@ export function BundleHomeScreen(): JSX.Element {
   // (`AssignmentItem.sequence`, sortiert in `getToday()`). Die UI ordnet nicht
   // selbst um — die Engine entscheidet, der Screen zeigt nur an.
   const ordered = cases;
-  const allDone = cases.length > 0 && cases.every((c) => isCaseClosed(c.status));
-  const nextBeleg = collectComplete ? cases.find((c) => !isCaseClosed(c.status)) : undefined;
+  // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
+  // der MA kann sie nicht weiter bearbeiten. Der nächste Beleg überspringt sie.
+  const allDone =
+    cases.length > 0 && cases.every((c) => isCaseClosed(c.status) || isCaseParked(c.status));
+  const nextBeleg = collectComplete
+    ? cases.find((c) => !isCaseClosed(c.status) && !isCaseParked(c.status))
+    : undefined;
 
   const openBeleg = (caseId: string): void => {
     if (!collectComplete) return;
+    const target = cases.find((c) => c.id === caseId);
+    // Geparkte Problemfälle sind gesperrt, bis der Teamlead geklärt hat (Punkt 10).
+    if (target && isCaseParked(target.status)) return;
     navigate(caseProcessPath(caseId));
   };
 
@@ -371,6 +389,15 @@ export function BundleHomeScreen(): JSX.Element {
           <Stack spacing={1}>
             {ordered.map((b) => {
               const chip = statusChipFor(b.status);
+              const parked = isCaseParked(b.status);
+              const resolved = b.status === 'problem_resolved';
+              // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
+              const tint = parked
+                ? { bgcolor: 'rgba(211, 47, 47, 0.08)', borderColor: 'error.light' }
+                : resolved
+                  ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
+                  : {};
+              const clickable = collectComplete && !parked;
               return (
                 <Paper
                   key={b.id}
@@ -381,8 +408,9 @@ export function BundleHomeScreen(): JSX.Element {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
-                    cursor: collectComplete ? 'pointer' : 'not-allowed',
+                    cursor: clickable ? 'pointer' : 'not-allowed',
                     opacity: collectComplete ? 1 : 0.5,
+                    ...tint,
                   }}
                 >
                   <Box sx={{ fontSize: 22 }}>{ICON[goodsCategoryFor(b.storageLocationKind)]}</Box>
@@ -395,6 +423,16 @@ export function BundleHomeScreen(): JSX.Element {
                         ? ` · ${b.totalQuantity} Teile`
                         : ''}
                     </Typography>
+                    {parked ? (
+                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.
+                      </Typography>
+                    ) : null}
+                    {resolved ? (
+                      <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                        Geklärt – zur Weiterbearbeitung freigegeben.
+                      </Typography>
+                    ) : null}
                   </Box>
                   {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
                   {b.goodsType ? <Chip size="small" variant="outlined" label={b.goodsType} /> : null}

@@ -143,10 +143,13 @@ export async function persistGeneratedBeleg(
       supplierColor: p.supplierColor,
       season: p.season,
       nosFlag: p.nosFlag,
+      orderNo: p.orderNo,
       branchNo: beleg.branchNo,
       shopNo: p.shopNo,
+      hShopNo: p.hShopNo,
       floor: p.floor,
       catMan: p.catMan,
+      catManDate: p.catManDate ? new Date(`${p.catManDate}T00:00:00.000Z`) : null,
       onlineRelevant: p.onlineRelevant,
     };
     const position = await db.receiptPosition.upsert({

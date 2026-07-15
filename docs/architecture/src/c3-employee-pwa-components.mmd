@@ -14,24 +14,26 @@ flowchart TB
 
     subgraph pwa["employee-pwa container"]
         direction TB
-        subgraph screens["screens/ (router: routes/paths.ts, App gated by session)"]
+        subgraph screens["screens/ + components/ (router: routes/paths.ts, App gated by session)"]
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
-            home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten + Rest parken + nächstes Bündel</i>"]:::screen
-            process["BelegProcessScreen<br/><i>/case/:id — WE-Hero, Kartons, Prüfstufe, Größen-Zeilen ±</i>"]:::screen
-            problem["ProblemMeldenScreen<br/><i>/case/:id/problem — ein Weiter-Pfad</i>"]:::screen
+            home["BundleHomeScreen<br/><i>/ — Ware holen + Bearbeiten; Problemfall rot geparkt / grün geklärt</i>"]:::screen
+            process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle, CatMan/Shop/Order, VK korrigiert</i>"]:::screen
+            problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
+            teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
         end
         subgraph wf["workflow/ (pure logic + the one live-data hook)"]
-            useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · complete · partialComplete · reportIssue</i>"]:::hook
-            model["workflowModel.ts<br/><i>guards: canCompleteCase · requiresQuantityCheck · setSkuQuantity</i>"]:::logic
-            collectLogic["collect.ts · belegList.ts (partial-Status) · issueTarget.ts"]:::logic
+            useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · setCorrectedVkPrice · addProblem/removeProblem · complete · partialComplete</i>"]:::hook
+            model["workflowModel.ts<br/><i>guards: canCompleteCase (Problem sperrt) · hasAnyProblem · skuQuantitiesBody · problemsBody</i>"]:::logic
+            collectLogic["collect.ts · belegList.ts"]:::logic
         end
         subgraph data["data/ (React Query — backend is the single source of truth)"]
             apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — fresh client per call, current session token</i>"]:::logic
             auth["auth.ts · session.ts<br/><i>login()/logout() · JWT claims · onSessionCleared()</i>"]:::logic
             meToday["useMeToday() · useNextBundle() · useParkRemaining()<br/><i>GET/POST /api/me/* — queryKey ['me','today']</i>"]:::hook
             caseAgg["useCaseAggregate()<br/><i>GET /api/me/cases/:id/aggregate — queryKey ['me','case',id,'aggregate']</i>"]:::hook
+            reasons["useProblemReasons()<br/><i>GET /api/problem-reasons — dynamischer Problemarten-Katalog</i>"]:::hook
             mapper["caseAggregateMapper.ts<br/><i>CaseAggregateDto → CaseAggregate (domain/types.ts)</i>"]:::logic
-            persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete/Issue — plain POST, throws on failure</i>"]:::logic
+            persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete — plain POST, throws on failure</i>"]:::logic
             focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) on window focus</i>"]:::hook
             live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — on message: invalidateQueries(['me','today'])</i>"]:::hook
         end
@@ -41,11 +43,14 @@ flowchart TB
     auth --> apiClient
     home --> meToday
     process --> useCaseFlow
-    problem --> useCaseFlow
+    process --> problemDlg
+    process --> teilDlg
+    problemDlg --> reasons
     useCaseFlow --> model
     useCaseFlow --> collectLogic
     useCaseFlow --> caseAgg
     useCaseFlow --> persist
+    reasons --> apiClient
     caseAgg --> mapper
     caseAgg --> apiClient
     meToday --> apiClient

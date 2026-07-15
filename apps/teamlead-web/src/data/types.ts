@@ -9,7 +9,7 @@
 import type {
   AssignmentStatus,
   GoodsReceiptCase,
-  IssueType,
+  ProblemKind,
   SkillTier,
   WorkIssue,
 } from '@paket/domain-types';
@@ -84,8 +84,12 @@ export interface LaneCard {
   storageCode: string;
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];
-  /** C4: latest OPEN problem (kind + note preview); null without an open issue. */
-  openIssue: { kind: IssueType; note: string | null } | null;
+  /**
+   * C4: latest OPEN problem preview; null without an open issue. Display label
+   * = `reasonLabel ?? problemKindLabels[kind]` (manual problems snapshot their
+   * ProblemReason-Katalog label).
+   */
+  openIssue: { kind: ProblemKind; reasonLabel: string | null; note: string | null } | null;
   /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
   /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */

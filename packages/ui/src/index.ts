@@ -22,7 +22,7 @@ export {
   type SyncState,
 } from './theme/tokens.js';
 export {
-  issueTypeLabels,
+  problemKindLabels,
   issueScopeLabels,
   locationKindLabels,
   employeeRoleLabels,

@@ -291,7 +291,7 @@
             "bearer": []
           }
         ],
-        "summary": "Begin handling a package (assigned → in_progress, case.started)",
+        "summary": "Begin handling a package (assigned → in_progress, case.started) or resume after Teamlead clearance (problem_resolved → in_progress, case.resumed)",
         "tags": [
           "cases"
         ]
@@ -383,44 +383,7 @@
             "bearer": []
           }
         ],
-        "summary": "Partially complete (in_progress → partially_completed)",
-        "tags": [
-          "cases"
-        ]
-      }
-    },
-    "/api/issues": {
-      "post": {
-        "operationId": "CasesController_reportIssue",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateIssueDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TransitionResultDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Report a problem on an owned case (→ issue_open, issue.created)",
+        "summary": "Teilabschluss mit gesammelten Problemen (in_progress → issue_open, case.problems_reported); der Beleg bleibt beim selben MA geparkt",
         "tags": [
           "cases"
         ]
@@ -1509,52 +1472,6 @@
         ]
       }
     },
-    "/api/teamlead/cases/{caseId}/reactivate": {
-      "post": {
-        "operationId": "TeamleadController_reactivate",
-        "parameters": [
-          {
-            "name": "caseId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ParkDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TransitionResultDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready).",
-        "tags": [
-          "teamlead"
-        ]
-      }
-    },
     "/api/teamlead/cases/{caseId}/deprioritize": {
       "post": {
         "operationId": "TeamleadController_deprioritize",
@@ -1647,9 +1564,9 @@
         ]
       }
     },
-    "/api/teamlead/cases/{caseId}/resolve-issue": {
+    "/api/teamlead/cases/{caseId}/resolve-problems": {
       "post": {
-        "operationId": "TeamleadController_resolveIssue",
+        "operationId": "TeamleadController_resolveProblems",
         "parameters": [
           {
             "name": "caseId",
@@ -1665,7 +1582,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ResolveIssueDto"
+                "$ref": "#/components/schemas/ResolveProblemsDto"
               }
             }
           }
@@ -1687,7 +1604,7 @@
             "bearer": []
           }
         ],
-        "summary": "Problem freigeben: resolve a case open issue (issue_open -> in_progress)",
+        "summary": "Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA",
         "tags": [
           "teamlead"
         ]
@@ -2427,6 +2344,107 @@
         "summary": "A8 CSV-Upload der Online-Größen-Präferenzen (wgr;sizeVariant;preferredSize;alternativeSize).",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/problem-reasons": {
+      "get": {
+        "operationId": "ProblemReasonsController_activeReasons",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProblemReasonDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aktive Problemarten für die Problem-Erfassung der Mitarbeiter-App.",
+        "tags": [
+          "problem-reasons"
+        ]
+      }
+    },
+    "/api/admin/problem-reasons": {
+      "get": {
+        "operationId": "ProblemReasonsController_allReasons",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProblemReasonDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vollständiger Problemarten-Katalog (inkl. inaktiver) für die Pflege.",
+        "tags": [
+          "problem-reasons"
+        ]
+      },
+      "put": {
+        "operationId": "ProblemReasonsController_replaceReasons",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProblemReasonUpsertDto"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProblemReasonDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Katalog ersetzen: Upsert per id, Neuanlage ohne id; entfernte Gründe werden gelöscht bzw. bei Issue-Referenz nur deaktiviert.",
+        "tags": [
+          "problem-reasons"
         ]
       }
     },
@@ -3398,6 +3416,11 @@
             "nullable": true,
             "description": "CatMan-Kennzeichen (Anzeige, A3)"
           },
+          "catManDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "CatMan-Termin der Position (ISO-Datum, Anzeige in der PWA)"
+          },
           "supplierArticleNo": {
             "type": "string"
           },
@@ -3413,11 +3436,21 @@
             "nullable": true,
             "description": "NOS (Never Out of Stock) article flag"
           },
+          "orderNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ordernummer der Position (ERP-Referenz zur Fehlerlösung)"
+          },
           "branchNo": {
             "type": "string"
           },
           "shopNo": {
             "type": "string"
+          },
+          "hShopNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hauptshop-Nummer der Position (Anzeige in der Positions-Kopfzeile)"
           },
           "floor": {
             "type": "string",
@@ -3698,57 +3731,84 @@
           "version"
         ]
       },
+      "SkuQuantityDto": {
+        "type": "object",
+        "properties": {
+          "skuLineId": {
+            "type": "string"
+          },
+          "confirmedQuantity": {
+            "type": "number",
+            "description": "Gezählte Ist-Menge der Größenzeile"
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "description": "Korrigierter VK, wenn der Etikettpreis falsch ist (Preisabweichung ⇒ implizites Problem)"
+          }
+        },
+        "required": [
+          "skuLineId",
+          "confirmedQuantity"
+        ]
+      },
       "CompleteDto": {
         "type": "object",
         "properties": {
-          "completedQuantity": {
-            "type": "number"
+          "skuQuantities": {
+            "description": "Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkuQuantityDto"
+            }
           }
         }
+      },
+      "ReportedProblemDto": {
+        "type": "object",
+        "properties": {
+          "positionId": {
+            "type": "string",
+            "description": "ReceiptPosition, auf die sich das Problem bezieht"
+          },
+          "skuLineId": {
+            "type": "string",
+            "description": "Optional auf eine Größenzeile eingegrenzt"
+          },
+          "reasonId": {
+            "type": "string",
+            "description": "ProblemReason-Katalog-Eintrag (aktiv)"
+          },
+          "note": {
+            "type": "string",
+            "description": "Freitext-Notiz des MA zum Problem"
+          }
+        },
+        "required": [
+          "positionId",
+          "reasonId"
+        ]
       },
       "PartialCompleteDto": {
         "type": "object",
         "properties": {
-          "reason": {
-            "type": "string"
-          },
-          "completedQuantity": {
-            "type": "number"
-          }
-        }
-      },
-      "CreateIssueDto": {
-        "type": "object",
-        "properties": {
-          "caseId": {
-            "type": "string",
-            "description": "Case the issue is reported against"
-          },
-          "scope": {
-            "type": "string",
-            "description": "IssueScope: case|position|sku_line|transport_box"
-          },
-          "issueType": {
-            "type": "string",
-            "description": "IssueType (Anhang A)"
-          },
-          "scopeId": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "photoKeys": {
+          "skuQuantities": {
+            "description": "Gezählte Ist-Mengen aller Größenzeilen",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SkuQuantityDto"
+            }
+          },
+          "problems": {
+            "description": "Manuell erfasste Positions-Probleme",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportedProblemDto"
             }
           }
         },
         "required": [
-          "caseId",
-          "scope",
-          "issueType"
+          "skuQuantities",
+          "problems"
         ]
       },
       "DashboardDto": {
@@ -4149,7 +4209,12 @@
         "properties": {
           "kind": {
             "type": "string",
-            "description": "IssueType (Anhang A) of the latest open issue"
+            "description": "ProblemKind: manual|over_delivery|under_delivery|price_deviation"
+          },
+          "reasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Label-Snapshot des Problemarten-Katalogs (nur kind=manual)"
           },
           "note": {
             "type": "string",
@@ -4609,11 +4674,51 @@
           },
           "scope": {
             "type": "string",
-            "description": "IssueScope: case|position|sku_line|transport_box"
+            "description": "IssueScope: position|sku_line"
           },
-          "issueType": {
+          "kind": {
             "type": "string",
-            "description": "IssueType (Anhang A)"
+            "description": "ProblemKind: manual|over_delivery|under_delivery|price_deviation"
+          },
+          "reasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual)"
+          },
+          "deviationQty": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery)"
+          },
+          "expectedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "VK-Etikett-Preis laut Beleg"
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "Vom MA korrigierter VK (kind=price_deviation)"
+          },
+          "positionNo": {
+            "type": "number",
+            "nullable": true,
+            "description": "Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)"
+          },
+          "ean": {
+            "type": "string",
+            "nullable": true,
+            "description": "EAN der betroffenen Größenzeile"
+          },
+          "size": {
+            "type": "string",
+            "nullable": true,
+            "description": "Größe der betroffenen Größenzeile"
+          },
+          "orderNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung)"
           },
           "status": {
             "type": "string",
@@ -4635,7 +4740,7 @@
         "required": [
           "id",
           "scope",
-          "issueType",
+          "kind",
           "status",
           "reportedAt"
         ]
@@ -5032,11 +5137,12 @@
           }
         }
       },
-      "ResolveIssueDto": {
+      "ResolveProblemsDto": {
         "type": "object",
         "properties": {
           "resolution": {
-            "type": "string"
+            "type": "string",
+            "description": "Anmerkung zur Klärung (auf allen Issues vermerkt)"
           }
         }
       },
@@ -5769,6 +5875,57 @@
           "upserted",
           "rejectedRows",
           "preferences"
+        ]
+      },
+      "ProblemReasonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Anzeigename der Problemart (deutsch)"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Inaktive Gründe sind in der PWA nicht wählbar"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Anzeige-Reihenfolge im Auswahlmenü"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "active",
+          "sortOrder"
+        ]
+      },
+      "ProblemReasonUpsertDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Vorhandene id = Update; ohne id = Neuanlage"
+          },
+          "label": {
+            "type": "string",
+            "description": "Anzeigename der Problemart"
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Anzeige-Reihenfolge"
+          }
+        },
+        "required": [
+          "label",
+          "sortOrder"
         ]
       },
       "TodayShiftDto": {

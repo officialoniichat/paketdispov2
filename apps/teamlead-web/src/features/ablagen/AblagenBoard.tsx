@@ -34,7 +34,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import type { components } from '@paket/api-client';
-import { CaseStatusChip, issueTypeLabels, PriorityChip, ProblemChip } from '@paket/ui';
+import { CaseStatusChip, problemKindLabels, PriorityChip, ProblemChip } from '@paket/ui';
 import { api } from '../../data/api.js';
 import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
@@ -106,9 +106,8 @@ export function AblagenBoard(): JSX.Element {
     prioritiseCase,
     deprioritiseCase,
     approveCase,
-    reactivateCase,
     cancelCase,
-    resolveIssue,
+    resolveProblems,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -197,9 +196,8 @@ export function AblagenBoard(): JSX.Element {
     parkCase,
     releaseCase,
     approveCase,
-    reactivateCase,
     cancelCase,
-    resolveIssue,
+    resolveProblems,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -514,7 +512,7 @@ function LaneCardView({
   onAttention: (caseId: string) => void;
   onSplit: (caseId: string) => void;
 }): JSX.Element {
-  // „Problem freigeben" is case-scoped (resolves the case's open issue by caseId),
+  // „Probleme geklärt" is case-scoped (resolves ALL open problems by caseId),
   // so the same ctx works from every surface — incl. the Problemfälle lane card.
   const ctx: CaseActionCtx = { caseId: card.caseId, store };
   // C3: parked context tooltip (who/when/why) on Geparkt cards.
@@ -557,10 +555,10 @@ function LaneCardView({
             />
           )}
         </Stack>
-        {/* C4: open-problem preview (kind + note) directly on the card. */}
+        {/* C4: open-problem preview (Grund/Art + note) directly on the card. */}
         {card.openIssue && (
           <Typography variant="caption" color="error.main" noWrap sx={{ display: 'block' }}>
-            {issueTypeLabels[card.openIssue.kind]}
+            {card.openIssue.reasonLabel ?? problemKindLabels[card.openIssue.kind]}
             {card.openIssue.note ? ` — „${card.openIssue.note}"` : ''}
           </Typography>
         )}

@@ -157,6 +157,7 @@ export async function seedCustomDetail(
         shopNo: gcase.primaryShopAreaNo ?? '21',
         floor: gcase.primaryFloor ?? 'EG',
         catMan: false,
+        orderNo: `ORD-${gcase.weBelegNo}-${idx + 1}`,
         onlineRelevant: p.onlineRelevant ?? false,
       },
     });

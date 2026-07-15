@@ -204,7 +204,7 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
       where: { weBelegNo: '9.404.802' },
       include: { assignedBundle: { include: { employee: true } } },
     });
-    expect(carryover?.status).toBe('partially_completed');
+    expect(carryover?.status).toBe('in_progress');
     expect(carryover?.assignedBundle?.employee.employeeNo).toBe('ma-104');
     expect(isoDay(carryover?.assignedBundle?.date ?? null)).toBe('2026-06-14'); // baseDate − 1
   });
@@ -351,7 +351,7 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
     const count = new Map(grouped.map((g) => [g.status, g._count]));
     expect(count.get('issue_open')).toBe(2);
     expect(count.get('parked')).toBe(4); // 2 geparkt + 2 weitergeleitet (parked)
-    expect(count.get('partially_completed')).toBe(1);
+    expect(count.get('problem_resolved')).toBe(1);
     expect(count.get('needs_review')).toBe(1);
     expect(count.get('in_progress')).toBe(1);
     expect(count.get('completed')).toBe(1);
@@ -365,9 +365,11 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
       'lieferscheinbucher',
       'retourenabteilung',
     ]);
-    // Offene Probleme mit unterschiedlichem Typ (Deep-Link-Ziele).
+    // Offene Probleme mit unterschiedlicher Art (Deep-Link-Ziele): ein manuelles
+    // Katalog-Problem + eine implizite Minderlieferung.
     const issues = await prisma.issue.findMany({ where: { status: 'open' } });
-    expect(issues.map((i) => i.issueType).sort()).toEqual(['missing_quantity', 'wrong_color']);
+    expect(issues.map((i) => i.kind).sort()).toEqual(['manual', 'under_delivery']);
+    expect(issues.find((i) => i.kind === 'manual')?.reasonLabel).toBe('falsche Farbe');
   });
 
   it('B15 leerer-tag: 0 Belege, aber Stammdaten (Team, Schichten, Lagerplätze) stehen', async () => {

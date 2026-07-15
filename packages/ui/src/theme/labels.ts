@@ -15,26 +15,23 @@ import type {
   AssignmentStatus,
   EmployeeRole,
   IssueScope,
-  IssueType,
   LocationKind,
+  ProblemKind,
   ShiftSource,
   SkuLineStatus,
   ZstSource,
 } from '@paket/domain-types';
 
-/** Problemarten, die ein Mitarbeiter melden kann (§9.7). */
-export const issueTypeLabels: Record<IssueType, string> = {
-  missing_quantity: 'Minderlieferung',
-  overdelivery: 'Mehrlieferung',
-  wrong_article: 'falscher Artikel',
-  wrong_color: 'falsche Farbe',
-  wrong_size: 'falsche Größe',
-  damaged_goods: 'beschädigt',
-  missing_package: 'Paket fehlt',
-  label_problem: 'Etikettenproblem',
-  security_problem: 'Sicherungsproblem',
-  printer_problem: 'Druckerproblem',
-  other: 'Sonstiges',
+/**
+ * Art eines Problems. Manuelle Problemarten kommen dynamisch aus dem
+ * admin-verwalteten ProblemReason-Katalog (`reasonLabel`); nur die impliziten
+ * Arten (Mengen-/Preisabweichung) haben feste Labels.
+ */
+export const problemKindLabels: Record<ProblemKind, string> = {
+  manual: 'Problem',
+  over_delivery: 'Mehrlieferung',
+  under_delivery: 'Minderlieferung',
+  price_deviation: 'Preisabweichung',
 };
 
 /** Worauf sich ein gemeldetes Problem bezieht. */

@@ -23,9 +23,9 @@ export interface CaseActionCtx {
     parkCase(id: string, reason: string): void;
     releaseCase(id: string, reason: string): void; // unpark
     approveCase(id: string, reason: string): void; // needs_review -> ready
-    reactivateCase(id: string, reason: string): void; // partially_completed -> ready
     cancelCase(id: string, reason: string): void;
-    resolveIssue(id: string, reason: string): void; // issue_open -> in_progress (case-scoped)
+    /** Klärt ALLE offenen Probleme des Belegs (issue_open -> problem_resolved). */
+    resolveProblems(id: string, resolution?: string): void;
     forwardCase(id: string, recipient: ForwardRecipient, reason?: string): void;
     unforwardCase(id: string): void;
     flagAttention(id: string, note?: string): void;
@@ -41,8 +41,7 @@ export type CaseActionId =
   | 'deprioritise'
   | 'park'
   | 'unpark'
-  | 'reactivate'
-  | 'resolve_issue'
+  | 'resolve_problems'
   | 'split'
   | 'assign'
   | 'forward'
@@ -70,6 +69,12 @@ export interface CaseActionDescriptor {
    * own one-click UX rather than gating it behind a reason.
    */
   instant?: boolean;
+  /**
+   * Opens the reason dialog with an OPTIONAL note instead of the mandatory
+   * §8.4 reason (e.g. „Probleme geklärt": the resolution is a courtesy note
+   * for the Mitarbeiter, not an audit prerequisite).
+   */
+  optionalReason?: boolean;
   run(ctx: CaseActionCtx, reason: string): void;
 }
 
@@ -94,20 +99,14 @@ const REGISTRY: CaseActionDescriptor[] = [
     run: (c, r) => c.store.approveCase(c.caseId, r),
   },
   {
-    id: 'resolve_issue',
-    label: 'Problem freigeben',
+    id: 'resolve_problems',
+    label: 'Probleme geklärt',
     tone: 'success',
     primary: true,
-    reasonSuggestions: ['Klärung erledigt', 'Daten korrigiert'],
-    run: (c, r) => c.store.resolveIssue(c.caseId, r),
-  },
-  {
-    id: 'reactivate',
-    label: 'Rest reaktivieren',
-    tone: 'primary',
-    primary: true,
-    reasonSuggestions: ['Rest heute fertig', 'Kapazität frei'],
-    run: (c, r) => c.store.reactivateCase(c.caseId, r),
+    optionalReason: true,
+    reasonSuggestions: ['Mit Mitarbeiter besprochen', 'Daten korrigiert', 'Lieferant informiert'],
+    // Klärt ALLE offenen Probleme; der Beleg wird grün beim selben MA (problem_resolved).
+    run: (c, r) => c.store.resolveProblems(c.caseId, r.trim() === '' ? undefined : r.trim()),
   },
   {
     id: 'assign',
@@ -240,10 +239,11 @@ export function getAvailableActions(c: CaseLike): CaseActionDescriptor[] {
       ids.push('cancel');
       break;
     case 'issue_open':
-      ids.push('resolve_issue', 'cancel');
+      ids.push('resolve_problems', 'cancel');
       break;
-    case 'partially_completed':
-      ids.push('reactivate');
+    case 'problem_resolved':
+      // Geklärt: liegt wieder beim selben MA — keine weitere TL-Statusaktion nötig.
+      ids.push('cancel');
       break;
     // completed / zst_done / cancelled: no status-driven actions.
   }

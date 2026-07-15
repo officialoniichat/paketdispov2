@@ -23,9 +23,9 @@ describe('case state machine (§7.1)', () => {
       ready: ['assigned', 'parked', 'cancelled'],
       parked: ['ready', 'cancelled'],
       assigned: ['in_progress', 'ready', 'cancelled'],
-      in_progress: ['issue_open', 'partially_completed', 'completed', 'cancelled'],
-      issue_open: ['in_progress', 'cancelled'],
-      partially_completed: ['ready'],
+      in_progress: ['issue_open', 'completed', 'cancelled'],
+      issue_open: ['problem_resolved', 'cancelled'],
+      problem_resolved: ['in_progress', 'cancelled'],
       completed: ['zst_done'],
       zst_done: [],
       cancelled: [],
@@ -54,15 +54,13 @@ describe('case state machine (§7.1)', () => {
     expect(canTransition('parked', 'ready')).toBe(true);
   });
 
-  it('allows the issue Sonderpfad in_progress → issue_open → in_progress', () => {
+  it('walks the Problem-Loop: Teilabschluss → Klärung → Weiterbearbeitung', () => {
     expect(canTransition('in_progress', 'issue_open')).toBe(true);
-    expect(canTransition('issue_open', 'in_progress')).toBe(true);
-  });
-
-  it('allows the partially_completed Sonderpfad (ready_next_day)', () => {
-    expect(canTransition('in_progress', 'partially_completed')).toBe(true);
-    expect(canTransition('partially_completed', 'ready')).toBe(true);
-    expect(canTransition('partially_completed', 'completed')).toBe(false);
+    expect(canTransition('issue_open', 'problem_resolved')).toBe(true);
+    expect(canTransition('problem_resolved', 'in_progress')).toBe(true);
+    // Gesperrt bis zur Klärung: kein direkter Weg zurück in die Bearbeitung.
+    expect(canTransition('issue_open', 'in_progress')).toBe(false);
+    expect(canTransition('issue_open', 'completed')).toBe(false);
   });
 
   it('allows the teamlead unassign override assigned → ready', () => {

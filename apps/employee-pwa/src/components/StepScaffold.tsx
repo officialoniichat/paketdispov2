@@ -1,16 +1,16 @@
 /**
- * Per-screen layout that answers the three §E.6 questions on every screen:
- * "Wo bin ich?" (where), "Was ist der nächste Schritt?" (primary action) and
- * "Was mache ich bei Problem?" (always-present Problem button, exception-first).
+ * Per-screen layout that answers the §E.6 orientation questions on every screen:
+ * "Wo bin ich?" (where) und "Was ist der nächste Schritt?" (primary action).
+ *
+ * Der beleg-weite „Problem melden"-Einstieg ist entfallen (Kundenfeedback
+ * 14.07.2026, Punkt 8): Probleme werden nur noch pro Position/Größe erfasst.
  */
 import type { JSX, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { TouchButton } from '@paket/ui';
-import { problemPath } from '../routes/paths.js';
 
 export interface PrimaryAction {
   label: string;
@@ -19,7 +19,6 @@ export interface PrimaryAction {
 }
 
 export interface StepScaffoldProps {
-  caseId: string;
   /** "Wo bin ich?" – location/context line. */
   where: string;
   title: string;
@@ -30,11 +29,9 @@ export interface StepScaffoldProps {
   secondary?: PrimaryAction;
   /** When set, a back affordance is shown so the worker can revise within the bundle. */
   onBack?: () => void;
-  hideProblem?: boolean;
 }
 
 export function StepScaffold({
-  caseId,
   where,
   title,
   subtitle,
@@ -42,9 +39,7 @@ export function StepScaffold({
   primary,
   secondary,
   onBack,
-  hideProblem,
 }: StepScaffoldProps): JSX.Element {
-  const navigate = useNavigate();
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%', pb: 18 }}>
       <Box sx={{ px: 2, pt: 2 }}>
@@ -88,32 +83,16 @@ export function StepScaffold({
             {primary.label}
           </TouchButton>
         ) : null}
-        {/* Secondary + Problem share one compact row so the footer doesn't eat the screen. */}
-        {secondary || !hideProblem ? (
-          <Stack direction="row" spacing={1}>
-            {secondary ? (
-              <Button
-                variant="outlined"
-                size="small"
-                fullWidth
-                onClick={secondary.onClick}
-                disabled={secondary.disabled}
-              >
-                {secondary.label}
-              </Button>
-            ) : null}
-            {hideProblem ? null : (
-              <Button
-                color="error"
-                variant="outlined"
-                size="small"
-                fullWidth
-                onClick={() => navigate(problemPath(caseId))}
-              >
-                Problem melden
-              </Button>
-            )}
-          </Stack>
+        {secondary ? (
+          <Button
+            variant="outlined"
+            size="small"
+            fullWidth
+            onClick={secondary.onClick}
+            disabled={secondary.disabled}
+          >
+            {secondary.label}
+          </Button>
         ) : null}
       </Stack>
     </Box>

@@ -1,8 +1,8 @@
 /**
  * Adapter: `/api/me/cases/{caseId}/aggregate`'s `CaseAggregateDto` (backend
  * wire shape, see `packages/api-client/src/generated/schema.ts`) → the app's
- * `CaseAggregate` (`domain/types.ts`), the shape `useCaseFlow`/the screens
- * (`BelegProcessScreen`, `ProblemMeldenScreen`) already consume.
+ * `CaseAggregate` (`domain/types.ts`), the shape `useCaseFlow`/the
+ * `BelegProcessScreen` already consume.
  *
  * The two shapes are close but not 1:1 (see `domain/types.ts`'s module doc):
  * - `CaseAggregateDto.case` is the shallower `CaseSummaryDto`, not the full
@@ -35,7 +35,7 @@ import type {
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
-import type { CaseAggregate } from '../domain/types.js';
+import type { CaseAggregate, PositionView } from '../domain/types.js';
 
 type CaseAggregateDto = components['schemas']['CaseAggregateDto'];
 type ReceiptPositionDto = components['schemas']['ReceiptPositionDto'];
@@ -76,7 +76,7 @@ function mapWorkInstruction(caseId: string, dto: WorkInstructionHeaderDto | null
   };
 }
 
-function mapPosition(caseId: string, dto: ReceiptPositionDto): ReceiptPosition {
+function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
   const instruction: PositionInstruction = dto.instruction
     ? {
         priceLabelRequired: dto.instruction.priceLabelRequired,
@@ -100,10 +100,13 @@ function mapPosition(caseId: string, dto: ReceiptPositionDto): ReceiptPosition {
     supplierColor: dto.supplierColor,
     season: dto.season ?? undefined,
     nosFlag: dto.nosFlag ?? undefined,
+    orderNo: dto.orderNo ?? undefined,
     branchNo: dto.branchNo,
     shopNo: dto.shopNo,
+    hShopNo: dto.hShopNo ?? undefined,
     floor: dto.floor ?? undefined,
     catMan: dto.catMan ?? undefined,
+    catManDate: dto.catManDate ?? undefined,
     instruction,
     skuLines: dto.skuLines.map((s) => ({
       id: s.id,

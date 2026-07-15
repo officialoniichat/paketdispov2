@@ -89,12 +89,23 @@ export interface BelegListItem {
   priceLabelPrintRequired: boolean;
 }
 
+/**
+ * App view of a ReceiptPosition. `catManDate` is a per-position display field
+ * of the aggregate DTO (`ReceiptPositionDto.catManDate`) that the shared
+ * domain schema does not carry — the PWA shows the konkrete CatMan-Termin
+ * statt nur des Kennzeichens (Kundenfeedback 14.07.2026).
+ */
+export interface PositionView extends ReceiptPosition {
+  /** CatMan-Termin der Position (ISO-Datum), Anzeige „CatMan 12.08.2026". */
+  catManDate?: string;
+}
+
 /** Everything needed to work one Beleg (case + instruction + positions + box targets). */
 export interface CaseAggregate {
   caseId: string;
   case: GoodsReceiptCase;
   workInstruction: WorkInstructionHeader;
-  positions: ReceiptPosition[];
+  positions: PositionView[];
   boxTargets: TransportBoxTarget[];
   /** Ordered Arbeitsanweisung points (derived projection from the engine/backend). */
   instructionPoints: WorkInstructionPoint[];
@@ -110,6 +121,28 @@ export interface CaseAggregate {
 
 /** Per-Beleg workflow step — a single PROCESS phase then DONE. */
 export type CaseStep = 'process' | 'done';
+
+/**
+ * Ein manuell erfasstes Problem an einer Position (optional auf eine
+ * Größenzeile eingegrenzt). Lokal gesammelt und erst beim Teilabschluss als
+ * `ReportedProblemDto[]` an das Backend übertragen. `reasonLabel` ist der
+ * Anzeigename aus dem admin-verwalteten ProblemReason-Katalog — mitgespeichert,
+ * damit Markierung und Teilabschluss-Zusammenfassung ohne erneuten
+ * Katalog-Lookup rendern.
+ */
+export interface RecordedProblem {
+  /** Client-generierte Id — nur für lokale Anzeige/Entfernen, geht nicht ans Backend. */
+  id: string;
+  positionId: string;
+  /** Optional auf eine Größenzeile eingegrenzt. */
+  skuLineId?: string;
+  /** ProblemReason-Katalog-Eintrag. */
+  reasonId: string;
+  /** Deutsches Label der gewählten Problemart (Katalog). */
+  reasonLabel: string;
+  /** Freitext-Notiz des MA. */
+  note?: string;
+}
 
 /**
  * Mutable per-Beleg progress with an optimistic-locking `version`. Reducers in
@@ -136,6 +169,19 @@ export interface CaseProgress {
    * direkt an der Positions-Karte. Nur Abweichungen werden gespeichert.
    */
   confirmedQuantities: Record<string, number>;
+  /**
+   * Korrigierter VK je Größe (skuLineId → Preis), wenn der VK-Etikett-Preis
+   * falsch ist. Ein gesetzter Preis gleich dem Etikettpreis zählt nicht als
+   * Korrektur und wird gar nicht erst gespeichert. Jede Korrektur ist ein
+   * implizites Problem (Preisabweichung) und erzwingt den Teilabschluss.
+   */
+  correctedVkPrices: Record<string, number>;
+  /**
+   * Manuell erfasste Positions-/Größen-Probleme (Problemarten aus dem
+   * admin-verwalteten Katalog). Lokal gesammelt, beim Teilabschluss gesendet;
+   * bis dahin entfernbar.
+   */
+  problems: RecordedProblem[];
   zstDone: boolean;
   partial: boolean;
   version: number;

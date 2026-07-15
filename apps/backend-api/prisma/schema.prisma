@@ -23,8 +23,10 @@ enum CaseStatus {
   parked
   assigned
   in_progress
+  // Teilabschluss mit Problemen: rot beim SELBEN MA geparkt, wartet auf Teamlead-Klärung.
   issue_open
-  partially_completed
+  // Teamlead hat alle Probleme geklärt: grün beim SELBEN MA, Weiterbearbeitung möglich.
+  problem_resolved
   completed
   zst_done
   cancelled
@@ -104,18 +106,15 @@ enum IssueScope {
   transport_box
 }
 
-enum IssueType {
-  missing_quantity
-  overdelivery
-  wrong_article
-  wrong_color
-  wrong_size
-  damaged_goods
-  missing_package
-  label_problem
-  security_problem
-  printer_problem
-  other
+// Art eines Problems (Kundenfeedback 14.07.2026): manuell erfasste Probleme
+// referenzieren den admin-verwalteten ProblemReason-Katalog; Mehr-/Minderlieferung
+// und Preisabweichung sind IMPLIZITE Probleme, die das Backend aus den gemeldeten
+// SKU-Mengen/Preiskorrekturen ableitet.
+enum ProblemKind {
+  manual
+  over_delivery
+  under_delivery
+  price_deviation
 }
 
 enum PositionStatus {
@@ -425,6 +424,9 @@ model ReceiptPosition {
   supplierColor      String
   season             String?
   nosFlag            Boolean?
+  // Ordernummer der Position (Kundenfeedback 14.07.2026): Referenz zur
+  // Fehlerlösung im ERP, angezeigt in der Teamlead-Klärung + PWA-Positionszeile.
+  orderNo            String?
   branchNo           String
   shopNo             String
   hShopNo            String?
@@ -434,6 +436,8 @@ model ReceiptPosition {
   labelType          String?
   // CatMan-Kennzeichen (A3, Anzeige-Daten — KEIN Prioritätstreiber).
   catMan             Boolean?
+  // CatMan-Termin der Position (Kundenfeedback 14.07.2026, Anzeige in der PWA).
+  catManDate         DateTime?      @db.Date
   status             PositionStatus @default(open)
 
   case        GoodsReceiptCase     @relation(fields: [caseId], references: [id], onDelete: Cascade)
@@ -633,13 +637,36 @@ model RouteStop {
 // Issues, boxes, ZST, events
 // ---------------------------------------------------------------------------
 
+// Admin-verwalteter Problemarten-Katalog (Kundenfeedback 14.07.2026): frei
+// definierbar und nachträglich editierbar im Teamlead-Cockpit; die PWA lädt ihn
+// dynamisch. Referenzierte Gründe werden nur deaktiviert, nie gelöscht.
+model ProblemReason {
+  id        String   @id @default(cuid())
+  label     String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issues Issue[]
+
+  @@map("problem_reasons")
+}
+
 model Issue {
   id          String      @id @default(cuid())
   caseId      String
   scope       IssueScope
   scopeId     String?
   employeeId  String
-  issueType   IssueType
+  kind        ProblemKind @default(manual)
+  // Katalog-Referenz + Label-Snapshot (nur kind=manual; Katalog bleibt editierbar).
+  reasonId    String?
+  reasonLabel String?
+  // Implizite Problem-Payload: Mengen-Delta (Ist−Soll) bzw. Preis alt→korrigiert.
+  deviationQty     Int?
+  expectedVkPrice  Float?
+  correctedVkPrice Float?
   description String?
   photoKeys   String[]    @default([])
   reportedAt  DateTime    @default(now())
@@ -650,6 +677,7 @@ model Issue {
 
   case     GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   employee User             @relation("IssueReporter", fields: [employeeId], references: [id])
+  reason   ProblemReason?   @relation(fields: [reasonId], references: [id])
 
   @@index([caseId])
   @@index([status])

@@ -32,21 +32,23 @@ import { useCaseAggregate } from '../data/useCaseAggregate.js';
 import { mapCaseAggregate } from '../data/caseAggregateMapper.js';
 import {
   persistComplete,
-  persistIssue,
   persistPartialComplete,
   persistStartPreparation,
-  type IssueInput,
 } from '../data/persist.js';
-import type { CaseAggregate, CaseProgress } from '../domain/types.js';
+import type { CaseAggregate, CaseProgress, RecordedProblem } from '../domain/types.js';
 import {
+  addProblem as addProblemTx,
   completeCase as completeCaseTx,
   hasProgress,
   initialProgress,
   partialComplete as partialCompleteTx,
+  problemsBody,
+  removeProblem as removeProblemTx,
+  setCorrectedVkPrice as setCorrectedVkPriceTx,
   setSkuQuantity as setSkuQuantityTx,
   setZst as setZstTx,
+  skuQuantitiesBody,
   togglePositionChecked as togglePositionCheckedTx,
-  totalConfirmedQuantity,
 } from './workflowModel.js';
 
 type TodayResponseDto = components['schemas']['TodayResponseDto'];
@@ -62,10 +64,19 @@ export interface CaseFlow {
   clearActionError: () => void;
   togglePositionChecked: (positionId: string) => void;
   setSkuQuantity: (skuLineId: string, quantity: number, expectedQuantity: number) => void;
+  /** Preisabweichung (Punkt 4): korrigierter VK je Größe (undefined = keine Korrektur). */
+  setCorrectedVkPrice: (
+    skuLineId: string,
+    price: number | undefined,
+    vkLabelPrice: number | undefined,
+  ) => void;
+  /** Manuell erfasstes Positions-Problem lokal sammeln (Punkt 6). */
+  addProblem: (problem: RecordedProblem) => void;
+  /** Ein gesammeltes Problem wieder entfernen (vor dem Teilabschluss). */
+  removeProblem: (problemId: string) => void;
   /** Resolves `true` on success, `false` on a surfaced (non-thrown) failure. */
   complete: () => Promise<boolean>;
-  partialComplete: (reason: string) => Promise<boolean>;
-  reportIssue: (input: IssueInput) => Promise<boolean>;
+  partialComplete: () => Promise<boolean>;
   refetch: () => void;
 }
 
@@ -153,31 +164,48 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [applyLocal, ensureStarted],
   );
 
+  const setCorrectedVkPrice = useCallback(
+    (skuLineId: string, price: number | undefined, vkLabelPrice: number | undefined): void => {
+      ensureStarted();
+      applyLocal((p) => setCorrectedVkPriceTx(p, skuLineId, price, vkLabelPrice));
+    },
+    [applyLocal, ensureStarted],
+  );
+
+  const addProblem = useCallback(
+    (problem: RecordedProblem): void => {
+      ensureStarted();
+      applyLocal((p) => addProblemTx(p, problem));
+    },
+    [applyLocal, ensureStarted],
+  );
+
+  const removeProblem = useCallback(
+    (problemId: string): void => {
+      applyLocal((p) => removeProblemTx(p, problemId));
+    },
+    [applyLocal],
+  );
+
   const complete = useCallback(async (): Promise<boolean> => {
-    const completedQuantity =
-      progress && aggregate ? totalConfirmedQuantity(progress, aggregate) : undefined;
-    const ok = await runMilestone('completed', () => persistComplete(caseId, completedQuantity));
+    if (!progress || !aggregate) return false;
+    const body = skuQuantitiesBody(progress, aggregate);
+    const ok = await runMilestone('completed', () => persistComplete(caseId, body));
     if (ok) applyLocal((p) => completeCaseTx(setZstTx(p)));
     return ok;
   }, [runMilestone, applyLocal, caseId, progress, aggregate]);
 
-  const partialComplete = useCallback(
-    async (reason: string): Promise<boolean> => {
-      const completedQuantity =
-        progress && aggregate ? totalConfirmedQuantity(progress, aggregate) : undefined;
-      const ok = await runMilestone('partially_completed', () =>
-        persistPartialComplete(caseId, reason, completedQuantity),
-      );
-      if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
-      return ok;
-    },
-    [runMilestone, applyLocal, caseId, progress, aggregate],
-  );
-
-  const reportIssue = useCallback(
-    async (input: IssueInput): Promise<boolean> => runMilestone('issue_open', () => persistIssue(input)),
-    [runMilestone],
-  );
+  const partialComplete = useCallback(async (): Promise<boolean> => {
+    if (!progress || !aggregate) return false;
+    const skuBody = skuQuantitiesBody(progress, aggregate);
+    const probBody = problemsBody(progress);
+    // Der Beleg bleibt beim selben MA rot geparkt (issue_open), bis der Teamlead klärt.
+    const ok = await runMilestone('issue_open', () =>
+      persistPartialComplete(caseId, skuBody, probBody),
+    );
+    if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
+    return ok;
+  }, [runMilestone, applyLocal, caseId, progress, aggregate]);
 
   return {
     loading: aggregateQuery.isLoading || (aggregate !== undefined && progressQuery.isLoading),
@@ -189,9 +217,11 @@ export function useCaseFlow(caseId: string): CaseFlow {
     clearActionError: () => setActionError(undefined),
     togglePositionChecked,
     setSkuQuantity,
+    setCorrectedVkPrice,
+    addProblem,
+    removeProblem,
     complete,
     partialComplete,
-    reportIssue,
     refetch: () => void aggregateQuery.refetch(),
   };
 }

@@ -14,13 +14,13 @@ const B14_LIFECYCLE: SeedLifecycleCase[] = [
     weBelegNo: '9.409.101', storageCode: 'D-3', section: 2, goodsTypeText: 'Prio',
     totalQuantity: 33, effortPoints: 8, estimatedMinutes: 20, status: 'issue_open',
     employeeNo: 'ma-103',
-    issue: { issueType: 'wrong_color', description: 'Farbe weicht von der Arbeitsanweisung ab' },
+    issue: { reasonId: 'pr_wrong_color', description: 'Farbe weicht von der Arbeitsanweisung ab' },
   },
   {
     weBelegNo: '9.409.105', storageCode: 'R7', section: 3, goodsTypeText: 'Nachorder',
     totalQuantity: 48, effortPoints: 11, estimatedMinutes: 24, status: 'issue_open',
     employeeNo: 'ma-101',
-    issue: { issueType: 'missing_quantity', description: 'Nur 40 von 48 Teilen im Karton' },
+    issue: { kind: 'under_delivery', deviationQty: -8, description: 'Nur 40 von 48 Teilen im Karton' },
   },
   // Geparkt-Lane (×2, eine mit Bucherinnen-Notiz).
   {
@@ -45,10 +45,11 @@ const B14_LIFECYCLE: SeedLifecycleCase[] = [
     totalQuantity: 30, effortPoints: 7, estimatedMinutes: 16, status: 'parked',
     employeeNo: 'ma-104', forwardedTo: 'lieferscheinbucher',
   },
-  // Teilabschluss (partially_completed mit ZST-Teilmenge).
+  // Geklärter Problemfall (problem_resolved mit ZST-Teilmenge): grün beim MA,
+  // wartet auf dessen Weiterbearbeitung.
   {
     weBelegNo: '9.409.125', storageCode: 'R19', section: 3, goodsTypeText: 'Nachorder',
-    totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'partially_completed',
+    totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'problem_resolved',
     employeeNo: 'ma-102', completedQuantity: 40, completedAt: '13:45',
   },
   // Prüfen/TL-Topf (needs_review mit Aufmerksamkeits-Notiz), in Arbeit, Abgeschlossen,

@@ -7,6 +7,7 @@ import { WorkflowModule } from './workflow/workflow.module.js';
 import { LiveModule } from './live/live.module.js';
 import { CasesModule } from './cases/cases.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { ProblemReasonsModule } from './problem-reasons/problem-reasons.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
 import { ProhandelModule } from './prohandel/prohandel.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -26,6 +27,7 @@ import { DevModule } from './dev/dev.module.js';
     WorkflowModule,
     CasesModule,
     AdminModule,
+    ProblemReasonsModule,
     EmployeesModule,
     ProhandelModule,
     HealthModule,

@@ -9,10 +9,10 @@ here (61 tests).
 
 | Module | Concept | Responsibility |
 | --- | --- | --- |
-| `issue/issue-logic.ts` | §4.5 Problemfall | Report a deviation, block **only** the affected level (case / position / sku_line / transport_box) so the rest keeps flowing ("Restware weiter"); teamlead inbox → resolve / release / reject. |
+| `issue/derive-problems.ts` | Kundenfeedback 14.07.2026, Punkt 7 | Implizite Probleme: Mehr-/Minderlieferung (Ist≠Soll) und Preisabweichung (korrigierter VK) werden aus den gemeldeten SKU-Ständen abgeleitet; sie erzwingen den Teilabschluss (`fullCompleteAllowed`). |
 | `transport/box-splitting.ts` | Anhang D, §3.2 | Derive `TransportBoxTarget`s automatically from positions; split per Shopbereich / Shop / Etage; deterministic, idempotent box numbering; `splitBoxCount` feeds the effort penalty (§8.2). |
 | `print/print-jobs.ts` | §13.4 Drucker/Etiketten | Build price-label + box-slip print jobs (PDF by default), enforce the reprint permission ("Nachdruck mit Berechtigung"), log every job as a workflow event (wer/wann/was/Drucker/Erfolg-Fehler). |
-| `completion/completion-logic.ts` | §4.6 Teilabschluss, §15.1 | Full completion → ZST record + `completed`; partial completion ships the finished part with proportional ZST and sets `partially_completed`; carry the remainder into the next day (→ `ready`). |
+| `completion/completion-logic.ts` | §15.1 | Rechenkerne des Abschlusses: `processingMinutes` + `proratedEffort` (Delta-ZST-Buchung). Der Ablauf (Beleg erledigt vs. Teilabschluss mit Problemen → issue_open) lebt im CasesService + der §7.1-State-Machine. |
 | `reporting/kpis.ts` + `csv-export.ts` | §15 Reporting/KPIs | Compute Teile/h **and** Aufwandspunkte/h, Durchlaufzeit, Pool-Alter, Problemquote, Override-Quote; RFC-4180 CSV/BI export of ZST rows and KPI snapshots. |
 
 Shared types live in `@paket/domain-types` (`print.ts`, `reporting.ts` + the existing

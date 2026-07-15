@@ -10,6 +10,7 @@ import {
   type BundleQueueRefDto,
   type CapacityDto,
   type CaseDetailDto,
+  type IssueSummaryDto,
   type CaseLookupResultDto,
   type CaseSearchQueryDto,
   type CaseSearchResultDto,
@@ -49,7 +50,7 @@ const OPEN_ISSUE_STATUSES = ['open', 'in_review', 'waiting_external'] as const;
  * (Aufmerksamkeitsflag ODER blocked/needs_review) und lebt in {@link poolWhere}.
  */
 const SCOPE_STATUSES: Record<'aktiv' | 'abgeschlossen' | 'archiv', CaseStatus[]> = {
-  aktiv: ['ready', 'parked', 'assigned', 'in_progress', 'issue_open', 'partially_completed'],
+  aktiv: ['ready', 'parked', 'assigned', 'in_progress', 'issue_open', 'problem_resolved'],
   abgeschlossen: ['completed'],
   archiv: ['completed', 'zst_done'],
 };
@@ -177,7 +178,7 @@ export class TeamleadReadService {
             where: { status: { in: [...OPEN_ISSUE_STATUSES] } },
             orderBy: { reportedAt: 'desc' },
             take: 1,
-            select: { issueType: true, description: true },
+            select: { kind: true, reasonLabel: true, description: true },
           },
           assignedBundle: {
             select: {
@@ -268,7 +269,11 @@ export class TeamleadReadService {
           : null,
         bundleQueue: this.toBundleQueue(c.id, c.assignedBundle),
         openIssue: c.issues[0]
-          ? { kind: c.issues[0].issueType, note: c.issues[0].description }
+          ? {
+              kind: c.issues[0].kind,
+              reasonLabel: c.issues[0].reasonLabel,
+              note: c.issues[0].description,
+            }
           : null,
       };
     });
@@ -879,15 +884,7 @@ export class TeamleadReadService {
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPositionDetail(p)),
       transportBoxes: found.transportBoxes.map((b) => mapBoxTarget(b)),
-      issues: found.issues.map((i) => ({
-        id: i.id,
-        scope: i.scope,
-        issueType: i.issueType,
-        status: i.status,
-        description: i.description,
-        resolution: i.resolution,
-        reportedAt: i.reportedAt.toISOString(),
-      })),
+      issues: found.issues.map((i) => this.mapIssue(i, found.positions)),
       zstRecords: found.zstRecords.map((z) => ({
         id: z.id,
         completedQuantity: z.completedQuantity,
@@ -1041,6 +1038,72 @@ export class TeamleadReadService {
       onlineHandlingRequired: p.instruction?.onlineHandlingRequired ?? false,
       status: p.status,
       skuLines,
+    };
+  }
+
+  /**
+   * Projects an Issue row for the Klärungs-UX: neben Art/Grund werden Position
+   * und Größenzeile aus `scopeId` aufgelöst, damit der Teamlead das Problem ohne
+   * Suche zuordnen kann (WE-Nr/Lieferschein stehen im Beleg-Kopf; eine
+   * Ordernummer existiert im Datenmodell nicht — siehe docs/review/ordernummer-gap.md).
+   */
+  private mapIssue(
+    issue: {
+      id: string;
+      scope: string;
+      scopeId: string | null;
+      kind: string;
+      reasonLabel: string | null;
+      deviationQty: number | null;
+      expectedVkPrice: number | null;
+      correctedVkPrice: number | null;
+      status: string;
+      description: string | null;
+      resolution: string | null;
+      reportedAt: Date;
+    },
+    positions: Array<{
+      id: string;
+      positionNo: number;
+      orderNo?: string | null;
+      skuLines: Array<{ id: string; ean: string; size: string }>;
+    }>,
+  ): IssueSummaryDto {
+    let positionNo: number | null = null;
+    let ean: string | null = null;
+    let size: string | null = null;
+    let orderNo: string | null = null;
+    for (const p of positions) {
+      if (issue.scope === 'position' && p.id === issue.scopeId) {
+        positionNo = p.positionNo;
+        orderNo = p.orderNo ?? null;
+        break;
+      }
+      const sku = p.skuLines.find((s) => s.id === issue.scopeId);
+      if (issue.scope === 'sku_line' && sku) {
+        positionNo = p.positionNo;
+        orderNo = p.orderNo ?? null;
+        ean = sku.ean;
+        size = sku.size;
+        break;
+      }
+    }
+    return {
+      id: issue.id,
+      scope: issue.scope,
+      kind: issue.kind,
+      reasonLabel: issue.reasonLabel,
+      deviationQty: issue.deviationQty,
+      expectedVkPrice: issue.expectedVkPrice,
+      correctedVkPrice: issue.correctedVkPrice,
+      positionNo,
+      ean,
+      size,
+      orderNo,
+      status: issue.status,
+      description: issue.description,
+      resolution: issue.resolution,
+      reportedAt: issue.reportedAt.toISOString(),
     };
   }
 }

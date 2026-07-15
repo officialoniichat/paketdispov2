@@ -24,6 +24,7 @@ erDiagram
     RECEIPT_POSITION ||--o{ RECEIPT_SKU_LINE : "EAN x size"
 
     GOODS_RECEIPT_CASE ||--o{ ISSUE : raises
+    PROBLEM_REASON ||--o{ ISSUE : "categorises (manual)"
     GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "packed into"
     GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "closed by"
 
@@ -89,7 +90,7 @@ erDiagram
         string_array priorityFlags "prio|catman_due|overdue|..."
         date catManDate
         date loadPlanDate
-        enum status "blocked|ready|assigned|in_progress|completed|zst_done|..."
+        enum status "blocked|ready|assigned|in_progress|issue_open|problem_resolved|completed|zst_done|..."
         float effortPoints
         string assignedBundleId FK
         string_array missingFields "blocked: fehlende Pflichtfelder"
@@ -118,7 +119,10 @@ erDiagram
         string supplierColor "POS: colour"
         string season "POS: Saison"
         boolean nosFlag "POS: NOS"
-        boolean catMan "POS: Anzeige-Datum, KEIN Prio-Treiber"
+        boolean catMan "POS: Anzeige-Kennzeichen, KEIN Prio-Treiber"
+        date catManDate "POS: CatMan-Termin (Anzeige)"
+        string hShopNo "POS: Hauptshop (Anzeige)"
+        string orderNo "POS: Ordernummer (ERP-Referenz zur Fehlerloesung)"
         enum status "open|confirmed|issue_open|completed"
     }
     POSITION_INSTRUCTION {
@@ -162,12 +166,23 @@ erDiagram
         datetime scannedAt
     }
 
+    PROBLEM_REASON {
+        string id PK
+        string label "admin-verwalteter Katalog (frei definierbar)"
+        boolean active
+        int sortOrder
+    }
     ISSUE {
         string id PK
         string caseId FK
-        enum scope "case|position|sku_line|transport_box"
+        enum scope "position|sku_line"
         string employeeId FK
-        enum issueType "missing_quantity|damaged_goods|..."
+        enum kind "manual|over_delivery|under_delivery|price_deviation"
+        string reasonId FK "→PROBLEM_REASON (nur kind=manual)"
+        string reasonLabel "Label-Snapshot des Katalogs"
+        int deviationQty "Ist−Soll (Mehr-/Minderlieferung)"
+        float expectedVkPrice "VK-Etikett-Preis"
+        float correctedVkPrice "korrigierter VK (Preisabweichung)"
         enum status "open|in_review|resolved|rejected"
     }
     TRANSPORT_BOX {

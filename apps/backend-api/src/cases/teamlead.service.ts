@@ -29,7 +29,7 @@ import {
   type ZstExportResultDto,
   type PrioritizeDto,
   type ReorderBundleDto,
-  type ResolveIssueDto,
+  type ResolveProblemsDto,
   type TransitionResultDto,
   type WithdrawDto,
 } from './cases.dto.js';
@@ -79,11 +79,6 @@ export class TeamleadService {
 
   /** „Zur Planung freigeben" — approve a reviewed case into the pool (needs_review → ready). */
   approve(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
-    return this.transition(caseId, 'ready', 'case.ready', principal, { reason: dto.reason });
-  }
-
-  /** „Rest reaktivieren" — put a part-finished case's remainder back to work (partially_completed → ready). */
-  reactivate(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
     return this.transition(caseId, 'ready', 'case.ready', principal, { reason: dto.reason });
   }
 
@@ -580,25 +575,24 @@ export class TeamleadService {
   }
 
   /**
-   * „Problem freigeben" — resolve a case's open problem and put it back to work.
-   * Case-scoped (not issue-scoped) so the action works from every surface that
-   * shows the case (Ablagen card, Belege list/detail) without threading an issue id.
-   * A case in `issue_open` has exactly one open issue.
+   * „Probleme geklärt" (Kundenfeedback 14.07.2026): der Teamlead löst ALLE offenen
+   * Probleme des Belegs auf einmal. Der Beleg wird grün beim SELBEN Mitarbeiter
+   * (issue_open → problem_resolved); erst dann kann dieser weiterarbeiten.
    */
-  async resolveIssue(
+  async resolveProblems(
     principal: Principal,
     caseId: string,
-    dto: ResolveIssueDto,
+    dto: ResolveProblemsDto,
   ): Promise<TransitionResultDto> {
-    const issue = await this.prisma.issue.findFirst({
+    const openIssues = await this.prisma.issue.findMany({
       where: { caseId, status: { in: ['open', 'in_review', 'waiting_external'] } },
       select: { id: true },
     });
-    if (!issue) throw new NotFoundException(`Case ${caseId} has no open issue`);
+    if (openIssues.length === 0) throw new NotFoundException(`Case ${caseId} has no open issue`);
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.issue.update({
-        where: { id: issue.id },
+      await tx.issue.updateMany({
+        where: { id: { in: openIssues.map((i) => i.id) } },
         data: {
           status: 'resolved',
           resolution: dto.resolution,
@@ -608,10 +602,10 @@ export class TeamleadService {
       });
       const result = await this.workflow.transition({
         caseId,
-        toStatus: 'in_progress',
-        eventType: 'issue.resolved',
+        toStatus: 'problem_resolved',
+        eventType: 'case.problems_resolved',
         actor: { actorType: 'teamlead', actorId: principal.sub },
-        payload: { issueId: issue.id },
+        payload: { issueIds: openIssues.map((i) => i.id), resolution: dto.resolution },
       });
       return this.toResult(result);
     });

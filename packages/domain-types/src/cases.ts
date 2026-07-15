@@ -68,6 +68,8 @@ export const receiptPositionSchema = z.object({
   supplierColor: z.string(),
   season: z.string().optional(),
   nosFlag: z.boolean().optional(),
+  /** Ordernummer der Position (ERP-Referenz zur Fehlerlösung, Kundenfeedback 14.07.2026). */
+  orderNo: z.string().optional(),
   branchNo: z.string(),
   shopNo: z.string(),
   hShopNo: z.string().optional(),

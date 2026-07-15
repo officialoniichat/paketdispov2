@@ -16,7 +16,6 @@ import { useLiveUpdates } from './data/useLiveUpdates.js';
 import { LoginScreen } from './screens/LoginScreen.js';
 import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
 import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
-import { ProblemMeldenScreen } from './screens/ProblemMeldenScreen.js';
 
 export function App(): JSX.Element {
   const [session, setSessionState] = useState<Session | null>(() => {
@@ -55,7 +54,6 @@ export function App(): JSX.Element {
       <Routes>
         <Route path="/" element={<BundleHomeScreen />} />
         <Route path="/case/:caseId" element={<BelegProcessScreen />} />
-        <Route path="/case/:caseId/problem" element={<ProblemMeldenScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Box>

@@ -7,23 +7,17 @@
  * authoritative `TransitionResultDto` (case id, new status, version). A failed
  * request throws: callers (see `workflow/useCaseFlow.ts`) must handle it
  * explicitly — nothing here swallows an error.
+ *
+ * Probleme werden NICHT mehr einzeln gemeldet: sie werden während der
+ * Bearbeitung lokal gesammelt und beim Teilabschluss gebündelt übertragen
+ * (Kundenfeedback 14.07.2026). Der beleg-weite Problem-Melden-Endpoint ist weg.
  */
 import type { components } from '@paket/api-client';
-import type { IssueScope, IssueType } from '@paket/domain-types';
 import { getApiClient } from './api.js';
 
 export type TransitionResultDto = components['schemas']['TransitionResultDto'];
-
-export interface IssueInput {
-  caseId: string;
-  /** What the problem is reported against (case/position/sku_line/transport_box). */
-  scope: IssueScope;
-  issueType: IssueType;
-  /** Id of the scoped entity (position/sku/box); omitted for case-level. */
-  scopeId?: string;
-  description?: string;
-  photoKeys?: string[];
-}
+type SkuQuantityDto = components['schemas']['SkuQuantityDto'];
+type ReportedProblemDto = components['schemas']['ReportedProblemDto'];
 
 interface ApiResult<T> {
   data?: T;
@@ -38,7 +32,7 @@ function unwrap(label: string, result: ApiResult<TransitionResultDto>): Transiti
   return result.data;
 }
 
-/** POST /api/cases/:id/start-preparation → assigned → in_progress. */
+/** POST /api/cases/:id/start-preparation → assigned/problem_resolved → in_progress. */
 export async function persistStartPreparation(caseId: string): Promise<TransitionResultDto> {
   return unwrap(
     'Start',
@@ -49,54 +43,43 @@ export async function persistStartPreparation(caseId: string): Promise<Transitio
 }
 
 /**
- * POST /api/cases/:id/complete → writes the ZstRecord.
+ * POST /api/cases/:id/complete → „Beleg erledigt", writes the ZstRecord.
  *
- * `completedQuantity` is the employee's actual counted total (incl. D2
- * Mehr-/Mindermengen, see `workflow/workflowModel.ts`'s `totalConfirmedQuantity`)
- * — omit it only when there is no progress state to derive it from; the
- * backend then falls back to the case's Soll total.
+ * `skuQuantities` are the employee's counted Ist-Mengen (incl. corrected VK).
+ * The backend REJECTS the call when any deviation, price correction or manual
+ * problem exists — those force a Teilabschluss (Kundenfeedback 14.07.2026).
  */
 export async function persistComplete(
   caseId: string,
-  completedQuantity?: number,
+  skuQuantities: SkuQuantityDto[],
 ): Promise<TransitionResultDto> {
   return unwrap(
     'Abschluss',
     await getApiClient().POST('/api/cases/{caseId}/complete', {
       params: { path: { caseId } },
-      body: { completedQuantity },
+      body: { skuQuantities },
     }),
   );
 }
 
-/** POST /api/cases/:id/partial-complete → §4.6 Teilabschluss. */
+/**
+ * POST /api/cases/:id/partial-complete → Teilabschluss mit gesammelten Problemen.
+ *
+ * Schickt alle gezählten Ist-Mengen (inkl. Preiskorrektur) plus die manuell
+ * erfassten Positions-Probleme. Das Backend leitet die impliziten Probleme
+ * (Mehr-/Minderlieferung, Preisabweichung) selbst ab und parkt den Beleg rot
+ * beim selben MA (issue_open), bis der Teamlead klärt.
+ */
 export async function persistPartialComplete(
   caseId: string,
-  reason: string,
-  completedQuantity?: number,
+  skuQuantities: SkuQuantityDto[],
+  problems: ReportedProblemDto[],
 ): Promise<TransitionResultDto> {
   return unwrap(
     'Teilabschluss',
     await getApiClient().POST('/api/cases/{caseId}/partial-complete', {
       params: { path: { caseId } },
-      body: { reason, completedQuantity },
-    }),
-  );
-}
-
-/** POST /api/issues → reports an exception against the case (§9.7). */
-export async function persistIssue(input: IssueInput): Promise<TransitionResultDto> {
-  return unwrap(
-    'Problem melden',
-    await getApiClient().POST('/api/issues', {
-      body: {
-        caseId: input.caseId,
-        scope: input.scope,
-        issueType: input.issueType,
-        scopeId: input.scopeId,
-        description: input.description,
-        photoKeys: input.photoKeys,
-      },
+      body: { skuQuantities, problems },
     }),
   );
 }

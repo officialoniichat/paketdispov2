@@ -17,8 +17,8 @@ import {
   toAssignmentStatus,
   toCaseStatus,
   toEventType,
-  toIssueType,
   toPriorityFlags,
+  toProblemKind,
   toSectionCode,
   toSkillTier,
 } from './narrow.js';
@@ -223,7 +223,7 @@ const LANE_META: Record<LaneId, { title: string; description: string }> = {
     title: 'Weitergeleitet',
     description: 'An Abteilung weitergeleitet (mock-Queue)',
   },
-  probleme: { title: 'Problemfälle', description: 'Offene Issues' },
+  probleme: { title: 'Problemfälle', description: 'Wartet auf Klärung durch Teamleitung' },
 };
 
 /**
@@ -314,7 +314,11 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     storageCode: item.storageLocationCode ?? '–',
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
     openIssue: item.openIssue
-      ? { kind: toIssueType(item.openIssue.kind), note: item.openIssue.note ?? null }
+      ? {
+          kind: toProblemKind(item.openIssue.kind),
+          reasonLabel: item.openIssue.reasonLabel ?? null,
+          note: item.openIssue.note ?? null,
+        }
       : null,
     forwardedTo: item.forwardedTo ?? null,
     bereich: item.bereich ?? null,

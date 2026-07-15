@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { CasesService } from './cases.service.js';
-import { CompleteDto, CreateIssueDto, PartialCompleteDto, TransitionResultDto } from './cases.dto.js';
+import { CompleteDto, PartialCompleteDto, TransitionResultDto } from './cases.dto.js';
 
 /**
  * Employee package-handling lifecycle (§14.2 Mitarbeiter-App). Every handler is
@@ -17,7 +17,10 @@ export class CasesController {
   constructor(private readonly cases: CasesService) {}
 
   @Post('cases/:caseId/start-preparation')
-  @ApiOperation({ summary: 'Begin handling a package (assigned → in_progress, case.started)' })
+  @ApiOperation({
+    summary:
+      'Begin handling a package (assigned → in_progress, case.started) or resume after Teamlead clearance (problem_resolved → in_progress, case.resumed)',
+  })
   @ApiOkResponse({ type: TransitionResultDto })
   startPreparation(
     @CurrentUser() principal: Principal,
@@ -38,7 +41,10 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/partial-complete')
-  @ApiOperation({ summary: 'Partially complete (in_progress → partially_completed)' })
+  @ApiOperation({
+    summary:
+      'Teilabschluss mit gesammelten Problemen (in_progress → issue_open, case.problems_reported); der Beleg bleibt beim selben MA geparkt',
+  })
   @ApiOkResponse({ type: TransitionResultDto })
   partialComplete(
     @CurrentUser() principal: Principal,
@@ -46,15 +52,5 @@ export class CasesController {
     @Body() dto: PartialCompleteDto,
   ): Promise<TransitionResultDto> {
     return this.cases.partialComplete(principal, caseId, dto);
-  }
-
-  @Post('issues')
-  @ApiOperation({ summary: 'Report a problem on an owned case (→ issue_open, issue.created)' })
-  @ApiOkResponse({ type: TransitionResultDto })
-  reportIssue(
-    @CurrentUser() principal: Principal,
-    @Body() dto: CreateIssueDto,
-  ): Promise<TransitionResultDto> {
-    return this.cases.reportIssue(principal, dto.caseId, dto);
   }
 }

@@ -178,8 +178,8 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
  * AssignmentService.persistBundle.
  *
  * Root cause: a case can be back in the `ready` pool while STILL owning an AssignmentItem
- * from an earlier plan. The §7.1 `partially_completed → ready` reactivation (and every
- * other workflow transition) only flips the case status — it never unlinks the bundle or
+ * from an earlier plan. Workflow transitions (z. B. ein TL-Unpark oder Storno-Rückbau)
+ * only flip the case status — they never unlink the bundle or
  * drops the item (workflow.service.transition updates `status` alone). clearPriorPlanForDate
  * keeps that bundle because it is still "referenced" (assignedBundleId set) and never reverts
  * the case (it is no longer `assigned`), so the stale item survives. The next recalculate
@@ -259,7 +259,7 @@ async function seedStrandedPool(): Promise<StrandedSeed> {
   poolCaseIds.push(await makeCase(15, { bookingDate: yesterday }));
 
   // Strand one plain free case: it is `ready` (in the pool) yet still owns an AssignmentItem
-  // in a kept bundle — the exact residue a `partially_completed → ready` reactivation leaves.
+  // in a kept bundle — the residue a status-only workflow transition leaves behind.
   const strandedCaseId = poolCaseIds[5]!;
   const priorBundle = await prisma.assignmentBundle.create({
     data: { employeeId: e1.id, date: day, status: 'assigned', createdBy: 'system', plannedEffortMinutes: 15 },

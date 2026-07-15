@@ -66,7 +66,10 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'print.job_completed': 'Druck fertig',
   'print.job_failed': 'Druck fehlgeschlagen',
   'case.completed': 'Abgeschlossen',
-  'case.partially_completed': 'Teilabschluss',
+  // Problem-Loop (Kundenfeedback 14.07.2026): melden → klären → beim selben MA fortsetzen.
+  'case.problems_reported': 'Probleme gemeldet',
+  'case.problems_resolved': 'Probleme geklärt',
+  'case.resumed': 'Weiterbearbeitung gestartet',
   'zst.created': 'ZST erfasst',
   'zst.exported': 'ZST exportiert',
   'assignment.overridden': 'Neu zugeteilt',

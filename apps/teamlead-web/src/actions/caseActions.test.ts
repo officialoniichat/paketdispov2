@@ -57,16 +57,16 @@ describe('caseActions registry', () => {
     expect(got).toContain('attention');
   });
 
-  it('issue_open offers resolve_issue and cancel, not prioritise', () => {
+  it('issue_open offers resolve_problems and cancel, not prioritise', () => {
     const got = ids({ status: 'issue_open', priorityFlags: [] });
-    expect(got).toContain('resolve_issue');
+    expect(got).toContain('resolve_problems');
     expect(got).toContain('cancel');
     expect(got).not.toContain('prioritise');
   });
 
-  it('partially_completed offers reactivate + forward/attention', () => {
-    const got = ids({ status: 'partially_completed', priorityFlags: [] });
-    expect(got).toContain('reactivate');
+  it('problem_resolved offers cancel + forward/attention (liegt beim selben MA)', () => {
+    const got = ids({ status: 'problem_resolved', priorityFlags: [] });
+    expect(got).toContain('cancel');
     expect(got).toContain('forward');
     expect(got).toContain('attention');
   });

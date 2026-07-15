@@ -60,8 +60,7 @@ const PRIMARY_BUDGET: Record<Density, number> = { compact: 1, detail: 2 };
 
 const ACTION_ICON: Record<CaseActionId, JSX.Element> = {
   approve: <ApproveIcon fontSize="small" />,
-  resolve_issue: <ApproveIcon fontSize="small" />,
-  reactivate: <ReplayIcon fontSize="small" />,
+  resolve_problems: <ApproveIcon fontSize="small" />,
   assign: <PersonAddAlt1Icon fontSize="small" />,
   park: <PauseCircleOutlineIcon fontSize="small" />,
   unpark: <PlayCircleOutlineIcon fontSize="small" />,
@@ -196,6 +195,7 @@ export function CaseActionMenu({
         title={pending ? `${pending.label} · Beleg ${weBelegNo}` : ''}
         confirmLabel={pending?.label}
         suggestions={pending?.reasonSuggestions}
+        optional={pending?.optionalReason === true}
         onConfirm={(reason) => pending?.run(ctx, reason)}
         onClose={() => setPending(null)}
       />

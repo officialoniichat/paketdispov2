@@ -11,7 +11,7 @@
  * and never gates completion.
  */
 import type { WorkInstructionHeader } from '@paket/domain-types';
-import type { CaseAggregate, CaseProgress } from '../domain/types.js';
+import type { CaseAggregate, CaseProgress, RecordedProblem } from '../domain/types.js';
 
 /** Fresh progress for a Beleg at version 0 (persisted before the first action). */
 export function initialProgress(aggregate: CaseAggregate, now: string): CaseProgress {
@@ -20,6 +20,8 @@ export function initialProgress(aggregate: CaseAggregate, now: string): CaseProg
     step: 'process',
     quantityCheckedPositionIds: [],
     confirmedQuantities: {},
+    correctedVkPrices: {},
+    problems: [],
     zstDone: false,
     partial: false,
     version: 0,
@@ -48,7 +50,24 @@ export const allQuantitiesChecked = (p: CaseProgress, aggregate: CaseAggregate):
 
 /** True when the Beleg has any local work recorded (drives the in-progress status). */
 export const hasProgress = (p: CaseProgress): boolean =>
-  p.quantityCheckedPositionIds.length > 0 || Object.keys(p.confirmedQuantities).length > 0;
+  p.quantityCheckedPositionIds.length > 0 ||
+  Object.keys(p.confirmedQuantities).length > 0 ||
+  Object.keys(p.correctedVkPrices).length > 0 ||
+  p.problems.length > 0;
+
+/**
+ * Alle Probleme des Belegs (Kundenfeedback 14.07.2026, Punkt 7): manuell erfasste
+ * Positions-Probleme + IMPLIZITE Probleme (Mehr-/Minderlieferung aus
+ * `confirmedQuantities`, Preisabweichung aus `correctedVkPrices`). Sobald eines
+ * vorliegt, ist „Beleg erledigt" gesperrt und der Teilabschluss der Weg.
+ */
+export function hasAnyProblem(p: CaseProgress): boolean {
+  return (
+    p.problems.length > 0 ||
+    Object.keys(p.confirmedQuantities).length > 0 ||
+    Object.keys(p.correctedVkPrices).length > 0
+  );
+}
 
 export interface CompletionGate {
   ok: boolean;
@@ -56,21 +75,18 @@ export interface CompletionGate {
 }
 
 /**
- * Hard preconditions for the per-Beleg erledigt → ZST. Only two gates remain:
- * every position must be geprüft, and no problem may be open (it must first be
- * cleared by the Teamlead, or shipped via Teilabschluss).
+ * Hard preconditions for „Beleg erledigt" (voll) → ZST. Every position must be
+ * geprüft, and there may be NO problem — neither manual nor implicit (Mehr-/
+ * Minderlieferung, Preisabweichung). Bei einem Problem ist der Teilabschluss der
+ * einzige Weg (das Backend würde „Beleg erledigt" ohnehin ablehnen).
  */
-export function canCompleteCase(
-  p: CaseProgress,
-  aggregate: CaseAggregate,
-  openIssues: number,
-): CompletionGate {
+export function canCompleteCase(p: CaseProgress, aggregate: CaseAggregate): CompletionGate {
   const reasons: string[] = [];
   if (requiresQuantityCheck(aggregate.workInstruction) && !allQuantitiesChecked(p, aggregate)) {
     reasons.push('Noch nicht alle Positionen geprüft');
   }
-  if (openIssues > 0) {
-    reasons.push('Offenes Problem – erst klären');
+  if (hasAnyProblem(p)) {
+    reasons.push('Abweichung/Problem erfasst – nur Teilabschluss möglich');
   }
   return { ok: reasons.length === 0, reasons };
 }
@@ -106,6 +122,37 @@ export function setSkuQuantity(
 }
 
 /**
+ * Preisabweichung (Kundenfeedback 14.07.2026, Punkt 4): korrigierter VK je Größe.
+ * Ein Preis gleich dem VK-Etikett-Preis (oder ohne Etikettpreis) ist keine
+ * Korrektur und wird wieder entfernt. Jede echte Korrektur ist ein implizites
+ * Problem (Preisabweichung) und erzwingt den Teilabschluss.
+ */
+export function setCorrectedVkPrice(
+  p: CaseProgress,
+  skuLineId: string,
+  price: number | undefined,
+  vkLabelPrice: number | undefined,
+): CaseProgress {
+  const corrected = { ...p.correctedVkPrices };
+  if (price === undefined || price < 0 || price === vkLabelPrice) {
+    delete corrected[skuLineId];
+  } else {
+    corrected[skuLineId] = price;
+  }
+  return { ...p, correctedVkPrices: corrected };
+}
+
+/** Fügt ein manuell erfasstes Problem hinzu (Grund aus dem Katalog). */
+export function addProblem(p: CaseProgress, problem: RecordedProblem): CaseProgress {
+  return { ...p, problems: [...p.problems, problem] };
+}
+
+/** Entfernt ein manuell erfasstes Problem wieder (vor dem Teilabschluss). */
+export function removeProblem(p: CaseProgress, problemId: string): CaseProgress {
+  return { ...p, problems: p.problems.filter((x) => x.id !== problemId) };
+}
+
+/**
  * Total Ist-Menge across every Größe (SKU line) in the Beleg: the employee's
  * confirmed count where they touched it (D2 Mehr-/Mindermengen), otherwise the
  * Soll (expected) quantity for that Größe. This is what gets booked as the
@@ -122,6 +169,48 @@ export function totalConfirmedQuantity(p: CaseProgress, aggregate: CaseAggregate
       ),
     0,
   );
+}
+
+/** Eine Größenzeile im Request-Body: Ist-Menge + optional korrigierter VK. */
+export interface SkuQuantityBody {
+  skuLineId: string;
+  confirmedQuantity: number;
+  correctedVkPrice?: number;
+}
+
+/**
+ * Baut die `skuQuantities` für „Beleg erledigt"/Teilabschluss: für JEDE Größe die
+ * gezählte Ist-Menge (Soll wo unberührt) plus eine etwaige Preiskorrektur.
+ */
+export function skuQuantitiesBody(p: CaseProgress, aggregate: CaseAggregate): SkuQuantityBody[] {
+  return aggregate.positions.flatMap((pos) =>
+    pos.skuLines.map((sku) => {
+      const corrected = p.correctedVkPrices[sku.id];
+      return {
+        skuLineId: sku.id,
+        confirmedQuantity: p.confirmedQuantities[sku.id] ?? sku.expectedQuantity,
+        ...(corrected !== undefined ? { correctedVkPrice: corrected } : {}),
+      };
+    }),
+  );
+}
+
+/** Eine manuelle Problemmeldung im Request-Body des Teilabschlusses. */
+export interface ProblemBody {
+  positionId: string;
+  skuLineId?: string;
+  reasonId: string;
+  note?: string;
+}
+
+/** Baut die manuellen `problems` für den Teilabschluss aus den lokal gesammelten. */
+export function problemsBody(p: CaseProgress): ProblemBody[] {
+  return p.problems.map((x) => ({
+    positionId: x.positionId,
+    ...(x.skuLineId ? { skuLineId: x.skuLineId } : {}),
+    reasonId: x.reasonId,
+    ...(x.note ? { note: x.note } : {}),
+  }));
 }
 
 export const setZst = (p: CaseProgress): CaseProgress => ({ ...p, zstDone: true });

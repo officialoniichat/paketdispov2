@@ -14,6 +14,16 @@ import { toLocationKind } from './narrow.js';
 type LocationDto = components['schemas']['LocationDto'];
 type LocationUpsertDto = components['schemas']['LocationUpsertDto'];
 type RuleConfigDto = components['schemas']['RuleConfigDto'];
+type ProblemReasonDto = components['schemas']['ProblemReasonDto'];
+type ProblemReasonUpsertDto = components['schemas']['ProblemReasonUpsertDto'];
+
+/** Editor-Zeile des Problemarten-Katalogs. Neue Zeilen tragen keine `id`. */
+export interface ProblemReasonRow {
+  id?: string;
+  label: string;
+  active: boolean;
+  sortOrder: number;
+}
 
 // --- Locations --------------------------------------------------------------
 
@@ -59,6 +69,28 @@ export async function saveLocations(locations: LocationMaster[]): Promise<Locati
   const result = await api.PUT('/api/admin/locations', { body });
   const dtos = unwrap<LocationDto[]>(result, 'Speichern der Lagerplätze');
   return dtos.map(toLocationMaster);
+}
+
+// --- Problem reasons (Kundenfeedback 14.07.2026) ----------------------------
+
+/** Vollständiger Problemarten-Katalog (inkl. inaktiver) für die Admin-Pflege. */
+export async function fetchProblemReasons(): Promise<ProblemReasonRow[]> {
+  const result = await api.GET('/api/admin/problem-reasons');
+  const dtos = unwrap<ProblemReasonDto[]>(result, 'Laden der Problemarten');
+  return dtos.map((d) => ({ id: d.id, label: d.label, active: d.active, sortOrder: d.sortOrder }));
+}
+
+/** Replace-all-Upsert des Problemarten-Katalogs; gibt die gespeicherte Liste zurück. */
+export async function saveProblemReasons(rows: ProblemReasonRow[]): Promise<ProblemReasonRow[]> {
+  const body: ProblemReasonUpsertDto[] = rows.map((r) => ({
+    ...(r.id ? { id: r.id } : {}),
+    label: r.label,
+    active: r.active,
+    sortOrder: r.sortOrder,
+  }));
+  const result = await api.PUT('/api/admin/problem-reasons', { body });
+  const dtos = unwrap<ProblemReasonDto[]>(result, 'Speichern der Problemarten');
+  return dtos.map((d) => ({ id: d.id, label: d.label, active: d.active, sortOrder: d.sortOrder }));
 }
 
 // --- Rule config ------------------------------------------------------------

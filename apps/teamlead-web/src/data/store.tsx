@@ -169,12 +169,14 @@ export interface CockpitApi {
   deprioritiseCase(caseId: string, reason: string): void;
   /** Approve a needs_review case into the planning pool (needs_review → ready). */
   approveCase(caseId: string, reason: string): void;
-  /** Reactivate the remainder of a partially completed case (partially_completed → ready). */
-  reactivateCase(caseId: string, reason: string): void;
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
-  /** Issue triage: resolve an open issue (issue_open → in_progress). */
-  resolveIssue(caseId: string, reason: string): void;
+  /**
+   * „Probleme geklärt" (Kundenfeedback 14.07.2026): löst ALLE offenen Probleme
+   * des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben
+   * MA. Die Anmerkung ist optional (courtesy note für den MA).
+   */
+  resolveProblems(caseId: string, resolution?: string): void;
   /** C5 „Weiterleiten an …" — status-neutral, no §7.1 transition. */
   forwardCase(caseId: string, recipient: ForwardRecipient, reason?: string): void;
   /** C5 „Zurückholen" — clears the forward flag. */
@@ -310,18 +312,6 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const reactivateMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
-    mutationFn: async ({ caseId, reason }) => {
-      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/reactivate', {
-        params: { path: { caseId } },
-        body: { reason },
-      });
-      if (error) throw new MutationError('Reaktivieren', error);
-      return data;
-    },
-    onSettled: invalidateCockpitAndBelege,
-  });
-
   const parkMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
     mutationFn: async ({ caseId, reason }) => {
       const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/park', {
@@ -358,13 +348,17 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const resolveIssueMutation = useMutation<unknown, Error, { caseId: string; reason: string }>({
-    mutationFn: async ({ caseId, reason }) => {
-      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-issue', {
+  const resolveProblemsMutation = useMutation<
+    unknown,
+    Error,
+    { caseId: string; resolution?: string }
+  >({
+    mutationFn: async ({ caseId, resolution }) => {
+      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-problems', {
         params: { path: { caseId } },
-        body: { resolution: reason },
+        body: { resolution },
       });
-      if (error) throw new MutationError('Problem freigeben', error);
+      if (error) throw new MutationError('Probleme klären', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -515,11 +509,10 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       prioritiseCase: (caseId, reason) => prioritiseMutation.mutate({ caseId, reason }),
       deprioritiseCase: (caseId, reason) => deprioritiseMutation.mutate({ caseId, reason }),
       approveCase: (caseId, reason) => approveMutation.mutate({ caseId, reason }),
-      reactivateCase: (caseId, reason) => reactivateMutation.mutate({ caseId, reason }),
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
-      resolveIssue: (caseId, reason) => resolveIssueMutation.mutate({ caseId, reason }),
+      resolveProblems: (caseId, resolution) => resolveProblemsMutation.mutate({ caseId, resolution }),
       forwardCase: (caseId, recipient, reason) =>
         forwardMutation.mutate({ caseId, recipient, reason }),
       unforwardCase: (caseId) => unforwardMutation.mutate({ caseId }),
@@ -542,11 +535,10 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       prioritiseMutation,
       deprioritiseMutation,
       approveMutation,
-      reactivateMutation,
       parkMutation,
       unparkMutation,
       cancelMutation,
-      resolveIssueMutation,
+      resolveProblemsMutation,
       forwardMutation,
       unforwardMutation,
       flagAttentionMutation,

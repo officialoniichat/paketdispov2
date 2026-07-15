@@ -30,7 +30,7 @@ const NOS_GOODS_TYPES: readonly string[] = ['NOS', 'NOS-Nachorder', 'NOOS'];
 export const DEFAULT_DAILY_SHOP_AREAS: readonly string[] = ['120', '90'];
 
 /** Statuses eligible for assignment. Everything else is class 0 (Ausschluss). */
-const DEFAULT_ELIGIBLE_STATUSES: readonly CaseStatus[] = ['ready', 'partially_completed'];
+const DEFAULT_ELIGIBLE_STATUSES: readonly CaseStatus[] = ['ready'];
 
 export interface PriorityContext {
   /** The planning date; Verladeplan dates are compared against it. */

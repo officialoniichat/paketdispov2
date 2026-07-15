@@ -54,13 +54,10 @@ describe('classifyPriority — exclusion (§8.1 rank 0)', () => {
     }
   });
 
-  it('admits the default eligible statuses (ready, partially_completed)', () => {
+  it('admits the default eligible status (ready)', () => {
     expect(classifyPriority(makeCase({ id: 'r', status: 'ready' }), { today: TODAY }).class).not.toBe(
       'exclusion',
     );
-    expect(
-      classifyPriority(makeCase({ id: 'p', status: 'partially_completed' }), { today: TODAY }).class,
-    ).not.toBe('exclusion');
   });
 
   it('excludes even a Prio case when its status is not eligible (exclusion wins)', () => {

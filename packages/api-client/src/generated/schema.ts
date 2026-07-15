@@ -159,7 +159,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Begin handling a package (assigned → in_progress, case.started) */
+        /** Begin handling a package (assigned → in_progress, case.started) or resume after Teamlead clearance (problem_resolved → in_progress, case.resumed) */
         post: operations["CasesController_startPreparation"];
         delete?: never;
         options?: never;
@@ -193,25 +193,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Partially complete (in_progress → partially_completed) */
+        /** Teilabschluss mit gesammelten Problemen (in_progress → issue_open, case.problems_reported); der Beleg bleibt beim selben MA geparkt */
         post: operations["CasesController_partialComplete"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Report a problem on an owned case (→ issue_open, issue.created) */
-        post: operations["CasesController_reportIssue"];
         delete?: never;
         options?: never;
         head?: never;
@@ -588,23 +571,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teamlead/cases/{caseId}/reactivate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready). */
-        post: operations["TeamleadController_reactivate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/teamlead/cases/{caseId}/deprioritize": {
         parameters: {
             query?: never;
@@ -639,7 +605,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teamlead/cases/{caseId}/resolve-issue": {
+    "/api/teamlead/cases/{caseId}/resolve-problems": {
         parameters: {
             query?: never;
             header?: never;
@@ -648,8 +614,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Problem freigeben: resolve a case open issue (issue_open -> in_progress) */
-        post: operations["TeamleadController_resolveIssue"];
+        /** Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA */
+        post: operations["TeamleadController_resolveProblems"];
         delete?: never;
         options?: never;
         head?: never;
@@ -941,6 +907,41 @@ export interface paths {
         put?: never;
         /** A8 CSV-Upload der Online-Größen-Präferenzen (wgr;sizeVariant;preferredSize;alternativeSize). */
         post: operations["AdminController_uploadOnlineSizePreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/problem-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aktive Problemarten für die Problem-Erfassung der Mitarbeiter-App. */
+        get: operations["ProblemReasonsController_activeReasons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/problem-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vollständiger Problemarten-Katalog (inkl. inaktiver) für die Pflege. */
+        get: operations["ProblemReasonsController_allReasons"];
+        /** Katalog ersetzen: Upsert per id, Neuanlage ohne id; entfernte Gründe werden gelöscht bzw. bei Issue-Referenz nur deaktiviert. */
+        put: operations["ProblemReasonsController_replaceReasons"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1295,13 +1296,19 @@ export interface components {
             wgrDescription?: string | null;
             /** @description CatMan-Kennzeichen (Anzeige, A3) */
             catMan?: boolean | null;
+            /** @description CatMan-Termin der Position (ISO-Datum, Anzeige in der PWA) */
+            catManDate?: string | null;
             supplierArticleNo: string;
             supplierColor: string;
             season?: string | null;
             /** @description NOS (Never Out of Stock) article flag */
             nosFlag?: boolean | null;
+            /** @description Ordernummer der Position (ERP-Referenz zur Fehlerlösung) */
+            orderNo?: string | null;
             branchNo: string;
             shopNo: string;
+            /** @description Hauptshop-Nummer der Position (Anzeige in der Positions-Kopfzeile) */
+            hShopNo?: string | null;
             floor?: string | null;
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
@@ -1374,23 +1381,32 @@ export interface components {
             /** @description Audit event id, if a milestone was recorded */
             eventId?: Record<string, never> | null;
         };
+        SkuQuantityDto: {
+            skuLineId: string;
+            /** @description Gezählte Ist-Menge der Größenzeile */
+            confirmedQuantity: number;
+            /** @description Korrigierter VK, wenn der Etikettpreis falsch ist (Preisabweichung ⇒ implizites Problem) */
+            correctedVkPrice?: number;
+        };
         CompleteDto: {
-            completedQuantity?: number;
+            /** @description Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll */
+            skuQuantities?: components["schemas"]["SkuQuantityDto"][];
+        };
+        ReportedProblemDto: {
+            /** @description ReceiptPosition, auf die sich das Problem bezieht */
+            positionId: string;
+            /** @description Optional auf eine Größenzeile eingegrenzt */
+            skuLineId?: string;
+            /** @description ProblemReason-Katalog-Eintrag (aktiv) */
+            reasonId: string;
+            /** @description Freitext-Notiz des MA zum Problem */
+            note?: string;
         };
         PartialCompleteDto: {
-            reason?: string;
-            completedQuantity?: number;
-        };
-        CreateIssueDto: {
-            /** @description Case the issue is reported against */
-            caseId: string;
-            /** @description IssueScope: case|position|sku_line|transport_box */
-            scope: string;
-            /** @description IssueType (Anhang A) */
-            issueType: string;
-            scopeId?: string;
-            description?: string;
-            photoKeys?: string[];
+            /** @description Gezählte Ist-Mengen aller Größenzeilen */
+            skuQuantities: components["schemas"]["SkuQuantityDto"][];
+            /** @description Manuell erfasste Positions-Probleme */
+            problems: components["schemas"]["ReportedProblemDto"][];
         };
         DashboardDto: {
             /** @description Open case count grouped by status */
@@ -1509,8 +1525,10 @@ export interface components {
             started: boolean;
         };
         OpenIssueRefDto: {
-            /** @description IssueType (Anhang A) of the latest open issue */
+            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
             kind: string;
+            /** @description Label-Snapshot des Problemarten-Katalogs (nur kind=manual) */
+            reasonLabel?: string | null;
             /** @description Issue description/note */
             note?: string | null;
         };
@@ -1652,10 +1670,26 @@ export interface components {
         };
         IssueSummaryDto: {
             id: string;
-            /** @description IssueScope: case|position|sku_line|transport_box */
+            /** @description IssueScope: position|sku_line */
             scope: string;
-            /** @description IssueType (Anhang A) */
-            issueType: string;
+            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
+            kind: string;
+            /** @description Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual) */
+            reasonLabel?: string | null;
+            /** @description Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery) */
+            deviationQty?: number | null;
+            /** @description VK-Etikett-Preis laut Beleg */
+            expectedVkPrice?: number | null;
+            /** @description Vom MA korrigierter VK (kind=price_deviation) */
+            correctedVkPrice?: number | null;
+            /** @description Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId) */
+            positionNo?: number | null;
+            /** @description EAN der betroffenen Größenzeile */
+            ean?: string | null;
+            /** @description Größe der betroffenen Größenzeile */
+            size?: string | null;
+            /** @description Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung) */
+            orderNo?: string | null;
             /** @description IssueStatus: open|in_review|waiting_external|resolved|rejected */
             status: string;
             description?: string | null;
@@ -1786,7 +1820,8 @@ export interface components {
             /** @description Reason logged in the case.cancelled audit event */
             reason?: string;
         };
-        ResolveIssueDto: {
+        ResolveProblemsDto: {
+            /** @description Anmerkung zur Klärung (auf allen Issues vermerkt) */
             resolution?: string;
         };
         RecalculateDto: {
@@ -2022,6 +2057,25 @@ export interface components {
             /** @description Abgelehnte Zeilen mit Grund */
             rejectedRows: string[];
             preferences: components["schemas"]["OnlineSizePreferenceDto"][];
+        };
+        ProblemReasonDto: {
+            id: string;
+            /** @description Anzeigename der Problemart (deutsch) */
+            label: string;
+            /** @description Inaktive Gründe sind in der PWA nicht wählbar */
+            active: boolean;
+            /** @description Anzeige-Reihenfolge im Auswahlmenü */
+            sortOrder: number;
+        };
+        ProblemReasonUpsertDto: {
+            /** @description Vorhandene id = Update; ohne id = Neuanlage */
+            id?: string;
+            /** @description Anzeigename der Problemart */
+            label: string;
+            /** @default true */
+            active: boolean;
+            /** @description Anzeige-Reihenfolge */
+            sortOrder: number;
         };
         TodayShiftDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -2481,29 +2535,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PartialCompleteDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TransitionResultDto"];
-                };
-            };
-        };
-    };
-    CasesController_reportIssue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateIssueDto"];
             };
         };
         responses: {
@@ -3054,31 +3085,6 @@ export interface operations {
             };
         };
     };
-    TeamleadController_reactivate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ParkDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TransitionResultDto"];
-                };
-            };
-        };
-    };
     TeamleadController_deprioritize: {
         parameters: {
             query?: never;
@@ -3129,7 +3135,7 @@ export interface operations {
             };
         };
     };
-    TeamleadController_resolveIssue: {
+    TeamleadController_resolveProblems: {
         parameters: {
             query?: never;
             header?: never;
@@ -3140,7 +3146,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveIssueDto"];
+                "application/json": components["schemas"]["ResolveProblemsDto"];
             };
         };
         responses: {
@@ -3580,6 +3586,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnlineSizePreferenceUploadResultDto"];
+                };
+            };
+        };
+    };
+    ProblemReasonsController_activeReasons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReasonDto"][];
+                };
+            };
+        };
+    };
+    ProblemReasonsController_allReasons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReasonDto"][];
+                };
+            };
+        };
+    };
+    ProblemReasonsController_replaceReasons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProblemReasonUpsertDto"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemReasonDto"][];
                 };
             };
         };

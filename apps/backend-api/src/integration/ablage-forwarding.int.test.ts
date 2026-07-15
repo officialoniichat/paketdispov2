@@ -70,9 +70,11 @@ async function seed(): Promise<SeededIds> {
   await prisma.issue.create({
     data: {
       caseId: withIssue.id,
-      scope: 'case',
+      scope: 'position',
       employeeId: emp.id,
-      issueType: 'wrong_color',
+      kind: 'manual',
+      reasonId: 'pr_wrong_color',
+      reasonLabel: 'falsche Farbe',
       description: 'Farbe weicht ab',
       status: 'open',
       reportedAt: new Date(`${DAY}T09:00:00.000Z`),
@@ -81,9 +83,11 @@ async function seed(): Promise<SeededIds> {
   await prisma.issue.create({
     data: {
       caseId: withIssue.id,
-      scope: 'case',
+      scope: 'position',
       employeeId: emp.id,
-      issueType: 'damaged_goods',
+      kind: 'manual',
+      reasonId: 'pr_damaged_goods',
+      reasonLabel: 'beschädigt',
       description: 'Karton beschädigt',
       status: 'open',
       reportedAt: new Date(`${DAY}T11:00:00.000Z`),
@@ -93,9 +97,11 @@ async function seed(): Promise<SeededIds> {
   await prisma.issue.create({
     data: {
       caseId: withResolvedIssue.id,
-      scope: 'case',
+      scope: 'position',
       employeeId: emp.id,
-      issueType: 'label_problem',
+      kind: 'manual',
+      reasonId: 'pr_label_problem',
+      reasonLabel: 'Etikettenproblem',
       description: 'war falsch etikettiert',
       status: 'resolved',
       reportedAt: new Date(`${DAY}T08:00:00.000Z`),
@@ -179,7 +185,8 @@ describe('C4 openIssue projection', () => {
   it('projects the LATEST open issue (kind + note) onto the pool item', async () => {
     const res = await readSvc.listPool({ q: 'FW-002' });
     expect(res.items[0]?.openIssue).toEqual({
-      kind: 'damaged_goods',
+      kind: 'manual',
+      reasonLabel: 'beschädigt',
       note: 'Karton beschädigt',
     });
   });

@@ -1,26 +1,24 @@
 /**
  * PROCESS phase — the single per-Beleg work screen.
  *
- * The WE Beleg-Nr. is the hero (C1); the Kopf shows Kartons (C2 — multi-carton
- * shipments must be searched on the cart) and the Warenart wording instead of
- * Abschnitt numbers (C3). The Arbeitsanweisung is ordered Prüfung Wareneingang →
- * Rotpreis → Boxzettel (C4); the Prüfstufe is explained in a tooltip on an info
- * icon (C5 — "Nein" does NOT mean nothing is checked), so the instruction list
- * stays one line per point. Positions carry the Preisetikett
- * placement with the Sicherungsetikett pictogram (C6). The only gates are the
- * per-position check and "no open problem"; printing is upstream (vorgelagert),
- * Karton öffnen is no work step (C4). Boxing never gates.
+ * The WE Beleg-Nr. is the hero (C1); the Kopf shows Kartons (C2) and the
+ * Warenart wording instead of Abschnitt numbers (C3). The Arbeitsanweisung is
+ * ordered Prüfung Wareneingang → Rotpreis → Boxzettel (C4); the Prüfstufe is
+ * explained in a tooltip on an info icon (C5). Positions carry the Preisetikett
+ * placement with the Sicherungsetikett pictogram (C6).
  *
- * Positions are ONE table with fixed column headers (A1), so every Größe-row
- * carries its values at the same x-position and EK/VK/VK-Etikett sit
- * right-aligned in their own columns at the right edge — the screen is a
- * stationary 22–24" touch display at the Packtisch, not a phone. Each Größe is
- * its own row — EAN, EK/VK/VK-Etikett + Menge like the WE-Beleg paper (D1) —
- * with +/- Mehr-/Mindermengen capture per Größe (D2, no Problem-screen detour
- * for quantity deviations), Shop/WGR-Klartext/Catman (D3) and the
- * Online-Größen-Markierung rot/grün (D4). „Position geprüft" is un-checkable
- * (D5); the Teilabschluss dialog explains what happens to the Beleg afterwards
- * (D7).
+ * Positions are ONE table with a STICKY column header (A1 + Kundenfeedback
+ * 14.07.2026, Punkt 3), so every Größe-row carries its values at the same
+ * x-position and EK/VK/VK-Etikett/VK korrigiert sit right-aligned at the right
+ * edge. Each Größe is its own row with +/- Mehr-/Mindermengen capture (D2), the
+ * corrected VK price input (Punkt 4), Shop/Hauptshop (Punkt 2), WGR-Klartext,
+ * CatMan-Termin (Punkt 1) and the Online-Größen-Markierung rot/grün (D4).
+ *
+ * Probleme werden pro Position/Größe im Dialog erfasst (Punkt 5), lokal
+ * gesammelt und farblich markiert (Punkt 9); der beleg-weite Problem-Einstieg
+ * ist entfallen (Punkt 8). Eine Mehr-/Minderlieferung oder Preisabweichung ist
+ * automatisch ein Problem (Punkt 7): „Beleg erledigt" ist dann gesperrt, nur der
+ * Teilabschluss (mit gesammelten Problemen, Punkt 10) bleibt.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -28,10 +26,6 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -49,26 +43,23 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
+import { ProblemDialog } from '../components/ProblemDialog.js';
+import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
+import type { PositionView } from '../domain/types.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
-import { TAGESSTART, problemPath } from '../routes/paths.js';
+import { TAGESSTART } from '../routes/paths.js';
 
 /**
  * Arbeitsanweisung points that are already performed via dedicated controls
  * ("Beleg erledigt" sets the ZST) or are upstream (printing is vorgelagert, C4)
  * — hidden from the read-only Arbeitsanweisung list.
  */
-const ACTION_POINT_KEYS = new Set([
-  'price_label_print', // upstream (vorgelagert) — no work step here (C4)
-  'price_label_attach', // → per-position placement line
-  'zst', // → "Beleg erledigt" sets the ZST
-]);
+const ACTION_POINT_KEYS = new Set(['price_label_print', 'price_label_attach', 'zst']);
 
 /**
- * C4 display order (Feedback wörtlich: „1. Passt" = Sortieren bleibt vorn,
- * „2. Prüfung", „3. [Boxzettel] wandert an Position 5", „4. Rotpreis",
- * „5. Boxzettel"): Sortieren, Prüfung, Sicherungsetikett, Rotpreis, Boxzettel.
+ * C4 display order: Sortieren, Prüfung, Sicherungsetikett, Rotpreis, Boxzettel.
  * Unlisted keys (Online) sort last.
  */
 const POINT_DISPLAY_ORDER: Record<string, number> = {
@@ -104,10 +95,18 @@ const BOX_GOODS_TYPE_LABEL: Record<string, string> = {
 const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
 
 const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const CATMAN_DATE = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** Format a price, or empty when the mock ERP did not deliver one. */
 function price(value: number | undefined): string | null {
   return typeof value === 'number' ? EUR.format(value) : null;
+}
+
+/** Format an ISO day as a German date, or null when absent. */
+function catManDateLabel(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : CATMAN_DATE.format(d);
 }
 
 /** D4: chip colour + wording of the Online-Größen-Markierung. */
@@ -139,21 +138,22 @@ interface PositionColumn {
 /**
  * Feste Spalten der Positionen-Tabelle (A1). Die Online-Spalte entfällt, wenn der
  * Beleg keine online-relevante Position hat — innerhalb eines Belegs bleibt die
- * Geometrie damit konstant.
+ * Geometrie damit konstant. „VK korrigiert" steht direkt hinter „VK-Etikett".
  */
 function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
   const columns: PositionColumn[] = [
-    { key: 'pos', label: 'Pos', weight: 8 },
-    { key: 'ean', label: 'EAN', weight: 13 },
-    { key: 'size', label: 'Größe', weight: 7 },
-    { key: 'expected', label: 'Soll', align: 'right', weight: 6 },
-    { key: 'actual', label: 'Ist', align: 'center', weight: 14 },
-    { key: 'deviation', label: 'Mehr-/Mindermenge', weight: 15 },
-    { key: 'ek', label: 'EK', align: 'right', weight: 11 },
-    { key: 'vk', label: 'VK', align: 'right', weight: 11 },
-    { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 12 },
+    { key: 'pos', label: 'Pos', weight: 7 },
+    { key: 'ean', label: 'EAN', weight: 12 },
+    { key: 'size', label: 'Größe', weight: 6 },
+    { key: 'expected', label: 'Soll', align: 'right', weight: 5 },
+    { key: 'actual', label: 'Ist', align: 'center', weight: 13 },
+    { key: 'deviation', label: 'Mehr-/Mindermenge', weight: 13 },
+    { key: 'ek', label: 'EK', align: 'right', weight: 9 },
+    { key: 'vk', label: 'VK', align: 'right', weight: 9 },
+    { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 10 },
+    { key: 'vkCorrected', label: 'VK korrigiert', align: 'right', weight: 13 },
   ];
-  if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 13 });
+  if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 11 });
   return columns;
 }
 
@@ -177,7 +177,7 @@ export function BelegProcessScreen(): JSX.Element {
   const navigate = useNavigate();
   const flow = useCaseFlow(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
-  const [reason, setReason] = useState('');
+  const [problemTarget, setProblemTarget] = useState<PositionView | null>(null);
 
   if (flow.isError) {
     return (
@@ -206,25 +206,30 @@ export function BelegProcessScreen(): JSX.Element {
 
   const { aggregate, progress } = flow;
   const wi = aggregate.workInstruction;
-  // TODO(task-13+): there is no dedicated open-issue count endpoint yet — the
-  // former Dexie-backed local event log this used to count `issue.created`
-  // events is gone. The case's own live status already flips to `issue_open`
-  // once a problem is reported (see persist.ts's reportIssue → §7.1), so that
-  // is used as the (0 | 1) gate signal instead.
-  const openIssues = aggregate.case.status === 'issue_open' ? 1 : 0;
-  const gate = canCompleteCase(progress, aggregate, openIssues);
+  const gate = canCompleteCase(progress, aggregate);
+  // Teilabschluss ist nur möglich, wenn mindestens ein Problem vorliegt (das
+  // Backend würde sonst ablehnen). Ein Problem = manuell erfasst ODER implizit
+  // (Mengen-/Preisabweichung).
+  const problemCount =
+    progress.problems.length +
+    Object.keys(progress.confirmedQuantities).length +
+    Object.keys(progress.correctedVkPrices).length;
   const checked = new Set(progress.quantityCheckedPositionIds);
   const infoPoints = [...aggregate.instructionPoints]
     .filter((p) => !ACTION_POINT_KEYS.has(p.key))
-    .sort(
-      (a, b) => (POINT_DISPLAY_ORDER[a.key] ?? 99) - (POINT_DISPLAY_ORDER[b.key] ?? 99),
-    );
+    .sort((a, b) => (POINT_DISPLAY_ORDER[a.key] ?? 99) - (POINT_DISPLAY_ORDER[b.key] ?? 99));
   const positionsById = new Map(aggregate.positions.map((p) => [p.id, p]));
-  // C3: Abschnitt-Zahlen durch Warenart-Wording ersetzt (Vororder/Nachorder …).
   const c = aggregate.case;
-  // Warenart je Position: NOS ist positions-getrieben (nosFlag), sonst gilt der Beleg-Kopf.
-  const positionWarenart = (pos: (typeof aggregate.positions)[number]): string | undefined =>
+  const positionWarenart = (pos: PositionView): string | undefined =>
     pos.nosFlag ? 'NOS' : (c.goodsTypeText ?? undefined);
+  // Manuell erfasste Probleme je Position (für die farbliche Markierung, Punkt 9).
+  const manualByPosition = new Map<string, typeof progress.problems>();
+  for (const problem of progress.problems) {
+    manualByPosition.set(problem.positionId, [
+      ...(manualByPosition.get(problem.positionId) ?? []),
+      problem,
+    ]);
+  }
 
   const hasOnlineMarks = aggregate.positions.some((pos) =>
     pos.skuLines.some((s) => aggregate.onlineMarks[s.id]),
@@ -240,7 +245,7 @@ export function BelegProcessScreen(): JSX.Element {
   };
 
   const confirmPartial = async (): Promise<void> => {
-    const ok = await flow.partialComplete(reason.trim() || 'Teilabschluss');
+    const ok = await flow.partialComplete();
     if (ok) {
       setPartialOpen(false);
       navigate(TAGESSTART);
@@ -249,7 +254,6 @@ export function BelegProcessScreen(): JSX.Element {
 
   return (
     <StepScaffold
-      caseId={caseId}
       where={aggregate.case.storageLocation?.code ?? '—'}
       title={`WE ${aggregate.case.weBelegNo}`}
       subtitle={
@@ -259,11 +263,13 @@ export function BelegProcessScreen(): JSX.Element {
       }
       onBack={() => navigate(TAGESSTART)}
       primary={{ label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
-      secondary={{ label: 'Teilabschluss', onClick: () => setPartialOpen(true) }}
+      secondary={{
+        label: 'Teilabschluss (Problem melden)',
+        onClick: () => setPartialOpen(true),
+        disabled: problemCount === 0,
+      }}
     >
       <Stack spacing={2}>
-        {/* Beleg-Kopf: Warenart PROMINENT (Selbst-Priorisierung, leicht zu übersehen war
-            gestern das Feedback) + Beleg-Menge. */}
         <Stack direction="row" spacing={1} alignItems="center">
           {c.goodsTypeText ? (
             <Chip color="secondary" sx={{ fontWeight: 700 }} label={c.goodsTypeText} />
@@ -297,9 +303,6 @@ export function BelegProcessScreen(): JSX.Element {
                         {isInspection && aggregate.inspectionLevelLabel
                           ? ` · ${aggregate.inspectionLevelLabel}`
                           : ''}
-                        {/* C5: die Prüfstufe erklärt — „Nein“ heißt NICHT: nichts prüfen. Der Hinweis
-                            hängt am Icon, statt die Arbeitsanweisung um Button + Aufklappblock zu
-                            verbreitern. enterTouchDelay=0: auf dem Touchdisplay genügt ein Tipp. */}
                         {isInspection && aggregate.inspectionDescription ? (
                           <Tooltip
                             title={aggregate.inspectionDescription}
@@ -311,20 +314,11 @@ export function BelegProcessScreen(): JSX.Element {
                               fontSize="small"
                               tabIndex={0}
                               aria-label={`Was heißt das? ${aggregate.inspectionDescription}`}
-                              sx={{
-                                color: 'text.secondary',
-                                cursor: 'help',
-                                // Glyphe bleibt 20 px, die Trefferfläche wächst auf 32 px:
-                                // ein Hinweis ist keine Primäraktion (touchTarget.min = 48), muss
-                                // am Touchdisplay aber sicher zu treffen sein.
-                                p: '6px',
-                                boxSizing: 'content-box',
-                              }}
+                              sx={{ color: 'text.secondary', cursor: 'help', p: '6px', boxSizing: 'content-box' }}
                             />
                           </Tooltip>
                         ) : null}
                       </Typography>
-                      {/* Wert nicht doppeln, wenn er bereits im Titel steht (Prüfstufe). */}
                       {!(isInspection && aggregate.inspectionLevelLabel === point.value) ? (
                         <Typography variant="body2" color="text.secondary">
                           {point.value}
@@ -338,36 +332,27 @@ export function BelegProcessScreen(): JSX.Element {
           </Paper>
         ) : null}
 
-        {/* Full position list at a glance with flags + Soll/Ist + position check. */}
         <Typography variant="subtitle2">Positionen</Typography>
         {wi.goodsReceiptCheckMode === 'quantity_only' ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
             Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".
           </Typography>
         ) : null}
-        {/* TODO(task-13+): "Position geprüft"/Mengen-Fortschritt is client-only
-            cache state while working the Beleg (no live per-action backend
-            endpoint yet, see useCaseFlow.ts) — it does not survive a reload
-            mid-Beleg. "Beleg erledigt"/"Teilabschluss" DOES transfer the
-            recorded Mengen to the backend (completedQuantity), so this caption
-            is literally accurate, not just a disclaimer. */}
         <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-          Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" sichert
-          ihn dauerhaft.
+          Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" oder der
+          Teilabschluss sichert ihn dauerhaft.
         </Typography>
-        {/* A1: EINE Tabelle über alle Positionen — feste Spaltenüberschriften, jede
-            Größen-Zeile trägt ihre Werte an derselben x-Position. EK/VK/VK-Etikett
-            stehen rechtsbündig ganz rechts (Dustin: „dass die Daten wie Verkaufspreis,
-            EK-Preis weiter rechts stehen"), Mehr-/Mindermengen direkt daneben. Jede
-            Position ist ein <tbody>: eine Kopfzeile mit Artikel-Identität, Chips,
-            Arbeitsanweisung und Aktionen, darunter je Größe eine Zeile (D1/D2/D4). */}
+        {/* A1: EINE Tabelle über alle Positionen mit STICKY Kopfzeile (Punkt 3). Die
+            Tabelle scrollt vertikal in ihrem Container; die Spaltenüberschriften
+            bleiben oben stehen. EK/VK/VK-Etikett/VK korrigiert stehen rechts. */}
         <Paper variant="outlined">
-          <TableContainer sx={{ overflowX: 'auto' }}>
+          <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100dvh - 340px)' }}>
             <Table
+              stickyHeader
               aria-label="Positionen"
               sx={{
                 tableLayout: 'fixed',
-                minWidth: 1360,
+                minWidth: 1440,
                 '& .MuiTableCell-root': { fontSize: '1.0625rem', py: 1 },
               }}
             >
@@ -382,7 +367,7 @@ export function BelegProcessScreen(): JSX.Element {
                     <TableCell
                       key={col.key}
                       align={col.align}
-                      sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+                      sx={{ fontWeight: 700, whiteSpace: 'nowrap', bgcolor: 'background.paper' }}
                     >
                       {col.label}
                     </TableCell>
@@ -396,10 +381,10 @@ export function BelegProcessScreen(): JSX.Element {
                   (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
                 );
                 const i = pos.instruction;
+                const manualProblems = manualByPosition.get(pos.id) ?? [];
+                const catManLabel = catManDateLabel(pos.catManDate);
                 const instructionLines = [
-                  i.priceLabelAttachLocation
-                    ? `Etikett anbringen: ${i.priceLabelAttachLocation}`
-                    : null,
+                  i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
                   i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
                   i.onlineHandlingRequired && i.onlineHandlingLocation
                     ? `Online: ${i.onlineHandlingLocation}`
@@ -421,23 +406,23 @@ export function BelegProcessScreen(): JSX.Element {
                           justifyContent="space-between"
                           alignItems="flex-start"
                         >
-                          {/* Die Kopfzeile liegt breit statt hoch: sonst frisst allein die
-                              Artikel-Identität den sichtbaren Bereich, bevor die erste
-                              Größen-Zeile beginnt. */}
                           <Box sx={{ minWidth: 0 }}>
-                            <Stack
-                              direction="row"
-                              alignItems="center"
-                              sx={{ flexWrap: 'wrap', gap: 0.75 }}
-                            >
+                            <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                               {/* D3: Artikel-Nr. + Farbe in derselben Schriftgröße. */}
                               <Typography sx={{ fontWeight: 700 }}>
                                 {pos.supplierArticleNo} · {pos.supplierColor}
                               </Typography>
-                              {pos.nosFlag ? (
-                                <Chip size="small" color="success" label="♻️ NOS" />
+                              {/* Punkt 2: Hauptshop + Shop in derselben Schriftgröße wie die Art-Nr. */}
+                              <Typography sx={{ fontWeight: 700 }} color="text.secondary">
+                                {pos.hShopNo ? `HShop ${pos.hShopNo} · ` : ''}Shop {pos.shopNo}
+                              </Typography>
+                              {/* Ordernummer zur Fehlerlösung (Kundenfeedback 14.07.2026). */}
+                              {pos.orderNo ? (
+                                <Typography sx={{ fontWeight: 700 }} color="text.secondary">
+                                  Order {pos.orderNo}
+                                </Typography>
                               ) : null}
-                              {/* Warenart je Position (NOS hat schon sein Badge). */}
+                              {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
                               {!pos.nosFlag && positionWarenart(pos) ? (
                                 <Chip
                                   size="small"
@@ -446,22 +431,22 @@ export function BelegProcessScreen(): JSX.Element {
                                   label={positionWarenart(pos)}
                                 />
                               ) : null}
-                              {pos.catMan ? (
-                                <Chip size="small" variant="outlined" label="Catman" />
+                              {/* Punkt 1: CatMan-Termin (Datum) statt bloßem Kennzeichen. */}
+                              {catManLabel ? (
+                                <Chip size="small" variant="outlined" label={`CatMan ${catManLabel}`} />
+                              ) : pos.catMan ? (
+                                <Chip size="small" variant="outlined" label="CatMan" />
                               ) : null}
                               {flags.map((f) => (
                                 <Chip key={f.key} size="small" color={f.color} label={f.label} />
                               ))}
                             </Stack>
 
-                            {/* Warenbezeichnung = Artikel-Identität: WGR mit Klartext (+ Saison) + Shop. */}
+                            {/* Warenbezeichnung: WGR mit Klartext (+ Saison). */}
                             <Typography variant="body2" color="text.secondary">
                               WGR {pos.wgr}
-                              {WGR_DESCRIPTION.get(pos.wgr)
-                                ? ` ${WGR_DESCRIPTION.get(pos.wgr)}`
-                                : ''}
+                              {WGR_DESCRIPTION.get(pos.wgr) ? ` ${WGR_DESCRIPTION.get(pos.wgr)}` : ''}
                               {pos.season ? ` · Saison ${pos.season}` : ''}
-                              {` · Shop ${pos.shopNo}`}
                             </Typography>
 
                             {instructionLines.length > 0 || (i.securityRequired && i.securityTypeCode) ? (
@@ -470,22 +455,18 @@ export function BelegProcessScreen(): JSX.Element {
                                 alignItems="center"
                                 sx={{ mt: 0.5, flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}
                               >
-                                {/* C6: Sicherungstyp als Piktogramm (Backend-Asset). */}
                                 {i.securityRequired && i.securityTypeCode ? (
                                   <Stack direction="row" spacing={1} alignItems="center">
                                     {pictogramUrl(i.securityTypeCode) ? (
                                       <Box
                                         component="img"
                                         src={pictogramUrl(i.securityTypeCode)}
-                                        alt={
-                                          PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode
-                                        }
+                                        alt={PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
                                         sx={{ width: 40, height: 40 }}
                                       />
                                     ) : null}
                                     <Typography variant="body2" color="text.secondary">
-                                      Sicherungstyp:{' '}
-                                      {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
+                                      Sicherungstyp: {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
                                     </Typography>
                                   </Stack>
                                 ) : null}
@@ -496,20 +477,28 @@ export function BelegProcessScreen(): JSX.Element {
                                 ))}
                               </Stack>
                             ) : null}
+
+                            {/* Punkt 9: farbliche Markierung der erfassten manuellen Probleme. */}
+                            {manualProblems.length > 0 ? (
+                              <Stack direction="row" sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}>
+                                {manualProblems.map((problem) => (
+                                  <Chip
+                                    key={problem.id}
+                                    size="small"
+                                    color="error"
+                                    variant="filled"
+                                    label={problem.note ? `${problem.reasonLabel}: ${problem.note}` : problem.reasonLabel}
+                                    onDelete={() => flow.removeProblem(problem.id)}
+                                  />
+                                ))}
+                              </Stack>
+                            ) : null}
                           </Box>
 
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ flexShrink: 0 }}
-                          >
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                             <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                               Soll gesamt {soll}
                             </Typography>
-                            {/* D5: 'Position geprüft' — wieder abwählbar (Toggle). Der Chip ist
-                                im geprüften Zustand das EINZIGE Abwähl-Ziel und muss darum
-                                dieselbe Trefferfläche haben wie der Button darunter. */}
                             {isChecked ? (
                               <Chip
                                 color="success"
@@ -518,20 +507,11 @@ export function BelegProcessScreen(): JSX.Element {
                                 sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
                               />
                             ) : (
-                              <Button
-                                variant="contained"
-                                onClick={() => void flow.togglePositionChecked(pos.id)}
-                              >
+                              <Button variant="contained" onClick={() => void flow.togglePositionChecked(pos.id)}>
                                 Position geprüft
                               </Button>
                             )}
-                            <Button
-                              color="error"
-                              variant="text"
-                              onClick={() =>
-                                navigate(problemPath(caseId, { scope: 'position', scopeId: pos.id }))
-                              }
-                            >
+                            <Button color="error" variant="text" onClick={() => setProblemTarget(pos)}>
                               Problem
                             </Button>
                           </Stack>
@@ -543,19 +523,31 @@ export function BelegProcessScreen(): JSX.Element {
                       const ist = progress.confirmedQuantities[s.id] ?? s.expectedQuantity;
                       const delta = ist - s.expectedQuantity;
                       const mark = aggregate.onlineMarks[s.id];
+                      const corrected = progress.correctedVkPrices[s.id];
+                      const hasPriceProblem = corrected !== undefined;
+                      // Punkt 9: Zeile mit Abweichung/Preisproblem rot hinterlegen.
+                      const rowProblem = delta !== 0 || hasPriceProblem;
                       return (
-                        <TableRow key={s.id} hover>
+                        <TableRow
+                          key={s.id}
+                          hover
+                          sx={
+                            rowProblem
+                              ? {
+                                  bgcolor: 'rgba(211, 47, 47, 0.08)',
+                                  borderLeft: '3px solid',
+                                  borderLeftColor: 'error.main',
+                                }
+                              : undefined
+                          }
+                        >
                           <TableCell />
                           <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
                           {hasOnlineMarks ? (
                             <TableCell>
                               {mark ? (
-                                <Chip
-                                  size="small"
-                                  color={ONLINE_MARK[mark].color}
-                                  label={ONLINE_MARK[mark].label}
-                                />
+                                <Chip size="small" color={ONLINE_MARK[mark].color} label={ONLINE_MARK[mark].label} />
                               ) : null}
                             </TableCell>
                           ) : null}
@@ -563,18 +555,11 @@ export function BelegProcessScreen(): JSX.Element {
                             {s.expectedQuantity}
                           </TableCell>
                           <TableCell align="center">
-                            <Stack
-                              direction="row"
-                              spacing={0.5}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
+                            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
                               <IconButton
                                 sx={STEPPER_BUTTON}
                                 aria-label={`Größe ${s.size}: Menge verringern`}
-                                onClick={() =>
-                                  void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
-                                }
+                                onClick={() => void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)}
                               >
                                 −
                               </IconButton>
@@ -592,9 +577,7 @@ export function BelegProcessScreen(): JSX.Element {
                               <IconButton
                                 sx={STEPPER_BUTTON}
                                 aria-label={`Größe ${s.size}: Menge erhöhen`}
-                                onClick={() =>
-                                  void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
-                                }
+                                onClick={() => void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)}
                               >
                                 +
                               </IconButton>
@@ -605,11 +588,7 @@ export function BelegProcessScreen(): JSX.Element {
                               <Chip
                                 size="small"
                                 color="warning"
-                                label={
-                                  delta > 0
-                                    ? `+${delta} Mehrmenge`
-                                    : `−${Math.abs(delta)} Mindermenge`
-                                }
+                                label={delta > 0 ? `+${delta} Mehrmenge` : `−${Math.abs(delta)} Mindermenge`}
                               />
                             ) : null}
                           </TableCell>
@@ -621,6 +600,31 @@ export function BelegProcessScreen(): JSX.Element {
                           </TableCell>
                           <TableCell align="right" sx={NUMERIC_CELL}>
                             {price(s.vkLabelPrice) ?? '—'}
+                          </TableCell>
+                          {/* Punkt 4: Preiskorrektur direkt hinter der VK-Etikett-Spalte. */}
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              type="number"
+                              placeholder="Preis"
+                              value={corrected ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                flow.setCorrectedVkPrice(
+                                  s.id,
+                                  raw === '' ? undefined : Number(raw),
+                                  s.vkLabelPrice,
+                                );
+                              }}
+                              inputProps={{
+                                min: 0,
+                                step: '0.01',
+                                inputMode: 'decimal',
+                                'aria-label': `Größe ${s.size}: VK korrigieren`,
+                                style: { textAlign: 'right' },
+                              }}
+                              sx={{ width: 120 }}
+                            />
                           </TableCell>
                         </TableRow>
                       );
@@ -640,19 +644,13 @@ export function BelegProcessScreen(): JSX.Element {
             {aggregate.boxTargets.map((t, i) => {
               const boxPositions = t.positionIds
                 .map((id) => positionsById.get(id))
-                .filter((p): p is (typeof aggregate.positions)[number] => Boolean(p));
+                .filter((p): p is PositionView => Boolean(p));
               const posNos = boxPositions.map((p) => p.positionNo).sort((a, b) => a - b);
-              // Warenart nie als rohes 'mixed'/„Gemischt“ verkürzen: bei gemischten Boxen
-              // die enthaltenen Warenarten aufschlüsseln (aus den Positionen der Box).
               const warenartLabel = (() => {
                 if (!t.goodsType) return null;
                 if (t.goodsType !== 'mixed') return BOX_GOODS_TYPE_LABEL[t.goodsType] ?? t.goodsType;
                 const parts = [
-                  ...new Set(
-                    boxPositions
-                      .map((p) => positionWarenart(p))
-                      .filter((w): w is string => Boolean(w)),
-                  ),
+                  ...new Set(boxPositions.map((p) => positionWarenart(p)).filter((w): w is string => Boolean(w))),
                 ];
                 return parts.length > 0 ? `Gemischt: ${parts.join(' + ')}` : 'Gemischt';
               })();
@@ -690,11 +688,15 @@ export function BelegProcessScreen(): JSX.Element {
         ) : null}
 
         {/* Why the close is blocked, if it is. */}
-        {!gate.ok ? <Alert severity="info">Noch offen: {gate.reasons.join(' · ')}</Alert> : null}
+        {!gate.ok ? (
+          <Alert severity="info">
+            {gate.reasons.join(' · ')}
+            {problemCount > 0
+              ? ' – über „Teilabschluss (Problem melden)" an die Teamleitung senden.'
+              : ''}
+          </Alert>
+        ) : null}
 
-        {/* A milestone POST (Beleg erledigt/Teilabschluss/Start) failed — never
-            swallowed (B4): surfaced here. The action itself stayed unset, so
-            pressing the same button again (below) is the retry. */}
         {flow.actionError ? (
           <Alert severity="error" onClose={flow.clearActionError}>
             {flow.actionError} – bitte erneut versuchen.
@@ -702,34 +704,20 @@ export function BelegProcessScreen(): JSX.Element {
         ) : null}
       </Stack>
 
-      <Dialog open={partialOpen} onClose={() => setPartialOpen(false)} fullWidth>
-        <DialogTitle>Teilabschluss</DialogTitle>
-        <DialogContent>
-          {/* D7: erklären, was der Teilabschluss tut und was mit dem Beleg passiert. */}
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Du schließt nur den bearbeiteten Teil ab. Der Beleg geht mit deinem Grund an die
-            Teamleitung und kommt mit der Restware zurück in die Planung (in der Regel am
-            nächsten Tag). In deiner Liste zählt er nicht als „Fertig“, sondern als
-            „Teilabschluss“.
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Grund"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            multiline
-            minRows={2}
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPartialOpen(false)}>Abbrechen</Button>
-          <Button variant="contained" onClick={confirmPartial}>
-            Teil abschließen
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ProblemDialog
+        open={problemTarget !== null}
+        position={problemTarget}
+        onClose={() => setProblemTarget(null)}
+        onSave={(problem) => flow.addProblem(problem)}
+      />
+
+      <TeilabschlussDialog
+        open={partialOpen}
+        progress={progress}
+        aggregate={aggregate}
+        onClose={() => setPartialOpen(false)}
+        onConfirm={confirmPartial}
+      />
     </StepScaffold>
   );
 }

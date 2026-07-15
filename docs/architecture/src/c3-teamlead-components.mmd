@@ -15,9 +15,10 @@ flowchart TB
             cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Braucht dich”-Entscheidungsliste<br/>(aus lanes) · Frei-&amp;-wartend (aus board) · SimulationPanel · Automatik toggle</i>"]:::feat
             ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
             board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · Bündel anlegen (AssignDialog, A1/A2 multi-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
-            belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list (Scopes Aktiv·Topf·Archiv·Alle,<br/>Filter/Sort/Pagination via GET /pool) + detail</i>"]:::feat
+            belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list + detail; Klärungs-UX (IssuesTab):<br/>alle Probleme mit Grund/Order/Delta/Preis → „Probleme geklärt”</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
-            admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand (EffortPreview)·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen</i>"]:::feat
+            admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen·Schichtende·Problemarten</i>"]:::feat
+            problemTab["admin/ProblemReasonsTab<br/><i>Problemarten-Katalog editieren (GET·PUT /api/admin/problem-reasons)</i>"]:::feat
             devtab["admin/DevScenariosTab (dev-gated, lazy)<br/><i>Szenario-Katalog (Backend-Quelle) · Zeit-Override · Quick-Knobs —<br/>tree-shaken aus Prod-Builds (import.meta.env-Gate, config/devPanel.ts)</i>"]:::dev
         end
         devbadge["components/DevTimeBadge (dev-gated, lazy)<br/><i>globales App-Bar-Badge bei aktivem Server-Zeit-Override</i>"]:::dev
@@ -40,6 +41,8 @@ flowchart TB
     belege --> store
     split --> store
     admin --> belegeData
+    admin --> problemTab
+    problemTab --> belegeData
     admin -. "lazy (nur Dev-Build)" .-> devtab
     devtab --> devData
     devbadge --> devData

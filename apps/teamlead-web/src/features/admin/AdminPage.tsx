@@ -33,6 +33,7 @@ import { EffortPreview } from './EffortPreview.js';
 import { EmployeeSettings } from './EmployeeSettings.js';
 import { SchichtplanTab } from './SchichtplanTab.js';
 import { IntegrationenTab } from './IntegrationenTab.js';
+import { ProblemReasonsTab } from './ProblemReasonsTab.js';
 import { devPanelRuntimeEnabled } from '../../config/devPanel.js';
 
 /**
@@ -61,6 +62,7 @@ const BASE_TABS = [
   'Schichtplan',
   'Integrationen',
   'Schichtende',
+  'Problemarten',
 ];
 
 /** Dev-only tab appended AFTER all positional indices (A1); index = BASE_TABS.length. */
@@ -80,6 +82,8 @@ const LOCATIONS_TAB = 5;
 const EMPLOYEES_TAB = 6;
 const SCHICHTPLAN_TAB = 7;
 const INTEGRATIONS_TAB = 8;
+/** Problemarten-Katalog-Pflege (Kundenfeedback 14.07.2026, Punkt 5). */
+const PROBLEM_REASONS_TAB = 10;
 
 const RULES_QUERY_KEY = ['admin', 'rules'] as const;
 
@@ -148,6 +152,8 @@ export function AdminPage(): JSX.Element {
         >
           <DevScenariosTab />
         </Suspense>
+      ) : tab === PROBLEM_REASONS_TAB ? (
+        <ProblemReasonsTab />
       ) : tab === INTEGRATIONS_TAB ? (
         <IntegrationenTab />
       ) : tab === SCHICHTPLAN_TAB ? (

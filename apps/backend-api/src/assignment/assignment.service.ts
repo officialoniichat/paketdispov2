@@ -36,8 +36,12 @@ import { toEmployeeShift, toGoodsReceiptCase, toLocationMaster } from './assignm
 import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto.js';
 
 const POOL_STATUS = 'ready' as const;
-/** A case in one of these no longer counts as "open" within a bundle. */
-const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
+/**
+ * A case in one of these does not block pulling the next cart. `issue_open`
+ * zählt mit: der Beleg ist rot beim MA geparkt und wartet auf den Teamlead —
+ * der MA arbeitet währenddessen an anderer Ware weiter (Kundenfeedback 14.07.2026).
+ */
+const PULL_NON_BLOCKING_STATUSES = ['completed', 'zst_done', 'cancelled', 'issue_open'] as const;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -100,11 +104,13 @@ export class AssignmentService {
     const engineConfig = engineConfigFromRuleConfig(ruleConfig);
 
     // Monster-Beleg-Fortsetzung (C6): Mitarbeiter, die noch an einem offenen Beleg
-    // über der Teile-Schwelle hängen (partially_completed), bekommen KEIN neues
-    // Starter-Pack — ihre Schicht wird der Verteilung entzogen, bis der Beleg fertig ist.
+    // über der Teile-Schwelle arbeiten (in_progress/problem_resolved), bekommen KEIN
+    // neues Starter-Pack — ihre Schicht wird der Verteilung entzogen, bis der Beleg
+    // fertig ist. Ein rot geparkter Problemfall (issue_open) entzieht die Schicht
+    // NICHT: der MA arbeitet währenddessen an anderer Ware (Kundenfeedback 14.07.2026).
     const continuationCases = await this.prisma.goodsReceiptCase.findMany({
       where: {
-        status: 'partially_completed',
+        status: { in: ['in_progress', 'problem_resolved'] },
         totalQuantity: { gte: engineConfig.assignment.largeBelegTeileThreshold },
         assignedBundleId: { not: null },
       },
@@ -134,8 +140,8 @@ export class AssignmentService {
 
       // 2a. Clear-before-insert (§8.3 idempotency): a case in the freed `ready` pool must
       //     not still be a member of ANY bundle. A residual AssignmentItem — e.g. left
-      //     behind when a `partially_completed` case is reactivated to `ready` (the
-      //     §7.1 workflow transition only flips the status; it does NOT unlink the bundle
+      //     behind when a workflow transition put a case back to `ready` (transitions
+      //     only flip the status; they do NOT unlink the bundle
       //     or drop the item) — would otherwise collide with this plan's freshly created
       //     item on the @@unique([caseId]) constraint (Prisma P2002) inside persistBundle.
       //     clearPriorPlanForDate cannot catch it: the owning bundle stays "referenced"
@@ -223,11 +229,11 @@ export class AssignmentService {
     const engineConfig = engineConfigFromRuleConfig(ruleConfig);
 
     // Monster-Beleg-Fortsetzung (C6): wer noch an einem mehrtägigen Beleg über der
-    // Teile-Schwelle hängt (partially_completed), erhält KEINE neuen Belege, bis er
-    // fertig ist — die Fortsetzung läuft über das bestehende Bündel.
+    // Teile-Schwelle arbeitet (in_progress/problem_resolved), erhält KEINE neuen
+    // Belege, bis er fertig ist — die Fortsetzung läuft über das bestehende Bündel.
     const openLargeCase = await this.prisma.goodsReceiptCase.findFirst({
       where: {
-        status: 'partially_completed',
+        status: { in: ['in_progress', 'problem_resolved'] },
         totalQuantity: { gte: engineConfig.assignment.largeBelegTeileThreshold },
         assignedBundle: { employeeId: employee.id },
       },
@@ -251,7 +257,7 @@ export class AssignmentService {
       const open = await this.prisma.goodsReceiptCase.count({
         where: {
           assignedBundleId: { in: todaysBundles.map((b) => b.id) },
-          status: { notIn: [...TERMINAL_CASE_STATUSES] },
+          status: { notIn: [...PULL_NON_BLOCKING_STATUSES] },
         },
       });
       if (open > 0) return { assigned: false, reason: 'active_bundle' };
@@ -309,7 +315,7 @@ export class AssignmentService {
             effortMinutes: effort.minutes,
             effortPoints: effort.points,
             wgrCodes: vector ? vector.wgrCodes : [],
-            fromPreviousDays: c.bookingDate < day || c.status === 'partially_completed',
+            fromPreviousDays: c.bookingDate < day,
             bereich: kind ? bereichFromLocationKind(kind) : undefined,
           } satisfies EnrichedCase;
         })
@@ -441,7 +447,7 @@ export class AssignmentService {
       this.readRuleConfig(),
     ]);
 
-    // The engine's §8.1 eligibility is `ready`/`partially_completed`; an already
+    // The engine's §8.1 eligibility is `ready`; an already
     // committed-but-not-started case is `assigned`. For the simulation we present
     // those `assigned` cases to the pure engine AS `ready` so it re-proposes today's
     // plan (recalculate is untouched — this normalisation is preview-only and never

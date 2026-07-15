@@ -78,19 +78,21 @@ describe('minimum-quantity guardrail', () => {
 
 describe('canCompleteCase', () => {
   it('blocks while a position check is open', () => {
-    const gate = canCompleteCase(p0, agg, 0);
+    const gate = canCompleteCase(p0, agg);
     expect(gate.ok).toBe(false);
     expect(gate.reasons.some((r) => r.includes('Positionen'))).toBe(true);
   });
 
-  it('blocks while a problem is open', () => {
-    const gate = canCompleteCase(checkAll(p0), agg, 1);
+  it('blocks while a deviation/problem is recorded (Teilabschluss statt Beleg erledigt)', () => {
+    const firstSku = agg.positions[0]!.skuLines[0]!;
+    const withDeviation = setSkuQuantity(checkAll(p0), firstSku.id, firstSku.expectedQuantity + 1, firstSku.expectedQuantity);
+    const gate = canCompleteCase(withDeviation, agg);
     expect(gate.ok).toBe(false);
-    expect(gate.reasons).toContain('Offenes Problem – erst klären');
+    expect(gate.reasons.some((r) => r.includes('Teilabschluss'))).toBe(true);
   });
 
-  it('passes once every position is checked (printing/boxing never gate — C4)', () => {
-    expect(canCompleteCase(checkAll(p0), agg, 0).ok).toBe(true);
+  it('passes once every position is checked and no problem exists (printing/boxing never gate — C4)', () => {
+    expect(canCompleteCase(checkAll(p0), agg).ok).toBe(true);
   });
 });
 

@@ -73,11 +73,12 @@ export const caseStatusMeta: Record<CaseStatus, ChipMeta> = {
   assigned: { label: 'Zugewiesen', bg: ltColors.info, fg: '#ffffff', icon: 'play' },
   in_progress: { label: 'In Arbeit', bg: ltColors.brandLight, fg: '#ffffff', icon: 'play' },
   issue_open: { label: 'Problem', bg: ltColors.danger, fg: '#ffffff', icon: 'error' },
-  partially_completed: {
-    label: 'Teilfertig',
-    bg: ltColors.warning,
+  // Problem-Loop (Kundenfeedback 14.07.2026): Teamlead hat geklärt — grün beim MA.
+  problem_resolved: {
+    label: 'Geklärt',
+    bg: ltColors.success,
     fg: '#ffffff',
-    icon: 'doneAll',
+    icon: 'check',
   },
   completed: { label: 'Fertig', bg: ltColors.success, fg: '#ffffff', icon: 'doneAll' },
   zst_done: { label: 'ZST erledigt', bg: '#00695c', fg: '#ffffff', icon: 'doneAll' },

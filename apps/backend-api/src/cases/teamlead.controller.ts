@@ -32,7 +32,7 @@ import {
   PoolQueryDto,
   PrioritizeDto,
   ReorderBundleDto,
-  ResolveIssueDto,
+  ResolveProblemsDto,
   TransitionResultDto,
   WithdrawDto,
   ZstExportResultDto,
@@ -277,17 +277,6 @@ export class TeamleadController {
     return this.teamlead.approve(principal, caseId, dto);
   }
 
-  @Post('cases/:caseId/reactivate')
-  @ApiOperation({ summary: 'Rest reaktivieren: put a part-finished remainder back to work (partially_completed → ready).' })
-  @ApiOkResponse({ type: TransitionResultDto })
-  reactivate(
-    @CurrentUser() principal: Principal,
-    @Param('caseId') caseId: string,
-    @Body() dto: ParkDto,
-  ): Promise<TransitionResultDto> {
-    return this.teamlead.reactivate(principal, caseId, dto);
-  }
-
   @Post('cases/:caseId/deprioritize')
   @ApiOperation({ summary: 'Priorität entfernen: drop the manual teamlead priority (case.deprioritized).' })
   @ApiOkResponse({ type: TransitionResultDto })
@@ -310,15 +299,18 @@ export class TeamleadController {
     return this.teamlead.cancel(principal, caseId, dto);
   }
 
-  @Post('cases/:caseId/resolve-issue')
-  @ApiOperation({ summary: 'Problem freigeben: resolve a case open issue (issue_open -> in_progress)' })
+  @Post('cases/:caseId/resolve-problems')
+  @ApiOperation({
+    summary:
+      'Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA',
+  })
   @ApiOkResponse({ type: TransitionResultDto })
-  resolveIssue(
+  resolveProblems(
     @CurrentUser() principal: Principal,
     @Param('caseId') caseId: string,
-    @Body() dto: ResolveIssueDto,
+    @Body() dto: ResolveProblemsDto,
   ): Promise<TransitionResultDto> {
-    return this.teamlead.resolveIssue(principal, caseId, dto);
+    return this.teamlead.resolveProblems(principal, caseId, dto);
   }
 
   // --- Assignment engine (§8.3) ---------------------------------------------

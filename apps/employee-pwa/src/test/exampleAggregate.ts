@@ -1,6 +1,6 @@
 /**
  * Shared `CaseAggregate` test fixture for the pure workflow unit tests
- * (`issueTarget.test.ts`, `workflowModel.test.ts`).
+ * (`workflowModel.test.ts`).
  *
  * The former `domain/exampleAssignment.ts` (deleted with the Dexie/offline-demo
  * scaffolding, see `bf3b7b3`) built this from a bigger scenario-assembly

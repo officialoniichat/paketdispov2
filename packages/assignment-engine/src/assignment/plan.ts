@@ -66,8 +66,7 @@ function enrichCase(
     effortMinutes: effort.minutes,
     effortPoints: effort.points,
     wgrCodes: vector ? vector.wgrCodes : [],
-    fromPreviousDays:
-      goodsCase.bookingDate < input.date || goodsCase.status === 'partially_completed',
+    fromPreviousDays: goodsCase.bookingDate < input.date,
   };
 }
 

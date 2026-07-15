@@ -81,8 +81,10 @@ export const caseStatusSchema = z.enum([
   'parked',
   'assigned',
   'in_progress',
+  // Teilabschluss mit Problemen: rot beim SELBEN MA geparkt, wartet auf Teamlead.
   'issue_open',
-  'partially_completed',
+  // Teamlead hat geklärt: grün beim SELBEN MA, Weiterbearbeitung möglich.
+  'problem_resolved',
   'completed',
   'zst_done',
   'cancelled',
@@ -151,20 +153,19 @@ export type SkuLineStatus = z.infer<typeof skuLineStatusSchema>;
 export const shiftSourceSchema = z.enum(['seak', 'pattern', 'teamlead']);
 export type ShiftSource = z.infer<typeof shiftSourceSchema>;
 
-export const issueTypeSchema = z.enum([
-  'missing_quantity',
-  'overdelivery',
-  'wrong_article',
-  'wrong_color',
-  'wrong_size',
-  'damaged_goods',
-  'missing_package',
-  'label_problem',
-  'security_problem',
-  'printer_problem',
-  'other',
+/**
+ * Art eines Problems (Kundenfeedback 14.07.2026): `manual` = vom MA erfasst mit
+ * Grund aus dem admin-verwalteten ProblemReason-Katalog; die übrigen Werte sind
+ * IMPLIZITE Probleme, die das Backend aus SKU-Mengen-Deltas bzw. Preiskorrekturen
+ * ableitet. Sie erzwingen einen Teilabschluss.
+ */
+export const problemKindSchema = z.enum([
+  'manual',
+  'over_delivery',
+  'under_delivery',
+  'price_deviation',
 ]);
-export type IssueType = z.infer<typeof issueTypeSchema>;
+export type ProblemKind = z.infer<typeof problemKindSchema>;
 
 export const pickupSequenceModeSchema = z.enum(['numeric_fallback', 'manual_sort_order']);
 export type PickupSequenceMode = z.infer<typeof pickupSequenceModeSchema>;
@@ -185,13 +186,17 @@ export const workflowEventTypeSchema = z.enum([
   'sku.quantity_confirmed',
   'issue.created',
   'issue.resolved',
+  // Problem-Loop (Kundenfeedback 14.07.2026): Teilabschluss meldet die gesammelten
+  // Probleme, der Teamlead klärt sie, der SELBE MA setzt fort.
+  'case.problems_reported',
+  'case.problems_resolved',
+  'case.resumed',
   'box.label_printed',
   'box.sealed',
   'print.job_created',
   'print.job_completed',
   'print.job_failed',
   'case.completed',
-  'case.partially_completed',
   'zst.created',
   'zst.exported',
   'assignment.overridden',

@@ -135,9 +135,9 @@ export async function seedCaseDetails(
           'assigned',
           'in_progress',
           'completed',
-          'partially_completed',
           'zst_done',
           'issue_open',
+          'problem_resolved',
         ],
       },
     },
@@ -199,11 +199,15 @@ export async function seedCaseDetails(
     });
     const positionIdsByFloor = new Map<string, string[]>();
     for (const p of posMeta) {
+      // CatMan-Termin (Kundenfeedback 14.07.2026): auf der CatMan-Position der
+      // Load-Plan-Tag des Belegs (fällt sichtbar in der PWA-Positionszeile).
+      const catManDate = p.catMan ? c.loadPlanDate ?? null : null;
       const position = await prisma.receiptPosition.upsert({
         where: { position_case_no: { caseId: c.id, positionNo: p.positionNo } },
         update: {
           wgr: p.wgr, supplierArticleNo: p.supplierArticleNo, supplierColor: p.supplierColor,
-          floor: p.floor, catMan: p.catMan, shopNo: '21', branchNo: '001',
+          floor: p.floor, catMan: p.catMan, catManDate, orderNo: `ORD-${c.weBelegNo}-${p.positionNo}`,
+          shopNo: '21', hShopNo: '21', branchNo: '001',
           onlineRelevant: p.onlineRelevant,
         },
         create: {
@@ -214,8 +218,11 @@ export async function seedCaseDetails(
           supplierColor: p.supplierColor,
           branchNo: c.branchNo,
           shopNo: c.primaryShopAreaNo ?? '21',
+          hShopNo: c.primaryShopAreaNo ?? '21',
           floor: p.floor,
           catMan: p.catMan,
+          catManDate,
+          orderNo: `ORD-${c.weBelegNo}-${p.positionNo}`,
           onlineRelevant: p.onlineRelevant,
         },
       });
@@ -299,10 +306,10 @@ type LifecycleStatus =
   | 'parked'
   | 'in_progress'
   | 'completed'
-  | 'partially_completed'
   | 'zst_done'
   | 'cancelled'
-  | 'issue_open';
+  | 'issue_open'
+  | 'problem_resolved';
 
 export interface SeedLifecycleCase {
   weBelegNo: string;
@@ -317,7 +324,16 @@ export interface SeedLifecycleCase {
   completedQuantity?: number;
   completedAt?: string;
   exportedAt?: string;
-  issue?: { issueType: 'wrong_color' | 'damaged_goods' | 'missing_quantity'; description: string };
+  /**
+   * Offenes Problem des Belegs: manuell mit Katalog-Grund (`reasonId` aus dem
+   * Migrations-Startkatalog) oder implizit als Mengen-Abweichung (`deviationQty`).
+   */
+  issue?: {
+    reasonId?: 'pr_wrong_color' | 'pr_damaged_goods' | 'pr_other';
+    kind?: 'under_delivery' | 'over_delivery';
+    deviationQty?: number;
+    description: string;
+  };
   /** A7 TL-Topf: „Besondere Aufmerksamkeit"-Flag mit Notiz (Bucherinnen-Inlet mock). */
   attentionNote?: string;
   /** C5 Digitale Ablage: Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher). */
@@ -342,7 +358,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
   },
   {
     weBelegNo: 'WE-2026-000202', storageCode: 'R19', section: 3, goodsTypeText: 'Nachorder',
-    totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'partially_completed',
+    totalQuantity: 100, effortPoints: 20, estimatedMinutes: 40, status: 'problem_resolved',
     employeeNo: 'ma-102', completedQuantity: 40, completedAt: '14:05',
   },
   {
@@ -359,7 +375,7 @@ const LIFECYCLE_CASES: SeedLifecycleCase[] = [
     weBelegNo: 'WE-2026-000205', storageCode: 'D-3', section: 8, goodsTypeText: 'Prio',
     totalQuantity: 33, effortPoints: 8, estimatedMinutes: 20, status: 'issue_open',
     employeeNo: 'ma-103',
-    issue: { issueType: 'wrong_color', description: 'Farbe weicht von Arbeitsanweisung ab' },
+    issue: { reasonId: 'pr_wrong_color', description: 'Farbe weicht von Arbeitsanweisung ab' },
   },
   {
     weBelegNo: 'WE-2026-000206', storageCode: 'R7', section: 7, goodsTypeText: 'NOS',
@@ -460,18 +476,32 @@ export async function seedLifecycleCases(
     }
 
     // Open problem for the issue_open case (Problemfälle lane). Idempotent: only
-    // create when this case has no open issue yet.
+    // create when this case has no open issue yet. Probleme hängen an einer
+    // Position (Kundenfeedback 14.07.2026) — die erste Position des Belegs, falls
+    // die Detail-Daten schon geseedet sind.
     if (c.issue) {
       const existing = await prisma.issue.findFirst({
         where: { caseId: gcase.id, status: 'open' },
       });
       if (!existing) {
+        const firstPosition = await prisma.receiptPosition.findFirst({
+          where: { caseId: gcase.id },
+          orderBy: { positionNo: 'asc' },
+          select: { id: true },
+        });
+        const reason = c.issue.reasonId
+          ? await prisma.problemReason.findUnique({ where: { id: c.issue.reasonId } })
+          : null;
         await prisma.issue.create({
           data: {
             caseId: gcase.id,
-            scope: 'case',
+            scope: 'position',
+            scopeId: firstPosition?.id,
             employeeId,
-            issueType: c.issue.issueType,
+            kind: c.issue.kind ?? 'manual',
+            reasonId: reason?.id,
+            reasonLabel: reason?.label,
+            deviationQty: c.issue.deviationQty,
             description: c.issue.description,
             status: 'open',
           },

@@ -49,9 +49,9 @@ export const datenqualitaetScenario: ScenarioDefinition = {
 const B7_CASES: CustomCaseSpec[] = [
   // Monster-Beleg ÜBER der Teile-Schwelle (2000): wartet auf die manuelle TL-Entscheidung.
   { weBelegNo: '9.404.801', storageCode: 'PA-1', totalQuantity: 2400, section: 2, estimatedMinutes: 420 },
-  // Gestern begonnener Monster-Beleg (Folgetag-Fortsetzung): teilabgeschlossen, hängt
-  // noch am Vortages-Bündel von Dirk Hansen (ma-104).
-  { weBelegNo: '9.404.802', storageCode: 'PA-2', totalQuantity: 2600, section: 2, status: 'partially_completed', bookingOffsetDays: 1, estimatedMinutes: 460 },
+  // Gestern begonnener Monster-Beleg (Folgetag-Fortsetzung): noch in Arbeit, hängt
+  // am Vortages-Bündel von Dirk Hansen (ma-104) — C6-Fortsetzung blockt neue Zuteilung.
+  { weBelegNo: '9.404.802', storageCode: 'PA-2', totalQuantity: 2600, section: 2, status: 'in_progress', bookingOffsetDays: 1, estimatedMinutes: 460 },
   // Normaler Tages-Pool.
   { weBelegNo: '9.404.901', storageCode: 'R3', totalQuantity: 48, section: null },
   { weBelegNo: '9.404.905', storageCode: 'R7', totalQuantity: 52, section: null },

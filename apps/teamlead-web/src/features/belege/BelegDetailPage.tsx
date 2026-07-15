@@ -29,7 +29,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import {
   CaseStatusChip,
   issueScopeLabels,
-  issueTypeLabels,
+  problemKindLabels,
   PriorityChip,
   ProblemChip,
   skuLineStatusLabels,
@@ -85,9 +85,8 @@ export function BelegDetailPage(): JSX.Element {
     parkCase,
     releaseCase,
     approveCase,
-    reactivateCase,
     cancelCase,
-    resolveIssue,
+    resolveProblems,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -175,9 +174,8 @@ export function BelegDetailPage(): JSX.Element {
       parkCase,
       releaseCase,
       approveCase,
-      reactivateCase,
       cancelCase,
-      resolveIssue,
+      resolveProblems,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -261,7 +259,7 @@ export function BelegDetailPage(): JSX.Element {
             </Button>
           }
         >
-          Offenes Problem: <strong>{issueTypeLabels[openIssue.issueType]}</strong>
+          Offenes Problem: <strong>{openIssue.reasonLabel ?? problemKindLabels[openIssue.kind]}</strong>
           {openIssue.description ? ` — „${openIssue.description}"` : ''}
         </Alert>
       )}
@@ -359,7 +357,9 @@ export function BelegDetailPage(): JSX.Element {
         {tab === 3 && <PositionsTab positions={c.positions} />}
         {tab === 4 && <BoxesTab boxes={c.boxes} />}
         {tab === 5 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
-        {tab === 6 && <IssuesTab issues={c.issues} />}
+        {tab === 6 && (
+          <IssuesTab issues={c.issues} weBelegNo={c.weBelegNo} deliveryNoteNo={c.deliveryNoteNo ?? null} />
+        )}
         {tab === 7 && <HistoryTab history={c.history} />}
       </Paper>
 
@@ -575,38 +575,100 @@ function AbschlussTab({
   );
 }
 
+const ISSUE_EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+
+/** Bezugszeile eines Problems: Position + Ordernummer + optional EAN/Größe (Klärungs-UX). */
+function issueScopeLine(i: BelegIssue): string | null {
+  if (i.positionNo === null) return null;
+  const parts = [`Position ${i.positionNo}`];
+  if (i.orderNo) parts.push(`Order ${i.orderNo}`);
+  if (i.size) parts.push(i.size);
+  if (i.ean) parts.push(i.ean);
+  return parts.join(' · ');
+}
+
 /**
- * Problem tab — read-only view of the case's reported issues (§4.5). The triage
- * action („Problem freigeben", issue_open → in_progress) lives in the header
- * {@link CaseActions} bar, driven by the §7.1 case status, so this tab is pure
- * information.
+ * Problem tab — die Klärungs-UX für den Teamlead (Kundenfeedback 14.07.2026).
+ * Zeigt ALLE gesammelten Probleme des Belegs mit Grund/Art, Position + EAN/Größe,
+ * Mengen-Delta und Preis-Korrektur. Die Aktion „Probleme geklärt" (issue_open →
+ * problem_resolved) liegt in der Header-{@link CaseActions}-Leiste; danach geht
+ * der Beleg grün an den SELBEN Mitarbeiter zurück.
  */
-function IssuesTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
+function IssuesTab({
+  issues,
+  weBelegNo,
+  deliveryNoteNo,
+}: {
+  issues: BelegIssue[];
+  weBelegNo: string;
+  deliveryNoteNo: string | null;
+}): JSX.Element {
   if (issues.length === 0) return <Empty text="Keine Probleme gemeldet." />;
   return (
     <Stack spacing={1.5}>
-      {issues.map((i) => (
-        <Box key={i.id}>
-          <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
-            <Typography sx={{ fontWeight: 700 }}>{issueTypeLabels[i.issueType]}</Typography>
-            <Chip size="small" label={issueScopeLabels[i.scope]} />
-            <ProblemChip status={i.status} size="small" />
-            <Typography variant="caption" color="text.secondary">
-              {formatDateTime(i.reportedAt)}
-            </Typography>
-          </Stack>
-          {i.description && (
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              „{i.description}"
-            </Typography>
-          )}
-          {i.resolution && (
-            <Typography variant="body2" color="text.secondary">
-              Lösung: {i.resolution}
-            </Typography>
-          )}
-        </Box>
-      ))}
+      {/* Bezugsnummern zur Fehlerlösung: WE-Nr + Lieferschein am Kopf, Ordernummer je Problem. */}
+      <Alert severity="info" variant="outlined">
+        <Stack direction="row" gap={2} flexWrap="wrap">
+          <span>
+            WE-Nr: <strong>{weBelegNo}</strong>
+          </span>
+          <span>
+            Lieferschein: <strong>{deliveryNoteNo ?? '–'}</strong>
+          </span>
+          <Typography component="span" variant="caption" color="text.secondary">
+            Ordernummer je Position bei den einzelnen Problemen.
+          </Typography>
+        </Stack>
+      </Alert>
+      <Typography variant="body2" color="text.secondary">
+        Nach „Probleme geklärt" geht der Beleg grün markiert zurück an den Mitarbeiter zur
+        Weiterbearbeitung.
+      </Typography>
+      {issues.map((i) => {
+        const scopeLine = issueScopeLine(i);
+        const label =
+          i.kind === 'manual' ? (i.reasonLabel ?? problemKindLabels.manual) : problemKindLabels[i.kind];
+        return (
+          <Box key={i.id}>
+            <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
+              <Typography sx={{ fontWeight: 700 }}>{label}</Typography>
+              <Chip size="small" label={issueScopeLabels[i.scope]} />
+              <ProblemChip status={i.status} size="small" />
+              <Typography variant="caption" color="text.secondary">
+                {formatDateTime(i.reportedAt)}
+              </Typography>
+            </Stack>
+            {scopeLine && (
+              <Typography variant="body2" color="text.secondary">
+                {scopeLine}
+              </Typography>
+            )}
+            {i.deviationQty !== null && i.deviationQty !== 0 && (
+              <Typography variant="body2">
+                {i.deviationQty > 0
+                  ? `Mehrlieferung +${i.deviationQty} Teile`
+                  : `Minderlieferung −${Math.abs(i.deviationQty)} Teile`}
+              </Typography>
+            )}
+            {i.correctedVkPrice !== null && (
+              <Typography variant="body2">
+                Preis: VK-Etikett {i.expectedVkPrice !== null ? ISSUE_EUR.format(i.expectedVkPrice) : '–'} →
+                korrigiert {ISSUE_EUR.format(i.correctedVkPrice)}
+              </Typography>
+            )}
+            {i.description && (
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                „{i.description}"
+              </Typography>
+            )}
+            {i.resolution && (
+              <Typography variant="body2" color="text.secondary">
+                Klärung: {i.resolution}
+              </Typography>
+            )}
+          </Box>
+        );
+      })}
     </Stack>
   );
 }

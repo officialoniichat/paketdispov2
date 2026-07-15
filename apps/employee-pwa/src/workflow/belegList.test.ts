@@ -18,6 +18,8 @@ const progress = (over: Partial<CaseProgress>): CaseProgress => ({
   step: 'process',
   quantityCheckedPositionIds: [],
   confirmedQuantities: {},
+  correctedVkPrices: {},
+  problems: [],
   zstDone: false,
   partial: false,
   version: 0,

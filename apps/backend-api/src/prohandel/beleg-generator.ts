@@ -41,9 +41,15 @@ export interface GeneratedPosition {
   supplierColor: string;
   season: string | null;
   nosFlag: boolean;
+  /** Ordernummer der Position (ERP-Referenz zur Fehlerlösung, Kundenfeedback 14.07.2026). */
+  orderNo: string;
   shopNo: string;
+  /** Hauptshop der Position (Anzeige in der Positions-Kopfzeile der PWA). */
+  hShopNo: string | null;
   floor: string;
   catMan: boolean;
+  /** CatMan-Termin (ISO-Tag), nur gesetzt wenn `catMan` (Kundenfeedback 14.07.2026). */
+  catManDate: string | null;
   onlineRelevant: boolean;
   instruction: {
     priceLabelRequired: boolean;
@@ -121,6 +127,13 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Adds `days` to an ISO day string (YYYY-MM-DD) and returns the ISO day. */
+function isoDayPlus(isoDay: string, days: number): string {
+  const d = new Date(`${isoDay}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface GenerateOptions {
   /** Deterministic seed (e.g. derived from the current max weBelegNo). */
   seed: number;
@@ -192,6 +205,7 @@ export function generateBelege(options: GenerateOptions): GeneratedBeleg[] {
           vkLabelPrice: goodsTypeText === 'Sonderposten' ? round2(vk * 0.7) : vk,
         });
       }
+      const catMan = rng() < 0.25;
       positions.push({
         positionNo: p,
         wgr: catalogEntry.wgr,
@@ -199,9 +213,15 @@ export function generateBelege(options: GenerateOptions): GeneratedBeleg[] {
         supplierColor: pick(rng, COLORS),
         season: pick(rng, SEASONS),
         nosFlag: goodsTypeText === 'NOS' || goodsTypeText === 'NOS_Nachorder' || rng() < 0.1,
+        // Deterministische Mock-Ordernummer je Position (real: ProHandel-Order).
+        orderNo: `ORD-${no}-${p}`,
         shopNo,
+        // Mock-Hauptshop: der erste Shop der Filiale — real liefert ProHandel den H-Shop.
+        hShopNo: SHOPS[0]!,
         floor,
-        catMan: rng() < 0.25,
+        catMan,
+        // CatMan-Termin wenige Tage nach Buchung (deterministisch aus dem RNG).
+        catManDate: catMan ? isoDayPlus(options.bookingDate, int(rng, 3, 14)) : null,
         onlineRelevant: rng() < 0.35,
         instruction: {
           priceLabelRequired: true,

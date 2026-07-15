@@ -5,11 +5,14 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { FORWARD_RECIPIENTS, type ForwardRecipient } from '@paket/domain-types';
 
 // --- Responses --------------------------------------------------------------
@@ -102,7 +105,14 @@ export class CaseSummaryDto {
 
 /** C4: latest OPEN problem of a Beleg — the Problemfälle-lane card preview. */
 export class OpenIssueRefDto {
-  @ApiProperty({ description: 'IssueType (Anhang A) of the latest open issue' }) kind!: string;
+  @ApiProperty({ description: 'ProblemKind: manual|over_delivery|under_delivery|price_deviation' })
+  kind!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Label-Snapshot des Problemarten-Katalogs (nur kind=manual)',
+  })
+  reasonLabel!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Issue description/note' })
   note!: string | null;
 }
@@ -314,6 +324,12 @@ export class ReceiptPositionDto {
   wgrDescription!: string | null;
   @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
   catMan!: boolean | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'CatMan-Termin der Position (ISO-Datum, Anzeige in der PWA)',
+  })
+  catManDate!: string | null;
   @ApiProperty() supplierArticleNo!: string;
   @ApiProperty() supplierColor!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) season!: string | null;
@@ -323,8 +339,20 @@ export class ReceiptPositionDto {
     description: 'NOS (Never Out of Stock) article flag',
   })
   nosFlag!: boolean | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Ordernummer der Position (ERP-Referenz zur Fehlerlösung)',
+  })
+  orderNo!: string | null;
   @ApiProperty() branchNo!: string;
   @ApiProperty() shopNo!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Hauptshop-Nummer der Position (Anzeige in der Positions-Kopfzeile)',
+  })
+  hShopNo!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) floor!: string | null;
   @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
   status!: string;
@@ -595,11 +623,48 @@ export class PositionDetailDto {
   @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
 }
 
-/** A problem reported against the case (Anhang A Issue) — the Belegdetail issue list. */
+/** A problem reported against the case (Anhang A Issue) — the Belegdetail/Klärung issue list. */
 export class IssueSummaryDto {
   @ApiProperty() id!: string;
-  @ApiProperty({ description: 'IssueScope: case|position|sku_line|transport_box' }) scope!: string;
-  @ApiProperty({ description: 'IssueType (Anhang A)' }) issueType!: string;
+  @ApiProperty({ description: 'IssueScope: position|sku_line' }) scope!: string;
+  @ApiProperty({ description: 'ProblemKind: manual|over_delivery|under_delivery|price_deviation' })
+  kind!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual)',
+  })
+  reasonLabel!: string | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery)',
+  })
+  deviationQty!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'VK-Etikett-Preis laut Beleg' })
+  expectedVkPrice!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Vom MA korrigierter VK (kind=price_deviation)',
+  })
+  correctedVkPrice!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)',
+  })
+  positionNo!: number | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'EAN der betroffenen Größenzeile' })
+  ean!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Größe der betroffenen Größenzeile' })
+  size!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung)',
+  })
+  orderNo!: string | null;
   @ApiProperty({ description: 'IssueStatus: open|in_review|waiting_external|resolved|rejected' })
   status!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) description!: string | null;
@@ -921,55 +986,77 @@ export class FlagAttentionDto {
   note?: string;
 }
 
-export class CreateIssueDto {
-  @ApiProperty({ description: 'Case the issue is reported against' })
-  @IsString()
-  caseId!: string;
+/** Vom MA gezählter Stand einer Größenzeile (Ist + optionale VK-Preiskorrektur). */
+export class SkuQuantityDto {
+  @ApiProperty() @IsString() skuLineId!: string;
 
-  @ApiProperty({ description: 'IssueScope: case|position|sku_line|transport_box' })
-  @IsString()
-  scope!: string;
+  @ApiProperty({ description: 'Gezählte Ist-Menge der Größenzeile' })
+  @IsInt()
+  @Min(0)
+  confirmedQuantity!: number;
 
-  @ApiProperty({ description: 'IssueType (Anhang A)' })
-  @IsString()
-  issueType!: string;
+  @ApiPropertyOptional({
+    description:
+      'Korrigierter VK, wenn der Etikettpreis falsch ist (Preisabweichung ⇒ implizites Problem)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  correctedVkPrice?: number;
+}
 
-  @ApiPropertyOptional()
+/** Vom MA an Position/SKU erfasstes Problem (Grund aus dem Problemarten-Katalog). */
+export class ReportedProblemDto {
+  @ApiProperty({ description: 'ReceiptPosition, auf die sich das Problem bezieht' })
+  @IsString()
+  positionId!: string;
+
+  @ApiPropertyOptional({ description: 'Optional auf eine Größenzeile eingegrenzt' })
   @IsOptional()
   @IsString()
-  scopeId?: string;
+  skuLineId?: string;
 
-  @ApiPropertyOptional()
+  @ApiProperty({ description: 'ProblemReason-Katalog-Eintrag (aktiv)' })
+  @IsString()
+  reasonId!: string;
+
+  @ApiPropertyOptional({ description: 'Freitext-Notiz des MA zum Problem' })
   @IsOptional()
   @IsString()
-  description?: string;
+  note?: string;
+}
 
-  @ApiPropertyOptional({ type: [String] })
+/**
+ * Teilabschluss (Kundenfeedback 14.07.2026): schickt die gesammelten Probleme
+ * an den Teamlead. Implizite Probleme (Mehr-/Minderlieferung, Preisabweichung)
+ * leitet das Backend aus `skuQuantities` ab; zusammen mit `problems` muss
+ * mindestens ein Problem vorliegen — sonst ist „Beleg erledigt" der richtige Weg.
+ */
+export class PartialCompleteDto {
+  @ApiProperty({ type: [SkuQuantityDto], description: 'Gezählte Ist-Mengen aller Größenzeilen' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SkuQuantityDto)
+  skuQuantities!: SkuQuantityDto[];
+
+  @ApiProperty({ type: [ReportedProblemDto], description: 'Manuell erfasste Positions-Probleme' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReportedProblemDto)
+  problems!: ReportedProblemDto[];
+}
+
+/** „Beleg erledigt" (voll). Nur erlaubt ohne Abweichungen und ohne erfasste Probleme. */
+export class CompleteDto {
+  @ApiPropertyOptional({
+    type: [SkuQuantityDto],
+    description: 'Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll',
+  })
   @IsOptional()
   @IsArray()
-  photoKeys?: string[];
-}
-
-export class PartialCompleteDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  reason?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  completedQuantity?: number;
-}
-
-export class CompleteDto {
-  /** Actual counted quantity (Ist, incl. Mehr-/Mindermengen); defaults to the case's Soll total. */
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  completedQuantity?: number;
+  @ValidateNested({ each: true })
+  @Type(() => SkuQuantityDto)
+  skuQuantities?: SkuQuantityDto[];
 }
 
 export class PrioritizeDto {
@@ -993,8 +1080,12 @@ export class CancelDto {
   reason?: string;
 }
 
-export class ResolveIssueDto {
-  @ApiPropertyOptional()
+/**
+ * Body for POST /api/teamlead/cases/:caseId/resolve-problems — der Teamlead
+ * klärt ALLE offenen Probleme des Belegs; der Beleg wird grün beim selben MA.
+ */
+export class ResolveProblemsDto {
+  @ApiPropertyOptional({ description: 'Anmerkung zur Klärung (auf allen Issues vermerkt)' })
   @IsOptional()
   @IsString()
   resolution?: string;
