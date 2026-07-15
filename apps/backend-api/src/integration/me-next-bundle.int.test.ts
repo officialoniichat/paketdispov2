@@ -14,10 +14,11 @@ import { Role, type Principal } from '../auth/rbac.js';
 
 /**
  * §continuation — POST /api/me/next-bundle (Pull-on-idle). The worker pulls a
- * cart-sized bundle from the ready pool; finishing it marks the bundle completed
- * and frees a second pull; an empty pool / active bundle / no shift each return
- * the matching reason. Shifts are derived from the weekly pattern (assignNextBundle
- * materializes them), so the seed sets a working pattern rather than a raw shift.
+ * cart-sized bundle from the ready pool; a second pull while the cart is open
+ * APPENDS to it (Kundenfeedback 2026-07-14 „Weiteres Bündel anfordern"); an empty
+ * pool / no shift each return the matching reason. Shifts are derived from the
+ * weekly pattern (assignNextBundle materializes them), so the seed sets a working
+ * pattern rather than a raw shift.
  */
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const owner: Principal = { sub: 'oidc-emp-1', employeeNo: 'E-1', roles: [Role.Employee], claims: {} };
@@ -147,9 +148,49 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     expect(await prisma.goodsReceiptCase.count({ where: { status: 'ready' } })).toBe(0);
   });
 
-  it('refuses a second pull while the first cart is still open', async () => {
+  it('appends a second pull to the still-open cart instead of blocking (Kundenfeedback 2026-07-14)', async () => {
+    // The first pull emptied the pool — put fresh work in so there is something to pull.
+    const day = today();
+    const loc = await prisma.location.findFirstOrThrow({ where: { code: 'R1' } });
+    for (let i = 0; i < 3; i += 1) {
+      await prisma.goodsReceiptCase.create({
+        data: {
+          source: 'manual',
+          externalRef: `nb-extra-${i}`,
+          weBelegNo: `WE-NB-X${i}`,
+          bookingDate: day,
+          branchNo: '1',
+          storageLocationId: loc.id,
+          section: 1,
+          totalQuantity: 3,
+          status: 'ready',
+          effortPoints: 5,
+          estimatedMinutes: 10,
+        },
+      });
+    }
+    const before = await prisma.assignmentBundle.findFirstOrThrow({ where: { employeeId } });
+
     const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
-    expect(res).toMatchObject({ assigned: false, reason: 'active_bundle' });
+    expect(res).toMatchObject({ assigned: true, caseCount: 3 });
+
+    // Still exactly ONE bundle — the open cart grew instead of a parallel bundle.
+    expect(await prisma.assignmentBundle.count({ where: { employeeId } })).toBe(1);
+    const after = await prisma.assignmentBundle.findFirstOrThrow({
+      where: { id: before.id },
+      include: { items: true, routeStops: true },
+    });
+    expect(after.items).toHaveLength(11);
+    expect(after.plannedEffortMinutes).toBeGreaterThan(before.plannedEffortMinutes);
+    // All new cases share location R1, which the bundle already visits — no duplicate stop.
+    expect(new Set(after.routeStops.map((s) => s.locationCode)).size).toBe(
+      after.routeStops.length,
+    );
+
+    const extended = await prisma.workflowEvent.findFirst({
+      where: { eventType: 'bundle.extended', entityId: before.id },
+    });
+    expect(extended).not.toBeNull();
   });
 
   it('completes the bundle when its last case is done, then the next pull works', async () => {

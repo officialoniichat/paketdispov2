@@ -3,15 +3,17 @@ import { IsOptional, Matches } from 'class-validator';
 
 /**
  * Result of POST /api/me/next-bundle (§continuation, Pull-on-idle). Either a cart
- * was assigned, or `reason` says why not (no_shift | active_bundle | capacity_done |
- * shift_ending | pool_empty). `shift_ending` (Punkt 6) means the remaining time before
- * shift end is too short to finish another cart — nothing is handed out.
+ * was assigned, or `reason` says why not (no_shift | capacity_done | shift_ending |
+ * pool_empty | skill_tier | continuation). `shift_ending` (Punkt 6) means the
+ * remaining time before shift end is too short to finish another cart — nothing is
+ * handed out. An open cart no longer blocks the pull (Kundenfeedback 2026-07-14):
+ * the new work is appended to it.
  */
 export class NextBundleResultDto {
   @ApiProperty() assigned!: boolean;
   @ApiPropertyOptional({
     description:
-      'Why no cart was assigned: no_shift|active_bundle|capacity_done|shift_ending|pool_empty',
+      'Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation',
   })
   reason?: string;
   @ApiPropertyOptional({ type: Number, description: 'Belege in the assigned cart' })

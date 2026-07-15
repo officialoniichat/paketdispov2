@@ -65,8 +65,8 @@ function isoDay(date: Date): string {
  * Bündel-Reihenfolge, wie die assignment-engine sie beschlossen hat
  * (`AssignmentItem.sequence`). Vorher sortierte `/api/me/today` allein nach
  * `bookingDate`; alle Belege eines Tages tragen dasselbe Datum, die Reihenfolge
- * war damit undefiniert und kippte, sobald eine Zeile geschrieben wurde. Der
- * Bündel-Home leitet daraus „Start Bearbeitung WE …" ab — der Vorschlag sprang.
+ * war damit undefiniert und kippte, sobald eine Zeile geschrieben wurde — die
+ * Beleg-Liste im Bündel-Home sprang.
  *
  * Ein Beleg hat wegen `@@unique([caseId])` höchstens EIN Item. Fehlt es (ein
  * reaktivierter `partially_completed`-Beleg behält seine Bündel-Bindung, verliert
@@ -666,6 +666,7 @@ export class CasesService {
       goodsTypeText: string | null;
       storageLocation: { code: string; kind?: string } | null;
       primaryShopNo?: string | null;
+      primaryShopAreaNo?: string | null;
       inboundCartonCount?: number | null;
       missingFields?: string[];
       branchNo: string;
@@ -691,6 +692,7 @@ export class CasesService {
       storageLocationKind: c.storageLocation?.kind ?? null,
       priceLabelPrintRequired: c.workInstruction?.priceLabelPrintRequired ?? null,
       primaryShopNo: c.primaryShopNo ?? null,
+      primaryShopAreaNo: c.primaryShopAreaNo ?? null,
       inboundCartonCount: c.inboundCartonCount ?? null,
       missingFields: c.missingFields ?? [],
       bookingDate: isoDay(c.bookingDate),

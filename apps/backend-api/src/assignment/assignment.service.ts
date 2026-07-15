@@ -36,8 +36,6 @@ import { toEmployeeShift, toGoodsReceiptCase, toLocationMaster } from './assignm
 import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto.js';
 
 const POOL_STATUS = 'ready' as const;
-/** A case in one of these no longer counts as "open" within a bundle. */
-const TERMINAL_CASE_STATUSES = ['completed', 'partially_completed', 'zst_done', 'cancelled'] as const;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -242,20 +240,13 @@ export class AssignmentService {
     });
     if (!shift || shift.netCapacityMinutes <= 0) return { assigned: false, reason: 'no_shift' };
 
-    // Never hand out a new cart while the employee still has an open one (Frei/Fix).
+    // Kundenfeedback 2026-07-14: an open cart no longer blocks the pull — the worker
+    // decides when to take on more. New work is appended to the open bundle (the PWA
+    // home shows exactly one bundle), so the one-open-bundle invariant holds everywhere.
     const todaysBundles = await this.prisma.assignmentBundle.findMany({
       where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd } },
       select: { id: true, plannedEffortMinutes: true },
     });
-    if (todaysBundles.length > 0) {
-      const open = await this.prisma.goodsReceiptCase.count({
-        where: {
-          assignedBundleId: { in: todaysBundles.map((b) => b.id) },
-          status: { notIn: [...TERMINAL_CASE_STATUSES] },
-        },
-      });
-      if (open > 0) return { assigned: false, reason: 'active_bundle' };
-    }
 
     // Feierabend: stop once the day's assigned effort reaches the shift capacity.
     const usedMinutes = todaysBundles.reduce((sum, b) => sum + b.plannedEffortMinutes, 0);
@@ -335,8 +326,25 @@ export class AssignmentService {
       if (cart.effortMinutes > finishableBudget) return { assigned: false, reason: 'shift_ending' };
 
       const caseById = new Map(cases.map((c) => [c.id, c]));
+
+      // Weiteres Bündel anfordern (Kundenfeedback 2026-07-14): while a cart is still
+      // open, the pull APPENDS to it instead of opening a parallel bundle — the PWA,
+      // "Rest parken" and the board all assume one open bundle per employee.
+      const openBundle = await tx.assignmentBundle.findFirst({
+        where: {
+          employeeId: employee.id,
+          date: { gte: dayStart, lte: dayEnd },
+          status: { notIn: ['completed', 'cancelled'] },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: { select: { caseId: true } },
+          routeStops: { select: { locationCode: true, sequence: true } },
+        },
+      });
+
       const bundleSkeleton: AssignmentBundle = assignmentBundleSchema.parse({
-        id: `bundle-${day}-${employee.id}-${todaysBundles.length}`,
+        id: openBundle?.id ?? `bundle-${day}-${employee.id}-${todaysBundles.length}`,
         employeeId: employee.id,
         date: day,
         caseIds: cart.caseIds,
@@ -359,7 +367,11 @@ export class AssignmentService {
         { mode: 'numeric_fallback', locationMaster: new Map(locations.map((l) => [l.code, l])) },
       );
 
-      await this.persistBundle(tx, bundleSkeleton, sequence, principal);
+      if (openBundle) {
+        await this.extendBundle(tx, openBundle, bundleSkeleton, sequence, principal);
+      } else {
+        await this.persistBundle(tx, bundleSkeleton, sequence, principal);
+      }
       return { assigned: true, caseCount: cart.caseIds.length, bereich: cart.bereich ?? null };
     });
   }
@@ -625,5 +637,79 @@ export class AssignmentService {
     );
 
     return bundle.caseIds.length;
+  }
+
+  /**
+   * Kundenfeedback 2026-07-14 („Weiteres Bündel anfordern"): append an engine-built
+   * cart to the employee's still-open bundle. Items go to the tail (bundle order),
+   * route stops are added only for locations the bundle does not visit yet (an
+   * existing stop already covers a same-location case), planned effort/points grow
+   * by the cart. The stop ids of already-collected stops stay untouched, so the
+   * PWA's local check-off state survives the extension.
+   */
+  private async extendBundle(
+    tx: PrismaTx,
+    openBundle: {
+      id: string;
+      plannedEffortMinutes: number;
+      effortPoints: number;
+      items: { caseId: string }[];
+      routeStops: { locationCode: string; sequence: number }[];
+    },
+    cart: AssignmentBundle,
+    sequence: BundlePickupSequence | undefined,
+    principal: Principal,
+  ): Promise<void> {
+    let nextItemSeq = openBundle.items.length;
+    for (const caseId of cart.caseIds) {
+      await tx.assignmentItem.create({
+        data: { bundleId: openBundle.id, caseId, sequence: nextItemSeq },
+      });
+      nextItemSeq += 1;
+    }
+
+    const knownLocations = new Set(openBundle.routeStops.map((s) => s.locationCode));
+    const newStops = (sequence?.stops ?? cart.route).filter(
+      (stop) => !knownLocations.has(stop.locationCode),
+    );
+    let nextStopSeq = openBundle.routeStops.reduce((max, s) => Math.max(max, s.sequence + 1), 0);
+    for (const stop of newStops) {
+      await tx.routeStop.create({
+        data: {
+          bundleId: openBundle.id,
+          sequence: nextStopSeq,
+          locationId: stop.locationId,
+          locationCode: stop.locationCode,
+          orderIds: stop.orderIds,
+          scanRequired: stop.scanRequired,
+          skipAllowedWithReason: stop.skipAllowedWithReason,
+        },
+      });
+      nextStopSeq += 1;
+    }
+
+    await tx.goodsReceiptCase.updateMany({
+      where: { id: { in: cart.caseIds }, status: POOL_STATUS },
+      data: { assignedBundleId: openBundle.id, status: 'assigned', version: { increment: 1 } },
+    });
+    await tx.assignmentBundle.update({
+      where: { id: openBundle.id },
+      data: {
+        plannedEffortMinutes: openBundle.plannedEffortMinutes + cart.plannedEffortMinutes,
+        effortPoints: openBundle.effortPoints + cart.effortPoints,
+      },
+    });
+
+    await this.events.append(
+      {
+        eventType: 'bundle.extended',
+        entityType: 'AssignmentBundle',
+        entityId: openBundle.id,
+        actorType: 'system',
+        actorId: principal.sub,
+        payload: { caseIds: cart.caseIds, effortPoints: cart.effortPoints },
+      },
+      tx,
+    );
   }
 }

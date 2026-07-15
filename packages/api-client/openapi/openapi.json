@@ -3081,6 +3081,11 @@
             "nullable": true,
             "description": "Primärer Shop (A7)"
           },
+          "primaryShopAreaNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA"
+          },
           "inboundCartonCount": {
             "type": "number",
             "nullable": true,
@@ -3601,7 +3606,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why no cart was assigned: no_shift|active_bundle|capacity_done|shift_ending|pool_empty"
+            "description": "Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation"
           },
           "caseCount": {
             "type": "number",
@@ -4210,6 +4215,11 @@
             "type": "string",
             "nullable": true,
             "description": "Primärer Shop (A7)"
+          },
+          "primaryShopAreaNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA"
           },
           "inboundCartonCount": {
             "type": "number",
