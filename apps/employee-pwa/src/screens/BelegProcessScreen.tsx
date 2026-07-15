@@ -317,8 +317,8 @@ export function BelegProcessScreen(): JSX.Element {
       }}
     >
       <Stack spacing={2}>
-        {/* Kompakte Fakten-Leiste: Warenart · Menge · Kartons — scanbar, ohne
-            Fließtext (Nachtrag 15.07.2026). */}
+        {/* Kompakte Fakten-Leiste: Warenart · Menge — scanbar, ohne Fließtext
+            (Nachtrag 15.07.2026). */}
         <Stack
           direction="row"
           spacing={2.5}
@@ -336,16 +336,6 @@ export function BelegProcessScreen(): JSX.Element {
               Teile
             </Typography>
           </Box>
-          {c.inboundCartonCount != null ? (
-            <Box>
-              <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
-                {c.inboundCartonCount}
-              </Typography>{' '}
-              <Typography component="span" variant="body2" color="text.secondary">
-                {c.inboundCartonCount === 1 ? 'Karton' : 'Kartons'}
-              </Typography>
-            </Box>
-          ) : null}
         </Stack>
 
         {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
