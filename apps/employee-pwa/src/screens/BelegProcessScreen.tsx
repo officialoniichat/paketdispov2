@@ -111,6 +111,68 @@ function pictogramUrl(code: string): string | undefined {
   return apiBaseUrl ? `${apiBaseUrl}/static/pictograms/${code}.svg` : undefined;
 }
 
+/** Piktogramm-Code des Preisetikett-Schritts (Punkt 8 „Preisetiketten anbringen"). */
+const ETIKETT_PICTOGRAM_CODE = 'preis-etikett';
+
+/**
+ * Ein Arbeitsschritt (Preisetikett/Sicherung) als illustrierte Karte im Stil der
+ * L+T-Arbeitsanweisung: große Line-Art-Grafik oben (die Preisetikett-Grafik ist
+ * die aus der AW vektorisierte Handschuh-Zeichnung), darunter Titel + Ort
+ * (Nachtrag 15.07.2026).
+ */
+function WorkStepPictogram({
+  code,
+  title,
+  subtitle,
+}: {
+  code: string;
+  title: string;
+  subtitle?: string;
+}): JSX.Element {
+  const url = pictogramUrl(code);
+  return (
+    <Stack
+      alignItems="center"
+      spacing={0.5}
+      sx={{
+        px: 2,
+        py: 1.25,
+        minWidth: 156,
+        maxWidth: 220,
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'grey.50',
+      }}
+    >
+      {url ? (
+        <Box
+          sx={{
+            width: '100%',
+            height: 104,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Box
+            component="img"
+            src={url}
+            alt=""
+            sx={{ maxHeight: '100%', maxWidth: 140, width: 'auto' }}
+          />
+        </Box>
+      ) : null}
+      <Typography sx={{ fontWeight: 700, textAlign: 'center', lineHeight: 1.2 }}>{title}</Typography>
+      {subtitle ? (
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+          {subtitle}
+        </Typography>
+      ) : null}
+    </Stack>
+  );
+}
+
 const FLAG_CHIPS = [
   { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' as const },
   { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' as const },
@@ -387,9 +449,9 @@ export function BelegProcessScreen(): JSX.Element {
                 // CatMan-Chip nur mit echtem Termin-Datum — ein bloßes Kennzeichen
                 // ohne Datum wäre nur Rauschen (Nachtrag 15.07.2026).
                 const catManChipLabel = catManLabel;
+                // Preisetikett + Sicherung stehen als Piktogramm-Karten (unten);
+                // hier bleiben nur die textlichen Zusatz-Hinweise.
                 const instructionLines = [
-                  i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
-                  i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
                   i.onlineHandlingRequired && i.onlineHandlingLocation
                     ? `Online: ${i.onlineHandlingLocation}`
                     : null,
@@ -458,27 +520,32 @@ export function BelegProcessScreen(): JSX.Element {
                               ) : null}
                             </Stack>
 
-                            {instructionLines.length > 0 || (i.securityRequired && i.securityTypeCode) ? (
+                            {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
+                                anbringen + Sichern, groß und wiedererkennbar. */}
+                            {i.priceLabelRequired || (i.securityRequired && i.securityTypeCode) ? (
+                              <Stack direction="row" sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
+                                {i.priceLabelRequired ? (
+                                  <WorkStepPictogram
+                                    code={ETIKETT_PICTOGRAM_CODE}
+                                    title="Preisetikett anbringen"
+                                    subtitle={i.priceLabelAttachLocation ?? undefined}
+                                  />
+                                ) : null}
+                                {i.securityRequired && i.securityTypeCode ? (
+                                  <WorkStepPictogram
+                                    code={i.securityTypeCode}
+                                    title={`Sichern: ${PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}`}
+                                    subtitle={i.securityLocation ?? undefined}
+                                  />
+                                ) : null}
+                              </Stack>
+                            ) : null}
+
+                            {instructionLines.length > 0 ? (
                               <Stack
                                 direction="row"
-                                alignItems="center"
                                 sx={{ mt: 0.5, flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}
                               >
-                                {i.securityRequired && i.securityTypeCode ? (
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    {pictogramUrl(i.securityTypeCode) ? (
-                                      <Box
-                                        component="img"
-                                        src={pictogramUrl(i.securityTypeCode)}
-                                        alt={PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
-                                        sx={{ width: 40, height: 40 }}
-                                      />
-                                    ) : null}
-                                    <Typography variant="body2" color="text.secondary">
-                                      Sicherungstyp: {PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}
-                                    </Typography>
-                                  </Stack>
-                                ) : null}
                                 {instructionLines.map((line) => (
                                   <Typography key={line} variant="body2" color="text.secondary">
                                     {line}
