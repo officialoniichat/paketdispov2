@@ -306,13 +306,8 @@ export function BelegProcessScreen(): JSX.Element {
 
   return (
     <StepScaffold
-      where={aggregate.case.storageLocation?.code ?? '—'}
+      where={`Lagerplatz ${aggregate.case.storageLocation?.code ?? '—'}`}
       title={`WE ${aggregate.case.weBelegNo}`}
-      subtitle={
-        c.inboundCartonCount != null
-          ? `📦 ${c.inboundCartonCount} Karton${c.inboundCartonCount === 1 ? '' : 's'} – alle auf dem Karren suchen!`
-          : undefined
-      }
       onBack={() => navigate(TAGESSTART)}
       primary={{ label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
       secondary={{
@@ -322,11 +317,35 @@ export function BelegProcessScreen(): JSX.Element {
       }}
     >
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        {/* Kompakte Fakten-Leiste: Warenart · Menge · Kartons — scanbar, ohne
+            Fließtext (Nachtrag 15.07.2026). */}
+        <Stack
+          direction="row"
+          spacing={2.5}
+          alignItems="center"
+          sx={{ flexWrap: 'wrap', rowGap: 1 }}
+        >
           {c.goodsTypeText ? (
             <Chip color="secondary" sx={{ fontWeight: 700 }} label={c.goodsTypeText} />
           ) : null}
-          <Typography sx={{ fontWeight: 600 }}>{c.totalQuantity} Teile</Typography>
+          <Box>
+            <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
+              {c.totalQuantity}
+            </Typography>{' '}
+            <Typography component="span" variant="body2" color="text.secondary">
+              Teile
+            </Typography>
+          </Box>
+          {c.inboundCartonCount != null ? (
+            <Box>
+              <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
+                {c.inboundCartonCount}
+              </Typography>{' '}
+              <Typography component="span" variant="body2" color="text.secondary">
+                {c.inboundCartonCount === 1 ? 'Karton' : 'Kartons'}
+              </Typography>
+            </Box>
+          ) : null}
         </Stack>
 
         {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}

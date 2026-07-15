@@ -51,21 +51,40 @@ export interface CollectStopView extends RouteStopDto {
 }
 
 /**
- * Route stops in pick order, each carrying the Belege booked to its
- * Lagerplatz (matched by `storageLocationCode` — `RouteStopDto` itself has no
- * case linkage). A stop whose only case(s) got parked survives the backend's
- * resequencing (only renumbered, not deleted) but now matches zero cases —
- * filtered out here so it doesn't sit in the list as an uncollectable,
- * pointless "ghost" stop blocking `collectComplete`.
+ * Pick list for „Ware holen": one stop per Lagerplatz that actually carries
+ * Belege of the bundle. Die Belege selbst sind die Wahrheit darüber, was geholt
+ * werden muss — deshalb wird die Liste IMMER aus ihren `storageLocationCode`
+ * gebaut. Die Engine-`routeStops` liefern nur Reihenfolge und Scan-Info, wo
+ * vorhanden; fehlen sie (z. B. manuell zugewiesenes / nachgezogenes Bündel ohne
+ * Routen-Neuberechnung), bleibt die Liste trotzdem vollständig statt „weirdly
+ * leer" (Nachtrag 15.07.2026). Ein Lagerplatz ohne Beleg (alles geparkt) fällt
+ * automatisch weg, weil er keine Gruppe bildet.
  */
 export function deriveStops(routeStops: RouteStopDto[], cases: CaseSummaryDto[]): CollectStopView[] {
-  return [...routeStops]
-    .sort((a, b) => a.sequence - b.sequence)
-    .map((stop) => ({
-      ...stop,
-      caseIds: cases.filter((c) => c.storageLocationCode === stop.locationCode).map((c) => c.id),
-    }))
-    .filter((stop) => stop.caseIds.length > 0);
+  const caseIdsByLocation = new Map<string, string[]>();
+  for (const c of cases) {
+    const loc = c.storageLocationCode;
+    if (!loc) continue;
+    caseIdsByLocation.set(loc, [...(caseIdsByLocation.get(loc) ?? []), c.id]);
+  }
+  const metaByLocation = new Map(routeStops.map((stop) => [stop.locationCode, stop]));
+  return [...caseIdsByLocation.entries()]
+    .sort(([a], [b]) => {
+      const seqA = metaByLocation.get(a)?.sequence ?? Number.MAX_SAFE_INTEGER;
+      const seqB = metaByLocation.get(b)?.sequence ?? Number.MAX_SAFE_INTEGER;
+      return seqA - seqB || a.localeCompare(b);
+    })
+    .map(([locationCode, caseIds], index) => {
+      const stop = metaByLocation.get(locationCode);
+      return {
+        id: stop?.id ?? `loc-${locationCode}`,
+        sequence: stop?.sequence ?? index + 1,
+        locationCode,
+        scanRequired: stop?.scanRequired ?? false,
+        scanned: stop?.scanned ?? false,
+        caseIds,
+      };
+    });
 }
 
 /** German messaging for the backend's "no cart assigned" reasons (§continuation). */
