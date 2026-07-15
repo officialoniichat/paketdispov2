@@ -7,22 +7,33 @@ korrekt auszeichnen.
 
 ## Wann anwenden
 
-Wenn du die Ware geholt hast und einen Beleg öffnest (`'Start Bearbeitung WE <Nummer>'` oder Tippen
-auf eine Karte in `'2 · Bearbeiten'`).
+Wenn du die Ware eines Belegs geholt hast und ihn durch Tippen auf seine Karte in
+`'2 · Bearbeiten'` öffnest. **Du bestimmst die Reihenfolge selbst** — es gibt keinen
+vorgegebenen „Start"-Beleg.
 
 ## Voraussetzungen
 
-- Alle Stops des Bündels geholt (Kapitel A2).
+- Der Lagerplatz-Stop des Belegs ist geholt (Kapitel A2). Belege noch nicht geholter Stops sind
+  ausgegraut.
 
 ## Die Bearbeiten-Liste verstehen (`'2 · Bearbeiten'`)
 
-Jede Beleg-Karte zeigt:
+Jede Beleg-Karte zeigt (in dieser Reihenfolge):
 
 - ein **Warenart-Icon**: Regal 🗄️, Palette 🟧, Hängeware 🧥, gemischt 📦;
 - **`'WE <Nummer>'`** (fett);
-- den Lagerplatz-Code, bei Hängeware zusätzlich `'· <Anzahl> Teile'`;
+- **`'Filiale <Nummer>'`** und **`'Shopbereich <Nummer>'`** — so kannst du Zusammengehörendes
+  nacheinander abarbeiten;
+- **`'🏷️ Etikettendruck'`** oder **`'Digitale Etiketten'`**;
 - optional eine Warenart wie `'Vororder'`, `'Nachorder'`, `'NOS'`, `'Extrabestellung'`;
 - einen Status: `'Offen'`, `'In Arbeit'`, `'Fertig'`, `'Teilabschluss'` oder `'Problem'`.
+
+## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
+
+Unter jeder Beleg-Karte gibt es den Knopf **`'Barcode anzeigen'`** — bei **jedem** Beleg, egal ob
+Etiketten nötig sind oder nicht. Er klappt die WE-Beleg-Nummer direkt in der Karte als
+**Code-128-Barcode** auf (kein neues Fenster). Damit forderst du Etiketten per Scanner an.
+`'Barcode ausblenden'` klappt ihn wieder zu.
 
 ## Der Beleg-Bildschirm
 

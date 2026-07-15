@@ -50,6 +50,12 @@ export class CaseSummaryDto {
   priceLabelPrintRequired?: boolean | null;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA',
+  })
+  primaryShopAreaNo!: string | null;
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Kartons der Anlieferung (A6)' })
   inboundCartonCount!: number | null;
   @ApiProperty({ type: [String], description: 'Intake-Gate: fehlende Pflichtfelder (blocked)' })

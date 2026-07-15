@@ -19,10 +19,12 @@ erscheint `'Mehrmenge'` bzw. `'Mindermenge'` (Kapitel A4).
 Tippe auf `'Rest parken (<Anzahl> Beleg/Belege)'`. Die noch nicht geholten Stops gehen zurück in die
 Planung: `'<Anzahl> Beleg / Belege geparkt – kommen ins nächste Bündel.'` (Kapitel A2).
 
-## Bündel fertig – wie geht's weiter?
+## Mehr Arbeit holen – jederzeit
 
 Sind alle Belege geschlossen, steht `'Bündel fertig 🎉'` und du kannst `'Nächstes Bündel holen'`
-antippen (während des Ladens: `'Lädt…'`). Je nach Lage bekommst du eine Rückmeldung:
+antippen (während des Ladens: `'Lädt…'`). Du musst aber **nicht** warten: Mit
+`'Weiteres Bündel anfordern'` holst du dir auch bei offenem Bündel zusätzliche Belege — sie
+werden an dein Bündel angehängt. Je nach Lage bekommst du eine Rückmeldung:
 
 | Meldung | Bedeutung |
 |---|---|
@@ -30,7 +32,8 @@ antippen (während des Ladens: `'Lädt…'`). Je nach Lage bekommst du eine Rüc
 | `'Feierabend – Tageskapazität erreicht.'` | Dein Tagespensum ist erreicht. |
 | `'Schichtende – kein neues Bündel mehr, damit nichts offen liegen bleibt.'` | Kurz vor Schichtende gibt es kein neues Bündel mehr. |
 | `'Heute keine Schicht eingeplant.'` | Für heute ist keine Schicht hinterlegt. |
-| `'Es läuft noch ein Bündel.'` | Du hast noch ein offenes Bündel – erst das fertig machen. |
+| `'Belege werden dir von der Teamleitung zugeteilt.'` | Deine Skill-Stufe zieht nicht selbst – die Teamleitung teilt zu. |
+| `'Erst den offenen mehrtägigen Beleg fertigstellen.'` | Ein großer, mehrtägiger Beleg läuft noch – erst abschließen. |
 | `'Konnte nicht laden – bitte später erneut.'` | Technischer Fehler, später erneut. |
 
 ## Schichtende

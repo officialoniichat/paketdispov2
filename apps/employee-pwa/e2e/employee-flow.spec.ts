@@ -77,10 +77,9 @@ function stopRows(page: Page): Locator {
 
 /**
  * Die Beleg-Zeile aus „2 · Bearbeiten" zu einer WE-Nummer — so, wie ein
- * Mitarbeiter sie anklickt. Bewusst NICHT über den Footer-Button
- * „Start Bearbeitung WE …": welcher Beleg dort steht, hängt zusätzlich vom
- * Status ab (`cases.find(c => !isCaseClosed(c.status))`). Dass die Reihenfolge
- * selbst stabil ist, sichert der Test „Beleg-Reihenfolge" separat ab.
+ * Mitarbeiter sie anklickt. Einen Footer-„Start Bearbeitung"-Button gibt es
+ * seit dem Kundenfeedback 2026-07-14 nicht mehr: jeder geholte Beleg ist
+ * direkt über seine Zeile startbar.
  */
 function belegRow(page: Page, weBelegNo: string): Locator {
   return page
@@ -89,9 +88,9 @@ function belegRow(page: Page, weBelegNo: string): Locator {
     .filter({ hasNot: page.getByText(/^(offen|geholt)$/) });
 }
 
-/** Öffnet den Beleg über seine Zeile und wartet auf das Beleg-Detail. */
+/** Öffnet den Beleg über seine Zeile (Klick auf die WE-Nr, nicht den Barcode-Button). */
 async function openBeleg(page: Page, weBelegNo: string): Promise<void> {
-  await belegRow(page, weBelegNo).click();
+  await belegRow(page, weBelegNo).getByText(`WE ${weBelegNo}`).click();
   await expect(page.getByRole('heading', { name: `WE ${weBelegNo}` })).toBeVisible();
 }
 
@@ -171,17 +170,20 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     }
   });
 
-  test('Forderung 3 (Ware holen): mehrere Stops nacheinander abhaken gibt Abschnitt 2 frei', async ({
+  test('Forderung 3 (Ware holen): Stops abhaken macht die zugehörigen Belege startbar — ohne Zwangsreihenfolge', async ({
     page,
   }) => {
     await loginAndWaitForHome(page, MA_103.employeeNo);
     const rows = stopRows(page);
     const total = MA_103.stops.length;
 
-    // Ausgangslage: nichts geholt, Abschnitt 2 ist gesperrt.
+    // Ausgangslage: nichts geholt — die Belege sind ausgegraut, aber ein weiteres
+    // Bündel ließe sich jederzeit anfordern (kein „Erst Ware holen"-Sperrknopf mehr).
     await expect(page.getByText(`0/${total} Plätze`)).toBeVisible();
-    await expect(page.getByText('Erst Ware holen, dann bearbeiten.')).toBeVisible();
-    await expect(page.getByRole('button', { name: `Erst Ware holen (0/${total})` })).toBeDisabled();
+    await expect(page.getByText(/Ausgegraute Belege erst holen/)).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Weiteres Bündel anfordern' }),
+    ).toBeEnabled();
 
     // Die Stop-Zeile ist klickbar und schaltet von „offen" auf „geholt" (:304).
     for (let index = 0; index < total; index++) {
@@ -191,13 +193,10 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
       await expect(page.getByText(`${index + 1}/${total} Plätze`)).toBeVisible();
     }
 
-    // Nach dem letzten Haken verschwindet der Hinweis (:367) …
-    await expect(page.getByText('Erst Ware holen, dann bearbeiten.')).toHaveCount(0);
+    // Nach dem letzten Haken verschwindet der Hinweis …
+    await expect(page.getByText(/Ausgegraute Belege erst holen/)).toHaveCount(0);
 
-    // … und Abschnitt 2 wird tatsächlich bedienbar: der Footer schaltet frei und
-    // die Beleg-Zeile öffnet den Beleg. Welchen Beleg der Footer benennt, ist
-    // nicht deterministisch (siehe `belegRow`) — also nur auf „irgendeinen" prüfen.
-    await expect(page.getByRole('button', { name: /^Start Bearbeitung WE / })).toBeEnabled();
+    // … und jeder Beleg ist direkt über seine Zeile startbar.
     await openBeleg(page, belegNos(MA_103)[0]);
   });
 
@@ -269,7 +268,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
 });
 
 /* ------------------------------------------------------------------------- *
- * Beleg-Reihenfolge — der „Start Bearbeitung"-Vorschlag darf nicht springen
+ * Beleg-Reihenfolge — die Liste folgt der Engine-Sequenz und springt nicht
  * ------------------------------------------------------------------------- */
 test.describe('Beleg-Reihenfolge', () => {
   test('die Belege kommen in der Reihenfolge der assignment-engine, nicht in der des Buchungsdatums', async ({
@@ -277,8 +276,8 @@ test.describe('Beleg-Reihenfolge', () => {
   }) => {
     // ma-105 ist so geseedet, dass die Engine-Sequenz der Einfügereihenfolge
     // WIDERSPRICHT: 105-2 trägt Sequenz 1. Sortierte `/api/me/today` weiter nach
-    // `bookingDate` (beide Belege: heute), stünde 105-1 vorn. Genau daran
-    // sprang der „Start Bearbeitung"-Vorschlag, sobald eine Zeile geschrieben wurde.
+    // `bookingDate` (beide Belege: heute), stünde 105-1 vorn — und die
+    // Beleg-Liste spränge, sobald eine Zeile geschrieben wurde.
     const [zweiterInDerEngine, ersterInDerEngine] = belegNos(MA_105);
 
     await loginAndWaitForHome(page, MA_105.employeeNo);
@@ -289,11 +288,7 @@ test.describe('Beleg-Reihenfolge', () => {
       zweiterInDerEngine,
     ]);
 
-    // Und der Bündel-Home schlägt genau diesen Beleg vor.
     await stopRows(page).first().click();
-    await expect(
-      page.getByRole('button', { name: `Start Bearbeitung WE ${ersterInDerEngine}` }),
-    ).toBeVisible();
 
     // Auch nachdem eine Zeile geschrieben wurde (`start-preparation`), bleibt es dabei.
     await openBeleg(page, ersterInDerEngine);

@@ -179,6 +179,7 @@ export const workflowEventTypeSchema = z.enum([
   'case.cancelled',
   'bundle.created',
   'bundle.assigned',
+  'bundle.extended',
   'bundle.completed',
   'pickup.location_scanned',
   'case.started',

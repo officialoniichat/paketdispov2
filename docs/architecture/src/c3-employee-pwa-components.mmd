@@ -16,7 +16,8 @@ flowchart TB
         direction TB
         subgraph screens["screens/ + components/ (router: routes/paths.ts, App gated by session)"]
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
-            home["BundleHomeScreen<br/><i>/ — Ware holen + Bearbeiten; Problemfall rot geparkt / grün geklärt</i>"]:::screen
+            home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten (frei wählbar) + Rest parken; Problemfall rot geparkt / grün geklärt</i>"]:::screen
+            barcode["Code128Barcode (components/)<br/><i>WE-Nr inline als Code-128-SVG — encoder: domain/code128.ts (pure)</i>"]:::logic
             process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle, CatMan/Shop/Order, VK korrigiert</i>"]:::screen
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
             teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
@@ -42,6 +43,7 @@ flowchart TB
     login --> auth
     auth --> apiClient
     home --> meToday
+    home --> barcode
     process --> useCaseFlow
     process --> problemDlg
     process --> teilDlg

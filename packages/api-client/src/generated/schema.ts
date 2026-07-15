@@ -1197,6 +1197,8 @@ export interface components {
             priceLabelPrintRequired?: boolean | null;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
+            /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
+            primaryShopAreaNo?: string | null;
             /** @description Kartons der Anlieferung (A6) */
             inboundCartonCount?: number | null;
             /** @description Intake-Gate: fehlende Pflichtfelder (blocked) */
@@ -1352,7 +1354,7 @@ export interface components {
         };
         NextBundleResultDto: {
             assigned: boolean;
-            /** @description Why no cart was assigned: no_shift|active_bundle|capacity_done|shift_ending|pool_empty */
+            /** @description Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation */
             reason?: string;
             /** @description Belege in the assigned cart */
             caseCount?: number;
@@ -1550,6 +1552,8 @@ export interface components {
             priceLabelPrintRequired?: boolean | null;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
+            /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
+            primaryShopAreaNo?: string | null;
             /** @description Kartons der Anlieferung (A6) */
             inboundCartonCount?: number | null;
             /** @description Intake-Gate: fehlende Pflichtfelder (blocked) */

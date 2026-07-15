@@ -1,13 +1,18 @@
 /**
- * Home hub — ONE screen for the whole bundle flow (Dustin B1).
+ * Home hub — ONE screen for the whole bundle flow (Dustin B1, überarbeitet nach
+ * Kundenfeedback 2026-07-14).
  *
  * Section „1 · Ware holen" lists the route-ordered pick stops inline; checking
  * off (Paket geholt) happens right here — no extra window. Section
- * „2 · Bearbeiten" lists the Belege directly below. Collecting stays the hard
- * gate; once fetched, the worker freely picks which Beleg to work first
- * (Warenart labels like NOS/EB support self-prioritisation — no system
- * recommendation). „Rest parken" (B4) sends the Belege of not-yet-fetched
- * stops back to the pool when the cart is full.
+ * „2 · Bearbeiten" lists the Belege directly below: WE-Beleg, Filiale,
+ * Shopbereich, Etikettendruck/Digitale Etiketten, plus an inline Code-128
+ * barcode of the WE-Nr per Beleg (Etiketten per Scanner anfordern). The worker
+ * picks the order themselves — every fetched Beleg is directly startable, there
+ * is no forced „Start Bearbeitung WE x" sequence anymore. Only per-Beleg
+ * fetching gates: a Beleg whose stop is not collected yet stays greyed out.
+ * „Rest parken" (B4) sends the Belege of not-yet-fetched stops back to the
+ * pool; „Weiteres Bündel anfordern" pulls more work onto the open cart at any
+ * time — the decision is the worker's.
  *
  * Data source: `/api/me/today` (`useMeToday`) via React Query — this is the
  * backend's single source of truth. There is no more local Dexie cache: the
@@ -19,10 +24,12 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Collapse from '@mui/material/Collapse';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { Code128Barcode } from '../components/Code128Barcode.js';
 import type { components } from '@paket/api-client';
 import { SessionExpiredError } from '../data/apiErrorHandling.js';
 import { getSession } from '../data/session.js';
@@ -65,7 +72,8 @@ const PULL_REASON_MSG: Record<string, string> = {
   capacity_done: 'Feierabend – Tageskapazität erreicht.',
   shift_ending: 'Schichtende – kein neues Bündel mehr, damit nichts offen liegen bleibt.',
   no_shift: 'Heute keine Schicht eingeplant.',
-  active_bundle: 'Es läuft noch ein Bündel.',
+  skill_tier: 'Belege werden dir von der Teamleitung zugeteilt.',
+  continuation: 'Erst den offenen mehrtägigen Beleg fertigstellen.',
   error: 'Konnte nicht laden – bitte später erneut.',
 };
 
@@ -149,6 +157,8 @@ export function BundleHomeScreen(): JSX.Element {
   const [seededBundleId, setSeededBundleId] = useState<string | undefined>(undefined);
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
   const [parkMsg, setParkMsg] = useState<string | undefined>(undefined);
+  // Punkt 3: which Beleg currently shows its WE-Nr as inline Code-128 barcode.
+  const [barcodeCaseId, setBarcodeCaseId] = useState<string | undefined>(undefined);
 
   const bundle = data?.bundle;
   const cases = data?.cases ?? [];
@@ -254,15 +264,18 @@ export function BundleHomeScreen(): JSX.Element {
   // selbst um — die Engine entscheidet, der Screen zeigt nur an.
   const ordered = cases;
   // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
-  // der MA kann sie nicht weiter bearbeiten. Der nächste Beleg überspringt sie.
+  // der MA kann sie nicht weiter bearbeiten (Kundenfeedback 14.07.2026, Punkt 10).
   const allDone =
     cases.length > 0 && cases.every((c) => isCaseClosed(c.status) || isCaseParked(c.status));
-  const nextBeleg = collectComplete
-    ? cases.find((c) => !isCaseClosed(c.status) && !isCaseParked(c.status))
-    : undefined;
+
+  // Punkt 4: keine erzwungene Sequenz mehr — jeder GEHOLTE Beleg ist direkt
+  // startbar. Nur das Holen selbst gated noch: ein Beleg, dessen Lagerplatz-Stop
+  // nicht abgehakt ist, bleibt ausgegraut.
+  const uncollectedCaseIdSet = new Set(uncollectedCaseIds);
+  const isBelegStartable = (caseId: string): boolean => !uncollectedCaseIdSet.has(caseId);
 
   const openBeleg = (caseId: string): void => {
-    if (!collectComplete) return;
+    if (!isBelegStartable(caseId)) return;
     const target = cases.find((c) => c.id === caseId);
     // Geparkte Problemfälle sind gesperrt, bis der Teamlead geklärt hat (Punkt 10).
     if (target && isCaseParked(target.status)) return;
@@ -270,7 +283,7 @@ export function BundleHomeScreen(): JSX.Element {
   };
 
   return (
-    <Box sx={{ p: 2, pb: bundle ? 18 : 2 }}>
+    <Box sx={{ p: 2, pb: 18 }}>
       {/* Feedback: „Dein Karren · N Belege · Bereich" gestrichen — kein Kopf-Overline. */}
       <Typography variant="h1" gutterBottom>
         {greetingForHour(new Date().getHours())}
@@ -279,7 +292,10 @@ export function BundleHomeScreen(): JSX.Element {
       <Typography sx={{ mb: 2 }}>Arbeitsplatz: {data?.workstation?.name ?? '—'}</Typography>
 
       {!bundle ? (
-        <Alert severity="info">Kein Bündel zugeteilt. Bitte an den Teamlead wenden.</Alert>
+        <Alert severity="info">
+          Kein Bündel zugeteilt. Du kannst unten selbst ein Bündel anfordern oder dich an den
+          Teamlead wenden.
+        </Alert>
       ) : (
         <>
           {parkMsg ? (
@@ -376,19 +392,22 @@ export function BundleHomeScreen(): JSX.Element {
             </Button>
           ) : null}
 
-          {/* 2 · Bearbeiten — the worker freely picks which Beleg first (B8). */}
+          {/* 2 · Bearbeiten — the worker freely picks which fetched Beleg first
+              (Punkt 4: no forced sequence; only not-yet-fetched Belege stay greyed). */}
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
             2 · Bearbeiten
           </Typography>
           {!collectComplete && cases.length > 0 ? (
             <Alert severity="info" sx={{ mb: 1 }}>
-              Erst Ware holen, dann bearbeiten.
+              Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger
+              Reihenfolge starten.
             </Alert>
           ) : null}
 
           <Stack spacing={1}>
             {ordered.map((b) => {
               const chip = statusChipFor(b.status);
+              const barcodeOpen = barcodeCaseId === b.id;
               const parked = isCaseParked(b.status);
               const resolved = b.status === 'problem_resolved';
               // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
@@ -397,46 +416,62 @@ export function BundleHomeScreen(): JSX.Element {
                 : resolved
                   ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
                   : {};
-              const clickable = collectComplete && !parked;
+              // Startbar = Ware geholt UND kein geparkter Problemfall.
+              const startable = isBelegStartable(b.id) && !parked;
               return (
-                <Paper
-                  key={b.id}
-                  variant="outlined"
-                  onClick={() => openBeleg(b.id)}
-                  sx={{
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: clickable ? 'pointer' : 'not-allowed',
-                    opacity: collectComplete ? 1 : 0.5,
-                    ...tint,
-                  }}
-                >
-                  <Box sx={{ fontSize: 22 }}>{ICON[goodsCategoryFor(b.storageLocationKind)]}</Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {b.storageLocationCode ?? '—'}
-                      {/* B5: Teile-Anzahl nur für Hängeware. */}
-                      {goodsCategoryFor(b.storageLocationKind) === 'haengeware'
-                        ? ` · ${b.totalQuantity} Teile`
-                        : ''}
-                    </Typography>
-                    {parked ? (
-                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.
+                <Paper key={b.id} variant="outlined" sx={{ p: 1.5, ...tint }}>
+                  <Box
+                    onClick={() => openBeleg(b.id)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      cursor: startable ? 'pointer' : 'not-allowed',
+                      opacity: isBelegStartable(b.id) ? 1 : 0.5,
+                    }}
+                  >
+                    <Box sx={{ fontSize: 22 }}>{ICON[goodsCategoryFor(b.storageLocationKind)]}</Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
+                      <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Filiale {b.branchNo}
+                        {b.primaryShopAreaNo ? ` · Shopbereich ${b.primaryShopAreaNo}` : ''}
                       </Typography>
-                    ) : null}
-                    {resolved ? (
-                      <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                        Geklärt – zur Weiterbearbeitung freigegeben.
+                      <Typography variant="body2" color="text.secondary">
+                        {b.priceLabelPrintRequired ? '🏷️ Etikettendruck' : 'Digitale Etiketten'}
                       </Typography>
+                      {parked ? (
+                        <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                          Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.
+                        </Typography>
+                      ) : null}
+                      {resolved ? (
+                        <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                          Geklärt – zur Weiterbearbeitung freigegeben.
+                        </Typography>
+                      ) : null}
+                    </Box>
+                    {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+                    {b.goodsType ? (
+                      <Chip size="small" variant="outlined" label={b.goodsType} />
                     ) : null}
+                    <Chip size="small" color={chip.color} label={chip.label} />
                   </Box>
-                  {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
-                  {b.goodsType ? <Chip size="small" variant="outlined" label={b.goodsType} /> : null}
-                  <Chip size="small" color={chip.color} label={chip.label} />
+                  {/* Punkt 3: WE-Nr als Code-128 inline aufklappen (Etiketten per Scanner
+                      anfordern) — bei JEDEM Beleg, unabhängig von der Etiketten-Pflicht. */}
+                  <Button
+                    size="small"
+                    sx={{ mt: 0.5 }}
+                    onClick={() => setBarcodeCaseId(barcodeOpen ? undefined : b.id)}
+                  >
+                    {barcodeOpen ? 'Barcode ausblenden' : 'Barcode anzeigen'}
+                  </Button>
+                  <Collapse in={barcodeOpen} unmountOnExit>
+                    <Box sx={{ mt: 1 }}>
+                      <Code128Barcode value={b.weBelegNo} />
+                    </Box>
+                  </Collapse>
                 </Paper>
               );
             })}
@@ -447,52 +482,47 @@ export function BundleHomeScreen(): JSX.Element {
               Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege hier.
             </Alert>
           ) : null}
-
-          <Box
-            sx={{
-              position: 'fixed',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              p: 2,
-              bgcolor: 'background.paper',
-              boxShadow: 8,
-            }}
-          >
-            {allDone ? (
-              <Stack spacing={1}>
-                <Alert severity="success" sx={{ py: 0.5 }}>
-                  Bündel fertig 🎉
-                </Alert>
-                {pullMsg ? (
-                  <Alert severity="info" sx={{ py: 0.5 }}>
-                    {pullMsg}
-                  </Alert>
-                ) : null}
-                <TouchButton
-                  emphasis="primary"
-                  disabled={requestNextBundle.isPending}
-                  onClick={() => void handleNextBundle()}
-                >
-                  {requestNextBundle.isPending ? 'Lädt…' : 'Nächstes Bündel holen'}
-                </TouchButton>
-              </Stack>
-            ) : !collectComplete ? (
-              <TouchButton emphasis="primary" disabled>
-                {`Erst Ware holen (${counts.collected}/${counts.total})`}
-              </TouchButton>
-            ) : (
-              <TouchButton
-                emphasis="primary"
-                disabled={!nextBeleg}
-                onClick={() => nextBeleg && openBeleg(nextBeleg.id)}
-              >
-                {nextBeleg ? `Start Bearbeitung WE ${nextBeleg.weBelegNo}` : 'Bearbeiten'}
-              </TouchButton>
-            )}
-          </Box>
         </>
       )}
+
+      {/* Punkt 1: „Weiteres Bündel anfordern" — jederzeit möglich, auch mit offenem
+          Bündel. Die Entscheidung liegt beim Mitarbeiter; das Backend hängt die
+          neuen Belege an das offene Bündel an. */}
+      <Box
+        sx={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          p: 2,
+          bgcolor: 'background.paper',
+          boxShadow: 8,
+        }}
+      >
+        <Stack spacing={1}>
+          {allDone ? (
+            <Alert severity="success" sx={{ py: 0.5 }}>
+              Bündel fertig 🎉
+            </Alert>
+          ) : null}
+          {pullMsg ? (
+            <Alert severity="info" sx={{ py: 0.5 }} onClose={() => setPullMsg(undefined)}>
+              {pullMsg}
+            </Alert>
+          ) : null}
+          <TouchButton
+            emphasis="primary"
+            disabled={requestNextBundle.isPending}
+            onClick={() => void handleNextBundle()}
+          >
+            {requestNextBundle.isPending
+              ? 'Lädt…'
+              : !bundle || allDone
+                ? 'Nächstes Bündel holen'
+                : 'Weiteres Bündel anfordern'}
+          </TouchButton>
+        </Stack>
+      </Box>
     </Box>
   );
 }
