@@ -373,6 +373,18 @@ export function BelegProcessScreen(): JSX.Element {
                 const i = pos.instruction;
                 const manualProblems = manualByPosition.get(pos.id) ?? [];
                 const catManLabel = catManDateLabel(pos.catManDate);
+                // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
+                // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
+                const metaText = [
+                  pos.hShopNo ? `HS ${pos.hShopNo}` : null,
+                  `Shop ${pos.shopNo}`,
+                  pos.floor ? `Etage ${pos.floor}` : null,
+                  pos.branchNo ? `Filiale ${pos.branchNo}` : null,
+                  c.primaryShopAreaNo ? `Bereich ${c.primaryShopAreaNo}` : null,
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(' · ');
+                const catManChipLabel = catManLabel ?? (pos.catMan ? 'Termin' : null);
                 const instructionLines = [
                   i.priceLabelAttachLocation ? `Etikett anbringen: ${i.priceLabelAttachLocation}` : null,
                   i.securityRequired && i.securityLocation ? `Sichern: ${i.securityLocation}` : null,
@@ -384,46 +396,10 @@ export function BelegProcessScreen(): JSX.Element {
                 return (
                   <TableBody key={pos.id}>
                     <TableRow sx={{ bgcolor: 'action.hover' }}>
-                      {/* Nachtrag 15.07.2026: Kontextfelder gestapelt unter der Pos-Nr.
-                          — HS, Shop, CatMan, Etage, Filiale, Shopbereich. */}
                       <TableCell sx={{ verticalAlign: 'top' }}>
-                        <Stack spacing={0.25}>
-                          <Typography sx={{ fontWeight: 700, fontSize: '1.25rem' }}>
-                            Pos {pos.positionNo}
-                          </Typography>
-                          {pos.hShopNo ? (
-                            <Typography variant="body2" color="text.secondary">
-                              HS {pos.hShopNo}
-                            </Typography>
-                          ) : null}
-                          <Typography variant="body2" color="text.secondary">
-                            Shop {pos.shopNo}
-                          </Typography>
-                          {catManLabel ? (
-                            <Typography variant="body2" color="text.secondary">
-                              CatMan {catManLabel}
-                            </Typography>
-                          ) : pos.catMan ? (
-                            <Typography variant="body2" color="text.secondary">
-                              CatMan
-                            </Typography>
-                          ) : null}
-                          {pos.floor ? (
-                            <Typography variant="body2" color="text.secondary">
-                              Etage {pos.floor}
-                            </Typography>
-                          ) : null}
-                          {pos.branchNo ? (
-                            <Typography variant="body2" color="text.secondary">
-                              Filiale {pos.branchNo}
-                            </Typography>
-                          ) : null}
-                          {c.primaryShopAreaNo ? (
-                            <Typography variant="body2" color="text.secondary">
-                              Shopbereich {c.primaryShopAreaNo}
-                            </Typography>
-                          ) : null}
-                        </Stack>
+                        <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.15 }}>
+                          Pos {pos.positionNo}
+                        </Typography>
                       </TableCell>
                       <TableCell colSpan={columns.length - 1} sx={{ verticalAlign: 'top' }}>
                         <Stack
@@ -458,6 +434,27 @@ export function BelegProcessScreen(): JSX.Element {
                               {WGR_DESCRIPTION.get(pos.wgr) ? ` ${WGR_DESCRIPTION.get(pos.wgr)}` : ''}
                               {pos.season ? ` · Saison ${pos.season}` : ''}
                             </Typography>
+
+                            {/* Nachtrag 15.07.2026: Positions-Kontext als horizontale
+                                Meta-Zeile — HS · Shop · Etage · Filiale · Bereich, CatMan als Chip. */}
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}
+                            >
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {metaText}
+                              </Typography>
+                              {catManChipLabel ? (
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  color="warning"
+                                  label={`📅 ${catManChipLabel}`}
+                                  sx={{ height: 22, '& .MuiChip-label': { px: 0.75 } }}
+                                />
+                              ) : null}
+                            </Stack>
 
                             {instructionLines.length > 0 || (i.securityRequired && i.securityTypeCode) ? (
                               <Stack
