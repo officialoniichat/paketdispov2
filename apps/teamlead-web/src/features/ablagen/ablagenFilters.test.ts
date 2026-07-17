@@ -74,13 +74,6 @@ describe('cardMatchesFilter', () => {
     expect(cardMatchesFilter(makeCard(), DEFAULT_ABLAGEN_FILTER_STATE)).toBe(true);
   });
 
-  it('bereiche filter requires a matching Bereich', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Hängebahn' as const] };
-    expect(cardMatchesFilter(makeCard({ bereich: 'Regal' }), filter)).toBe(false);
-    expect(cardMatchesFilter(makeCard({ bereich: 'Hängebahn' }), filter)).toBe(true);
-    expect(cardMatchesFilter(makeCard({ bereich: null }), filter)).toBe(false);
-  });
-
   it('goodsTypes filter requires a matching Warenart', () => {
     const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, goodsTypes: ['Prio' as const] };
     expect(cardMatchesFilter(makeCard({ goodsTypeText: 'NOS' }), filter)).toBe(false);
@@ -120,12 +113,12 @@ describe('cardMatchesFilter', () => {
   });
 
   it('combines multiple active filters with AND', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyPrio: true, bereiche: ['Regal' as const] };
-    const prioButWrongBereich = makeCard({ bereich: 'Palette', priorityFlags: ['prio'] });
-    const bereichButNotPrio = makeCard({ bereich: 'Regal', priorityFlags: [] });
-    const both = makeCard({ bereich: 'Regal', priorityFlags: ['prio'] });
-    expect(cardMatchesFilter(prioButWrongBereich, filter)).toBe(false);
-    expect(cardMatchesFilter(bereichButNotPrio, filter)).toBe(false);
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, onlyPrio: true, goodsTypes: ['NOS' as const] };
+    const prioButWrongGoodsType = makeCard({ goodsTypeText: 'Prio', priorityFlags: ['prio'] });
+    const goodsTypeButNotPrio = makeCard({ goodsTypeText: 'NOS', priorityFlags: [] });
+    const both = makeCard({ goodsTypeText: 'NOS', priorityFlags: ['prio'] });
+    expect(cardMatchesFilter(prioButWrongGoodsType, filter)).toBe(false);
+    expect(cardMatchesFilter(goodsTypeButNotPrio, filter)).toBe(false);
     expect(cardMatchesFilter(both, filter)).toBe(true);
   });
 });
@@ -133,11 +126,11 @@ describe('cardMatchesFilter', () => {
 describe('filterLaneCards', () => {
   it('returns only the matching cards, preserving order', () => {
     const cards = [
-      makeCard({ caseId: 'a', bereich: 'Regal' }),
-      makeCard({ caseId: 'b', bereich: 'Palette' }),
-      makeCard({ caseId: 'c', bereich: 'Regal' }),
+      makeCard({ caseId: 'a', goodsTypeText: 'NOS' }),
+      makeCard({ caseId: 'b', goodsTypeText: 'Prio' }),
+      makeCard({ caseId: 'c', goodsTypeText: 'NOS' }),
     ];
-    const result = filterLaneCards(cards, { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal'] });
+    const result = filterLaneCards(cards, { ...DEFAULT_ABLAGEN_FILTER_STATE, goodsTypes: ['NOS'] });
     expect(result.map((c) => c.caseId)).toEqual(['a', 'c']);
   });
 });
@@ -152,11 +145,11 @@ describe('isFilterActive / activeFilterChips / removeFilterChip', () => {
     const filter = {
       ...DEFAULT_ABLAGEN_FILTER_STATE,
       onlyNeedsDecision: true,
-      bereiche: ['Regal' as const, 'Palette' as const],
+      goodsTypes: ['NOS' as const, 'Prio' as const],
     };
     expect(isFilterActive(filter)).toBe(true);
     const chips = activeFilterChips(filter);
-    expect(chips.map((c) => c.key)).toEqual(['onlyNeedsDecision', 'bereich:Regal', 'bereich:Palette']);
+    expect(chips.map((c) => c.key)).toEqual(['onlyNeedsDecision', 'goodsType:NOS', 'goodsType:Prio']);
   });
 
   it('removeFilterChip clears exactly the targeted dimension', () => {
@@ -166,10 +159,10 @@ describe('isFilterActive / activeFilterChips / removeFilterChip', () => {
     expect(next.onlyPrio).toBe(true);
   });
 
-  it('removeFilterChip removes a single Bereich value out of several', () => {
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const, 'Palette' as const] };
-    const next = removeFilterChip(filter, 'bereich:Regal');
-    expect(next.bereiche).toEqual(['Palette']);
+  it('removeFilterChip removes a single Warenart value out of several', () => {
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, goodsTypes: ['NOS' as const, 'Prio' as const] };
+    const next = removeFilterChip(filter, 'goodsType:NOS');
+    expect(next.goodsTypes).toEqual(['Prio']);
   });
 });
 
@@ -192,10 +185,10 @@ describe('isFilterExemptLane', () => {
 describe('filterLaneCardsForLane', () => {
   it('exempt lanes ignore narrowing filters entirely', () => {
     const cards = [
-      makeCard({ caseId: 'a', bereich: 'Regal' }),
-      makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
+      makeCard({ caseId: 'a', goodsTypeText: 'NOS' }),
+      makeCard({ caseId: 'b', goodsTypeText: 'Prio' }),
     ];
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const], onlyPrio: true };
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, goodsTypes: ['NOS' as const], onlyPrio: true };
     expect(filterLaneCardsForLane(cards, filter, 'probleme').map((c) => c.caseId)).toEqual(['a', 'b']);
     expect(filterLaneCardsForLane(cards, filter, 'geparkt').map((c) => c.caseId)).toEqual(['a', 'b']);
     expect(filterLaneCardsForLane(cards, filter, 'weitergeleitet').map((c) => c.caseId)).toEqual(['a', 'b']);
@@ -209,10 +202,10 @@ describe('filterLaneCardsForLane', () => {
 
   it('working lanes apply the full filter, same as filterLaneCards', () => {
     const cards = [
-      makeCard({ caseId: 'a', bereich: 'Regal' }),
-      makeCard({ caseId: 'b', bereich: 'Hängebahn' }),
+      makeCard({ caseId: 'a', goodsTypeText: 'NOS' }),
+      makeCard({ caseId: 'b', goodsTypeText: 'Prio' }),
     ];
-    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, bereiche: ['Regal' as const] };
+    const filter = { ...DEFAULT_ABLAGEN_FILTER_STATE, goodsTypes: ['NOS' as const] };
     expect(filterLaneCardsForLane(cards, filter, 'prio')).toEqual(filterLaneCards(cards, filter));
   });
 });
@@ -255,6 +248,11 @@ describe('sanitizeAblagenFilterState', () => {
   it('falls back groupBy to "none" for a value from a removed option (e.g. old "assignedTo")', () => {
     const stale = { groupBy: 'assignedTo' } as unknown as Partial<typeof DEFAULT_ABLAGEN_FILTER_STATE>;
     expect(sanitizeAblagenFilterState(stale).groupBy).toBe('none');
+  });
+
+  it('drops keys of removed filter dimensions (e.g. the old "bereiche" filter)', () => {
+    const stale = { bereiche: ['Regal'] } as unknown as Partial<typeof DEFAULT_ABLAGEN_FILTER_STATE>;
+    expect(sanitizeAblagenFilterState(stale)).toEqual(DEFAULT_ABLAGEN_FILTER_STATE);
   });
 
   it('keeps a valid groupBy and merges other persisted fields over the defaults', () => {

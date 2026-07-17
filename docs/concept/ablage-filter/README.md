@@ -110,11 +110,10 @@ verwerfen oder als spätere Zusatz-Ansicht zu planen.
   `Frei` (kein `assignedTo`) · `Braucht Entscheidung` (offenes Problem, `blocked`, Pool-Hold, oder
   `attentionFlag`) · `Prio` (`priorityFlags` enthält `prio`/`overdue`/`same_day_required`) ·
   `Meine Filiale` (sobald Shop/Filiale am Modell existiert).
-- **„Weitere Filter"-Popover:** Bereich (Mehrfachauswahl aus fixem Bereichs-Vokabular, siehe
-  [[bereich-design]]), Warenart, Lieferungs-Gruppe (ja/nein), Teile-Range (Slider/Min-Max), Filiale
-  (sobald verfügbar), Skill-Tier (sobald verfügbar).
+- **„Weitere Filter"-Popover:** Warenart, Lieferungs-Gruppe (ja/nein), Teile-Range (Slider/Min-Max),
+  Filiale (sobald verfügbar), Skill-Tier (sobald verfügbar).
 - **Aktive-Filter-Zeile:** Zusammenfassung als entfernbare Chips direkt unter der Filterleiste
-  („Bereich: Kühlware ✕", „Frei ✕" …) + „Alle zurücksetzen".
+  („Warenart: NOS ✕", „Prio ✕" …) + „Alle zurücksetzen".
 - **Lane-Verhalten unter Filter:** Kartenzahl im Lane-Header zeigt gefilterte/gesamt (z. B. „3/12"),
   wenn ein Filter aktiv ist. Leere Lane wegen Filter zeigt „Kein Treffer für aktuelle Filter" statt dem
   generischen „Leer.", damit TL nicht denkt, die Lane sei tatsächlich leer.
@@ -130,9 +129,9 @@ verwerfen oder als spätere Zusatz-Ansicht zu planen.
 ## 5a. Filter-Ausnahme für Problemfälle/Geparkt/Weitergeleitet (umgesetzt)
 
 Diese drei Lanes sind bereits kleine Ausnahme-/Triage-Queues — ihr ganzer Zweck ist, dass nichts darin
-übersehen wird. Ein zufälliger Bereichs-/Warenart-/Teile-Filter, der genau den einen Problemfall
+übersehen wird. Ein zufälliger Warenart-/Teile-Filter, der genau den einen Problemfall
 außerhalb des aktuellen Filters versteckt, würde diesen Zweck aushebeln. Deshalb ignorieren diese drei
-Lanes alle einschränkenden Filter (Bereich, Warenart, Lieferungs-Gruppe, Teile-Range, „Prio",
+Lanes alle einschränkenden Filter (Warenart, Lieferungs-Gruppe, Teile-Range, „Prio",
 „Braucht Entscheidung") vollständig und zeigen immer 100 % ihrer Karten — nur die Freitextsuche bleibt
 aktiv (Suche ist ein „Finden", kein „Einschränken", und ist auch in kleinen Lanes nützlich). Umgesetzt
 in `ablagenFilters.ts` (`isFilterExemptLane` / `filterLaneCardsForLane`).
@@ -151,6 +150,14 @@ gar keinen Effekt (in den Arbeits-Lanes) oder gar keine Wirkung, weil die einzig
 `assignedTo` vom Filtern ausgenommen sind — tote UI, die nur Verwirrung stiftet. Entfernt statt behalten;
 `assignedTo` bleibt weiterhin über die Freitextsuche auffindbar (§5a) und wird auf der Karte selbst
 angezeigt.
+
+## 5c. Bereich-Filter entfernt
+
+Die Filter-Gruppe „Bereich" (Mehrfachauswahl Hängebahn/Palette/Regal im „Weitere Filter"-Popover) wurde
+auf Kunden-Feedback (2026-07-15) hin ersatzlos entfernt. Bereich bleibt in der Digitalen Ablage weiter
+zugänglich — als Treffer der Freitextsuche und als „Gruppieren nach"-Dimension —, und das
+Domänen-Konzept Bereich/`LocationKind` (siehe [[bereich-design]]) ist unberührt; nur die
+Filter-Dimension in `AblagenFilterState` samt UI ist weg.
 
 ## 6. Was zuerst am Datenmodell nachgezogen werden müsste
 

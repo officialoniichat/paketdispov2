@@ -22,7 +22,7 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import TuneIcon from '@mui/icons-material/Tune';
-import { BEREICHE, goodsTypeTextSchema, type Bereich, type GoodsTypeText } from '@paket/domain-types';
+import { goodsTypeTextSchema, type GoodsTypeText } from '@paket/domain-types';
 import {
   activeFilterChips,
   isFilterActive,
@@ -48,13 +48,6 @@ export function AblagenFilterBar({ filter, onChange }: AblagenFilterBarProps): J
   const [advancedAnchor, setAdvancedAnchor] = useState<HTMLElement | null>(null);
   const advancedOpen = advancedAnchor !== null;
 
-  const toggleBereich = (bereich: Bereich): void => {
-    const bereiche = filter.bereiche.includes(bereich)
-      ? filter.bereiche.filter((b) => b !== bereich)
-      : [...filter.bereiche, bereich];
-    onChange({ ...filter, bereiche });
-  };
-
   const toggleGoodsType = (goodsType: GoodsTypeText): void => {
     const goodsTypes = filter.goodsTypes.includes(goodsType)
       ? filter.goodsTypes.filter((g) => g !== goodsType)
@@ -63,7 +56,6 @@ export function AblagenFilterBar({ filter, onChange }: AblagenFilterBarProps): J
   };
 
   const advancedActiveCount =
-    filter.bereiche.length +
     filter.goodsTypes.length +
     (filter.deliveryGroup !== 'any' ? 1 : 0) +
     (filter.minQuantity !== null ? 1 : 0) +
@@ -154,20 +146,6 @@ export function AblagenFilterBar({ filter, onChange }: AblagenFilterBarProps): J
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <Stack spacing={2} sx={{ p: 2, minWidth: 320, maxWidth: 420 }}>
-          <FilterField label="Bereich">
-            <Stack direction="row" flexWrap="wrap" gap={0.5}>
-              {BEREICHE.map((bereich) => (
-                <Chip
-                  key={bereich}
-                  size="small"
-                  label={bereich}
-                  color={filter.bereiche.includes(bereich) ? 'primary' : undefined}
-                  onClick={() => toggleBereich(bereich)}
-                />
-              ))}
-            </Stack>
-          </FilterField>
-
           <FilterField label="Warenart">
             <Stack direction="row" flexWrap="wrap" gap={0.5}>
               {GOODS_TYPES.map((goodsType) => (
@@ -253,7 +231,6 @@ const CLEARED_FIELDS: Omit<AblagenFilterState, 'groupBy'> = {
   search: '',
   onlyNeedsDecision: false,
   onlyPrio: false,
-  bereiche: [],
   goodsTypes: [],
   deliveryGroup: 'any',
   minQuantity: null,

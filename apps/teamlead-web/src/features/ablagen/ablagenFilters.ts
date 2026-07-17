@@ -6,7 +6,7 @@
  * "Gruppieren nach" that only changes the sub-grouping WITHIN a lane, never
  * the lane axis itself (status/Fachlogik stays the lane boundary).
  */
-import type { Bereich, CaseStatus, GoodsTypeText, PriorityFlag } from '@paket/domain-types';
+import type { CaseStatus, GoodsTypeText, PriorityFlag } from '@paket/domain-types';
 import type { LaneCard, LaneId } from '../../data/types.js';
 
 /**
@@ -23,7 +23,6 @@ export interface AblagenFilterState {
   search: string;
   onlyNeedsDecision: boolean;
   onlyPrio: boolean;
-  bereiche: Bereich[];
   goodsTypes: GoodsTypeText[];
   deliveryGroup: DeliveryGroupFilter;
   minQuantity: number | null;
@@ -35,7 +34,6 @@ export const DEFAULT_ABLAGEN_FILTER_STATE: AblagenFilterState = {
   search: '',
   onlyNeedsDecision: false,
   onlyPrio: false,
-  bereiche: [],
   goodsTypes: [],
   deliveryGroup: 'any',
   minQuantity: null,
@@ -50,12 +48,19 @@ const VALID_GROUP_BY: ReadonlySet<string> = new Set<AblagenGroupBy>(['none', 'be
  * defaults. Guards against values from a since-removed option — e.g. a stored
  * `groupBy: 'assignedTo'` from before that dimension was dropped — which would
  * otherwise flow straight into the MUI `<Select>` and render blank because no
- * `<MenuItem>` matches it.
+ * `<MenuItem>` matches it. Picks known fields explicitly so keys of removed
+ * filter dimensions (e.g. the old `bereiche` filter) don't survive re-saves.
  */
 export function sanitizeAblagenFilterState(persisted: Partial<AblagenFilterState> | undefined): AblagenFilterState {
   const merged = { ...DEFAULT_ABLAGEN_FILTER_STATE, ...persisted };
   return {
-    ...merged,
+    search: merged.search,
+    onlyNeedsDecision: merged.onlyNeedsDecision,
+    onlyPrio: merged.onlyPrio,
+    goodsTypes: merged.goodsTypes,
+    deliveryGroup: merged.deliveryGroup,
+    minQuantity: merged.minQuantity,
+    maxQuantity: merged.maxQuantity,
     groupBy: VALID_GROUP_BY.has(merged.groupBy) ? merged.groupBy : 'none',
   };
 }
@@ -78,7 +83,7 @@ export function cardIsPrio(card: LaneCard): boolean {
 /**
  * These lanes are already low-volume exception/triage queues (§4 Problemfälle,
  * Geparkt, Weitergeleitet) — their whole purpose is that NOTHING in them goes
- * unnoticed. A stray Bereich/Warenart/Teile-Filter silently hiding the one
+ * unnoticed. A stray Warenart/Teile-Filter silently hiding the one
  * problem case outside the current filter would defeat that purpose, so these
  * lanes ignore every narrowing filter and only respond to search (a "find",
  * not a "narrow" — see docs/concept/ablage-filter/README.md §5).
@@ -102,9 +107,6 @@ function matchesSearch(card: LaneCard, search: string): boolean {
 export function cardMatchesFilter(card: LaneCard, filter: AblagenFilterState): boolean {
   if (filter.onlyNeedsDecision && !cardNeedsDecision(card)) return false;
   if (filter.onlyPrio && !cardIsPrio(card)) return false;
-  if (filter.bereiche.length > 0 && !(card.bereich && filter.bereiche.includes(card.bereich as Bereich))) {
-    return false;
-  }
   if (
     filter.goodsTypes.length > 0 &&
     !(card.goodsTypeText && filter.goodsTypes.includes(card.goodsTypeText))
@@ -143,7 +145,6 @@ export function isFilterActive(filter: AblagenFilterState): boolean {
     filter.search.trim() !== '' ||
     filter.onlyNeedsDecision ||
     filter.onlyPrio ||
-    filter.bereiche.length > 0 ||
     filter.goodsTypes.length > 0 ||
     filter.deliveryGroup !== 'any' ||
     filter.minQuantity !== null ||
@@ -161,7 +162,6 @@ export function activeFilterChips(filter: AblagenFilterState): ActiveFilterChip[
   const chips: ActiveFilterChip[] = [];
   if (filter.onlyNeedsDecision) chips.push({ key: 'onlyNeedsDecision', label: 'Braucht Entscheidung' });
   if (filter.onlyPrio) chips.push({ key: 'onlyPrio', label: 'Prio' });
-  for (const bereich of filter.bereiche) chips.push({ key: `bereich:${bereich}`, label: `Bereich: ${bereich}` });
   for (const goodsType of filter.goodsTypes) {
     chips.push({ key: `goodsType:${goodsType}`, label: `Warenart: ${goodsType}` });
   }
@@ -184,10 +184,6 @@ export function removeFilterChip(filter: AblagenFilterState, key: string): Ablag
   if (key === 'deliveryGroup') return { ...filter, deliveryGroup: 'any' };
   if (key === 'minQuantity') return { ...filter, minQuantity: null };
   if (key === 'maxQuantity') return { ...filter, maxQuantity: null };
-  if (key.startsWith('bereich:')) {
-    const value = key.slice('bereich:'.length);
-    return { ...filter, bereiche: filter.bereiche.filter((b) => b !== value) };
-  }
   if (key.startsWith('goodsType:')) {
     const value = key.slice('goodsType:'.length);
     return { ...filter, goodsTypes: filter.goodsTypes.filter((g) => g !== value) };
