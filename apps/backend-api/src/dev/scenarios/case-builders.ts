@@ -481,39 +481,53 @@ export async function seedLifecycleCases(
       });
     }
 
-    // Open problem for the issue_open case (Problemfälle lane). Idempotent: only
-    // create when this case has no open issue yet. Probleme hängen an einer
-    // Position (Kundenfeedback 14.07.2026) — die erste Position des Belegs, falls
-    // die Detail-Daten schon geseedet sind.
-    if (c.issue) {
-      const existing = await prisma.issue.findFirst({
-        where: { caseId: gcase.id, status: 'open' },
-      });
-      if (!existing) {
-        const firstPosition = await prisma.receiptPosition.findFirst({
-          where: { caseId: gcase.id },
-          orderBy: { positionNo: 'asc' },
-          select: { id: true },
-        });
-        const reason = c.issue.reasonId
-          ? await prisma.problemReason.findUnique({ where: { id: c.issue.reasonId } })
-          : null;
-        await prisma.issue.create({
-          data: {
-            caseId: gcase.id,
-            scope: 'position',
-            scopeId: firstPosition?.id,
-            employeeId,
-            kind: c.issue.kind ?? 'manual',
-            reasonId: reason?.id,
-            reasonLabel: reason?.label,
-            deviationQty: c.issue.deviationQty,
-            description: c.issue.description,
-            status: 'open',
-          },
-        });
-      }
-    }
+  }
+}
+
+/**
+ * Offene Probleme der Lifecycle-Fälle (Problemfälle lane) — als EIGENER Schritt
+ * NACH `seedCaseDetails`: Probleme hängen an einer Position (Kundenfeedback
+ * 14.07.2026), und die Positionen entstehen erst mit den Detail-Daten. Idempotent:
+ * nur anlegen, wenn der Beleg noch kein offenes Problem hat.
+ */
+export async function seedLifecycleIssues(
+  prisma: ScenarioPrisma,
+  userIds: Record<string, string>,
+  cases: readonly SeedLifecycleCase[] = LIFECYCLE_CASES,
+): Promise<void> {
+  for (const c of cases) {
+    if (!c.issue) continue;
+    const gcase = await prisma.goodsReceiptCase.findUnique({
+      where: { weBelegNo: c.weBelegNo },
+      select: { id: true },
+    });
+    if (!gcase) continue;
+    const existing = await prisma.issue.findFirst({
+      where: { caseId: gcase.id, status: 'open' },
+    });
+    if (existing) continue;
+    const firstPosition = await prisma.receiptPosition.findFirst({
+      where: { caseId: gcase.id },
+      orderBy: { positionNo: 'asc' },
+      select: { id: true },
+    });
+    const reason = c.issue.reasonId
+      ? await prisma.problemReason.findUnique({ where: { id: c.issue.reasonId } })
+      : null;
+    await prisma.issue.create({
+      data: {
+        caseId: gcase.id,
+        scope: 'position',
+        scopeId: firstPosition?.id,
+        employeeId: requireId(userIds, c.employeeNo, 'user'),
+        kind: c.issue.kind ?? 'manual',
+        reasonId: reason?.id,
+        reasonLabel: reason?.label,
+        deviationQty: c.issue.deviationQty,
+        description: c.issue.description,
+        status: 'open',
+      },
+    });
   }
 }
 

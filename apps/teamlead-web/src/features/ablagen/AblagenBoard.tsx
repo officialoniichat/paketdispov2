@@ -257,9 +257,7 @@ export function AblagenBoard(): JSX.Element {
             onToggleCollapsed={() => toggleCollapsed(lane.id)}
             parkedContext={parkedContext}
             store={store}
-            onOpen={(caseId, tab) =>
-              navigate(tab ? `/belege/${caseId}?tab=${tab}` : `/belege/${caseId}`)
-            }
+            onOpen={(caseId) => navigate(`/belege/${caseId}`)}
             onAssign={setAssignCaseId}
             onForward={setForwardCaseId}
             onAttention={setAttentionCaseId}
@@ -336,7 +334,7 @@ interface LaneColumnProps {
   onToggleCollapsed: () => void;
   parkedContext: Map<string, ParkedContext>;
   store: CaseActionCtx['store'];
-  onOpen: (caseId: string, tab?: string) => void;
+  onOpen: (caseId: string) => void;
   onAssign: (caseId: string) => void;
   onForward: (caseId: string) => void;
   onAttention: (caseId: string) => void;
@@ -456,7 +454,6 @@ function LaneColumn({
               <LaneCardView
                 key={c.caseId}
                 card={c}
-                laneId={lane.id}
                 parked={parkedContext.get(c.caseId)}
                 store={store}
                 onOpen={onOpen}
@@ -493,7 +490,6 @@ function groupByRecipient(
 
 function LaneCardView({
   card,
-  laneId,
   parked,
   store,
   onOpen,
@@ -503,10 +499,9 @@ function LaneCardView({
   onSplit,
 }: {
   card: LaneCard;
-  laneId: LaneId;
   parked: ParkedContext | undefined;
   store: CaseActionCtx['store'];
-  onOpen: (caseId: string, tab?: string) => void;
+  onOpen: (caseId: string) => void;
   onAssign: (caseId: string) => void;
   onForward: (caseId: string) => void;
   onAttention: (caseId: string) => void;
@@ -574,7 +569,7 @@ function LaneCardView({
           size="small"
           variant="text"
           sx={{ color: 'text.secondary', fontWeight: 400 }}
-          onClick={() => onOpen(card.caseId, laneId === 'probleme' ? 'problem' : undefined)}
+          onClick={() => onOpen(card.caseId)}
         >
           Details
         </Button>

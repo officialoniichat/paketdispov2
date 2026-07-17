@@ -1,7 +1,12 @@
 // B14 Problemfälle & Ablage (alle Lanes gefüllt + Problem-Deep-Link) und
 // B15 Leerer Tag (nur Stammdaten — die UI-Leerzustände).
 import { seedMasterData, forceRuleConfig } from '../lib.js';
-import { seedCaseDetails, seedLifecycleCases, type SeedLifecycleCase } from '../case-builders.js';
+import {
+  seedCaseDetails,
+  seedLifecycleCases,
+  seedLifecycleIssues,
+  type SeedLifecycleCase,
+} from '../case-builders.js';
 import type { ScenarioDefinition } from '../types.js';
 import { seedCustomCases, type CustomCaseSpec } from './custom-case.js';
 
@@ -112,6 +117,9 @@ export const problemfaelleAblageScenario: ScenarioDefinition = {
     await seedLifecycleCases(ctx.prisma, ctx.baseDate, locationIds, userIds, B14_LIFECYCLE);
     await seedCustomCases(ctx.prisma, ctx.baseDate, locationIds, B14_READY);
     await seedCaseDetails(ctx.prisma, new Map());
+    // Probleme hängen an einer Position (Kundenfeedback 14.07.2026) — deshalb
+    // erst NACH den Detail-Daten an die erste Position des Belegs anhängen.
+    await seedLifecycleIssues(ctx.prisma, userIds, B14_LIFECYCLE);
   },
 };
 

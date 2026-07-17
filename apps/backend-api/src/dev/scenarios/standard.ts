@@ -6,6 +6,7 @@ import {
   seedGeneratedBelege,
   seedIntakeGateFixtures,
   seedLifecycleCases,
+  seedLifecycleIssues,
   seedReadyAttentionFlag,
 } from './case-builders.js';
 import type { ScenarioDefinition } from './types.js';
@@ -37,6 +38,9 @@ export const standardScenario: ScenarioDefinition = {
     // After both case sets exist, attach detail (positions/boxes/SKU) to every case
     // that should show it — generated ready pool + lifecycle cases.
     await seedCaseDetails(ctx.prisma, specByWeBelegNo);
+    // Probleme hängen an einer Position (Kundenfeedback 14.07.2026) — deshalb
+    // erst NACH den Detail-Daten an die erste Position des Belegs anhängen.
+    await seedLifecycleIssues(ctx.prisma, userIds);
     // Generated mock-ProHandel batch ON TOP of the generated pool (runs after
     // seedCaseDetails so its richer positions/boxes are not overwritten).
     await seedGeneratedBelege(ctx.prisma, ctx.baseDate, locationIds);

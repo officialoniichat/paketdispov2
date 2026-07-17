@@ -1,12 +1,14 @@
 /**
- * Belegdetails (§10.4): Kopf, Priorität, Aufwand, Positionen+SKU, Boxen,
- * Abschluss, Problem und Historie — read live from the backend
+ * Belegdetails (§10.4): der Beleg-Tab zeigt Kopf, Positionen und Probleme in
+ * EINER kombinierten Ansicht (Kundenfeedback 15.07.2026; Vorlage: employee-pwa
+ * BelegProcessScreen), daneben nur noch Aufwand, Abschluss, Historie und
+ * Priorität (ganz rechts) — read live from the backend
  * (`GET /api/teamlead/cases/:id`). Teamlead actions (Priorisieren/Parken) POST
  * through the store's audited (§8.4) endpoints and invalidate this view + the
  * cockpit on success.
  */
 import { useMemo, useState, type JSX, type ReactNode } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DeliveryGroupPanel } from './DeliveryGroupPanel';
 import Alert from '@mui/material/Alert';
@@ -21,6 +23,7 @@ import Tab from '@mui/material/Tab';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
@@ -38,7 +41,6 @@ import {
 import { useCockpitData } from '../../data/store.js';
 import {
   fetchBelegDetail,
-  type BelegBox,
   type BelegDetail,
   type BelegHistoryEntry,
   type BelegIssue,
@@ -59,23 +61,12 @@ import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
 
 const TABS = [
-  'Kopf',
-  'Priorität',
+  'Beleg',
   'Aufwand',
-  'Positionen',
-  'Boxen',
   'Abschluss',
-  'Problem',
   'Historie',
+  'Priorität',
 ];
-
-/** Index of the Problem tab (deep-link target `?tab=problem`, C4). */
-const PROBLEM_TAB_INDEX = 6;
-
-/** Map the `?tab=` search param onto a tab index; unknown values open Kopf. */
-function initialTab(param: string | null): number {
-  return param === 'problem' ? PROBLEM_TAB_INDEX : 0;
-}
 
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
@@ -93,9 +84,7 @@ export function BelegDetailPage(): JSX.Element {
     unflagAttention,
   } = useCockpitData();
   const navigate = useNavigate();
-  // C4 deep-link: /belege/:id?tab=problem opens the Problem tab directly.
-  const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState(() => initialTab(searchParams.get('tab')));
+  const [tab, setTab] = useState(0);
   // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
   const [assignOpen, setAssignOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
@@ -249,12 +238,12 @@ export function BelegDetailPage(): JSX.Element {
         </Alert>
       )}
 
-      {/* C4: an open problem is surfaced on EVERY tab, with a jump to the Problem tab. */}
+      {/* C4: an open problem is surfaced on EVERY tab; Probleme leben in der Beleg-Ansicht. */}
       {c.hasOpenIssue && openIssue && (
         <Alert
           severity="error"
           action={
-            <Button color="inherit" size="small" onClick={() => setTab(PROBLEM_TAB_INDEX)}>
+            <Button color="inherit" size="small" onClick={() => setTab(0)}>
               Zum Problem
             </Button>
           }
@@ -279,46 +268,8 @@ export function BelegDetailPage(): JSX.Element {
       </Tabs>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
-        {tab === 0 && (
-          <FieldGrid
-            rows={[
-              ['WE-Belegnummer', c.weBelegNo],
-              ['Lieferschein', c.deliveryNoteNo ?? '–'],
-              ['Filiale', c.branchNo],
-              ['Buchungsdatum', formatDate(c.bookingDate)],
-              ['Lagerplatz', c.storageCode],
-              ['Shopbereich', c.primaryShopAreaNo ?? '–'],
-              ['Shops', c.shopNos.length > 0 ? c.shopNos.join(', ') : '–'],
-              ['Etage', c.primaryFloor ?? '–'],
-              ['Kartons (Anlieferung)', c.inboundCartonCount === null ? '–' : String(c.inboundCartonCount)],
-              ['Etiketten', c.labelsRequired ? 'ja' : 'nein'],
-              ['Belegmenge', String(c.totalQuantity)],
-              ['Zugeteilt', c.assignedEmployeeName ?? '–'],
-              [
-                'DocuWare',
-                c.docuWareUrl ? (
-                  <Link href={c.docuWareUrl} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-                    Langzeitarchiv öffnen <OpenInNewIcon fontSize="inherit" />
-                  </Link>
-                ) : (
-                  '–'
-                ),
-              ],
-            ]}
-          />
-        )}
+        {tab === 0 && <BelegTab c={c} />}
         {tab === 1 && (
-          <FieldGrid
-            rows={[
-              ['Abschnitt', c.section === null ? '– (Prio ist kein Abschnitt)' : String(c.section)],
-              ['Prio-Flags', c.priorityFlags.join(', ') || '–'],
-              ['CatMan-Datum', formatDate(c.catManDate ?? undefined)],
-              ['Verladetag', formatDate(c.loadPlanDate ?? undefined)],
-              ['Warenart', c.goodsType ?? '–'],
-            ]}
-          />
-        )}
-        {tab === 2 && (
           <Stack spacing={1.5}>
             <FieldGrid
               rows={[
@@ -354,13 +305,19 @@ export function BelegDetailPage(): JSX.Element {
             )}
           </Stack>
         )}
-        {tab === 3 && <PositionsTab positions={c.positions} />}
-        {tab === 4 && <BoxesTab boxes={c.boxes} />}
-        {tab === 5 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
-        {tab === 6 && (
-          <IssuesTab issues={c.issues} weBelegNo={c.weBelegNo} deliveryNoteNo={c.deliveryNoteNo ?? null} />
+        {tab === 2 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
+        {tab === 3 && <HistoryTab history={c.history} />}
+        {tab === 4 && (
+          <FieldGrid
+            rows={[
+              ['Abschnitt', c.section === null ? '– (Prio ist kein Abschnitt)' : String(c.section)],
+              ['Prio-Flags', c.priorityFlags.join(', ') || '–'],
+              ['CatMan-Datum', formatDate(c.catManDate ?? undefined)],
+              ['Verladetag', formatDate(c.loadPlanDate ?? undefined)],
+              ['Warenart', c.goodsType ?? '–'],
+            ]}
+          />
         )}
-        {tab === 7 && <HistoryTab history={c.history} />}
       </Paper>
 
       <AssignFromListDialog
@@ -429,77 +386,207 @@ function FieldGrid({ rows }: { rows: [string, ReactNode][] }): JSX.Element {
   );
 }
 
-function PositionsTab({ positions }: { positions: BelegPosition[] }): JSX.Element {
-  if (positions.length === 0) return <Empty text="Keine Positionen erfasst." />;
+/**
+ * Beleg-Tab — Kopf, Positionen und Probleme in EINER Ansicht (Kundenfeedback
+ * 15.07.2026). Vorlage ist die kombinierte Darstellung des Mitarbeiter-UIs
+ * (employee-pwa BelegProcessScreen): Beleg-Kopf oben, darunter die eine
+ * Positionen-Tabelle mit Problem-Markierungen direkt an der Ware, darunter die
+ * gesammelten Probleme des Belegs.
+ */
+function BelegTab({ c }: { c: BelegDetail }): JSX.Element {
   return (
-    <Stack spacing={2}>
-      {positions.map((p) => (
-        <Box key={p.id}>
-          <Stack direction="row" gap={1} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap">
-            <Typography sx={{ fontWeight: 700 }}>
-              Position {p.positionNo} · WGR {p.wgr} · {p.supplierColor}
-            </Typography>
-            {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
-            {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
-            {p.priceLabelRequired && <Chip size="small" label="Etikett" />}
-            {p.securityRequired && <Chip size="small" color="warning" label="Sichern" />}
-            {p.onlineHandlingRequired && <Chip size="small" label="Online" />}
-          </Stack>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>EAN</TableCell>
-                <TableCell>Größe</TableCell>
-                <TableCell align="right">Soll</TableCell>
-                <TableCell align="right">Ist</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {p.skuLines.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>{s.ean}</TableCell>
-                  <TableCell>{s.size}</TableCell>
-                  <TableCell align="right">{s.expectedQuantity}</TableCell>
-                  <TableCell align="right">{s.confirmedQuantity ?? '–'}</TableCell>
-                  <TableCell>{skuLineStatusLabels[s.status]}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Box>
-      ))}
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Kopf
+        </Typography>
+        <FieldGrid
+        rows={[
+          ['WE-Belegnummer', c.weBelegNo],
+          ['Lieferschein', c.deliveryNoteNo ?? '–'],
+          ['Filiale', c.branchNo],
+          ['Buchungsdatum', formatDate(c.bookingDate)],
+          ['Lagerplatz', c.storageCode],
+          ['Shopbereich', c.primaryShopAreaNo ?? '–'],
+          ['Shops', c.shopNos.length > 0 ? c.shopNos.join(', ') : '–'],
+          ['Etage', c.primaryFloor ?? '–'],
+          ['Kartons (Anlieferung)', c.inboundCartonCount === null ? '–' : String(c.inboundCartonCount)],
+          ['Etiketten', c.labelsRequired ? 'ja' : 'nein'],
+          ['Belegmenge', String(c.totalQuantity)],
+          ['Zugeteilt', c.assignedEmployeeName ?? '–'],
+          [
+            'DocuWare',
+            c.docuWareUrl ? (
+              <Link href={c.docuWareUrl} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                Langzeitarchiv öffnen <OpenInNewIcon fontSize="inherit" />
+              </Link>
+            ) : (
+              '–'
+            ),
+          ],
+        ]}
+        />
+      </Box>
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Positionen
+        </Typography>
+        <PositionsSection positions={c.positions} issues={c.issues} />
+      </Box>
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Probleme
+        </Typography>
+        <IssuesTab issues={c.issues} weBelegNo={c.weBelegNo} deliveryNoteNo={c.deliveryNoteNo} />
+      </Box>
     </Stack>
   );
 }
 
-function BoxesTab({ boxes }: { boxes: BelegBox[] }): JSX.Element {
-  if (boxes.length === 0) return <Empty text="Noch keine Transportboxen berechnet." />;
+/** Kopfzeilen-Zellen der Positionen-Tabelle (sticky, PWA-Vorlage A1). */
+const POSITION_HEAD_CELL = { fontWeight: 700, whiteSpace: 'nowrap', bgcolor: 'background.paper' } as const;
+
+/** Ziffern in Zahlenspalten laufen einspurig, sonst wandert das Komma je Zeile (PWA-Vorlage). */
+const NUMERIC_CELL = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } as const;
+
+/** PWA-Vorlage Punkt 9: betroffene Größenzeilen rot markieren. */
+const PROBLEM_ROW_SX = {
+  bgcolor: 'rgba(211, 47, 47, 0.08)',
+  borderLeft: '3px solid',
+  borderLeftColor: 'error.main',
+} as const;
+
+/** Anweisungs-Chips der Position (PWA-Vorlage: FLAG_CHIPS im BelegProcessScreen). */
+const POSITION_FLAG_CHIPS = [
+  { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' },
+  { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' },
+  { key: 'onlineHandlingRequired', label: '🌐 Online', color: 'info' },
+] as const;
+
+/**
+ * Positionen der kombinierten Beleg-Ansicht — Vorlage: employee-pwa
+ * BelegProcessScreen (A1): EINE Tabelle mit sticky Kopfzeile; je Position eine
+ * Kopfzeile (Pos-Nr, WGR + Klartext, Farbe, Ordernummer, Anweisungs-Chips) und
+ * je Größe eine Zeile. Probleme stehen direkt an der Ware: offene Probleme als
+ * rote Chips an ihrer Position, betroffene Größenzeilen (gemeldete EAN/Größe
+ * oder bestätigte Mengenabweichung) rot markiert (PWA Punkt 9).
+ */
+function PositionsSection({
+  positions,
+  issues,
+}: {
+  positions: BelegPosition[];
+  issues: BelegIssue[];
+}): JSX.Element {
+  if (positions.length === 0) return <Empty text="Keine Positionen erfasst." />;
+  const openIssues = issues.filter((i) => i.status !== 'resolved' && i.status !== 'rejected');
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Box</TableCell>
-          <TableCell>Shopbereich</TableCell>
-          <TableCell>Etage</TableCell>
-          <TableCell align="right">Menge</TableCell>
-          <TableCell>Boxzettel</TableCell>
-          <TableCell>Plombe</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {boxes.map((b) => (
-          <TableRow key={b.id}>
-            <TableCell>#{b.boxNo}</TableCell>
-            <TableCell>{b.shopAreaNo}</TableCell>
-            <TableCell>{b.floor ?? '–'}</TableCell>
-            <TableCell align="right">{b.quantity}</TableCell>
-            <TableCell>{b.labelStatus === 'not_required' ? 'Nicht nötig' : b.labelStatus}</TableCell>
-            <TableCell>{b.sealed ? 'Versiegelt' : 'Offen'}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Paper variant="outlined">
+      <TableContainer sx={{ overflowX: 'auto', maxHeight: 560 }}>
+        <Table size="small" stickyHeader aria-label="Positionen">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={POSITION_HEAD_CELL}>Pos</TableCell>
+              <TableCell sx={POSITION_HEAD_CELL}>EAN</TableCell>
+              <TableCell sx={POSITION_HEAD_CELL}>Größe</TableCell>
+              <TableCell sx={POSITION_HEAD_CELL} align="right">
+                Soll
+              </TableCell>
+              <TableCell sx={POSITION_HEAD_CELL} align="right">
+                Ist
+              </TableCell>
+              <TableCell sx={POSITION_HEAD_CELL}>Mehr-/Mindermenge</TableCell>
+              <TableCell sx={POSITION_HEAD_CELL}>Status</TableCell>
+            </TableRow>
+          </TableHead>
+          {positions.map((p) => {
+            const positionIssues = openIssues.filter((i) => i.positionNo === p.positionNo);
+            const flags = POSITION_FLAG_CHIPS.filter((f) => p[f.key]);
+            return (
+              <TableBody key={p.id}>
+                <TableRow sx={{ bgcolor: 'action.hover' }}>
+                  <TableCell sx={{ verticalAlign: 'top' }}>
+                    <Typography sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>
+                      Pos {p.positionNo}
+                    </Typography>
+                  </TableCell>
+                  <TableCell colSpan={6} sx={{ verticalAlign: 'top' }}>
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      justifyContent="space-between"
+                      alignItems="flex-start"
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                          <Typography sx={{ fontWeight: 700 }}>
+                            WGR {p.wgr}
+                            {p.wgrDescription ? ` ${p.wgrDescription}` : ''} · {p.supplierColor}
+                          </Typography>
+                          {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
+                          {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
+                          {flags.map((f) => (
+                            <Chip key={f.key} size="small" color={f.color} label={f.label} />
+                          ))}
+                        </Stack>
+                        {positionIssues.length > 0 && (
+                          <Stack direction="row" sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}>
+                            {positionIssues.map((i) => (
+                              <Chip
+                                key={i.id}
+                                size="small"
+                                color="error"
+                                label={i.description ? `${issueLabel(i)}: ${i.description}` : issueLabel(i)}
+                              />
+                            ))}
+                          </Stack>
+                        )}
+                      </Box>
+                      <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        Soll gesamt {p.expectedQuantity}
+                      </Typography>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+                {p.skuLines.map((s) => {
+                  const delta =
+                    s.confirmedQuantity === null ? 0 : s.confirmedQuantity - s.expectedQuantity;
+                  const hasIssue = openIssues.some(
+                    (i) => i.positionNo === p.positionNo && i.ean === s.ean && i.size === s.size,
+                  );
+                  return (
+                    <TableRow key={s.id} hover sx={delta !== 0 || hasIssue ? PROBLEM_ROW_SX : undefined}>
+                      <TableCell />
+                      <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
+                      <TableCell align="right" sx={NUMERIC_CELL}>
+                        {s.expectedQuantity}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ ...NUMERIC_CELL, ...(delta !== 0 ? { color: 'error.main', fontWeight: 700 } : {}) }}
+                      >
+                        {s.confirmedQuantity ?? '–'}
+                      </TableCell>
+                      <TableCell>
+                        {delta !== 0 && (
+                          <Chip
+                            size="small"
+                            color="warning"
+                            label={delta > 0 ? `+${delta} Mehrmenge` : `−${Math.abs(delta)} Mindermenge`}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>{skuLineStatusLabels[s.status]}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            );
+          })}
+        </Table>
+      </TableContainer>
+    </Paper>
   );
 }
 
@@ -524,7 +611,7 @@ function HistoryTab({ history }: { history: BelegHistoryEntry[] }): JSX.Element 
  * Abschluss tab — the case's ZST completion result (§4.6/§15.1): one row per
  * ZST record (full or partial), with the booked quantity, effort, who/when, and
  * whether it has been exported to the legacy system (zst_done). For a terminal
- * case this is the meaningful state, where Positionen/Boxen show the work setup.
+ * case this is the meaningful state; die Beleg-Ansicht zeigt das Arbeits-Setup.
  */
 function AbschlussTab({
   zstRecords,
@@ -579,6 +666,11 @@ function AbschlussTab({
 
 const ISSUE_EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
+/** Problemart-Label: Katalog-Snapshot bei manuellen Problemen, sonst die feste Art. */
+function issueLabel(i: BelegIssue): string {
+  return i.kind === 'manual' ? (i.reasonLabel ?? problemKindLabels.manual) : problemKindLabels[i.kind];
+}
+
 /** Bezugszeile eines Problems: Position + Ordernummer + optional EAN/Größe (Klärungs-UX). */
 function issueScopeLine(i: BelegIssue): string | null {
   if (i.positionNo === null) return null;
@@ -628,8 +720,7 @@ function IssuesTab({
       </Typography>
       {issues.map((i) => {
         const scopeLine = issueScopeLine(i);
-        const label =
-          i.kind === 'manual' ? (i.reasonLabel ?? problemKindLabels.manual) : problemKindLabels[i.kind];
+        const label = issueLabel(i);
         return (
           <Box key={i.id}>
             <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>

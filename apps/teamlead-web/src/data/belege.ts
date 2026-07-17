@@ -44,7 +44,6 @@ type PoolListDto = components['schemas']['PoolListDto'];
 type CaseDetailDto = components['schemas']['CaseDetailDto'];
 type PositionDetailDto = components['schemas']['PositionDetailDto'];
 type SkuLineDto = components['schemas']['SkuLineDto'];
-type TransportBoxTargetDto = components['schemas']['TransportBoxTargetDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
 type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
 type ZstSummaryDto = components['schemas']['ZstSummaryDto'];
@@ -207,6 +206,8 @@ export interface BelegPosition {
   /** Ordernummer (ERP-Referenz) — nur in der Teamlead-UX zur Fehlerlösung (Nachtrag 15.07.2026). */
   orderNo: string | null;
   wgr: string;
+  /** WGR-Klartext (z. B. „D-Bermuda") — Positions-Kopf der kombinierten Ansicht. */
+  wgrDescription: string | null;
   supplierColor: string;
   expectedQuantity: number;
   confirmedQuantity: number | null;
@@ -215,16 +216,6 @@ export interface BelegPosition {
   onlineHandlingRequired: boolean;
   status: string;
   skuLines: BelegSkuLine[];
-}
-
-export interface BelegBox {
-  id: string;
-  boxNo: number;
-  shopAreaNo: string;
-  floor: string | null;
-  quantity: number;
-  labelStatus: string;
-  sealed: boolean;
 }
 
 /**
@@ -286,7 +277,7 @@ export interface BelegWorkInstruction {
   zstRequired: boolean;
 }
 
-/** The full §10.4 Belegdetails view-model (the 7 tabs read from this). */
+/** The full §10.4 Belegdetails view-model (the Belegdetail tabs read from this). */
 /** One sibling Beleg of the Lieferung in the Belegdetail panel. */
 export interface DeliveryGroupMember {
   caseId: string;
@@ -343,7 +334,6 @@ export interface BelegDetail {
   hasOpenIssue: boolean;
   workInstruction: BelegWorkInstruction | null;
   positions: BelegPosition[];
-  boxes: BelegBox[];
   issues: BelegIssue[];
   zstRecords: BelegZst[];
   history: BelegHistoryEntry[];
@@ -705,7 +695,6 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     hasOpenIssue: status === 'issue_open',
     workInstruction: dto.workInstruction ? toWorkInstruction(dto.workInstruction) : null,
     positions: dto.positions.map(toBelegPosition),
-    boxes: dto.transportBoxes.map(toBelegBox),
     issues: dto.issues.map(toBelegIssue),
     zstRecords: dto.zstRecords.map(toBelegZst),
     history: dto.history.map(toBelegHistoryEntry),
@@ -749,6 +738,7 @@ function toBelegPosition(p: PositionDetailDto): BelegPosition {
     positionNo: p.positionNo,
     orderNo: p.orderNo ?? null,
     wgr: p.wgr,
+    wgrDescription: p.wgrDescription ?? null,
     supplierColor: p.supplierColor,
     expectedQuantity: p.expectedQuantity,
     confirmedQuantity: p.confirmedQuantity ?? null,
@@ -768,18 +758,6 @@ function toBelegSkuLine(s: SkuLineDto): BelegSkuLine {
     expectedQuantity: s.expectedQuantity,
     confirmedQuantity: s.confirmedQuantity ?? null,
     status: toSkuLineStatus(s.status),
-  };
-}
-
-function toBelegBox(b: TransportBoxTargetDto): BelegBox {
-  return {
-    id: b.id,
-    boxNo: b.boxNo,
-    shopAreaNo: b.shopAreaNo,
-    floor: b.floor ?? null,
-    quantity: b.quantity,
-    labelStatus: b.labelStatus,
-    sealed: b.sealed,
   };
 }
 
