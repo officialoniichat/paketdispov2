@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStops } from './BundleHomeScreen.js';
+import { deriveStops, orderCasesForDisplay } from './BundleHomeScreen.js';
 
 function stop(id: string, sequence: number, locationCode: string, scanned = false) {
   return { id, sequence, locationCode, scanRequired: false, scanned };
@@ -46,5 +46,39 @@ describe('deriveStops', () => {
     // sequence number changed from 0 to 1.
     expect(after.map((s) => s.id)).toEqual(['s3', 's1']);
     expect(after.find((s) => s.id === 's1')?.sequence).toBe(1);
+  });
+});
+
+function kaseWithStatus(id: string, status: string) {
+  return { id, status } as Parameters<typeof orderCasesForDisplay>[0][number];
+}
+
+describe('orderCasesForDisplay', () => {
+  it('listet einen geparkten Problemfall (issue_open) ganz unten — trotz Engine-Sequenz 1', () => {
+    const ordered = orderCasesForDisplay([
+      kaseWithStatus('p', 'issue_open'),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('b', 'in_progress'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'p']);
+  });
+
+  it('lässt die Engine-Reihenfolge unangetastet, wenn kein Problemfall geparkt ist — auch „Geklärt" (problem_resolved) sinkt NICHT', () => {
+    const ordered = orderCasesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('b', 'problem_resolved'),
+      kaseWithStatus('c', 'completed'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('stabile Partition: mehrere Problemfälle behalten untereinander die Engine-Reihenfolge', () => {
+    const ordered = orderCasesForDisplay([
+      kaseWithStatus('p1', 'issue_open'),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('p2', 'issue_open'),
+      kaseWithStatus('b', 'assigned'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'p1', 'p2']);
   });
 });

@@ -1,12 +1,10 @@
 /**
- * Aggregate model for the Mitarbeiter-App — one-screen bundle flow.
+ * Aggregate model for the Mitarbeiter-App.
  *
- * The PWA works exactly the engine's assignment for the day: one
- * Bereich-homogeneous bundle (the {@link BundleContext}), its consolidated
- * route-ordered pick list ({@link CollectStop}s, „Ware holen") and the
- * per-Beleg aggregates needed to work each Beleg. Assignment is
- * system-only — the worker never self-assigns; he fetches the cart's Ware,
- * then freely picks which Beleg to process and sets the per-Beleg ZST.
+ * The bundle/list display itself reads the generated `@paket/api-client` DTOs
+ * directly (`/api/me/today`, see BundleHomeScreen) — what lives here are the
+ * types the PROCESS workflow needs: the per-Beleg {@link CaseAggregate} and the
+ * local, mutable {@link CaseProgress} the workflow reducers operate on.
  *
  * These are plain types (no persistence semantics attached) — they replace
  * the former Dexie-backed `db/types.ts`. No generated `@paket/api-client`
@@ -18,7 +16,6 @@
  */
 import type {
   GoodsReceiptCase,
-  GoodsTypeText,
   OnlineSizeMark,
   ReceiptPosition,
   WorkInstructionHeader,
@@ -27,66 +24,6 @@ import type {
 
 /** Storage/goods category — derived from the Lagerplatz-Art (LocationKind), drives icons. */
 export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
-
-/** Derived list status for a Beleg row (computed from CaseProgress + open issues). */
-export type BelegStatus = 'open' | 'in_progress' | 'done' | 'partial' | 'issue';
-
-/**
- * The engine bundle for today (one active bundle per employee). `caseIds` is
- * the bundle order; the pick list derives its order from it. The Arbeitsplatz
- * (Tisch) is NOT part of the bundle — the worker claims it at login (see
- * data/workstation.ts).
- */
-export interface BundleContext {
-  bundleId: string;
-  employeeName: string;
-  /** ISO date 'YYYY-MM-DD' of the assignment, display only. */
-  date: string;
-  plannedEffortMinutes: number;
-  /** Homogeneous Bereich label (Regal/Palette/Hängebahn), display only. */
-  bereich: string | null;
-  caseIds: string[];
-}
-
-/**
- * One stop in the consolidated, route-ordered (§D.3) pick list. The whole
- * bundle's locations are listed once; `caseIds` are the Belege at this location.
- * `scanRequired` drives the optional scan affordance — collecting is a check-off,
- * scanning is never forced (client: today they do not scan).
- */
-export interface CollectStop {
-  sequence: number;
-  locationCode: string;
-  scanRequired: boolean;
-  caseIds: string[];
-}
-
-/**
- * Bundle-level „Ware holen" progress. `collectedSequences` are the stops the
- * worker has checked off. Processing a Beleg is hard-gated until every
- * (remaining) stop is fetched.
- */
-export interface BundleProgress {
-  collectedSequences: number[];
-  version: number;
-  updatedAt: string;
-}
-
-/** One assigned Beleg as shown in the Bearbeiten list (ordered by the bundle). */
-export interface BelegListItem {
-  caseId: string;
-  weBelegNo: string;
-  /** Position within the bundle (`caseIds` index); drives display order. */
-  order: number;
-  storageLocationCode: string;
-  /** Derived from the Lagerplatz-Art (LocationKind) — Regal/Palette/Hängebahn icon. */
-  goodsType: GoodsCategory;
-  totalQuantity: number;
-  /** Warenart (Vororder/Nachorder/NOS/EB …) — Selbst-Priorisierung, keine System-Empfehlung. */
-  goodsTypeText?: GoodsTypeText;
-  /** Preisetiketten müssen gedruckt werden — Hinweis beim Ware holen (nichts anzeigen wenn false). */
-  priceLabelPrintRequired: boolean;
-}
 
 /**
  * App view of a ReceiptPosition. `catManDate` is a per-position display field

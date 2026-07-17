@@ -6,18 +6,27 @@ import {
   MA_103,
   MA_104,
   MA_105,
+  MA_106,
   UNKNOWN_EMPLOYEE_NO,
   belegNos,
   locationCodes,
 } from './fixtures/seed-data.js';
-import { GREETING, loginAs, loginAndWaitForHome, openBeleg, stopRows } from './fixtures/ui.js';
+import {
+  GREETING,
+  belegRow,
+  loginAs,
+  loginAndWaitForHome,
+  openBeleg,
+  stopRows,
+  toggleStop,
+} from './fixtures/ui.js';
 
 /**
  * Mitarbeiter-App E2E — echtes Backend, echtes geseedetes Postgres.
  *
  * Jeder Test trägt im Namen die Kundenforderung aus dem Call vom 07.07.2026,
  * die er absichert. `e2e/fixtures/global-setup.ts` bootet ein reales backend-api
- * gegen ein Testcontainers-Postgres und seedet vier Mitarbeiter
+ * gegen ein Testcontainers-Postgres und seedet sechs Mitarbeiter
  * (`fixtures/seed-data.ts`) mit je eigenem Bündel.
  *
  * KEIN `recalculate` im Setup: der Seed schreibt die Bündel direkt und legt keine
@@ -144,10 +153,10 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     await expect(page.getByText(/Ausgegraute Belege erst holen/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Weiteres Bündel anfordern' })).toBeEnabled();
 
-    // Die Stop-Zeile ist klickbar und schaltet von „offen" auf „geholt" (:304).
+    // Die Stop-Zeile ist klickbar und schaltet von „offen" auf „geholt".
     for (let index = 0; index < total; index++) {
       await expect(rows.nth(index).getByText('offen', { exact: true })).toBeVisible();
-      await rows.nth(index).click();
+      await toggleStop(rows.nth(index));
       await expect(rows.nth(index).getByText('geholt', { exact: true })).toBeVisible();
       await expect(page.getByText(`${index + 1}/${total} Plätze`)).toBeVisible();
     }
@@ -175,18 +184,18 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     // Der Button erscheint erst, wenn mindestens ein Stop geholt ist (:350).
     await expect(parkButton).toHaveCount(0);
 
-    await rows.nth(0).click();
+    await toggleStop(rows.nth(0));
     await expect(page.getByRole('button', { name: 'Rest parken (2 Belege)' })).toBeVisible();
 
-    await rows.nth(1).click();
+    await toggleStop(rows.nth(1));
     await expect(page.getByRole('button', { name: 'Rest parken (1 Beleg)' })).toBeVisible();
 
     // … und verschwindet wieder, sobald nichts mehr offen ist.
-    await rows.nth(2).click();
+    await toggleStop(rows.nth(2));
     await expect(parkButton).toHaveCount(0);
 
     // Dustins Szenario: der Karren ist voll, der letzte Platz bleibt liegen.
-    await rows.nth(2).click();
+    await toggleStop(rows.nth(2));
     await expect(page.getByRole('button', { name: 'Rest parken (1 Beleg)' })).toBeVisible();
     await page.getByRole('button', { name: 'Rest parken (1 Beleg)' }).click();
 
@@ -200,29 +209,74 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     expect(after.weBelegNos).not.toContain(beleg3);
   });
 
-  test('Forderung 5 (Etikettendruck): der Chip erscheint nur bei Belegen mit priceLabelPrintRequired', async ({
+  test('Forderung 5 + Punkt 1 (15.07.2026): jeder Beleg zeigt am Stop seine Kopf-Infos — Etiketten-Art, Filiale/Shopbereich, Warenart', async ({
     page,
   }) => {
     await loginAndWaitForHome(page, MA_101.employeeNo);
     const [mitEtiketten, ohneEtiketten] = belegNos(MA_101);
 
-    // Beide Belege liegen auf demselben Lagerplatz — der Chip ist der EINZIGE
-    // Unterschied. Wäre das Flag überall gesetzt, trüge er keine Information:
-    // Dustin will am Bündel-Home erkennen, ob er zum Drucker muss (:334-335).
+    // Beide Belege liegen auf demselben Lagerplatz. Der Stop-Text wird an den
+    // WE-Nummern in die beiden Beleg-Einträge zerlegt, damit jede Info dem
+    // RICHTIGEN Beleg zugeordnet ist — nicht bloß „irgendwo am Stop".
     const stopText = await stopRows(page).first().innerText();
+    const startMit = stopText.indexOf(`WE ${mitEtiketten}`);
+    const startOhne = stopText.indexOf(`WE ${ohneEtiketten}`);
+    expect(startMit, 'Beleg MIT Etikettendruck steht auf der Liste').toBeGreaterThanOrEqual(0);
+    expect(startOhne, 'Beleg OHNE Etikettendruck folgt (Engine-Reihenfolge)').toBeGreaterThan(
+      startMit,
+    );
+    const eintragMit = stopText.slice(startMit, startOhne);
+    const eintragOhne = stopText.slice(startOhne);
 
-    expect(stopText, 'Beleg MIT Etikettendruck trägt den Chip').toContain(
-      `WE ${mitEtiketten} · 🏷️ Etiketten drucken`,
-    );
-    expect(stopText, 'Beleg OHNE Etikettendruck steht trotzdem auf der Liste').toContain(
-      `WE ${ohneEtiketten}`,
-    );
-    expect(stopText, 'Beleg OHNE Etikettendruck trägt KEINEN Chip').not.toContain(
-      `WE ${ohneEtiketten} · 🏷️`,
-    );
+    // Etiketten-Art wie in „2 · Bearbeiten": Druckpflicht vs. digital bleibt am
+    // Stop unterscheidbar — Dustin sieht weiter, ob er zum Drucker muss (F5).
+    expect(eintragMit).toContain('🏷️ Etikettendruck');
+    expect(eintragMit).not.toContain('Digitale Etiketten');
+    expect(eintragOhne).toContain('Digitale Etiketten');
+    expect(eintragOhne).not.toContain('🏷️');
 
-    // Genau ein Beleg dieses Bündels verlangt Etikettendruck.
-    expect(stopText.match(/Etiketten drucken/g)).toHaveLength(1);
+    // Filiale · Shopbereich und Warenart je Beleg (Punkt 1).
+    // EINE Zeile je Beleg, Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
+    expect(eintragMit).toContain('Filiale 1 · Shopbereich 42 | 🏷️ Etikettendruck');
+    expect(eintragMit).toContain('Vororder');
+    expect(eintragOhne).toContain('Filiale 1 · Shopbereich 77 | Digitale Etiketten');
+    expect(eintragOhne).toContain('NOS');
+
+    // … und unter „2 · Bearbeiten" stehen dieselben Infos unverändert.
+    await expect(belegRow(page, mitEtiketten)).toContainText(
+      'Filiale 1 · Shopbereich 42 | 🏷️ Etikettendruck',
+    );
+    await expect(belegRow(page, ohneEtiketten)).toContainText(
+      'Filiale 1 · Shopbereich 77 | Digitale Etiketten',
+    );
+  });
+
+  test('Punkt 2 (15.07.2026): „Barcode anzeigen" sitzt beim Ware holen — und ist bei „2 · Bearbeiten" ersatzlos entfernt', async ({
+    page,
+  }) => {
+    await loginAndWaitForHome(page, MA_101.employeeNo);
+    const stop = stopRows(page).first();
+    const [ersterBeleg] = belegNos(MA_101);
+
+    // Je Beleg des Stops ein Button (MA_101: zwei Belege auf einem Platz) …
+    await expect(stop.getByRole('button', { name: 'Barcode anzeigen' })).toHaveCount(2);
+    // … und auf den Beleg-Zeilen in „2 · Bearbeiten" KEINER mehr.
+    for (const weBelegNo of belegNos(MA_101)) {
+      await expect(
+        belegRow(page, weBelegNo).getByRole('button', { name: 'Barcode anzeigen' }),
+      ).toHaveCount(0);
+    }
+
+    // Der Klick öffnet das Code-128-Pop-up des RICHTIGEN Belegs …
+    await stop.getByRole('button', { name: 'Barcode anzeigen' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: `WE ${ersterBeleg}` })).toBeVisible();
+    await expect(dialog.getByRole('img', { name: `Barcode ${ersterBeleg}` })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Schließen' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // … und hakt den Stop dabei NICHT als „geholt" ab (stopPropagation).
+    await expect(stop.getByText('offen', { exact: true })).toBeVisible();
   });
 });
 
@@ -247,7 +301,7 @@ test.describe('Beleg-Reihenfolge', () => {
       zweiterInDerEngine,
     ]);
 
-    await stopRows(page).first().click();
+    await toggleStop(stopRows(page).first());
 
     // Auch nachdem eine Zeile geschrieben wurde (`start-preparation`), bleibt es dabei.
     await openBeleg(page, ersterInDerEngine);
@@ -258,6 +312,54 @@ test.describe('Beleg-Reihenfolge', () => {
       ersterInDerEngine,
       zweiterInDerEngine,
     ]);
+  });
+});
+
+/* ------------------------------------------------------------------------- *
+ * Kundenfeedback 15.07.2026, Punkt 3 — Problemfälle immer ganz unten
+ * ------------------------------------------------------------------------- */
+test.describe('Kundenfeedback 15.07.2026, Punkt 3 — Problemfälle ganz unten', () => {
+  /** Die Beleg-Zeilen aus „2 · Bearbeiten" in DOM-Reihenfolge (ohne Stop-Zeilen). */
+  function bearbeitenRows(page: Page): Locator {
+    return page
+      .locator('.MuiPaper-root')
+      .filter({ hasText: /WE WE-E2E-/ })
+      .filter({ hasNot: page.getByText(/^(offen|geholt)$/) });
+  }
+
+  test('ein „Problem gemeldet"-Beleg steht unter dem letzten Beleg — obwohl die Engine ihn zuerst liefert', async ({
+    page,
+  }) => {
+    const [problemfall, zweiter, dritter] = belegNos(MA_106);
+    await loginAndWaitForHome(page, MA_106.employeeNo);
+
+    // Ware holen abhaken: so ist der Problemfall unten NICHT bloß „noch nicht
+    // geholt", sondern ausschließlich durch seinen Status gesperrt.
+    await toggleStop(stopRows(page).first());
+
+    // Serverseitig steht der Problemfall VORN (Engine-Sequenz 1): die Absenkung
+    // ist reine Anzeige-Regel, keine Umordnung der Engine-Entscheidung.
+    expect((await fetchBundleFromBackend(page)).weBelegNos).toEqual([
+      problemfall,
+      zweiter,
+      dritter,
+    ]);
+
+    const rows = bearbeitenRows(page);
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText(`WE ${zweiter}`);
+    await expect(rows.nth(1)).toContainText(`WE ${dritter}`);
+    // Ganz unten: der Problemfall, samt Status-Chip und Sperr-Hinweis.
+    await expect(rows.nth(2)).toContainText(`WE ${problemfall}`);
+    await expect(rows.nth(2)).toContainText('Problem gemeldet');
+    await expect(rows.nth(2)).toContainText(
+      'Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.',
+    );
+
+    // Gesperrt heißt gesperrt: der Klick auf den Problemfall öffnet KEINEN Beleg.
+    await rows.nth(2).getByText(`WE ${problemfall}`).click();
+    await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `WE ${problemfall}` })).toHaveCount(0);
   });
 });
 
@@ -308,7 +410,7 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
   /** „1 · Ware holen" sperrt „2 · Bearbeiten": erst den einzigen Stop abhaken. */
   async function openFirstBeleg(page: Page): Promise<void> {
     await loginAndWaitForHome(page, MA_101.employeeNo);
-    await stopRows(page).first().click();
+    await toggleStop(stopRows(page).first());
     await expect(stopRows(page).first().getByText('geholt', { exact: true })).toBeVisible();
     await openBeleg(page, belegNos(MA_101)[0]);
   }

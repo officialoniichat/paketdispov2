@@ -15,6 +15,9 @@
  * - `MA_104` — drei Stops, EIGENER Mitarbeiter, weil „Rest parken" den
  *   Serverzustand verändert (Belege wandern zurück in den Pool). Kein anderer
  *   Test darf davon abhängen.
+ * - `MA_106` — ein geparkter Problemfall (`issue_open`) mit Engine-Sequenz 1:
+ *   belegt, dass die Anzeige ihn ganz unten listet (Kundenfeedback 15.07.2026,
+ *   Punkt 3), obwohl das Backend ihn zuerst liefert.
  */
 
 /** One Größe (SKU line) of a position; the prices are what the table right-aligns. */
@@ -47,15 +50,23 @@ export interface SeedPositionSpec {
 export interface SeedBelegSpec {
   weBelegNo: string;
   /**
-   * Legt einen `WorkInstructionHeader` an und steuert damit den Chip
-   * „🏷️ Etiketten drucken" (BundleHomeScreen B3, Zeile 335). `undefined` ⇒ gar
-   * kein Header; `/api/me/today` liefert dann `priceLabelPrintRequired: null`.
-   * Belege MIT Positionen brauchen zwingend einen Header — der PROCESS-Screen
-   * rendert die Arbeitsanweisung daraus.
+   * Legt einen `WorkInstructionHeader` an und steuert damit die Etiketten-Art
+   * „🏷️ Etikettendruck" vs. „Digitale Etiketten" (BundleHomeScreen,
+   * `BelegInfoLine`). `undefined` ⇒ gar kein Header; `/api/me/today` liefert
+   * dann `priceLabelPrintRequired: null`. Belege MIT Positionen brauchen
+   * zwingend einen Header — der PROCESS-Screen rendert die Arbeitsanweisung
+   * daraus.
    */
   priceLabelPrintRequired?: boolean;
-  /** Warenart-Chip auf der Beleg-Zeile in „2 · Bearbeiten" (Prisma `GoodsTypeText`). */
+  /** Warenart-Chip auf der Beleg-Zeile (Ware holen + Bearbeiten, Prisma `GoodsTypeText`). */
   goodsTypeText?: string;
+  /** Beleg-Kopf Shopbereich — Anzeige „Filiale 1 · Shopbereich x" (Kundenfeedback 15.07.2026). */
+  shopAreaNo?: string;
+  /**
+   * CaseStatus des Belegs; ohne Angabe `assigned`. `issue_open` = geparkter
+   * Problemfall (wartet auf Klärung durch die Teamleitung, nicht bearbeitbar).
+   */
+  status?: 'assigned' | 'issue_open';
   /**
    * `AssignmentItem.sequence` — die Reihenfolge, die die assignment-engine
    * beschlossen hat. Ohne Angabe die Einfügereihenfolge. Wird gesetzt, um sie
@@ -178,12 +189,14 @@ export const MA_101: SeedEmployeeSpec = {
           weBelegNo: 'WE-E2E-101-1',
           priceLabelPrintRequired: true,
           goodsTypeText: 'Vororder',
+          shopAreaNo: '42',
           positions: [POSITION_1, POSITION_2],
         },
         {
           weBelegNo: 'WE-E2E-101-2',
           priceLabelPrintRequired: false,
           goodsTypeText: 'NOS',
+          shopAreaNo: '77',
         },
       ],
     },
@@ -249,6 +262,27 @@ export const MA_105: SeedEmployeeSpec = {
       belege: [
         { weBelegNo: 'WE-E2E-105-1', bundleSequence: 2 },
         { weBelegNo: 'WE-E2E-105-2', bundleSequence: 1 },
+      ],
+    },
+  ],
+};
+
+/**
+ * Problemfall-Wächter (Kundenfeedback 15.07.2026, Punkt 3). Der geparkte
+ * Problemfall trägt ABSICHTLICH Engine-Sequenz 1: `/api/me/today` liefert ihn
+ * zuerst — nur die ANZEIGE senkt ihn ans Listenende. Ein Problemfall, der schon
+ * in der Engine-Reihenfolge hinten stünde, würde auch ohne Fix zufällig grün.
+ */
+export const MA_106: SeedEmployeeSpec = {
+  employeeNo: 'ma-106',
+  displayName: 'Mitarbeiter 106',
+  stops: [
+    {
+      locationCode: 'E2E-R6',
+      belege: [
+        { weBelegNo: 'WE-E2E-106-P', status: 'issue_open', bundleSequence: 1 },
+        { weBelegNo: 'WE-E2E-106-2', bundleSequence: 2 },
+        { weBelegNo: 'WE-E2E-106-3', bundleSequence: 3 },
       ],
     },
   ],

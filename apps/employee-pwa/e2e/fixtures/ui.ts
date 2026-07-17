@@ -29,6 +29,16 @@ export function stopRows(page: Page): Locator {
 }
 
 /**
+ * Hakt eine Stop-Zeile ab/auf — als Nutzer-Klick auf ihren Status-Chip
+ * („offen"/„geholt") statt blind auf die Zeilenmitte: dort stehen seit dem
+ * Kundenfeedback 15.07.2026 die Beleg-Infos samt „Barcode anzeigen"-Button,
+ * und der Button toggelt bewusst NICHT (stopPropagation).
+ */
+export async function toggleStop(row: Locator): Promise<void> {
+  await row.getByText(/^(offen|geholt)$/).click();
+}
+
+/**
  * Die Beleg-Zeile aus „2 · Bearbeiten" zu einer WE-Nummer — so, wie ein
  * Mitarbeiter sie anklickt. Einen Footer-„Start Bearbeitung"-Button gibt es
  * seit dem Kundenfeedback 2026-07-14 nicht mehr: jeder geholte Beleg ist

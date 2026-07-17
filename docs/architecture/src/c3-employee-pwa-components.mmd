@@ -16,7 +16,7 @@ flowchart TB
         direction TB
         subgraph screens["screens/ + components/ (router: routes/paths.ts, App gated by session)"]
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
-            home["BundleHomeScreen<br/><i>/ — Ware holen inline + Bearbeiten (frei wählbar) + Rest parken; Problemfall rot geparkt / grün geklärt</i>"]:::screen
+            home["BundleHomeScreen<br/><i>/ — Ware holen inline (je Beleg Kopf-Infos + Barcode-Pop-up) + Bearbeiten (frei wählbar, Problemfälle ganz unten) + Rest parken; Problemfall rot geparkt / grün geklärt</i>"]:::screen
             barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — encoder: domain/code128.ts (pure)</i>"]:::logic
             process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis (keine Order, kein Boxzettel)</i>"]:::screen
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
@@ -25,7 +25,6 @@ flowchart TB
         subgraph wf["workflow/ (pure logic + the one live-data hook)"]
             useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · setCorrectedVkPrice · addProblem/removeProblem · complete · partialComplete</i>"]:::hook
             model["workflowModel.ts<br/><i>guards: canCompleteCase (Problem sperrt) · hasAnyProblem · skuQuantitiesBody · problemsBody</i>"]:::logic
-            collectLogic["collect.ts · belegList.ts"]:::logic
         end
         subgraph data["data/ (React Query — backend is the single source of truth)"]
             apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — fresh client per call, current session token</i>"]:::logic
@@ -49,7 +48,6 @@ flowchart TB
     process --> teilDlg
     problemDlg --> reasons
     useCaseFlow --> model
-    useCaseFlow --> collectLogic
     useCaseFlow --> caseAgg
     useCaseFlow --> persist
     reasons --> apiClient

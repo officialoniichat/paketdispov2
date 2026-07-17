@@ -1,5 +1,5 @@
 /**
- * Seeds four employees, each with their OWN AssignmentBundle + RouteStops +
+ * Seeds six employees, each with their OWN AssignmentBundle + RouteStops +
  * GoodsReceiptCases, so the e2e suite can prove real per-employee data
  * isolation through the actual backend (not a mock). The raw constants live in
  * `seed-data.ts`.
@@ -24,6 +24,7 @@ import {
   MA_103,
   MA_104,
   MA_105,
+  MA_106,
   ONLINE_SIZE_PREFERENCE,
   type SeedBelegSpec,
   type SeedEmployeeSpec,
@@ -101,10 +102,13 @@ async function seedBeleg(
       weBelegNo: spec.weBelegNo,
       bookingDate: todayMidnightUtc(),
       branchNo: '1',
+      primaryShopAreaNo: spec.shopAreaNo,
       storageLocationId: context.locationId,
       section: 7,
       totalQuantity: 10,
-      status: 'assigned',
+      // `issue_open` = geparkter Problemfall — bleibt im Bündel des MA (rot),
+      // wartet auf Klärung durch die Teamleitung (Kundenfeedback 15.07.2026).
+      status: spec.status ?? 'assigned',
       effortPoints: 5,
       estimatedMinutes: 15,
       goodsTypeText: spec.goodsTypeText,
@@ -187,7 +191,7 @@ export async function seedDatabase(databaseUrl: string): Promise<void> {
     // The Online-Größen-Markierung is derived from this preference, so it must
     // exist before the positions that reference its WGR are read back.
     await prisma.onlineSizePreference.create({ data: { ...ONLINE_SIZE_PREFERENCE } });
-    for (const employee of [MA_101, MA_102, MA_103, MA_104, MA_105]) {
+    for (const employee of [MA_101, MA_102, MA_103, MA_104, MA_105, MA_106]) {
       await seedEmployee(prisma, employee);
     }
   } finally {
