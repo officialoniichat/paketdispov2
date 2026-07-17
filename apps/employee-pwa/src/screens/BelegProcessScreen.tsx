@@ -11,14 +11,17 @@
  * 14.07.2026, Punkt 3), so every Größe-row carries its values at the same
  * x-position and EK/VK/VK-Etikett/Etikettpreis sit right-aligned at the right
  * edge. Each Größe is its own row with +/- Mehr-/Mindermengen capture (D2) and
- * the Etikettpreis input (Punkt 4). Die Positions-Kopfzelle stapelt unter der
+ * the Etikettpreis input (Punkt 4, Betragsanzeige mit €-Zeichen: „40" wird zu
+ * „40,00 €"). Die Positions-Kopfzelle stapelt unter der
  * Pos-Nr. die Kontextfelder (Nachtrag 15.07.2026): HS, Shop, CatMan-Termin,
  * Etage, Filiale, Shopbereich. Der frühere Boxzettel-Abschnitt entfällt — seine
  * Infos (Filiale, Shopbereich, Shop, Etage, Warenart) stehen jetzt an der
  * Position; die Ordernummer ist nur noch in der Teamlead-UX sichtbar.
  *
  * Probleme werden pro Position/Größe im Dialog erfasst (Punkt 5), lokal
- * gesammelt und farblich markiert (Punkt 9); der beleg-weite Problem-Einstieg
+ * gesammelt und farblich markiert (Punkt 9): ein Problem mit Größe färbt seine
+ * Größenzeile rot, ein Problem ohne Größe („Ganze Position") die komplette
+ * Position samt Kopfzeile; der beleg-weite Problem-Einstieg
  * ist entfallen (Punkt 8). Eine Mehr-/Minderlieferung oder Preisabweichung ist
  * automatisch ein Problem (Punkt 7): „Beleg erledigt" ist dann gesperrt, nur der
  * Teilabschluss (mit gesammelten Problemen, Punkt 10) bleibt.
@@ -41,6 +44,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
@@ -86,7 +90,11 @@ const PICTOGRAM_LABEL: Record<string, string> = {
 const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
 
 const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
-const CATMAN_DATE = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const CATMAN_DATE = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
 
 /** Format a price, or empty when the mock ERP did not deliver one. */
 function price(value: number | undefined): string | null {
@@ -166,13 +174,78 @@ function WorkStepPictogram({
           />
         </Box>
       ) : null}
-      <Typography sx={{ fontWeight: 700, textAlign: 'center', lineHeight: 1.2 }}>{title}</Typography>
+      <Typography sx={{ fontWeight: 700, textAlign: 'center', lineHeight: 1.2 }}>
+        {title}
+      </Typography>
       {subtitle ? (
         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
           {subtitle}
         </Typography>
       ) : null}
     </Stack>
+  );
+}
+
+/**
+ * Deutsche Betragsdarstellung der Etikettpreis-Eingabe ohne Währungszeichen
+ * („40" → „40,00"). Ohne Tausender-Gruppierung, damit der formatierte Text
+ * selbst wieder gültige Eingabe ist und beim Fokussieren unverändert stehen
+ * bleiben kann.
+ */
+const PRICE_INPUT_FORMAT = new Intl.NumberFormat('de-DE', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: false,
+});
+
+/** Erlaubte Preis-Eingabe: Ziffern mit optionalem Komma-/Punkt-Dezimalteil (max. 2 Stellen). */
+const PRICE_INPUT_PATTERN = /^\d*(?:[.,]\d{0,2})?$/;
+
+/**
+ * Punkt 4: Etikettpreis-Eingabe je Größe. Das €-Zeichen steht PERMANENT im
+ * Feld — auch leer neben dem Platzhalter („Preis … €") — und ein erfasster
+ * Wert erscheint als Betrag („40,00 €") statt als blanke Zahl; während der
+ * Eingabe bleibt das Feld frei editierbar (Komma oder Punkt als
+ * Dezimaltrenner). Die Fachlogik (Preis gleich VK-Etikett = keine Korrektur)
+ * bleibt im workflowModel — hier ist nur Darstellung.
+ */
+function EtikettpreisInput({
+  sizeLabel,
+  corrected,
+  onChange,
+}: {
+  sizeLabel: string;
+  corrected: number | undefined;
+  onChange: (price: number | undefined) => void;
+}): JSX.Element {
+  // Während des Tippens zählt der Rohtext; ohne Fokus die formatierte Zahl.
+  const [editing, setEditing] = useState<string | null>(null);
+  const display = editing ?? (corrected !== undefined ? PRICE_INPUT_FORMAT.format(corrected) : '');
+  return (
+    <TextField
+      size="small"
+      placeholder="Preis"
+      value={display}
+      onBlur={() => setEditing(null)}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (!PRICE_INPUT_PATTERN.test(raw)) return;
+        setEditing(raw);
+        const parsed = Number(raw.replace(',', '.'));
+        onChange(raw === '' || Number.isNaN(parsed) ? undefined : parsed);
+      }}
+      slotProps={{
+        input: {
+          endAdornment: <InputAdornment position="end">€</InputAdornment>,
+        },
+        htmlInput: {
+          inputMode: 'decimal',
+          'aria-label': `Größe ${sizeLabel}: Etikettpreis erfassen`,
+          style: { textAlign: 'right' },
+        },
+      }}
+      sx={{ width: 120 }}
+    />
   );
 }
 
@@ -226,6 +299,17 @@ const STEPPER_BUTTON = {
   fontWeight: 700,
   border: '1px solid',
   borderColor: 'divider',
+} as const;
+
+/**
+ * Punkt 9: die EINE rote Problem-Markierung der Tabelle — identisch für
+ * Mengenabweichung, Preisabweichung und manuell gemeldete Probleme, auf
+ * Größenzeilen wie Positions-Kopfzeilen.
+ */
+const PROBLEM_ROW_SX = {
+  bgcolor: 'rgba(211, 47, 47, 0.08)',
+  borderLeft: '3px solid',
+  borderLeftColor: 'error.main',
 } as const;
 
 export function BelegProcessScreen(): JSX.Element {
@@ -378,7 +462,12 @@ export function BelegProcessScreen(): JSX.Element {
                               fontSize="small"
                               tabIndex={0}
                               aria-label={`Was heißt das? ${aggregate.inspectionDescription}`}
-                              sx={{ color: 'text.secondary', cursor: 'help', p: '6px', boxSizing: 'content-box' }}
+                              sx={{
+                                color: 'text.secondary',
+                                cursor: 'help',
+                                p: '6px',
+                                boxSizing: 'content-box',
+                              }}
                             />
                           </Tooltip>
                         ) : null}
@@ -446,6 +535,10 @@ export function BelegProcessScreen(): JSX.Element {
                 );
                 const i = pos.instruction;
                 const manualProblems = manualByPosition.get(pos.id) ?? [];
+                // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
+                // Position") markiert die gesamte Position rot — Kopfzeile und
+                // alle Größenzeilen.
+                const positionWideProblem = manualProblems.some((x) => x.skuLineId === undefined);
                 const catManLabel = catManDateLabel(pos.catManDate);
                 // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
                 // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
@@ -471,7 +564,9 @@ export function BelegProcessScreen(): JSX.Element {
                 ].filter((line): line is string => line !== null);
                 return (
                   <TableBody key={pos.id}>
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow
+                      sx={positionWideProblem ? PROBLEM_ROW_SX : { bgcolor: 'action.hover' }}
+                    >
                       <TableCell sx={{ verticalAlign: 'top' }}>
                         <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.15 }}>
                           Pos {pos.positionNo}
@@ -485,12 +580,18 @@ export function BelegProcessScreen(): JSX.Element {
                           alignItems="flex-start"
                         >
                           <Box sx={{ minWidth: 0 }}>
-                            <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              sx={{ flexWrap: 'wrap', gap: 0.75 }}
+                            >
                               {/* D3: Artikel-Nr. + Farbe in derselben Schriftgröße. */}
                               <Typography sx={{ fontWeight: 700 }}>
                                 {pos.supplierArticleNo} · {pos.supplierColor}
                               </Typography>
-                              {pos.nosFlag ? <Chip size="small" color="success" label="♻️ NOS" /> : null}
+                              {pos.nosFlag ? (
+                                <Chip size="small" color="success" label="♻️ NOS" />
+                              ) : null}
                               {!pos.nosFlag && positionWarenart(pos) ? (
                                 <Chip
                                   size="small"
@@ -507,7 +608,9 @@ export function BelegProcessScreen(): JSX.Element {
                             {/* Warenbezeichnung: WGR mit Klartext (+ Saison). */}
                             <Typography variant="body2" color="text.secondary">
                               WGR {pos.wgr}
-                              {WGR_DESCRIPTION.get(pos.wgr) ? ` ${WGR_DESCRIPTION.get(pos.wgr)}` : ''}
+                              {WGR_DESCRIPTION.get(pos.wgr)
+                                ? ` ${WGR_DESCRIPTION.get(pos.wgr)}`
+                                : ''}
                               {pos.season ? ` · Saison ${pos.season}` : ''}
                             </Typography>
 
@@ -575,7 +678,11 @@ export function BelegProcessScreen(): JSX.Element {
                                     size="small"
                                     color="error"
                                     variant="filled"
-                                    label={problem.note ? `${problem.reasonLabel}: ${problem.note}` : problem.reasonLabel}
+                                    label={
+                                      problem.note
+                                        ? `${problem.reasonLabel}: ${problem.note}`
+                                        : problem.reasonLabel
+                                    }
                                     onDelete={() => flow.removeProblem(problem.id)}
                                   />
                                 ))}
@@ -583,7 +690,12 @@ export function BelegProcessScreen(): JSX.Element {
                             ) : null}
                           </Box>
 
-                          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{ flexShrink: 0 }}
+                          >
                             <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                               Soll gesamt {soll}
                             </Typography>
@@ -595,11 +707,18 @@ export function BelegProcessScreen(): JSX.Element {
                                 sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
                               />
                             ) : (
-                              <Button variant="contained" onClick={() => void flow.togglePositionChecked(pos.id)}>
+                              <Button
+                                variant="contained"
+                                onClick={() => void flow.togglePositionChecked(pos.id)}
+                              >
                                 Position geprüft
                               </Button>
                             )}
-                            <Button color="error" variant="text" onClick={() => setProblemTarget(pos)}>
+                            <Button
+                              color="error"
+                              variant="text"
+                              onClick={() => setProblemTarget(pos)}
+                            >
                               Problem
                             </Button>
                           </Stack>
@@ -613,22 +732,14 @@ export function BelegProcessScreen(): JSX.Element {
                       const mark = aggregate.onlineMarks[s.id];
                       const corrected = progress.correctedVkPrices[s.id];
                       const hasPriceProblem = corrected !== undefined;
-                      // Punkt 9: Zeile mit Abweichung/Preisproblem rot hinterlegen.
-                      const rowProblem = delta !== 0 || hasPriceProblem;
+                      // Punkt 9: Zeile rot bei Mengenabweichung, Preisproblem
+                      // oder gemeldetem Problem — größenspezifisch oder
+                      // positionsweit (ohne Größe gemeldet).
+                      const skuProblem = manualProblems.some((x) => x.skuLineId === s.id);
+                      const rowProblem =
+                        delta !== 0 || hasPriceProblem || skuProblem || positionWideProblem;
                       return (
-                        <TableRow
-                          key={s.id}
-                          hover
-                          sx={
-                            rowProblem
-                              ? {
-                                  bgcolor: 'rgba(211, 47, 47, 0.08)',
-                                  borderLeft: '3px solid',
-                                  borderLeftColor: 'error.main',
-                                }
-                              : undefined
-                          }
-                        >
+                        <TableRow key={s.id} hover sx={rowProblem ? PROBLEM_ROW_SX : undefined}>
                           <TableCell />
                           <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
@@ -639,7 +750,10 @@ export function BelegProcessScreen(): JSX.Element {
                                   size="small"
                                   color={ONLINE_MARK[mark].color}
                                   label={ONLINE_MARK[mark].label}
-                                  sx={{ maxWidth: 'none', '& .MuiChip-label': { overflow: 'visible' } }}
+                                  sx={{
+                                    maxWidth: 'none',
+                                    '& .MuiChip-label': { overflow: 'visible' },
+                                  }}
                                 />
                               ) : null}
                             </TableCell>
@@ -648,11 +762,18 @@ export function BelegProcessScreen(): JSX.Element {
                             {s.expectedQuantity}
                           </TableCell>
                           <TableCell align="center">
-                            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
                               <IconButton
                                 sx={STEPPER_BUTTON}
                                 aria-label={`Größe ${s.size}: Menge verringern`}
-                                onClick={() => void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)}
+                                onClick={() =>
+                                  void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
+                                }
                               >
                                 −
                               </IconButton>
@@ -670,7 +791,9 @@ export function BelegProcessScreen(): JSX.Element {
                               <IconButton
                                 sx={STEPPER_BUTTON}
                                 aria-label={`Größe ${s.size}: Menge erhöhen`}
-                                onClick={() => void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)}
+                                onClick={() =>
+                                  void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
+                                }
                               >
                                 +
                               </IconButton>
@@ -681,7 +804,11 @@ export function BelegProcessScreen(): JSX.Element {
                               <Chip
                                 size="small"
                                 color="warning"
-                                label={delta > 0 ? `+${delta} Mehrmenge` : `−${Math.abs(delta)} Mindermenge`}
+                                label={
+                                  delta > 0
+                                    ? `+${delta} Mehrmenge`
+                                    : `−${Math.abs(delta)} Mindermenge`
+                                }
                               />
                             ) : null}
                           </TableCell>
@@ -696,27 +823,12 @@ export function BelegProcessScreen(): JSX.Element {
                           </TableCell>
                           {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte. */}
                           <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              placeholder="Preis"
-                              value={corrected ?? ''}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                flow.setCorrectedVkPrice(
-                                  s.id,
-                                  raw === '' ? undefined : Number(raw),
-                                  s.vkLabelPrice,
-                                );
-                              }}
-                              inputProps={{
-                                min: 0,
-                                step: '0.01',
-                                inputMode: 'decimal',
-                                'aria-label': `Größe ${s.size}: Etikettpreis erfassen`,
-                                style: { textAlign: 'right' },
-                              }}
-                              sx={{ width: 120 }}
+                            <EtikettpreisInput
+                              sizeLabel={s.size}
+                              corrected={corrected}
+                              onChange={(value) =>
+                                flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
+                              }
                             />
                           </TableCell>
                         </TableRow>

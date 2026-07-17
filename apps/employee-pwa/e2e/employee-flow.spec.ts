@@ -10,6 +10,7 @@ import {
   belegNos,
   locationCodes,
 } from './fixtures/seed-data.js';
+import { GREETING, loginAs, loginAndWaitForHome, openBeleg, stopRows } from './fixtures/ui.js';
 
 /**
  * Mitarbeiter-App E2E — echtes Backend, echtes geseedetes Postgres.
@@ -27,7 +28,6 @@ import {
  * Persistenz-Test würde zu Recht fehlschlagen.
  */
 
-const GREETING = /Guten (Morgen|Tag|Abend)/;
 const API_BASE = `http://localhost:${BACKEND_PORT}`;
 
 /** Die festen Spaltenüberschriften der Positionen-Tabelle, in Reihenfolge. */
@@ -42,6 +42,7 @@ const COLUMN_LABELS = [
   'EK',
   'VK',
   'VK-Etikett',
+  'Etikettpreis',
 ];
 
 /** Die drei rechtsbündigen Preisspalten — Dustins ausdrückliche Bedingung. */
@@ -53,46 +54,6 @@ const MIN_TOUCH_TARGET_PX = 44;
 // Login + Bündel-Home sind eine Phone-first-Spalte. Der PROCESS-Screen nicht:
 // er zielt auf das stationäre 22–24"-Touchdisplay am Packtisch.
 test.use({ viewport: { width: 390, height: 844 } });
-
-async function loginAs(page: Page, employeeNo: string): Promise<void> {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Anmeldung' })).toBeVisible();
-  await page.getByLabel('Mitarbeiternummer').fill(employeeNo);
-  await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
-}
-
-async function loginAndWaitForHome(page: Page, employeeNo: string): Promise<void> {
-  await loginAs(page, employeeNo);
-  await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
-}
-
-/**
- * Die Stop-Zeilen aus „1 · Ware holen". Anker ist der klein geschriebene
- * Status-Chip der Zeile („offen"/„geholt"); die Beleg-Zeilen in „2 · Bearbeiten"
- * tragen einen groß geschriebenen Chip („Offen"), werden also nicht mitgefangen.
- */
-function stopRows(page: Page): Locator {
-  return page.locator('.MuiPaper-root').filter({ has: page.getByText(/^(offen|geholt)$/) });
-}
-
-/**
- * Die Beleg-Zeile aus „2 · Bearbeiten" zu einer WE-Nummer — so, wie ein
- * Mitarbeiter sie anklickt. Einen Footer-„Start Bearbeitung"-Button gibt es
- * seit dem Kundenfeedback 2026-07-14 nicht mehr: jeder geholte Beleg ist
- * direkt über seine Zeile startbar.
- */
-function belegRow(page: Page, weBelegNo: string): Locator {
-  return page
-    .locator('.MuiPaper-root')
-    .filter({ hasText: `WE ${weBelegNo}` })
-    .filter({ hasNot: page.getByText(/^(offen|geholt)$/) });
-}
-
-/** Öffnet den Beleg über seine Zeile (Klick auf die WE-Nr, nicht den Barcode-Button). */
-async function openBeleg(page: Page, weBelegNo: string): Promise<void> {
-  await belegRow(page, weBelegNo).getByText(`WE ${weBelegNo}`).click();
-  await expect(page.getByRole('heading', { name: `WE ${weBelegNo}` })).toBeVisible();
-}
 
 /** Serverzustand — bewusst am UI und am React-Query-Cache vorbei. */
 async function fetchBundleFromBackend(
@@ -181,9 +142,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     // Bündel ließe sich jederzeit anfordern (kein „Erst Ware holen"-Sperrknopf mehr).
     await expect(page.getByText(`0/${total} Plätze`)).toBeVisible();
     await expect(page.getByText(/Ausgegraute Belege erst holen/)).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Weiteres Bündel anfordern' }),
-    ).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Weiteres Bündel anfordern' })).toBeEnabled();
 
     // Die Stop-Zeile ist klickbar und schaltet von „offen" auf „geholt" (:304).
     for (let index = 0; index < total; index++) {
@@ -380,7 +339,9 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
       .boundingBox();
     expect(groesse, 'Größenspalte muss gelayoutet sein').not.toBeNull();
     for (const label of PRICE_COLUMNS) {
-      const price = await page.getByRole('columnheader', { name: label, exact: true }).boundingBox();
+      const price = await page
+        .getByRole('columnheader', { name: label, exact: true })
+        .boundingBox();
       expect(price, `${label}: Spalte muss gelayoutet sein`).not.toBeNull();
       expect(
         price!.x,
@@ -427,15 +388,16 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
       await page.setViewportSize({ width, height });
       await openFirstBeleg(page);
 
-      const vkLabel = page.getByRole('columnheader', { name: 'VK-Etikett', exact: true });
-      await vkLabel.scrollIntoViewIfNeeded();
-      const box = await vkLabel.boundingBox();
-      expect(box, 'VK-Etikett muss gelayoutet sein').not.toBeNull();
+      // Seit Punkt 4 ist „Etikettpreis" die rechteste Spalte (hinter VK-Etikett).
+      const etikettpreis = page.getByRole('columnheader', { name: 'Etikettpreis', exact: true });
+      await etikettpreis.scrollIntoViewIfNeeded();
+      const box = await etikettpreis.boundingBox();
+      expect(box, 'Etikettpreis muss gelayoutet sein').not.toBeNull();
 
       // Die rechteste Spalte beginnt jenseits der Bildmitte …
-      expect(box!.x, 'VK-Etikett beginnt in der rechten Bildhälfte').toBeGreaterThan(width / 2);
+      expect(box!.x, 'Etikettpreis beginnt in der rechten Bildhälfte').toBeGreaterThan(width / 2);
       // … und reicht bis an den rechten Rand — genau der bislang leere Platz.
-      expect(box!.x + box!.width, 'VK-Etikett reicht an den rechten Rand').toBeGreaterThan(
+      expect(box!.x + box!.width, 'Etikettpreis reicht an den rechten Rand').toBeGreaterThan(
         width * 0.9,
       );
 
@@ -503,7 +465,11 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
 
     await openFirstBeleg(page);
 
-    const img = page.getByRole('img', { name: 'Hartetikett' });
+    // Seit ab8ae6b ist das Piktogramm die Illustration der Arbeitsschritt-Karte
+    // „Sichern: Hartetikett" (alt="", also ohne eigenen Accessible Name) — die
+    // Karte trägt den Text, das <img> wird über seine SVG-Quelle gefunden.
+    await expect(page.getByText('Sichern: Hartetikett')).toBeVisible();
+    const img = page.locator('img[src$="/static/pictograms/hard-tag.svg"]');
     await expect(img).toBeVisible();
 
     await expect
@@ -533,11 +499,10 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
     const online = COLUMN_LABELS.indexOf('Online');
 
     // 38 ist die bevorzugte Größe (grün), jede andere gelieferte Größe wird rot.
-    await expect(sizeRows(page).nth(1).locator('td').nth(online)).toHaveText(
-      'Onlineartikel-Highlight',
-    );
-    await expect(sizeRows(page).nth(0).locator('td').nth(online)).toHaveText('Onlineartikel');
-    await expect(sizeRows(page).nth(2).locator('td').nth(online)).toHaveText('Onlineartikel');
+    // Kurze Chip-Texte seit 0fe8df0, damit die Markierung nie abgeschnitten wird.
+    await expect(sizeRows(page).nth(1).locator('td').nth(online)).toHaveText('Online-Highlight');
+    await expect(sizeRows(page).nth(0).locator('td').nth(online)).toHaveText('Online');
+    await expect(sizeRows(page).nth(2).locator('td').nth(online)).toHaveText('Online');
 
     // Pos 2 ist nicht online-relevant: die Zelle bleibt leer, die Spalte steht trotzdem.
     await expect(sizeRows(page).nth(3).locator('td').nth(online)).toBeEmpty();
@@ -583,7 +548,10 @@ test.describe('Forderung 9 — deutsche Oberfläche', () => {
     expect(text.length, `${where}: der Screen muss überhaupt Text tragen`).toBeGreaterThan(50);
 
     const english = text.match(ENGLISH_WORDMARKS);
-    expect(english, `${where}: englische Wortmarke „${english?.[0]}" im sichtbaren Text`).toBeNull();
+    expect(
+      english,
+      `${where}: englische Wortmarke „${english?.[0]}" im sichtbaren Text`,
+    ).toBeNull();
 
     const rawKeys = [...new Set(text.split(/\s+/).filter((token) => RAW_ENUM_KEY.test(token)))];
     expect(rawKeys, `${where}: rohe Enum-Schlüssel im sichtbaren Text`).toEqual([]);
