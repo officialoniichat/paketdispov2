@@ -112,7 +112,7 @@ export function CockpitPage(): JSX.Element {
   const poolRest = pool.openCases;
   const healthTotal = verteilt + poolRest;
 
-  // --- Braucht dich: every item is a real, already-fetched signal with a jump target. ---
+  // --- Schnellaktionen: every item is a real, already-fetched signal with a jump target. ---
   const geparktCount = lanes.find((l) => l.id === 'geparkt')?.cards.length ?? 0;
   const incompleteDeliveries = useMemo(() => {
     const seen = new Set<string>();
@@ -126,7 +126,6 @@ export function CockpitPage(): JSX.Element {
   }, [lanes]);
   const overloaded = board.filter((r) => r.utilisationPct >= OVERLOAD_PCT);
   const overbooked = capacity.freeCapacityMinutes <= 0;
-  const idleEmployees = board.filter((r) => r.bundleId == null);
 
   const decisions: DecisionItem[] = [];
   if (pool.openIssues > 0) {
@@ -368,13 +367,10 @@ export function CockpitPage(): JSX.Element {
         )}
       </Box>
 
-      {/* Braucht dich — the only routine human touchpoint, each item clickable. */}
+      {/* Schnellaktionen — the only routine human touchpoint, each item clickable. */}
       <Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-          Braucht dich jetzt
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          Alles Übrige läuft automatisch — hier reicht ein Blick, nicht mehr.
+        <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.5 }}>
+          Schnellaktionen
         </Typography>
         {isLoading ? (
           <Skeleton variant="rounded" height={64} />
@@ -417,31 +413,6 @@ export function CockpitPage(): JSX.Element {
                   {d.actionLabel} →
                 </Button>
               </Paper>
-            ))}
-          </Stack>
-        )}
-      </Box>
-
-      {/* Frei & wartend — idle employees, short list only (detail lives on the board). */}
-      <Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-          Frei &amp; wartend {idleEmployees.length > 0 ? `(${idleEmployees.length})` : ''}
-        </Typography>
-        {isLoading ? (
-          <Skeleton variant="rounded" height={48} />
-        ) : idleEmployees.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Kein Mitarbeiter frei — alle haben ein Bündel.
-          </Typography>
-        ) : (
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            {idleEmployees.map((r) => (
-              <Chip
-                key={r.employeeId}
-                variant="outlined"
-                label={`${r.displayName}${r.bereiche.length > 0 ? ` · ${r.bereiche.join(', ')}` : ''}`}
-                onClick={() => navigate('/board')}
-              />
             ))}
           </Stack>
         )}

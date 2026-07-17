@@ -12,7 +12,7 @@ flowchart TB
     subgraph web["teamlead-web container"]
         direction TB
         subgraph features["features/ (routes via App.tsx)"]
-            cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Braucht dich”-Entscheidungsliste<br/>(aus lanes) · Frei-&amp;-wartend (aus board) · SimulationPanel · Automatik toggle</i>"]:::feat
+            cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Schnellaktionen”-Entscheidungsliste<br/>(aus lanes + board) · SimulationPanel · Automatik toggle</i>"]:::feat
             ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
             board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · Bündel anlegen (AssignDialog, A1/A2 multi-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
             belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list + detail; Klärungs-UX (IssuesTab):<br/>alle Probleme mit Grund/Order/Delta/Preis → „Probleme geklärt”</i>"]:::feat
