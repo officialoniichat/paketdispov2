@@ -1,42 +1,42 @@
-%% C4 Level 2 — Container
-%% Verified: apps/{employee-pwa,teamlead-web,backend-api}, packages/{assignment-engine,domain-types,api-client,ui},
+%% C4 Ebene 2 — Container
+%% Verifiziert: apps/{employee-pwa,teamlead-web,backend-api}, packages/{assignment-engine,domain-types,api-client,ui},
 %% apps/backend-api/prisma/schema.prisma, docker-compose.yml, apps/*/railway.json.
 C4Container
     title Container — Paketlagerdispo
 
-    Person(employee, "Mitarbeiter:in", "Warehouse worker")
-    Person(teamlead, "Teamlead / Admin", "Pool steering & config")
+    Person(employee, "Mitarbeiter:in", "Lagerkraft")
+    Person(teamlead, "Teamlead / Admin", "Pool-Steuerung & Konfiguration")
 
-    System_Ext(prohandel, "ProHandel ERP", "System of record (delta-pull = concept-stage)")
-    System_Ext(oidc, "OIDC Provider", "Keycloak / Entra (JWKS) — teamlead-web / admin login only. Employees never hop out to this IdP: employee-pwa authenticates first-party via backend-api's own POST /api/auth/login (employeeNo alone; only teamlead/admin/it add a PIN), which mints an RS256 JWT with the same claim shape the shared JwtAuthGuard verifies.")
+    System_Ext(prohandel, "ProHandel ERP", "Führendes System (Delta-Pull = Konzept-Stadium)")
+    System_Ext(oidc, "OIDC-Provider", "Keycloak / Entra (JWKS) — nur Login für teamlead-web / Admin. Mitarbeiter:innen springen nie zu diesem IdP: employee-pwa authentifiziert sich first-party über backend-apis eigenes POST /api/auth/login (Mitarbeiternummer allein; nur teamlead/admin/it zusätzlich mit PIN), das ein RS256-JWT mit derselben Claim-Form ausstellt, die der gemeinsame JwtAuthGuard prüft.")
 
     Container_Boundary(paket, "Paketlagerdispo") {
-        Container(pwa, "employee-pwa", "React + Vite PWA, React Query", "Live-backend mobile app (no offline cache). Login with the Mitarbeiternummer alone, bundle collect/process flow, keyboard-wedge scanner, SSE live-updates.")
+        Container(pwa, "employee-pwa", "React + Vite PWA, React Query", "Mobile App gegen das Live-Backend (kein Offline-Cache). Login allein mit der Mitarbeiternummer, Bündel-Ablauf „Ware holen“/„Bearbeiten“, Keyboard-Wedge-Scanner, SSE-Live-Updates.")
         Container(web, "teamlead-web", "React + Vite + MUI, TanStack Query", "Cockpit, Digitale Ablagen (Kanban), Mitarbeiter-Board, Belege, Aufteilungen, Admin (Regeln + Stammdaten).")
-        Container(api, "backend-api", "NestJS on Fastify, Prisma", "Modular monolith. REST + SSE, OIDC/RBAC guards, §7.1 state machine, §7.2 hash-chain audit log, OpenAPI.")
-        ContainerDb(db, "PostgreSQL", "PostgreSQL 16", "System of record for cases, bundles, shifts, locations, rules (AppConfig), immutable WorkflowEvent log.")
+        Container(api, "backend-api", "NestJS auf Fastify, Prisma", "Modularer Monolith. REST + SSE, OIDC-/RBAC-Guards, §7.1-Zustandsmaschine, §7.2-Hash-Ketten-Audit-Log, OpenAPI.")
+        ContainerDb(db, "PostgreSQL", "PostgreSQL 16", "Führendes System für Belege, Bündel, Schichten, Lagerplätze, Regeln (AppConfig), unveränderliches WorkflowEvent-Log.")
 
-        Container(engine, "assignment-engine", "TypeScript library (pure)", "Deterministic planner: enrich -> exclude -> capacity -> bundles -> distribute -> pickup. No IO. <5s/day.")
-        Container(types, "domain-types", "TypeScript + Zod", "Single source of truth: enums, schemas, RuleConfig, Bereich derivation. Shared by all containers.")
-        Container(apiclient, "api-client", "TypeScript (openapi-typescript + openapi-fetch)", "Typed client generated from the backend OpenAPI spec. Consumed by both frontends.")
+        Container(engine, "assignment-engine", "TypeScript-Bibliothek (pur)", "Deterministischer Planer: anreichern -> ausschließen -> Kapazität -> Bündel -> verteilen -> Abholfolge. Kein IO. <5s/Tag.")
+        Container(types, "domain-types", "TypeScript + Zod", "Single Source of Truth: Enums, Schemas, RuleConfig, Bereich-Ableitung. Von allen Containern geteilt.")
+        Container(apiclient, "api-client", "TypeScript (openapi-typescript + openapi-fetch)", "Typisierter Client, generiert aus der Backend-OpenAPI-Spezifikation. Von beiden Frontends genutzt.")
     }
 
-    Rel(employee, pwa, "Uses", "HTTPS")
-    Rel(teamlead, web, "Uses", "HTTPS")
+    Rel(employee, pwa, "nutzt", "HTTPS")
+    Rel(teamlead, web, "nutzt", "HTTPS")
 
-    Rel(pwa, api, "POST /api/auth/login (employeeNo, no PIN); GET /api/me/*, POST next-bundle; SSE /api/me/stream", "REST + SSE (Bearer JWT)")
-    Rel(web, api, "GET/POST /api/teamlead/*, /api/admin/*; SSE /api/teamlead/stream", "REST + SSE (Bearer JWT)")
+    Rel(pwa, api, "POST /api/auth/login (employeeNo, ohne PIN); GET /api/me/*, POST next-bundle; SSE /api/me/stream", "REST + SSE (Bearer-JWT)")
+    Rel(web, api, "GET/POST /api/teamlead/*, /api/admin/*; SSE /api/teamlead/stream", "REST + SSE (Bearer-JWT)")
 
-    Rel(pwa, apiclient, "calls", "in-process")
-    Rel(web, apiclient, "calls", "in-process")
-    Rel(api, engine, "runs assignWork()", "in-process")
-    Rel(api, db, "reads/writes via Prisma", "SQL/TCP")
-    Rel(api, oidc, "verifies teamlead/admin JWT (JWKS)", "OIDC")
-    Rel(prohandel, api, "cases (concept-stage)", "API pull")
+    Rel(pwa, apiclient, "ruft auf", "prozessintern")
+    Rel(web, apiclient, "ruft auf", "prozessintern")
+    Rel(api, engine, "führt assignWork() aus", "prozessintern")
+    Rel(api, db, "liest/schreibt via Prisma", "SQL/TCP")
+    Rel(api, oidc, "prüft Teamlead-/Admin-JWT (JWKS)", "OIDC")
+    Rel(prohandel, api, "Belege (Konzept-Stadium)", "API-Pull")
 
-    Rel(apiclient, types, "re-exports", "build-time")
-    Rel(engine, types, "imports", "build-time")
-    Rel(api, types, "imports", "build-time")
+    Rel(apiclient, types, "re-exportiert", "Build-Zeit")
+    Rel(engine, types, "importiert", "Build-Zeit")
+    Rel(api, types, "importiert", "Build-Zeit")
 
     UpdateRelStyle(prohandel, api, $lineColor="grey", $offsetX="-30")
     UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

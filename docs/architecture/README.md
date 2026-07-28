@@ -1,100 +1,113 @@
-# Paketlagerdispo — C4 Architecture Model
+# Paketlagerdispo — C4-Architekturmodell
 
-A [C4 model](https://c4model.com/) (Simon Brown) of the *Digitale Belegverteilung* system, plus a
-type/domain model. **Every diagram is derived from and verified against the actual code on branch
-`main`** (`apps/*`, `packages/*`, `apps/backend-api/prisma/schema.prisma`) — not invented.
+Ein [C4-Modell](https://c4model.com/) (Simon Brown) des Systems *Digitale Belegverteilung*, plus
+Typ-/Domänenmodell. **Jedes Diagramm ist aus dem echten Code auf Branch `main` abgeleitet und
+dagegen verifiziert** (`apps/*`, `packages/*`, `apps/backend-api/prisma/schema.prisma`) — nicht
+erfunden.
 
-- **Sources** (diagram-as-code): [`src/*.mmd`](src/)
-- **Rendered output** (viewable, checked in): [`rendered/*.svg`](rendered/)
-- **Combined viewer**: open [`index.html`](index.html) in a browser (L&T dark theme)
+- **Quellen** (Diagramm als Code): [`src/*.mmd`](src/)
+- **Gerenderte Ausgabe** (anschaubar, eingecheckt): [`rendered/*.svg`](rendered/)
+- **Viewer**: [`index.html`](index.html) im Browser öffnen (L&T-Dark-Theme, Zoom + Pan + Vollbild)
+
+Alle beschreibenden Texte (Titel, Beschreibungen, Beziehungs-Labels) sind auf Deutsch;
+Code-Identitäten (Paket-/Klassen-/Datei-/Endpoint-Namen, Enum-Werte) und etablierte
+Technik-Abkürzungen (SSE, JWT, REST, OIDC, OpenAPI, JWKS) bleiben unverändert. Fachbegriffe folgen
+dem Glossar in `docs/handbook/grundlagen-glossar.md`. Beobachtungen aus der Übersetzung:
+[`UEBERSETZUNG-NOTIZEN.md`](UEBERSETZUNG-NOTIZEN.md).
 
 ---
 
-## Library choice: Mermaid — and why
+## Bibliothekswahl: Mermaid — und warum
 
-| Option | C4 fidelity | Render toolchain | Viewable offline | Verdict |
+| Option | C4-Treue | Render-Toolchain | Offline anschaubar | Urteil |
 | --- | --- | --- | --- | --- |
-| **Structurizr DSL** | ★★★ canonical C4 model | needs Java + Structurizr CLI/Lite (or cloud) | only via Structurizr Lite/cloud | rejected — heaviest toolchain, weakest "just open it" story |
-| **C4-PlantUML** | ★★★ | needs Java + PlantUML | static images | rejected — JVM dependency |
-| **D2** | ★★ (not native C4) | needs the `d2` binary | static SVG | strong runner-up — beautiful, but extra binary + non-native C4 |
-| **Mermaid** ✅ | ★★ native `C4Context`/`C4Container` + flowchart/ER/class | none (renders in Markdown/GitHub/HTML); optional `mmdc` for SVG | yes — plain SVG / any browser | **chosen** |
+| **Structurizr DSL** | ★★★ kanonisches C4-Modell | braucht Java + Structurizr CLI/Lite (oder Cloud) | nur via Structurizr Lite/Cloud | verworfen — schwerste Toolchain, schwächste „einfach öffnen“-Story |
+| **C4-PlantUML** | ★★★ | braucht Java + PlantUML | statische Bilder | verworfen — JVM-Abhängigkeit |
+| **D2** | ★★ (kein natives C4) | braucht das `d2`-Binary | statisches SVG | starker Zweiter — schön, aber Extra-Binary + kein natives C4 |
+| **Mermaid** ✅ | ★★ natives `C4Context`/`C4Container` + flowchart/ER/class | keine (rendert in Markdown/GitHub/HTML); optional `mmdc` für SVG | ja — pures SVG / jeder Browser | **gewählt** |
 
-**Why Mermaid for this repo:**
+**Warum Mermaid für dieses Repo:**
 
-1. **Toolchain-free to view.** Mermaid renders natively in Markdown, on GitHub, and in plain HTML.
-   No proprietary cloud, no JVM. The checked-in SVGs open in any browser.
-2. **Matches the existing docs pattern.** `docs/concept/*.html` are self-contained static HTML
-   mockups in the L&T dark theme; [`index.html`](index.html) follows the same convention.
-3. **One library covers every level.** `C4Context` / `C4Container` give canonical C4 semantics for
-   levels 1–2; `flowchart` gives clean component (level 3) and code (level 4) diagrams; `erDiagram`
-   gives the domain model; all in one diff-able text format.
-4. **Reproducible.** Sources are plain text; [`render.sh`](render.sh) regenerates every SVG.
+1. **Ohne Toolchain anschaubar.** Mermaid rendert nativ in Markdown, auf GitHub und in purem HTML.
+   Keine proprietäre Cloud, kein JVM. Die eingecheckten SVGs öffnen in jedem Browser.
+2. **Passt zum bestehenden Doku-Muster.** `docs/concept/*.html` sind eigenständige statische
+   HTML-Mockups im L&T-Dark-Theme; [`index.html`](index.html) folgt derselben Konvention.
+3. **Eine Bibliothek deckt jede Ebene ab.** `C4Context` / `C4Container` liefern kanonische
+   C4-Semantik für die Ebenen 1–2; `flowchart` liefert saubere Komponenten- (Ebene 3) und
+   Code-Diagramme (Ebene 4); `erDiagram` das Domänenmodell — alles in einem diff-baren Textformat.
+4. **Reproduzierbar.** Die Quellen sind reiner Text; [`render.sh`](render.sh) regeneriert jedes SVG.
 
-**Honest trade-off:** Mermaid's auto-layout for the native C4 diagram types is less polished than
-Structurizr's. We therefore use the **native C4 types for levels 1–2** (where the C4 semantics matter
-most) and the **diagram type that lays out cleanest** for the rest (flowchart for components/code, ER
-for the domain model). This is the standard pragmatic Mermaid-C4 approach.
+**Ehrlicher Trade-off:** Mermaids Auto-Layout für die nativen C4-Diagrammtypen ist weniger poliert
+als das von Structurizr. Wir nutzen daher die **nativen C4-Typen für die Ebenen 1–2** (wo die
+C4-Semantik am meisten zählt) und für den Rest den **Diagrammtyp mit dem saubersten Layout**
+(flowchart für Komponenten/Code, ER für das Domänenmodell). Das ist der übliche pragmatische
+Mermaid-C4-Ansatz.
 
 ---
 
-## Regeneration
+## Neu rendern
 
-Prerequisite: Node.js (repo already uses pnpm). The renderer
-([mermaid-cli](https://github.com/mermaid-js/mermaid-cli)) is fetched on demand via `npx` and uses a
-headless Chromium — no global install or cloud account needed.
+Voraussetzung: Node.js (das Repo nutzt ohnehin pnpm). Der Renderer
+([mermaid-cli](https://github.com/mermaid-js/mermaid-cli)) wird bei Bedarf via `npx` geholt und
+nutzt ein Headless-Chromium — keine globale Installation, kein Cloud-Konto.
 
 ```bash
 cd docs/architecture
 
-# Render all diagrams (src/*.mmd -> rendered/*.svg)
+# Alle Diagramme rendern (src/*.mmd -> rendered/*.svg)
 ./render.sh
 
-# Render a single diagram by basename
+# Ein einzelnes Diagramm per Basisname rendern
 ./render.sh c2-container
 ```
 
-`render.sh` applies [`mermaid.config.json`](mermaid.config.json) (dark theme, L&T-leaning palette,
-transparent background so the SVGs sit on the dark `index.html`). To preview without rendering,
-paste any `src/*.mmd` into <https://mermaid.live> or a Markdown file on GitHub.
+`render.sh` wendet [`mermaid.config.json`](mermaid.config.json) an: Dark-Theme, L&T-nahe Palette,
+transparenter Hintergrund (damit die SVGs auf dem dunklen `index.html` sitzen) — und für die
+Lesbarkeit **16px-Grundschrift (C4 15px, ER 14px)** sowie **`useMaxWidth: false`**, damit jedes SVG
+seine natürliche Breite behält, statt auf Fensterbreite heruntergestaucht zu werden. Zoom + Pan
+übernimmt der Viewer. Zum Vorschauen ohne Rendern: eine beliebige `src/*.mmd` in
+<https://mermaid.live> oder eine Markdown-Datei auf GitHub einfügen.
 
-After editing a `.mmd` source, re-run `./render.sh` and commit both the changed source **and** its
-regenerated SVG.
+Nach dem Bearbeiten einer `.mmd`-Quelle `./render.sh` neu ausführen und die geänderte Quelle
+**gemeinsam mit** ihrem regenerierten SVG committen.
 
 ---
 
-## The diagrams
+## Die Diagramme
 
-| File | Level | What it shows |
+| Datei | Ebene | Was sie zeigt |
 | --- | --- | --- |
-| `c1-system-context.mmd` | **C4 L1 — Context** | The system, its three human roles, and the external systems (ProHandel ERP, OIDC provider). |
-| `c2-container.mmd` | **C4 L2 — Container** | Deploy/runtime units: employee-pwa, teamlead-web, backend-api, PostgreSQL, and the shared library packages; protocols (REST + SSE, SQL, in-process). |
-| `c3-backend-components.mmd` | **C4 L3 — Component** | NestJS modules inside backend-api: Cases (Me/Cases/Teamlead), Assignment, Employees, Admin, and the cross-cutting Auth/Prisma/Events/Workflow/Live globals. |
-| `c3-engine-components.mmd` | **C4 L3 — Component** | The pure `@paket/assignment-engine`: `assignWork()` orchestrator + priority/effort (incl. effort-factors)/capacity (incl. shift-end)/reserve/bundling/grouping/distribute/pickup modules. |
-| `c3-employee-pwa-components.mmd` | **C4 L3 — Component** | employee-pwa: COLLECT→PROCESS→DONE screens, workflow hooks/guards, Dexie offline DB + optimistic-lock sync. |
-| `c3-teamlead-components.mmd` | **C4 L3 — Component** | teamlead-web: cockpit/ablagen/board/belege/split/admin features, the `useCockpitData()` store, data layer, and the `caseActions` registry. |
-| `c4-engine-pipeline.mmd` | **C4 L4 — Code** | The data flow inside `assignWork()`: shift-end cutoff → enrich → exclude → capacity → reserve → bundles → delivery-groups → distribute → pickup. |
-| `domain-model.mmd` | **Domain / ER** | Prisma entities, relations and cardinalities; the Beleg-Kopf vs. Position (Warenbezeichnung/ASN-DESADV) split; config tables and the immutable WorkflowEvent log. |
-| `type-pipeline.mmd` | **Types** | The type-generation chain: domain-types (Zod) ↔ Prisma ↔ OpenAPI → api-client (generated). |
+| `c1-system-context.mmd` | **C4 E1 — Kontext** | Das System, seine drei menschlichen Rollen und die externen Systeme (ProHandel ERP, OIDC-Provider). |
+| `c2-container.mmd` | **C4 E2 — Container** | Deploy-/Laufzeit-Einheiten: employee-pwa, teamlead-web, backend-api, PostgreSQL und die geteilten Bibliotheks-Pakete; Protokolle (REST + SSE, SQL, prozessintern). |
+| `c3-backend-components.mmd` | **C4 E3 — Komponenten** | NestJS-Module in backend-api: Cases (Me/Cases/Teamlead), Assignment, Employees, Admin, Problemarten, Prohandel, Dev sowie die Querschnitts-Globals Auth/Prisma/Events/Workflow/Live/Clock. |
+| `c3-engine-components.mmd` | **C4 E3 — Komponenten** | Die pure `@paket/assignment-engine`: `assignWork()`-Orchestrator + Module priority/effort (inkl. effort-factors)/capacity (inkl. shift-import, shift-end)/assignment (bundling, distribute)/grouping/pickup. |
+| `c3-employee-pwa-components.mmd` | **C4 E3 — Komponenten** | employee-pwa: Login, Bündel-Home („Ware holen“/„Bearbeiten“), Beleg-Bearbeitung mit Problem-Dialogen; React-Query-Datenschicht + SSE-Live-Updates (kein Offline-Cache). |
+| `c3-teamlead-components.mmd` | **C4 E3 — Komponenten** | teamlead-web: Features cockpit/ablagen/board/belege/split/admin, der `useCockpitData()`-Store, die Datenschicht und die `caseActions`-Registry. |
+| `c4-engine-pipeline.mmd` | **C4 E4 — Code** | Der Datenfluss in `assignWork()`: Skill-Tier-Gate → Schichtende-Cutoff → Anreichern → Ausschluss → Liefergruppen → Monster-Beleg-Prüfung → Kapazität → Starter-Packs → Verteilen → Abholfolge. |
+| `domain-model.mmd` | **Domäne / ER** | Prisma-Entitäten, Relationen und Kardinalitäten; die Trennung Beleg-Kopf vs. Position (Warenbezeichnung/ASN-DESADV); Konfig-Tabellen und das unveränderliche WorkflowEvent-Log. |
+| `type-pipeline.mmd` | **Typen** | Die Typ-Generierungskette: domain-types (Zod) ↔ Prisma ↔ OpenAPI → api-client (generiert). |
 
-### Level notes
+### Notizen je Ebene
 
-- **L1 Context.** ProHandel ERP is the *intended* system of record (cases carry
-  `source=prohandel_api` + `externalRef`), but the settings-configured delta-pull is **concept-stage**
-  — there is no running ingestion service yet (only the `prohandel_api` enum + a teamlead
-  "Integrationen" settings surface). The diagram marks this relationship accordingly. OIDC auth is
-  implemented (`OidcTokenVerifier`, JWKS, with a dev RS256 key fallback).
-- **L2 Container.** Caddy/Redis/MinIO appear in `docker-compose.yml` as an infra baseline but are
-  **not wired by current backend code** (no bullmq/redis/minio/s3 dependencies); the backend talks
-  only to PostgreSQL via Prisma, so they are omitted from the container diagram and noted instead.
-- **L3 Component.** Four component views — one per "interesting" container. The backend view shows
-  the audited write path (Controller → Service → WorkflowService → EventLogService → Prisma) and the
-  SSE read path.
-- **L4 Code.** The engine is pure and deterministic (no IO); the pipeline ordering mirrors
+- **E1 Kontext.** ProHandel ERP ist das *vorgesehene* führende System (Belege tragen
+  `source=prohandel_api` + `externalRef`), aber der per Einstellungen konfigurierbare Delta-Pull ist
+  **Konzept-Stadium** — es gibt noch keinen laufenden Ingestion-Dienst (nur das
+  `prohandel_api`-Enum + eine Teamlead-Einstellungsfläche „Integrationen“). Das Diagramm markiert
+  diese Beziehung entsprechend. Die OIDC-Authentifizierung ist implementiert (`OidcTokenVerifier`,
+  JWKS, mit statischem RS256-Dev-Fallback).
+- **E2 Container.** Caddy/Redis/MinIO stehen als Infrastruktur-Grundlinie in `docker-compose.yml`,
+  sind aber **vom aktuellen Backend-Code nicht angebunden** (keine bullmq-/redis-/minio-/s3-
+  Abhängigkeiten); das Backend spricht nur via Prisma mit PostgreSQL — sie fehlen daher bewusst im
+  Container-Diagramm und werden stattdessen hier vermerkt.
+- **E3 Komponenten.** Vier Komponenten-Sichten — eine je „interessantem“ Container. Die
+  Backend-Sicht zeigt den auditierten Schreibpfad (Controller → Service → WorkflowService →
+  EventLogService → Prisma) und den SSE-Lesepfad.
+- **E4 Code.** Die Engine ist pur und deterministisch (kein IO); die Pipeline-Reihenfolge spiegelt
   `packages/assignment-engine/src/assignment/plan.ts`.
-- **Domain / ER.** Cardinalities follow the Prisma relations exactly. Note the denormalised
-  `AssignmentBundle → GoodsReceiptCase` link (`assignedBundleId`) alongside the ordered
-  `AssignmentItem` join.
+- **Domäne / ER.** Die Kardinalitäten folgen exakt den Prisma-Relationen. Beachte den
+  denormalisierten Link `AssignmentBundle → GoodsReceiptCase` (`assignedBundleId`) neben dem
+  geordneten `AssignmentItem`-Join.
 
 ---
 
-*This is documentation only — no production code or logic was changed to produce it.*
+*Dies ist reine Dokumentation — es wurde kein Produktionscode und keine Logik verändert.*

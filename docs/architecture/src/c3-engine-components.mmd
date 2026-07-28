@@ -1,5 +1,5 @@
-%% C4 Level 3 — Components: @paket/assignment-engine (pure, deterministic)
-%% Verified against packages/assignment-engine/src/* (assignment/plan.ts orchestrator,
+%% C4 Ebene 3 — Komponenten: @paket/assignment-engine (pur, deterministisch)
+%% Verifiziert gegen packages/assignment-engine/src/* (assignment/plan.ts als Orchestrator,
 %% priority/, effort/{effort-score,effort-factors}.ts, assignment/{bundling,distribute}.ts,
 %% capacity/{net-capacity,shift-import,shift-end}.ts, grouping/delivery-group.ts, pickup/, config.ts, types.ts)
 %% — Teile-Modell nach Teamlead-Feedback 03.07.2026 (Skill-Tier-Gate, Starter-Packs, Self-Pull-Pool).
@@ -9,18 +9,18 @@ flowchart TB
     classDef io fill:#23272f,stroke:#7c8696,color:#cbd2dd;
     classDef cfg fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
 
-    caller["backend AssignmentService<br/><i>builds EngineInput from Prisma rows</i>"]:::io
+    caller["AssignmentService im Backend<br/><i>baut EngineInput aus Prisma-Zeilen</i>"]:::io
 
     subgraph engine["@paket/assignment-engine"]
         direction TB
-        plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>orchestrator → AssignmentPlan<br/>Skill-Tier-Gate: starter/dummy-Schichten ausgenommen (A10)</i>"]:::orch
+        plan["assignment/plan.ts<br/><b>assignWork(input, config)</b><br/><i>Orchestrator → AssignmentPlan<br/>Skill-Tier-Gate: starter/dummy-Schichten ausgenommen (A10)</i>"]:::orch
 
         subgraph prio["priority/"]
             priEng["priority-engine.ts<br/><i>classifyPriority (rank 0–6, Leiter B2) · sortByPriority · comparePriority<br/>3 = tägl. Verladung (7/4/8 + Shops 120/90) · 4 = NOS+Hängeware<br/>5 = Verladeplan fällig ab Verladetag (kein Vorlauf) · 6 = FIFO</i>"]:::mod
         end
         subgraph eff["effort/"]
-            effSc["effort-score.ts<br/><i>computeEffort → minutes + fairness points (B.3)</i>"]:::mod
-            effFac["effort-factors.ts<br/><i>applyEffortFactors · previewEffortBreakdown (Pkt 2 transparency)</i>"]:::mod
+            effSc["effort-score.ts<br/><i>computeEffort → Minuten + Fairness-Punkte (B.3)</i>"]:::mod
+            effFac["effort-factors.ts<br/><i>applyEffortFactors · previewEffortBreakdown (Transparenz Pkt 2)</i>"]:::mod
         end
         subgraph cap["capacity/"]
             netCap["net-capacity.ts<br/><i>computeNetCapacityMinutes · teamCapacityMinutes</i>"]:::mod
@@ -32,15 +32,15 @@ flowchart TB
             distribute["distribute.ts<br/><i>distributeBundlesByWeightedLoad — GENAU EIN Starter-Pack je MA (C3);<br/>LPT über Minuten-Last + Specialist-/Bereich-Penalty (§8.3/8.4)</i>"]:::mod
         end
         subgraph grp["grouping/"]
-            delivery["delivery-group.ts<br/><i>detectDeliveryGroups · indexDeliveryGroups · withheldCaseIds<br/>(Pkt 1: suspected/unvollständige Gruppen werden zurückgehalten)</i>"]:::mod
+            delivery["delivery-group.ts<br/><i>detectDeliveryGroups · indexDeliveryGroups · withheldCaseIds<br/>(Pkt 1: suspected-/unvollständige Gruppen werden zurückgehalten)</i>"]:::mod
         end
         subgraph pck["pickup/"]
-            pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, type→number, never feeds back)</i>"]:::mod
+            pickup["pickup-order.ts<br/><i>buildPickupSequence (§D.3, Reihenfolge Typ→Nummer, wirkt nie zurück)</i>"]:::mod
         end
         config["config.ts + types.ts<br/><i>EngineConfig (effort/capacity/assignment/priority/grouping/shiftEnd) / EngineInput / AssignmentPlan</i>"]:::cfg
     end
 
-    types["@paket/domain-types<br/><i>schemas · enums · bereichFromLocationKind()</i>"]:::io
+    types["@paket/domain-types<br/><i>Schemas · Enums · bereichFromLocationKind()</i>"]:::io
 
     caller -->|"assignWork()"| plan
     plan --> shEnd
@@ -52,7 +52,7 @@ flowchart TB
     plan --> distribute
     plan --> pickup
     delivery -. "groupIdByCaseId (Liefergruppe bleibt im Pack)" .-> bundling
-    plan -. "reads defaults" .-> config
+    plan -. "liest Defaults" .-> config
     priEng --> types
     effSc --> types
     effFac --> effSc

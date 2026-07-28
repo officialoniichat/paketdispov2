@@ -1,5 +1,5 @@
-%% C4 Level 4 — Code / data flow: assignWork() pipeline (Teile-Modell, Teamlead-Feedback 03.07.2026)
-%% Verified against packages/assignment-engine/src/assignment/plan.ts and the called modules
+%% C4 Ebene 4 — Code / Datenfluss: assignWork()-Pipeline (Teile-Modell, Teamlead-Feedback 03.07.2026)
+%% Verifiziert gegen packages/assignment-engine/src/assignment/plan.ts und die aufgerufenen Module
 %% (shift-end, priority-engine, effort-score, net-capacity, bundling, delivery-group,
 %% distribute, pickup-order).
 flowchart TB
@@ -10,34 +10,34 @@ flowchart TB
 
     input["EngineInput<br/><i>cases · shifts · locations · pickupProfiles · effortVectors</i>"]:::io
 
-    skillgate["0 · SKILL-TIER GATE (A10)<br/><i>Schichten von starter/dummy raus aus der Auto-Verteilung<br/>(nur manuell zugeteilte Belege)</i>"]:::step
-    cutoff["1 · SHIFT-END CUTOFF — autoAssignableCapacityMinutes()<br/><i>map shifts → cutoff-effective copies (Pkt 5, config.shiftEnd)</i>"]:::step
-    enrich["2 · ENRICH — enrichCase()<br/>classifyPriority() → rank 0–6 (Leiter B2)<br/>computeEffort() → minutes + points (§8.2 unverändert)<br/>teile = totalQuantity"]:::step
-    exclude{"3 · EXCLUDE<br/>rank === 0 ?"}:::branch
+    skillgate["0 · SKILL-TIER-GATE (A10)<br/><i>Schichten von starter/dummy raus aus der Auto-Verteilung<br/>(nur manuell zugeteilte Belege)</i>"]:::step
+    cutoff["1 · SCHICHTENDE-CUTOFF — autoAssignableCapacityMinutes()<br/><i>Schichten → Kopien mit Cutoff-Wirkung (Pkt 5, config.shiftEnd)</i>"]:::step
+    enrich["2 · ANREICHERN — enrichCase()<br/>classifyPriority() → rank 0–6 (Leiter B2)<br/>computeEffort() → Minuten + Punkte (§8.2 unverändert)<br/>teile = totalQuantity"]:::step
+    exclude{"3 · AUSSCHLUSS<br/>rank === 0 ?"}:::branch
     excluded["unassigned[]<br/><i>reason = excluded</i>"]:::out
 
-    grouping["4 · DELIVERY GROUPS — detectDeliveryGroups() → withheldCaseIds()<br/><i>same Lieferschein / consecutive WE-Beleg run (Pkt 1);<br/>WITHHOLD: suspected (T3) + unvollständige „X von N&quot;-Gruppen,<br/>außer released/locked → reason = delivery_unconfirmed</i>"]:::step
+    grouping["4 · LIEFERGRUPPEN — detectDeliveryGroups() → withheldCaseIds()<br/><i>gleicher Lieferschein / fortlaufende WE-Beleg-Folge (Pkt 1);<br/>ZURÜCKHALTEN: suspected (T3) + unvollständige „X von N“-Gruppen,<br/>außer released/locked → reason = delivery_unconfirmed</i>"]:::step
     withheld["unassigned[]<br/><i>reason = delivery_unconfirmed<br/>(wartet auf TL-Bestätigung/Freigabe)</i>"]:::out
     monster{"5 · MONSTER-BELEG<br/>teile ≥ largeBelegTeileThreshold ?"}:::branch
     large["unassigned[]<br/><i>reason = large_beleg<br/>(manuelle TL-Entscheidung, C6)</i>"]:::out
 
-    capacity["6 · CAPACITY — teamCapacityMinutes(effectiveShifts)<br/><i>Minuten = Machbarkeits-Budget</i>"]:::step
-    packs["7 · STARTER-PACKS — createBalancedBundles()<br/><i>fromPreviousDays zuerst, dann heute — je priority/FIFO-sortiert;<br/>Teile-dimensioniert (200–250), gruppen-atomar, Bereich-homogen;<br/>Belege jenseits des Minuten-Budgets → overflow</i>"]:::step
-    distribute["8 · DISTRIBUTE — distributeBundlesByWeightedLoad()<br/><i>GENAU EIN Starter-Pack je Mitarbeiter (C3);<br/>LPT über Minuten-Last + Specialist-/Bereich-Penalty<br/>(schwer/leicht-Gewichtung gestrichen, C2)</i>"]:::step
+    capacity["6 · KAPAZITÄT — teamCapacityMinutes(effectiveShifts)<br/><i>Minuten = Machbarkeits-Budget</i>"]:::step
+    packs["7 · STARTER-PACKS — createBalancedBundles()<br/><i>fromPreviousDays zuerst, dann heute — je priority/FIFO-sortiert;<br/>Teile-dimensioniert (200–250), gruppen-atomar, Bereich-homogen;<br/>Belege jenseits des Minuten-Budgets → Overflow</i>"]:::step
+    distribute["8 · VERTEILEN — distributeBundlesByWeightedLoad()<br/><i>GENAU EIN Starter-Pack je Mitarbeiter (C3);<br/>LPT über Minuten-Last + Specialist-/Bereich-Penalty<br/>(schwer/leicht-Gewichtung gestrichen, C2)</i>"]:::step
     pool["unassigned[]<br/><i>reason = pool_remaining — Self-Pull zieht<br/>Folge-Packs (80–90 Teile) via assignNextBundle()</i>"]:::out
-    nocap["unassigned[]<br/><i>reason = no_capacity (packing overflow)</i>"]:::out
-    pickup["9 · PICKUP — resolvePickup() → buildPickupSequence()<br/><i>per assigned pack: type→number order (§D.3), never feeds back</i>"]:::step
+    nocap["unassigned[]<br/><i>reason = no_capacity (Packungs-Überlauf)</i>"]:::out
+    pickup["9 · ABHOLFOLGE — resolvePickup() → buildPickupSequence()<br/><i>je zugewiesenem Pack: Reihenfolge Typ→Nummer (§D.3), wirkt nie zurück</i>"]:::step
 
     plan["AssignmentPlan<br/><i>bundles · pickupSequences · unassigned · loads · diagnostics</i>"]:::out
 
     input --> skillgate --> cutoff --> enrich --> exclude
-    exclude -->|"yes"| excluded
-    exclude -->|"no (eligible)"| grouping
-    grouping -->|"withheld"| withheld
+    exclude -->|"ja"| excluded
+    exclude -->|"nein (verteilbar)"| grouping
+    grouping -->|"zurückgehalten"| withheld
     grouping --> monster
-    monster -->|"yes"| large
-    monster -->|"no (packable)"| capacity --> packs
+    monster -->|"ja"| large
+    monster -->|"nein (packbar)"| capacity --> packs
     grouping -. "groupIdByCaseId" .-> packs
     packs --> distribute --> pickup --> plan
-    packs -. "overflow" .-> nocap
+    packs -. "Overflow" .-> nocap
     distribute -. "Packs ohne freien MA" .-> pool

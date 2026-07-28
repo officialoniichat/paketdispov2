@@ -1,49 +1,49 @@
-%% Domain / Entity model (ER) — verified against apps/backend-api/prisma/schema.prisma
-%% Cardinality: ||--o{ = one-to-many ; ||--|| = one-to-one ; }o--o{ = many-to-many (via join).
-%% Warenbezeichnung (ASN/DESADV): Beleg-Kopf fields live on GOODS_RECEIPT_CASE;
-%% article identity / NOS / Saison live on RECEIPT_POSITION (see annotations).
+%% Domänen-/Entitätsmodell (ER) — verifiziert gegen apps/backend-api/prisma/schema.prisma
+%% Kardinalität: ||--o{ = 1:n ; ||--|| = 1:1 ; }o--o{ = n:m (über Join-Tabelle).
+%% Warenbezeichnung (ASN/DESADV): Beleg-Kopf-Felder liegen auf GOODS_RECEIPT_CASE;
+%% Artikel-Identität / NOS / Saison liegen auf RECEIPT_POSITION (siehe Feld-Kommentare).
 erDiagram
-    USER ||--o{ USER_ROLE : has
-    ROLE ||--o{ USER_ROLE : grants
-    ROLE ||--o{ ROLE_PERMISSION : has
-    PERMISSION ||--o{ ROLE_PERMISSION : in
-    USER ||--o{ SHIFT : works
-    USER ||--o{ ASSIGNMENT_BUNDLE : owns
-    USER ||--o{ ISSUE : reports
-    USER ||--o{ ZST_RECORD : completes
+    USER ||--o{ USER_ROLE : "hat"
+    ROLE ||--o{ USER_ROLE : "gewährt"
+    ROLE ||--o{ ROLE_PERMISSION : "hat"
+    PERMISSION ||--o{ ROLE_PERMISSION : "in"
+    USER ||--o{ SHIFT : "arbeitet"
+    USER ||--o{ ASSIGNMENT_BUNDLE : "besitzt"
+    USER ||--o{ ISSUE : "meldet"
+    USER ||--o{ ZST_RECORD : "schließt ab"
 
-    LOCATION ||--o{ WORKSTATION : hosts
-    WORKSTATION ||--o{ SHIFT : "staffed at"
-    WORKSTATION ||--o{ USER : "assigned table"
-    LOCATION |o--o{ GOODS_RECEIPT_CASE : "stored at (null only if blocked)"
-    LOCATION ||--o{ ROUTE_STOP : "visited by"
+    LOCATION ||--o{ WORKSTATION : "beherbergt"
+    WORKSTATION ||--o{ SHIFT : "besetzt an"
+    WORKSTATION ||--o{ USER : "zugewiesener Tisch"
+    LOCATION |o--o{ GOODS_RECEIPT_CASE : "lagert an (null nur bei blocked)"
+    LOCATION ||--o{ ROUTE_STOP : "angefahren von"
 
-    GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf AW"
-    GOODS_RECEIPT_CASE ||--o{ RECEIPT_POSITION : contains
-    RECEIPT_POSITION ||--o| POSITION_INSTRUCTION : "position AW"
-    RECEIPT_POSITION ||--o{ RECEIPT_SKU_LINE : "EAN x size"
+    GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf-AW"
+    GOODS_RECEIPT_CASE ||--o{ RECEIPT_POSITION : "enthält"
+    RECEIPT_POSITION ||--o| POSITION_INSTRUCTION : "Positions-AW"
+    RECEIPT_POSITION ||--o{ RECEIPT_SKU_LINE : "EAN × Größe"
 
-    GOODS_RECEIPT_CASE ||--o{ ISSUE : raises
-    PROBLEM_REASON ||--o{ ISSUE : "categorises (manual)"
-    GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "packed into"
-    GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "closed by"
+    GOODS_RECEIPT_CASE ||--o{ ISSUE : "löst aus"
+    PROBLEM_REASON ||--o{ ISSUE : "kategorisiert (manuell)"
+    GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "verpackt in"
+    GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "abgeschlossen durch"
 
-    ASSIGNMENT_BUNDLE ||--o{ ASSIGNMENT_ITEM : orders
-    ASSIGNMENT_ITEM ||--|| GOODS_RECEIPT_CASE : references
-    ASSIGNMENT_BUNDLE ||--o{ GOODS_RECEIPT_CASE : "assigned (denorm.)"
-    ASSIGNMENT_BUNDLE ||--o{ ROUTE_STOP : "pickup route"
+    ASSIGNMENT_BUNDLE ||--o{ ASSIGNMENT_ITEM : "ordnet"
+    ASSIGNMENT_ITEM ||--|| GOODS_RECEIPT_CASE : "referenziert"
+    ASSIGNMENT_BUNDLE ||--o{ GOODS_RECEIPT_CASE : "zugewiesen (denorm.)"
+    ASSIGNMENT_BUNDLE ||--o{ ROUTE_STOP : "Abholroute"
 
     USER {
         string id PK
         string employeeNo UK
         string displayName
-        string_array bereiche "fixed, from LocationKind"
+        string_array bereiche "fest, aus LocationKind abgeleitet"
         float productivityFactor
         json weeklyPattern
         boolean active
-        boolean measured "temp staff=false → excl. Leistung-KPI"
+        boolean measured "Zeitarbeit false → nicht im Leistungs-KPI"
         enum skillTier "profi|fortgeschritten|basis|starter|dummy"
-        string workstationId FK "assigned table (nullable)"
+        string workstationId FK "zugewiesener Tisch (nullable)"
     }
     ROLE { string id PK
         string name UK }
@@ -77,16 +77,16 @@ erDiagram
     GOODS_RECEIPT_CASE {
         string id PK
         enum source "prohandel_api|manual"
-        string externalRef "ProHandel idempotency"
+        string externalRef "ProHandel-Idempotenz"
         string weBelegNo UK
         string deliveryNoteNo "KOPF: Lieferschein"
-        string deliverySourceGroupKey "Liefergruppe: X von N + manual override"
+        string deliverySourceGroupKey "Liefergruppe: X von N + manueller Override"
         string branchNo "KOPF: Filiale"
-        string primaryShopNo "KOPF: primaerer Shop"
+        string primaryShopNo "KOPF: primärer Shop"
         int inboundCartonCount "KOPF: Kartons der Anlieferung"
         int section "KOPF: Abschnitt 1-4,7,8"
         enum goodsTypeText "KOPF: Warenart"
-        string storageLocationId FK "nullable ONLY for blocked (Intake-Gate D1)"
+        string storageLocationId FK "nullable NUR bei blocked (Intake-Gate D1)"
         string_array priorityFlags "prio|catman_due|overdue|..."
         date catManDate
         date loadPlanDate
@@ -94,13 +94,13 @@ erDiagram
         float effortPoints
         string assignedBundleId FK
         string_array missingFields "blocked: fehlende Pflichtfelder"
-        boolean deliveryGroupReleased "TL-Freigabe trotz unvollstaendiger Gruppe"
+        boolean deliveryGroupReleased "TL-Freigabe trotz unvollständiger Gruppe"
         string docuWareUrl "Archiv: DocuWare-Deeplink (nullable)"
         datetime completedAt "einmalig gestempelt bei completed/zst_done"
         boolean attentionFlag "TL-Topf: besondere Aufmerksamkeit"
         string attentionNote "Notiz zum Aufmerksamkeits-Flag"
         enum forwardedTo "retourenabteilung|lieferscheinbucher (nullable)"
-        int version "optimistic lock"
+        int version "Optimistic Lock"
     }
     WORK_INSTRUCTION_HEADER {
         string caseId PK "FK→case (1:1)"
@@ -115,14 +115,14 @@ erDiagram
         string caseId FK
         int positionNo
         string wgr "Warengruppe"
-        string supplierArticleNo "POS: article identity"
-        string supplierColor "POS: colour"
+        string supplierArticleNo "POS: Artikel-Identität"
+        string supplierColor "POS: Farbe"
         string season "POS: Saison"
         boolean nosFlag "POS: NOS"
         boolean catMan "POS: Anzeige-Kennzeichen, KEIN Prio-Treiber"
         date catManDate "POS: CatMan-Termin (Anzeige)"
         string hShopNo "POS: Hauptshop (Anzeige)"
-        string orderNo "POS: Ordernummer (ERP-Referenz zur Fehlerloesung)"
+        string orderNo "POS: Ordernummer (ERP-Referenz zur Fehlerlösung)"
         enum status "open|confirmed|issue_open|completed"
     }
     POSITION_INSTRUCTION {
@@ -153,7 +153,7 @@ erDiagram
     ASSIGNMENT_ITEM {
         string id PK
         string bundleId FK
-        string caseId FK "UK: case in ≤1 bundle"
+        string caseId FK "UK: Beleg in ≤1 Bündel"
         int sequence
     }
     ROUTE_STOP {
@@ -206,16 +206,16 @@ erDiagram
 
     WORKFLOW_EVENT {
         string id PK
-        bigint seq UK "monotonic"
+        bigint seq UK "monoton steigend"
         string eventType
-        string entityType "polymorphic ref"
+        string entityType "polymorphe Referenz"
         string entityId
         enum actorType "system|employee|teamlead|admin"
-        string hash "SHA256 chain"
+        string hash "SHA256-Kette"
         string prevHash
     }
     APP_CONFIG {
-        string key PK "rule_config singleton"
+        string key PK "Singleton rule_config"
         json value "Zod RuleConfig"
     }
     LOAD_PLAN_RULE {
@@ -231,8 +231,8 @@ erDiagram
         string driverKey UK
         float weight }
 
-    %% Mock-ERP catalogs (Teamlead-Feedback 03.07.2026) — standalone lookup tables,
-    %% referenced by code (wgr / inspectionLevelCode), no FK relations.
+    %% Mock-ERP-Kataloge (Teamlead-Feedback 03.07.2026) — eigenständige Lookup-Tabellen,
+    %% per Code referenziert (wgr / inspectionLevelCode), keine FK-Relationen.
     WGR_CATALOG {
         string wgr PK "Warengruppe, z.B. 218110"
         string description "Klartext, z.B. D-Bermuda"

@@ -1,24 +1,24 @@
-%% C4 Level 1 — System Context
+%% C4 Ebene 1 — Systemkontext
 %% Paketlagerdispo — Digitale Belegverteilung (L&T Logistics)
-%% Source of truth: verified against apps/* and packages/* on branch main.
+%% Quelle der Wahrheit: gegen apps/* und packages/* auf Branch main verifiziert.
 C4Context
-    title System Context — Paketlagerdispo (Digitale Belegverteilung)
+    title Systemkontext — Paketlagerdispo (Digitale Belegverteilung)
 
-    Person(employee, "Mitarbeiter:in", "Warehouse worker. Collects (COLLECT) and processes (PROCESS) goods-receipt cases on a mobile PWA: scans, confirms quantities, prints labels, reports problems.")
-    Person(teamlead, "Teamlead Logistik", "Steers the daily pool: cockpit, digitale Ablagen, simulation, manual overrides, Tagesabschluss (ZST).")
-    Person(admin, "Admin / IT", "Maintains rules (Priorität/Bündel/Aufwand), Lagerplätze, employees, integrations.")
+    Person(employee, "Mitarbeiter:in", "Lagerkraft. Holt („Ware holen“) und bearbeitet („Bearbeiten“) Wareneingangs-Belege in einer mobilen PWA: scannt, bestätigt Mengen, druckt Etiketten, meldet Probleme.")
+    Person(teamlead, "Teamlead Logistik", "Steuert den Tages-Pool: Cockpit, digitale Ablagen, Simulation, manuelle Overrides, Tagesabschluss (ZST).")
+    Person(admin, "Admin / IT", "Pflegt Regeln (Priorität/Bündel/Aufwand), Lagerplätze, Mitarbeiter, Integrationen.")
 
-    System(paket, "Paketlagerdispo", "Modular monolith that turns goods-receipt cases into fair, deterministic daily work bundles and steers their lifecycle to Tagesabschluss.")
+    System(paket, "Paketlagerdispo", "Modularer Monolith, der Wareneingangs-Belege in faire, deterministische Tages-Bündel verwandelt und ihren Lebenszyklus bis zum Tagesabschluss steuert.")
 
-    System_Ext(prohandel, "ProHandel ERP", "Retail ERP — intended system of record for goods-receipt cases incl. Lagerplatz. Cases carry source=prohandel_api + externalRef. NOTE: settings-configured delta-pull is concept-stage, not yet a running ingestion service.")
-    System_Ext(oidc, "OIDC Auth Provider", "Keycloak / Entra. Issues JWT access tokens (JWKS) for Teamlead / Admin / IT login. Dev: static RS256 key fallback. Employees do NOT authenticate through this provider (see note below).")
+    System_Ext(prohandel, "ProHandel ERP", "Retail-ERP — vorgesehenes führendes System für Wareneingangs-Belege inkl. Lagerplatz. Belege tragen source=prohandel_api + externalRef. HINWEIS: Der per Einstellungen konfigurierbare Delta-Pull ist Konzept-Stadium, noch kein laufender Ingestion-Dienst.")
+    System_Ext(oidc, "OIDC Auth-Provider", "Keycloak / Entra. Stellt JWT-Access-Tokens (JWKS) für den Teamlead-/Admin-/IT-Login aus. Dev: statischer RS256-Schlüssel als Fallback. Mitarbeiter:innen melden sich NICHT über diesen Provider an (siehe Hinweis unten).")
 
-    Rel(employee, paket, "Uses (mobile PWA). Logs in with the employeeNo alone (no PIN) directly against Paketlagerdispo — no external IdP hop.", "HTTPS / REST + SSE")
-    Rel(teamlead, paket, "Steers pool & overrides", "HTTPS / REST + SSE")
-    Rel(admin, paket, "Configures rules & master data", "HTTPS / REST")
+    Rel(employee, paket, "Nutzt (mobile PWA). Meldet sich allein mit der Mitarbeiternummer (ohne PIN) direkt an der Paketlagerdispo an — kein Umweg über einen externen IdP.", "HTTPS / REST + SSE")
+    Rel(teamlead, paket, "Steuert Pool & Overrides", "HTTPS / REST + SSE")
+    Rel(admin, paket, "Konfiguriert Regeln & Stammdaten", "HTTPS / REST")
 
-    Rel(paket, oidc, "Verifies Teamlead/Admin access tokens against", "OIDC / JWKS")
-    Rel(prohandel, paket, "Goods-receipt cases (system of record)", "API pull — concept-stage")
+    Rel(paket, oidc, "Prüft Teamlead-/Admin-Access-Tokens gegen", "OIDC / JWKS")
+    Rel(prohandel, paket, "Wareneingangs-Belege (führendes System)", "API-Pull — Konzept-Stadium")
 
     UpdateRelStyle(prohandel, paket, $offsetY="-30", $offsetX="-40", $lineColor="grey")
     UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")

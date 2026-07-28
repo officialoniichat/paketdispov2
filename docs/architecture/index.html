@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Paketlagerdispo — C4 Architecture Model</title>
+    <title>Paketlagerdispo — C4-Architekturmodell</title>
     <style>
       :root {
         --bg: #0f1115;
@@ -35,7 +35,7 @@
         height: 100vh;
       }
 
-      /* ---------- sidebar ---------- */
+      /* ---------- Seitenleiste ---------- */
       aside {
         border-right: 1px solid var(--line);
         background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -81,7 +81,7 @@
       .legend .row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
       .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-      /* ---------- main ---------- */
+      /* ---------- Hauptbereich ---------- */
       main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
       .stage-head {
         display: flex; align-items: center; gap: 14px;
@@ -102,7 +102,7 @@
       }
       .links a:hover { border-color: var(--backend); }
 
-      /* ---------- toolbar ---------- */
+      /* ---------- Werkzeugleiste ---------- */
       .toolbar {
         display: flex; align-items: center; gap: 6px; padding: 8px 16px;
         border-bottom: 1px solid var(--line); background: rgba(13,16,22,0.5);
@@ -129,7 +129,7 @@
       }
       .navarrows { display: flex; gap: 6px; }
 
-      /* ---------- canvas ---------- */
+      /* ---------- Zeichenfläche ---------- */
       .canvas {
         position: relative; flex: 1; min-height: 0; overflow: hidden;
         background:
@@ -138,7 +138,9 @@
         cursor: grab; touch-action: none;
       }
       .canvas.grabbing { cursor: grabbing; }
-      .pan { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+      /* Wichtig für Schärfe: Zoom ändert die Layout-Größe des SVGs (Vektor-Neurendering),
+         der Transform verschiebt nur (translate) — keine unscharfe Raster-Skalierung. */
+      .pan { position: absolute; top: 0; left: 0; will-change: transform; }
       .pan svg, .pan img { display: block; }
       .loading {
         position: absolute; inset: 0; display: grid; place-items: center;
@@ -150,7 +152,7 @@
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      /* ---------- mobile ---------- */
+      /* ---------- Mobil ---------- */
       .menutoggle { display: none; }
       @media (max-width: 880px) {
         .app { grid-template-columns: 1fr; }
@@ -173,49 +175,49 @@
       <aside id="sidebar">
         <div class="brand">
           <div class="eyebrow">L&amp;T · Digitale Belegverteilung</div>
-          <h1>C4 <span>Architecture</span></h1>
-          <p>Verified against branch <code>main</code>. Mermaid sources in <code>src/</code>.</p>
+          <h1>C4-<span>Architekturmodell</span></h1>
+          <p>Gegen Branch <code>main</code> verifiziert. Mermaid-Quellen in <code>src/</code>.</p>
         </div>
         <nav class="navwrap" id="nav"></nav>
         <div class="legend">
-          <div class="row"><span class="dot" style="background:var(--system)"></span> External / actor</div>
-          <div class="row"><span class="dot" style="background:var(--backend)"></span> Controller / screen / feature</div>
-          <div class="row"><span class="dot" style="background:var(--teamlead)"></span> Service / logic</div>
-          <div class="row"><span class="dot" style="background:var(--employee)"></span> Cross-cutting / orchestrator</div>
-          <div class="row"><span class="dot" style="background:var(--data)"></span> Datastore / artifact</div>
+          <div class="row"><span class="dot" style="background:var(--system)"></span> Extern / Akteur</div>
+          <div class="row"><span class="dot" style="background:var(--backend)"></span> Controller / Screen / Feature</div>
+          <div class="row"><span class="dot" style="background:var(--teamlead)"></span> Service / Logik</div>
+          <div class="row"><span class="dot" style="background:var(--employee)"></span> Querschnitt / Orchestrator</div>
+          <div class="row"><span class="dot" style="background:var(--data)"></span> Datenhaltung / Artefakt</div>
         </div>
       </aside>
       <div class="scrim" id="scrim"></div>
 
       <main>
         <div class="stage-head">
-          <button class="tbtn menutoggle" id="menutoggle" title="Diagrams" aria-label="Toggle diagram list">☰</button>
+          <button class="tbtn menutoggle" id="menutoggle" title="Diagramme" aria-label="Diagrammliste umschalten">☰</button>
           <div class="meta">
             <span class="tag" id="d-tag">C4 · 1</span>
-            <h2 id="d-title">System Context</h2>
+            <h2 id="d-title">Systemkontext</h2>
             <p class="desc" id="d-desc"></p>
           </div>
           <div class="links">
-            <a id="link-src" href="#" target="_blank" rel="noopener">source .mmd</a>
-            <a id="link-svg" href="#" target="_blank" rel="noopener">raw SVG</a>
-            <a id="link-dl" href="#" download>download</a>
+            <a id="link-src" href="#" target="_blank" rel="noopener">Quelle (.mmd)</a>
+            <a id="link-svg" href="#" target="_blank" rel="noopener">SVG öffnen</a>
+            <a id="link-dl" href="#" download>Download</a>
           </div>
         </div>
 
         <div class="toolbar">
           <div class="navarrows">
-            <button class="tbtn" id="prev" title="Previous diagram (←)" aria-label="Previous">‹</button>
-            <button class="tbtn" id="next" title="Next diagram (→)" aria-label="Next">›</button>
+            <button class="tbtn" id="prev" title="Vorheriges Diagramm (←)" aria-label="Vorheriges Diagramm">‹</button>
+            <button class="tbtn" id="next" title="Nächstes Diagramm (→)" aria-label="Nächstes Diagramm">›</button>
           </div>
           <div class="sep"></div>
-          <button class="tbtn" id="zoomout" title="Zoom out (−)" aria-label="Zoom out">−</button>
-          <button class="tbtn" id="zoomval-btn" title="Reset to 100%" aria-label="Reset zoom"><span class="zoomval" id="zoomval">100%</span></button>
-          <button class="tbtn" id="zoomin" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button class="tbtn" id="zoomout" title="Verkleinern (−)" aria-label="Verkleinern">−</button>
+          <button class="tbtn" id="zoomval-btn" title="Auf Originalgröße (100 %) zurücksetzen (1)" aria-label="Zoom zurücksetzen"><span class="zoomval" id="zoomval">100 %</span></button>
+          <button class="tbtn" id="zoomin" title="Vergrößern (+)" aria-label="Vergrößern">+</button>
           <div class="sep"></div>
-          <button class="tbtn" id="fit" title="Fit to screen (0)">Fit</button>
-          <button class="tbtn" id="full" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
+          <button class="tbtn" id="fit" title="Ganzes Diagramm einpassen (0)">Einpassen</button>
+          <button class="tbtn" id="full" title="Vollbild (F)" aria-label="Vollbild">⛶</button>
           <div class="spacer"></div>
-          <span class="hint">drag to pan · scroll to zoom · <kbd>←</kbd><kbd>→</kbd> switch · <kbd>+</kbd><kbd>-</kbd><kbd>0</kbd> zoom · <kbd>F</kbd> full</span>
+          <span class="hint">Ziehen: verschieben · Scrollen/Pinch: zoomen · <kbd>←</kbd><kbd>→</kbd> Diagramm · <kbd>+</kbd><kbd>−</kbd><kbd>0</kbd><kbd>1</kbd> Zoom · <kbd>F</kbd> Vollbild</span>
         </div>
 
         <div class="canvas" id="canvas">
@@ -227,24 +229,24 @@
 
     <script>
       const DIAGRAMS = [
-        { id: 'c1-system-context',           group: 'Level 1 · Context',   tag: 'C4 · 1', title: 'System Context',
-          desc: 'The system, its three human roles (Mitarbeiter, Teamlead, Admin/IT), and external systems: ProHandel ERP (system of record — delta-pull concept-stage) and the OIDC provider.' },
-        { id: 'c2-container',                group: 'Level 2 · Container', tag: 'C4 · 2', title: 'Container',
-          desc: 'Deploy/runtime units: employee-pwa, teamlead-web, backend-api (NestJS on Fastify + Prisma), PostgreSQL, and the shared library packages. Protocols: REST + SSE, SQL, in-process.' },
-        { id: 'c3-backend-components',       group: 'Level 3 · Component', tag: 'C4 · 3', title: 'Component — backend-api',
-          desc: 'NestJS modules: Cases (Me/Cases/Teamlead), Assignment (recalculate / assignNextBundle / preview), Employees, Admin, and the cross-cutting Auth/Prisma/Events/Workflow/Live globals.' },
-        { id: 'c3-engine-components',        group: 'Level 3 · Component', tag: 'C4 · 3', title: 'Component — assignment-engine',
-          desc: 'The pure planner: assignWork() orchestrator + priority / effort (+ effort-factors) / capacity (+ shift-end) / reserve / bundling / grouping / distribute / pickup modules.' },
-        { id: 'c3-employee-pwa-components',  group: 'Level 3 · Component', tag: 'C4 · 3', title: 'Component — employee-pwa',
-          desc: 'Offline-first PWA: COLLECT→PROCESS→DONE screens, workflow hooks/guards, Dexie v4 DB with optimistic-lock repository and pull-based sync.' },
-        { id: 'c3-teamlead-components',      group: 'Level 3 · Component', tag: 'C4 · 3', title: 'Component — teamlead-web',
-          desc: 'Cockpit SPA: cockpit/ablagen/board/belege/split/admin features over a single useCockpitData() store; case actions via the caseActions registry → ReasonDialog.' },
-        { id: 'c4-engine-pipeline',          group: 'Level 4 · Code',      tag: 'C4 · 4', title: 'Code — engine pipeline',
-          desc: 'Data flow inside assignWork(): shift-end cutoff → enrich → exclude → capacity → reserve → bundles → delivery-groups → distribute → pickup.' },
-        { id: 'domain-model',                group: 'Data model',          tag: 'ER',     title: 'Domain / Entity model',
-          desc: 'Prisma entities, relations and cardinalities. Beleg-Kopf (Filiale/Lieferschein/Abschnitt/Warenart) on GOODS_RECEIPT_CASE; article identity/NOS/Saison on RECEIPT_POSITION.' },
-        { id: 'type-pipeline',               group: 'Data model',          tag: 'TYPES',  title: 'Type-generation pipeline',
-          desc: 'domain-types (Zod, single source) ↔ Prisma ↔ OpenAPI (@nestjs/swagger, DB-less generate) → api-client (openapi-typescript + openapi-fetch); drift test guards spec ↔ client.' },
+        { id: 'c1-system-context',           group: 'Ebene 1 · Kontext',    tag: 'C4 · 1', title: 'Systemkontext',
+          desc: 'Das System, seine drei menschlichen Rollen (Mitarbeiter:in, Teamlead, Admin/IT) und die externen Systeme: ProHandel ERP (führendes System — Delta-Pull im Konzept-Stadium) und der OIDC-Provider.' },
+        { id: 'c2-container',                group: 'Ebene 2 · Container',  tag: 'C4 · 2', title: 'Container',
+          desc: 'Deploy-/Laufzeit-Einheiten: employee-pwa, teamlead-web, backend-api (NestJS auf Fastify + Prisma), PostgreSQL und die geteilten Bibliotheks-Pakete. Protokolle: REST + SSE, SQL, prozessintern.' },
+        { id: 'c3-backend-components',       group: 'Ebene 3 · Komponenten', tag: 'C4 · 3', title: 'Komponenten — backend-api',
+          desc: 'NestJS-Module: Cases (Me/Cases/Teamlead), Assignment (recalculate / assignNextBundle / preview), Employees, Admin, Problemarten, Prohandel, Dev — plus die Querschnitts-Globals Auth/Prisma/Events/Workflow/Live/Clock.' },
+        { id: 'c3-engine-components',        group: 'Ebene 3 · Komponenten', tag: 'C4 · 3', title: 'Komponenten — assignment-engine',
+          desc: 'Der pure Planer: assignWork()-Orchestrator + Module priority / effort (inkl. effort-factors) / capacity (inkl. shift-import, shift-end) / assignment (bundling, distribute) / grouping / pickup.' },
+        { id: 'c3-employee-pwa-components',  group: 'Ebene 3 · Komponenten', tag: 'C4 · 3', title: 'Komponenten — employee-pwa',
+          desc: 'Mobile App gegen das Live-Backend (kein Offline-Cache): Login nur mit der Mitarbeiternummer, Bündel-Home („Ware holen“ / „Bearbeiten“), Beleg-Bearbeitung mit Problem-Dialogen; React-Query-Datenschicht + SSE-Live-Updates.' },
+        { id: 'c3-teamlead-components',      group: 'Ebene 3 · Komponenten', tag: 'C4 · 3', title: 'Komponenten — teamlead-web',
+          desc: 'Cockpit-SPA: Features cockpit/ablagen/board/belege/split/admin über den zentralen useCockpitData()-Store; Beleg-Aktionen über die caseActions-Registry → ReasonDialog.' },
+        { id: 'c4-engine-pipeline',          group: 'Ebene 4 · Code',       tag: 'C4 · 4', title: 'Code — Engine-Pipeline',
+          desc: 'Der Datenfluss in assignWork(): Skill-Tier-Gate → Schichtende-Cutoff → Anreichern → Ausschluss → Liefergruppen → Monster-Beleg-Prüfung → Kapazität → Starter-Packs → Verteilen → Abholfolge.' },
+        { id: 'domain-model',                group: 'Datenmodell',          tag: 'ER',     title: 'Domänen-/Entitätsmodell',
+          desc: 'Prisma-Entitäten, Relationen und Kardinalitäten. Beleg-Kopf (Filiale/Lieferschein/Abschnitt/Warenart) auf GOODS_RECEIPT_CASE; Artikel-Identität/NOS/Saison auf RECEIPT_POSITION.' },
+        { id: 'type-pipeline',               group: 'Datenmodell',          tag: 'TYPEN',  title: 'Typ-Generierungskette',
+          desc: 'domain-types (Zod, Single Source of Truth) ↔ Prisma ↔ OpenAPI (@nestjs/swagger, Generate-Lauf ohne DB) → api-client (openapi-typescript + openapi-fetch); ein Drift-Test sichert Spec ↔ Client.' },
       ];
 
       const $ = (id) => document.getElementById(id);
@@ -252,12 +254,36 @@
       const zoomvalEl = $('zoomval');
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-      let st = { scale: 1, tx: 0, ty: 0, natW: 0, natH: 0 };
+      // Zoom = Layout-Größe des SVG/Bilds (Vektor bleibt gestochen scharf),
+      // Pan = reiner translate-Transform.
+      let st = { scale: 1, tx: 0, ty: 0, natW: 0, natH: 0, el: null };
+      let appliedScale = -1;
       let current = 0;
 
+      function applySize() {
+        const w = st.natW * st.scale, h = st.natH * st.scale;
+        if (st.el.tagName.toLowerCase() === 'svg') {
+          st.el.setAttribute('width', w);
+          st.el.setAttribute('height', h);
+        } else {
+          st.el.style.width = w + 'px';
+          st.el.style.height = h + 'px';
+        }
+      }
       function apply() {
-        pan.style.transform = `translate(${st.tx}px, ${st.ty}px) scale(${st.scale})`;
-        zoomvalEl.textContent = Math.round(st.scale * 100) + '%';
+        if (st.el && appliedScale !== st.scale) { applySize(); appliedScale = st.scale; }
+        pan.style.transform = `translate(${st.tx}px, ${st.ty}px)`;
+        zoomvalEl.textContent = Math.round(st.scale * 100) + ' %';
+      }
+      // Standard-Ansicht: 100 % (Lesegröße) — nicht auf Fensterbreite stauchen.
+      // Horizontal auf die Diagramm-Mitte zentriert (dort sitzt der Inhalt),
+      // vertikal am Anfang (oben), damit Flüsse bei ihrem Start beginnen.
+      function readable() {
+        const cw = canvas.clientWidth, ch = canvas.clientHeight;
+        st.scale = 1;
+        st.tx = (cw - st.natW) / 2;
+        st.ty = st.natH < ch ? (ch - st.natH) / 2 : 24;
+        apply();
       }
       function fit() {
         const cw = canvas.clientWidth, ch = canvas.clientHeight;
@@ -270,7 +296,8 @@
       }
       function setScaleCentered(target) {
         const cw = canvas.clientWidth, ch = canvas.clientHeight;
-        zoomAt(canvas.getBoundingClientRect().left + cw / 2, canvas.getBoundingClientRect().top + ch / 2, target / st.scale);
+        const rect = canvas.getBoundingClientRect();
+        zoomAt(rect.left + cw / 2, rect.top + ch / 2, target / st.scale);
       }
       function zoomAt(clientX, clientY, factor) {
         const rect = canvas.getBoundingClientRect();
@@ -283,22 +310,26 @@
         apply();
       }
 
-      async function setNaturalSize(svg) {
+      function setNaturalSize(el) {
         let w, h;
-        const vb = svg.getAttribute('viewBox');
-        if (vb) { const p = vb.split(/[\s,]+/).map(Number); w = p[2]; h = p[3]; }
-        if (!w || !h) { const r = svg.getBoundingClientRect(); w = r.width; h = r.height; }
-        w = w || 1000; h = h || 700;
-        svg.removeAttribute('style');
-        svg.setAttribute('width', w); svg.setAttribute('height', h);
-        svg.style.maxWidth = 'none';
-        st.natW = w; st.natH = h;
+        if (el.tagName.toLowerCase() === 'svg') {
+          const vb = el.getAttribute('viewBox');
+          if (vb) { const p = vb.split(/[\s,]+/).map(Number); w = p[2]; h = p[3]; }
+          if (!w || !h) { const r = el.getBoundingClientRect(); w = r.width; h = r.height; }
+          el.removeAttribute('style');
+          el.style.maxWidth = 'none';
+        } else {
+          w = el.naturalWidth; h = el.naturalHeight;
+        }
+        st.natW = w || 1000; st.natH = h || 700;
+        st.el = el;
+        appliedScale = -1;
       }
 
       async function load(i, { keepView = false } = {}) {
         current = (i + DIAGRAMS.length) % DIAGRAMS.length;
         const d = DIAGRAMS[current];
-        // header + links
+        // Kopf + Links
         $('d-tag').textContent = d.tag;
         $('d-title').textContent = d.title;
         $('d-desc').textContent = d.desc;
@@ -306,40 +337,41 @@
         $('link-svg').href = `rendered/${d.id}.svg`;
         $('link-dl').href = `rendered/${d.id}.svg`;
         $('link-dl').setAttribute('download', `${d.id}.svg`);
-        // active nav
+        // aktiver Navigationseintrag
         document.querySelectorAll('.navitem').forEach((b) => b.classList.toggle('active', b.dataset.idx == current));
         const activeBtn = document.querySelector('.navitem.active');
         if (activeBtn) activeBtn.scrollIntoView({ block: 'nearest' });
-        history.replaceState(null, '', '#' + d.id);
+        try { history.replaceState(null, '', '#' + d.id); } catch (e) {}
         try { localStorage.setItem('paket.c4.last', d.id); } catch (e) {}
 
         loading.style.display = 'grid';
+        loading.innerHTML = '<div class="spinner"></div>';
         pan.innerHTML = '';
+        st.el = null;
         try {
           const res = await fetch(`rendered/${d.id}.svg`, { cache: 'no-cache' });
           if (!res.ok) throw new Error(res.status);
           pan.innerHTML = await res.text();
           const svg = pan.querySelector('svg');
-          if (!svg) throw new Error('no svg');
-          await setNaturalSize(svg);
+          if (!svg) throw new Error('kein SVG');
+          setNaturalSize(svg);
           loading.style.display = 'none';
-          if (!keepView) fit(); else apply();
+          if (!keepView) readable(); else apply();
         } catch (err) {
-          // Fallback for file:// (fetch blocked) — raster <img>, still pan/zoomable.
+          // Fallback für file:// (fetch blockiert) — <img> bleibt dank Layout-Zoom scharf.
           pan.innerHTML = `<img alt="${d.title}">`;
           const img = pan.querySelector('img');
           img.onload = () => {
-            st.natW = img.naturalWidth || 1000; st.natH = img.naturalHeight || 700;
-            img.style.width = st.natW + 'px'; img.style.height = st.natH + 'px';
+            setNaturalSize(img);
             loading.style.display = 'none';
-            if (!keepView) fit(); else apply();
+            if (!keepView) readable(); else apply();
           };
-          img.onerror = () => { loading.textContent = 'Could not load diagram. Serve over HTTP (see README).'; };
+          img.onerror = () => { loading.textContent = 'Diagramm konnte nicht geladen werden. Bitte über HTTP ausliefern (siehe README).'; };
           img.src = `rendered/${d.id}.svg`;
         }
       }
 
-      // ----- build sidebar -----
+      // ----- Seitenleiste aufbauen -----
       (function buildNav() {
         const nav = $('nav');
         let lastGroup = null, groupEl = null;
@@ -357,31 +389,50 @@
         });
       })();
 
-      // ----- pan (pointer drag) -----
-      let dragging = false, lx = 0, ly = 0;
+      // ----- Pan (Ziehen) + Pinch-Zoom (zwei Finger) über Pointer-Events -----
+      const pointers = new Map();
+      let lastDist = 0;
       canvas.addEventListener('pointerdown', (e) => {
-        dragging = true; lx = e.clientX; ly = e.clientY;
-        canvas.classList.add('grabbing'); canvas.setPointerCapture(e.pointerId);
+        canvas.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1) canvas.classList.add('grabbing');
+        if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          lastDist = Math.hypot(a.x - b.x, a.y - b.y);
+        }
       });
       canvas.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        st.tx += e.clientX - lx; st.ty += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply();
+        if (!pointers.has(e.pointerId)) return;
+        const prev = pointers.get(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1) {
+          st.tx += e.clientX - prev.x; st.ty += e.clientY - prev.y; apply();
+        } else if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          if (lastDist > 0 && dist > 0) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, dist / lastDist);
+          lastDist = dist;
+        }
       });
-      const endDrag = (e) => { dragging = false; canvas.classList.remove('grabbing'); };
-      canvas.addEventListener('pointerup', endDrag);
-      canvas.addEventListener('pointercancel', endDrag);
+      const endPointer = (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) lastDist = 0;
+        if (pointers.size === 0) canvas.classList.remove('grabbing');
+      };
+      canvas.addEventListener('pointerup', endPointer);
+      canvas.addEventListener('pointercancel', endPointer);
 
-      // ----- wheel zoom (cursor-centered) -----
+      // ----- Mausrad-/Trackpad-Zoom (auf den Zeiger zentriert) -----
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
         zoomAt(e.clientX, e.clientY, factor);
       }, { passive: false });
 
-      // double-click zoom
+      // Doppelklick-Zoom (mit Umschalt: herauszoomen)
       canvas.addEventListener('dblclick', (e) => zoomAt(e.clientX, e.clientY, e.shiftKey ? 1 / 1.6 : 1.6));
 
-      // ----- toolbar -----
+      // ----- Werkzeugleiste -----
       $('zoomin').onclick = () => setScaleCentered(clamp(st.scale * 1.25, 0.05, 8));
       $('zoomout').onclick = () => setScaleCentered(clamp(st.scale / 1.25, 0.05, 8));
       $('zoomval-btn').onclick = () => setScaleCentered(1);
@@ -394,14 +445,14 @@
       };
       document.addEventListener('fullscreenchange', () => setTimeout(fit, 60));
 
-      // ----- mobile menu -----
+      // ----- Mobil-Menü -----
       const sidebar = $('sidebar'), scrim = $('scrim');
       function openMenu() { sidebar.classList.add('open'); scrim.classList.add('show'); }
       function closeMenu() { sidebar.classList.remove('open'); scrim.classList.remove('show'); }
       $('menutoggle').onclick = openMenu;
       scrim.onclick = closeMenu;
 
-      // ----- keyboard -----
+      // ----- Tastatur -----
       window.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT') return;
         switch (e.key) {
@@ -417,9 +468,13 @@
         e.preventDefault();
       });
 
-      window.addEventListener('resize', () => { /* keep position, just reclamp nothing */ });
+      // ----- Deeplinks: Hash-Wechsel lädt das passende Diagramm (replaceState feuert kein hashchange — keine Schleife) -----
+      window.addEventListener('hashchange', () => {
+        const idx = DIAGRAMS.findIndex((d) => d.id === location.hash.replace('#', ''));
+        if (idx >= 0 && idx !== current) load(idx);
+      });
 
-      // ----- initial diagram (hash > localStorage > first) -----
+      // ----- Startdiagramm (Hash > localStorage > erstes) -----
       function initialIndex() {
         const fromHash = location.hash.replace('#', '');
         let idx = DIAGRAMS.findIndex((d) => d.id === fromHash);

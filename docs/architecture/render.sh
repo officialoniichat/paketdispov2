@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Render every Mermaid source in src/ to an SVG in rendered/.
-# Reproducible, offline-capable, no proprietary cloud: uses mermaid-cli (headless Chromium).
+# Rendert jede Mermaid-Quelle aus src/ als SVG nach rendered/.
+# Reproduzierbar, offline-fähig, keine proprietäre Cloud: nutzt mermaid-cli (Headless-Chromium).
 #
-# Usage:
-#   ./render.sh                # render all diagrams
-#   ./render.sh c2-container   # render a single diagram by basename
+# Aufruf:
+#   ./render.sh                # alle Diagramme rendern
+#   ./render.sh c2-container   # ein einzelnes Diagramm per Basisname rendern
 #
-# Requires: Node.js + pnpm/npx. mermaid-cli is fetched on demand via npx.
+# Voraussetzung: Node.js + pnpm/npx. mermaid-cli wird bei Bedarf via npx geholt.
+# Lesbarkeit: mermaid.config.json setzt eine größere Grundschrift (16px, C4 15px) und
+# useMaxWidth=false, damit die SVGs ihre natürliche Breite behalten statt auf
+# Fensterbreite heruntergestaucht zu werden — der Viewer (index.html) übernimmt Zoom + Pan.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -18,7 +21,7 @@ render_one() {
   local f="$1"
   local name
   name="$(basename "$f" .mmd)"
-  echo "→ rendering $name.svg"
+  echo "→ rendere $name.svg"
   "${MMDC[@]}" -i "$f" -o "rendered/$name.svg" -c "$CONFIG" -b transparent
 }
 
@@ -28,4 +31,4 @@ else
   for f in src/*.mmd; do render_one "$f"; done
 fi
 
-echo "Done. SVGs in ./rendered/"
+echo "Fertig. SVGs in ./rendered/"

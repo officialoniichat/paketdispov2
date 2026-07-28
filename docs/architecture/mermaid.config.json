@@ -2,14 +2,29 @@
   "theme": "dark",
   "themeVariables": {
     "fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-    "fontSize": "14px",
+    "fontSize": "16px",
     "primaryColor": "#1d222c",
     "primaryTextColor": "#eef1f6",
     "primaryBorderColor": "#2a313d",
     "lineColor": "#98a2b3",
     "tertiaryColor": "#161a22"
   },
-  "flowchart": { "htmlLabels": true, "curve": "basis", "useMaxWidth": true },
-  "er": { "useMaxWidth": true },
-  "c4": { "useMaxWidth": true }
+  "flowchart": { "htmlLabels": true, "curve": "basis", "useMaxWidth": false },
+  "er": { "useMaxWidth": false, "fontSize": 14 },
+  "c4": {
+    "useMaxWidth": false,
+    "width": 240,
+    "personFontSize": 15,
+    "external_personFontSize": 15,
+    "systemFontSize": 15,
+    "external_systemFontSize": 15,
+    "system_dbFontSize": 15,
+    "external_system_dbFontSize": 15,
+    "containerFontSize": 15,
+    "external_containerFontSize": 15,
+    "container_dbFontSize": 15,
+    "external_container_dbFontSize": 15,
+    "boundaryFontSize": 15,
+    "messageFontSize": 13
+  }
 }

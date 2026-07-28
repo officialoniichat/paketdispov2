@@ -1,5 +1,5 @@
-%% C4 Level 3 — Components: backend-api (NestJS on Fastify)
-%% Verified against apps/backend-api/src/* (app.module.ts, cases/, assignment/, employees/,
+%% C4 Ebene 3 — Komponenten: backend-api (NestJS auf Fastify)
+%% Verifiziert gegen apps/backend-api/src/* (app.module.ts, cases/, assignment/, employees/,
 %% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, clock/, dev/, health/, openapi/).
 flowchart TB
     classDef ctrl fill:#16314a,stroke:#56b6ff,color:#eef1f6;
@@ -8,31 +8,31 @@ flowchart TB
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
     classDef store fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
 
-    pwa["employee-pwa<br/><i>React PWA</i>"]:::ext
-    web["teamlead-web<br/><i>React cockpit</i>"]:::ext
-    oidc["OIDC Provider<br/><i>JWKS</i>"]:::ext
+    pwa["employee-pwa<br/><i>React-PWA</i>"]:::ext
+    web["teamlead-web<br/><i>React-Cockpit</i>"]:::ext
+    oidc["OIDC-Provider<br/><i>JWKS</i>"]:::ext
     db[("PostgreSQL")]:::store
-    enginePkg["@paket/assignment-engine<br/><i>pure planner</i>"]:::ext
+    enginePkg["@paket/assignment-engine<br/><i>purer Planer</i>"]:::ext
 
-    subgraph api["backend-api container"]
+    subgraph api["Container backend-api"]
         direction TB
 
-        subgraph crosscut["Cross-cutting (global modules)"]
+        subgraph crosscut["Querschnitt (globale Module)"]
             auth["AuthModule<br/>JwtAuthGuard · RolesGuard<br/>OidcTokenVerifier · Principal"]:::cross
             prisma["PrismaService<br/><i>@Global, $transaction</i>"]:::cross
-            events["EventLogService<br/><i>append() · SHA256 hash-chain</i>"]:::cross
-            workflow["WorkflowService<br/><i>§7.1 transition() state machine</i>"]:::cross
+            events["EventLogService<br/><i>append() · SHA256-Hash-Kette</i>"]:::cross
+            workflow["WorkflowService<br/><i>§7.1-Zustandsmaschine transition()</i>"]:::cross
             live["LiveStatusService + LiveController<br/><i>SSE: /api/me/stream, /api/teamlead/stream</i>"]:::cross
-            clock["ClockService<br/><i>@Global now(): dev Zeit-Override<br/>(AppConfig) oder Systemzeit</i>"]:::cross
+            clock["ClockService<br/><i>@Global now(): Dev-Zeit-Override<br/>(AppConfig) oder Systemzeit</i>"]:::cross
         end
 
         subgraph cases["CasesModule"]
             meCtrl["MeController<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle<br/>· POST park (B4) · POST workstation (A2)"]:::ctrl
             casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation (auch resume)<br/>· complete (skuQuantities) · partial-complete (Probleme→issue_open)"]:::ctrl
-            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· cases/:id/resolve-problems (Problemfall→problem_resolved)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/search (A1/A2/B1 assign-flow search+browse) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
+            tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· cases/:id/resolve-problems (Problemfall→problem_resolved)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/search (Suche+Browse im Zuweisen-Flow A1/A2/B1) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
             casesSvc["CasesService<br/><i>getToday · aggregate · start · complete<br/>· parkRemaining · claimWorkstation</i>"]:::svc
             tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>assignToEmployee/assignBundleToEmployee (find-or-create) · moveCase</i>"]:::svc
-            tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool (server-filter/sort/pagination) · lookup · search (ranked, assignable-only) · detail</i>"]:::svc
+            tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool (Server-Filter/-Sortierung/-Paging) · lookup · search (gerankt, nur zuweisbare) · detail</i>"]:::svc
         end
 
         subgraph assignment["AssignmentModule"]
@@ -46,7 +46,7 @@ flowchart TB
 
         subgraph adminMod["AdminModule"]
             adminCtrl["AdminController<br/>/api/admin/locations · /api/admin/rules<br/>· catalogs/wgr · catalogs/inspection-levels<br/>· online-size-preferences (GET·POST·upload)"]:::ctrl
-            adminSvc["AdminService<br/><i>RuleConfig (AppConfig singleton) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
+            adminSvc["AdminService<br/><i>RuleConfig (Singleton AppConfig) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
         end
 
         subgraph problemMod["ProblemReasonsModule"]
@@ -60,12 +60,12 @@ flowchart TB
             phSvc["ProhandelService<br/><i>Mock-Connector (A9): beleg-generator + beleg-persist<br/>(gemeinsame Senke mit prisma/seed.ts)</i>"]:::svc
         end
 
-        subgraph devMod["DevModule (env-gated: DEV_PANEL, 404 in prod)"]
+        subgraph devMod["DevModule (per Env geschaltet: DEV_PANEL, 404 in Prod)"]
             devCtrl["DevController<br/>GET /api/dev/scenarios · POST scenarios/:key/load<br/>· POST scenarios/reset · POST/DELETE time-override<br/>· POST materialize-shifts<br/><i>@Roles(Admin) + DevPanelGuard</i>"]:::ctrl
-            scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typed registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
+            scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typisierte Registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
         end
 
-        subgraph dom["Domain cores (src/modules/*)"]
+        subgraph dom["Fachliche Kerne (src/modules/*)"]
             mods["completion · issue/derive-problems (implizite Probleme)<br/>· print · transport · reporting (CSV)"]:::svc
         end
     end
@@ -108,7 +108,7 @@ flowchart TB
     phSvc --> events
     tlSvc --> mods
 
-    auth -. "guards all controllers" .-> cases
+    auth -. "schützt alle Controller" .-> cases
     auth --> oidc
     casesSvc --> prisma
     tlSvc --> prisma

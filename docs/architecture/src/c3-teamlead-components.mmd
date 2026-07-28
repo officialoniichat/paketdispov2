@@ -1,5 +1,5 @@
-%% C4 Level 3 — Components: teamlead-web (React + Vite + MUI, TanStack Query)
-%% Verified against apps/teamlead-web/src/* (features/, data/, actions/, components/).
+%% C4 Ebene 3 — Komponenten: teamlead-web (React + Vite + MUI, TanStack Query)
+%% Verifiziert gegen apps/teamlead-web/src/* (features/, data/, actions/, components/).
 flowchart TB
     classDef feat fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef store fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
@@ -7,31 +7,31 @@ flowchart TB
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
     classDef dev fill:#3a2d14,stroke:#e5b567,color:#eef1f6,stroke-dasharray:4 3;
 
-    api["backend-api<br/>/api/teamlead/* · /api/admin/* · /api/dev/* (dev-only)"]:::ext
+    api["backend-api<br/>/api/teamlead/* · /api/admin/* · /api/dev/* (nur Dev)"]:::ext
 
-    subgraph web["teamlead-web container"]
+    subgraph web["Container teamlead-web"]
         direction TB
-        subgraph features["features/ (routes via App.tsx)"]
-            cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Schnellaktionen”-Entscheidungsliste<br/>(aus lanes + board) · SimulationPanel · Automatik toggle</i>"]:::feat
-            ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
-            board["board/MitarbeiterBoard<br/><i>§10.3 employees × bundles · Bündel anlegen (AssignDialog, A1/A2 multi-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
-            belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 server-driven list + detail; Beleg-Tab = Kopf+Positionen+Probleme in EINER Ansicht<br/>(BelegTab/PositionsSection, PWA-Vorlage: Positions-Kontext HS/Shop/Etage/Filiale/Bereich/CatMan + EK/VK/VK-Etikett je Größe;<br/>Reiter: Beleg·Aufwand·Abschluss·Historie·Priorität);<br/>Klärungs-UX (IssuesTab) in der Beleg-Ansicht: alle Probleme mit Grund/Order/Delta/Preis → „Probleme geklärt”</i>"]:::feat
+        subgraph features["features/ (Routen via App.tsx)"]
+            cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Schnellaktionen“-Entscheidungsliste<br/>(aus lanes + board) · SimulationPanel · Automatik-Schalter</i>"]:::feat
+            ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 Lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
+            board["board/MitarbeiterBoard<br/><i>§10.3 Mitarbeiter × Bündel · Bündel anlegen (AssignDialog, A1/A2 Mehrfach-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
+            belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 servergetriebene Liste + Detail; Beleg-Tab = Kopf+Positionen+Probleme in EINER Ansicht<br/>(BelegTab/PositionsSection, PWA-Vorlage: Positions-Kontext HS/Shop/Etage/Filiale/Bereich/CatMan + EK/VK/VK-Etikett je Größe;<br/>Reiter: Beleg·Aufwand·Abschluss·Historie·Priorität);<br/>Klärungs-UX (IssuesTab) in der Beleg-Ansicht: alle Probleme mit Grund/Order/Delta/Preis → „Probleme geklärt“</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen·Schichtende·Problemarten</i>"]:::feat
             problemTab["admin/ProblemReasonsTab<br/><i>Problemarten-Katalog editieren (GET·PUT /api/admin/problem-reasons)</i>"]:::feat
-            devtab["admin/DevScenariosTab (dev-gated, lazy)<br/><i>Szenario-Katalog (Backend-Quelle) · Zeit-Override · Quick-Knobs —<br/>tree-shaken aus Prod-Builds (import.meta.env-Gate, config/devPanel.ts)</i>"]:::dev
+            devtab["admin/DevScenariosTab (nur Dev, lazy)<br/><i>Szenario-Katalog (Backend-Quelle) · Zeit-Override · Quick-Knobs —<br/>per Tree-Shaking aus Prod-Builds entfernt (import.meta.env-Gate, config/devPanel.ts)</i>"]:::dev
         end
-        devbadge["components/DevTimeBadge (dev-gated, lazy)<br/><i>globales App-Bar-Badge bei aktivem Server-Zeit-Override</i>"]:::dev
-        store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>view-models + mutations (TanStack Query)</i>"]:::store
+        devbadge["components/DevTimeBadge (nur Dev, lazy)<br/><i>globales App-Bar-Badge bei aktivem Server-Zeit-Override</i>"]:::dev
+        store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>View-Models + Mutationen (TanStack Query)</i>"]:::store
         subgraph datal["data/"]
             remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·cases</i>"]:::logic
             belegeData["belege.ts · admin.ts · employees.ts · audit.ts"]:::logic
-            devData["dev.ts (dev-gated)<br/><i>/api/dev-Client mit Admin-Dev-Token (VITE_DEV_ADMIN_TOKEN)</i>"]:::dev
+            devData["dev.ts (nur Dev)<br/><i>/api/dev-Client mit Admin-Dev-Token (VITE_DEV_ADMIN_TOKEN)</i>"]:::dev
             mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · assignToEmployee ·<br/>assignBundleToEmployee (A1/A2) · moveCase (B2) · reorder · pause/resume</i>"]:::logic
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
-        actions["actions/caseActions.ts<br/><i>getAvailableActions(): single-source registry (status + assign/forward/attention flags)<br/>→ ReasonDialog (reasoned) · custom (assign/forward/attention/split) · instant (Zurückholen, Aufmerksamkeit entfernen)</i>"]:::logic
-        shared["components/<br/><i>CaseActionMenu (density compact/detail, one shared kebab for every surface) · AssignDialog (live-search combobox + Durchsuchen browse drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (server-mode) · ReasonDialog</i>"]:::logic
+        actions["actions/caseActions.ts<br/><i>getAvailableActions(): zentrale Registry (Status + assign/forward/attention-Flags)<br/>→ ReasonDialog (mit Pflicht-Grund) · custom (assign/forward/attention/split) · sofort (Zurückholen, Aufmerksamkeit entfernen)</i>"]:::logic
+        shared["components/<br/><i>CaseActionMenu (Dichte compact/detail, EIN gemeinsames Kebab-Menü für alle Oberflächen) · AssignDialog (Live-Such-Combobox + „Durchsuchen“-Drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (Server-Modus) · ReasonDialog</i>"]:::logic
         viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen)</i>"]:::logic
     end
 
@@ -60,5 +60,5 @@ flowchart TB
     remote --> apiClient
     mutations --> apiClient
     belegeData --> apiClient
-    apiClient -->|"REST (Bearer JWT)"| api
+    apiClient -->|"REST (Bearer-JWT)"| api
     api -. "SSE /api/teamlead/stream" .-> store

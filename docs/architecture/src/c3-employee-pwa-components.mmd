@@ -1,9 +1,9 @@
-%% C4 Level 3 — Components: employee-pwa (React + Vite PWA)
-%% Verified against apps/employee-pwa/src/* (screens/, workflow/, data/, routes/) — tasks 13-17.
-%% Real employee login (data/auth.ts) gates the app; the backend is the single source of
-%% truth via React Query plus an SSE live-update channel — the former Dexie-backed db/
-%% (offline-first cache), events/ (local audit log) and seed/sync/repository modules are
-%% gone (tasks 10-13). Task 15 added useLiveUpdates() (GET /api/me/stream, SSE).
+%% C4 Ebene 3 — Komponenten: employee-pwa (React + Vite PWA)
+%% Verifiziert gegen apps/employee-pwa/src/* (screens/, workflow/, data/, routes/) — Tasks 13–17.
+%% Der echte Mitarbeiter-Login (data/auth.ts) schützt die App; das Backend ist die einzige
+%% Quelle der Wahrheit via React Query plus SSE-Live-Update-Kanal — die früheren Dexie-Module db/
+%% (Offline-first-Cache), events/ (lokales Audit-Log) sowie seed/sync/repository sind
+%% entfernt (Tasks 10–13). Task 15 ergänzte useLiveUpdates() (GET /api/me/stream, SSE).
 flowchart TB
     classDef screen fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef hook fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
@@ -12,31 +12,31 @@ flowchart TB
 
     api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* · /api/issues · /static/pictograms/* · SSE /api/me/stream"]:::ext
 
-    subgraph pwa["employee-pwa container"]
+    subgraph pwa["Container employee-pwa"]
         direction TB
-        subgraph screens["screens/ + components/ (router: routes/paths.ts, App gated by session)"]
+        subgraph screens["screens/ + components/ (Router: routes/paths.ts, App durch Session geschützt)"]
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
             home["BundleHomeScreen<br/><i>/ — Ware holen inline (je Beleg Kopf-Infos + Barcode-Pop-up) + Bearbeiten (frei wählbar, Problemfälle ganz unten) + Rest parken; Problemfall rot geparkt / grün geklärt</i>"]:::screen
-            barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — encoder: domain/code128.ts (pure)</i>"]:::logic
+            barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — Encoder: domain/code128.ts (pur)</i>"]:::logic
             process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis mit € + Komma; Problem markiert Größe/ganze POS rot</i>"]:::screen
             osk["OnScreenKeyboard (components/, App-mounted)<br/><i>aufklappbare digitale Tastatur für data-osk-Felder; nur Touch, blendet bei Hardware-Tastatur aus</i>"]:::logic
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
             teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
         end
-        subgraph wf["workflow/ (pure logic + the one live-data hook)"]
+        subgraph wf["workflow/ (reine Logik + der einzige Live-Daten-Hook)"]
             useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · setCorrectedVkPrice · addProblem/removeProblem · complete · partialComplete</i>"]:::hook
-            model["workflowModel.ts<br/><i>guards: canCompleteCase (Problem sperrt) · hasAnyProblem · skuQuantitiesBody · problemsBody</i>"]:::logic
+            model["workflowModel.ts<br/><i>Guards: canCompleteCase (Problem sperrt) · hasAnyProblem · skuQuantitiesBody · problemsBody</i>"]:::logic
         end
-        subgraph data["data/ (React Query — backend is the single source of truth)"]
-            apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — fresh client per call, current session token</i>"]:::logic
-            auth["auth.ts · session.ts<br/><i>login()/logout() · JWT claims · onSessionCleared()</i>"]:::logic
+        subgraph data["data/ (React Query — das Backend ist die einzige Quelle der Wahrheit)"]
+            apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — frischer Client je Aufruf, aktuelles Session-Token</i>"]:::logic
+            auth["auth.ts · session.ts<br/><i>login()/logout() · JWT-Claims · onSessionCleared()</i>"]:::logic
             meToday["useMeToday() · useNextBundle() · useParkRemaining()<br/><i>GET/POST /api/me/* — queryKey ['me','today']</i>"]:::hook
             caseAgg["useCaseAggregate()<br/><i>GET /api/me/cases/:id/aggregate — queryKey ['me','case',id,'aggregate']</i>"]:::hook
             reasons["useProblemReasons()<br/><i>GET /api/problem-reasons — dynamischer Problemarten-Katalog</i>"]:::hook
             mapper["caseAggregateMapper.ts<br/><i>CaseAggregateDto → CaseAggregate (domain/types.ts)</i>"]:::logic
-            persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete — plain POST, throws on failure</i>"]:::logic
-            focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) on window focus</i>"]:::hook
-            live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — on message: invalidateQueries(['me','today'])</i>"]:::hook
+            persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete — einfacher POST, wirft bei Fehler</i>"]:::logic
+            focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) bei Fenster-Fokus</i>"]:::hook
+            live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — bei Message: invalidateQueries(['me','today'])</i>"]:::hook
         end
     end
 
@@ -61,6 +61,6 @@ flowchart TB
     persist --> apiClient
     focus --> meToday
     live --> meToday
-    live -->|"SSE (query-param JWT)"| api
-    process -->|"Piktogramm img"| api
-    apiClient -->|"REST (Bearer JWT)"| api
+    live -->|"SSE (JWT als Query-Param)"| api
+    process -->|"Piktogramm-Bild"| api
+    apiClient -->|"REST (Bearer-JWT)"| api
