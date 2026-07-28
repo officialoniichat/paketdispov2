@@ -197,6 +197,12 @@ export interface BelegSkuLine {
   size: string;
   expectedQuantity: number;
   confirmedQuantity: number | null;
+  /** EK-Preis (A1) — Teamlead-Extra zur Klärung/Steuerung. */
+  ekPrice: number | null;
+  /** VK-Preis (A1). */
+  vkPrice: number | null;
+  /** VK-Etikett-Preis (A1). */
+  vkLabelPrice: number | null;
   status: SkuLineStatus;
 }
 
@@ -208,7 +214,27 @@ export interface BelegPosition {
   wgr: string;
   /** WGR-Klartext (z. B. „D-Bermuda") — Positions-Kopf der kombinierten Ansicht. */
   wgrDescription: string | null;
+  /** Lieferanten-Artikelnummer (Artikelidentität, wie PWA). */
+  supplierArticleNo: string;
   supplierColor: string;
+  /** Saison (Positions-Kontext, wie PWA). */
+  season: string | null;
+  /** NOS-Kennzeichen (Positions-Kontext, wie PWA). */
+  nosFlag: boolean | null;
+  /** CatMan-Termin der Position (ISO-Datum, Positions-Kontext wie PWA). */
+  catManDate: string | null;
+  /** HS (Hauptshop-Nr) der Position. */
+  hShopNo: string | null;
+  /** Shopnummer der Position. */
+  shopNo: string;
+  /** Etage der Position. */
+  floor: string | null;
+  /** Filiale (Positions-Kontext, wie PWA). */
+  branchNo: string;
+  /** Shopbereich (Beleg-Kopf, je Position gespiegelt wie PWA). */
+  shopAreaNo: string | null;
+  /** Warenart (Beleg-Kopf, je Position gespiegelt wie PWA). */
+  goodsType: string | null;
   expectedQuantity: number;
   confirmedQuantity: number | null;
   priceLabelRequired: boolean;
@@ -739,7 +765,17 @@ function toBelegPosition(p: PositionDetailDto): BelegPosition {
     orderNo: p.orderNo ?? null,
     wgr: p.wgr,
     wgrDescription: p.wgrDescription ?? null,
+    supplierArticleNo: p.supplierArticleNo,
     supplierColor: p.supplierColor,
+    season: p.season ?? null,
+    nosFlag: p.nosFlag ?? null,
+    catManDate: p.catManDate ?? null,
+    hShopNo: p.hShopNo ?? null,
+    shopNo: p.shopNo,
+    floor: p.floor ?? null,
+    branchNo: p.branchNo,
+    shopAreaNo: p.shopAreaNo ?? null,
+    goodsType: p.goodsType ?? null,
     expectedQuantity: p.expectedQuantity,
     confirmedQuantity: p.confirmedQuantity ?? null,
     priceLabelRequired: p.priceLabelRequired,
@@ -757,6 +793,9 @@ function toBelegSkuLine(s: SkuLineDto): BelegSkuLine {
     size: s.size,
     expectedQuantity: s.expectedQuantity,
     confirmedQuantity: s.confirmedQuantity ?? null,
+    ekPrice: s.ekPrice ?? null,
+    vkPrice: s.vkPrice ?? null,
+    vkLabelPrice: s.vkLabelPrice ?? null,
     status: toSkuLineStatus(s.status),
   };
 }

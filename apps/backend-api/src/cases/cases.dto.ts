@@ -619,7 +619,36 @@ export class PositionDetailDto {
   wgrDescription!: string | null;
   @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
   catMan!: boolean | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'CatMan-Termin der Position (ISO-Datum) — Positions-Kontext wie in der PWA',
+  })
+  catManDate!: string | null;
+  @ApiProperty({ description: 'Lieferanten-Artikelnummer (Artikelidentität)' }) supplierArticleNo!: string;
   @ApiProperty() supplierColor!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Saison (Positions-Kontext)' })
+  season!: string | null;
+  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'NOS (Never Out of Stock) article flag' })
+  nosFlag!: boolean | null;
+  @ApiProperty({ description: 'Filiale (Positions-Kontext, wie PWA)' }) branchNo!: string;
+  @ApiProperty({ description: 'Shopnummer der Position (Positions-Kontext, wie PWA)' }) shopNo!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Hauptshop-Nummer der Position (HS)' })
+  hShopNo!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Etage der Position' })
+  floor!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Shopbereich (Beleg-Kopf primaryShopAreaNo, je Position gespiegelt wie PWA)',
+  })
+  shopAreaNo!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Warenart (Beleg-Kopf goodsTypeText, je Position gespiegelt wie PWA)',
+  })
+  goodsType!: string | null;
   @ApiProperty({ description: 'Σ expected over the position SKU lines' }) expectedQuantity!: number;
   @ApiPropertyOptional({
     type: Number,
@@ -702,7 +731,7 @@ export class ZstSummaryDto {
 
 /**
  * §10.4 Belegdetails read model: rich header + work instruction + positions
- * (with SKU lines) + transport boxes + audit history.
+ * (Positions-Kontext + SKU lines) + audit history.
  */
 /**
  * Per-driver minute breakdown of a case's effort (§8.2), mirroring the engine's
@@ -745,7 +774,6 @@ export class CaseDetailDto {
   @ApiPropertyOptional({ type: WorkInstructionHeaderDto, nullable: true })
   workInstruction!: WorkInstructionHeaderDto | null;
   @ApiProperty({ type: [PositionDetailDto] }) positions!: PositionDetailDto[];
-  @ApiProperty({ type: [TransportBoxTargetDto] }) transportBoxes!: TransportBoxTargetDto[];
   @ApiProperty({ type: [IssueSummaryDto], description: 'Reported problems, newest first' })
   issues!: IssueSummaryDto[];
   @ApiProperty({ type: [ZstSummaryDto], description: 'ZST completion records, oldest first' })

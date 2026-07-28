@@ -456,6 +456,29 @@ const PROBLEM_ROW_SX = {
   borderLeftColor: 'error.main',
 } as const;
 
+/** Warenart-Anzeige wie in der PWA: NOS schlägt die Warenart des Beleg-Kopfs. */
+function positionWarenart(p: BelegPosition): string | null {
+  if (p.nosFlag) return 'NOS';
+  return p.goodsType ?? null;
+}
+
+/**
+ * Positions-Kontext als horizontale Meta-Zeile (identisch zur PWA, Nachtrag
+ * 15.07.2026): HS · Shop · Etage · Filiale · Bereich. Der frühere Boxen-Umweg
+ * entfällt — diese Infos stehen jetzt an der Position.
+ */
+function positionMetaText(p: BelegPosition): string {
+  return [
+    p.hShopNo ? `HS ${p.hShopNo}` : null,
+    `Shop ${p.shopNo}`,
+    p.floor ? `Etage ${p.floor}` : null,
+    p.branchNo ? `Filiale ${p.branchNo}` : null,
+    p.shopAreaNo ? `Bereich ${p.shopAreaNo}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+}
+
 /** Anweisungs-Chips der Position (PWA-Vorlage: FLAG_CHIPS im BelegProcessScreen). */
 const POSITION_FLAG_CHIPS = [
   { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' },
@@ -489,6 +512,16 @@ function PositionsSection({
               <TableCell sx={POSITION_HEAD_CELL}>Pos</TableCell>
               <TableCell sx={POSITION_HEAD_CELL}>EAN</TableCell>
               <TableCell sx={POSITION_HEAD_CELL}>Größe</TableCell>
+              {/* Teamlead-Extras zur Klärung/Steuerung: EK/VK/VK-Etikett je Größe. */}
+              <TableCell sx={POSITION_HEAD_CELL} align="right">
+                EK
+              </TableCell>
+              <TableCell sx={POSITION_HEAD_CELL} align="right">
+                VK
+              </TableCell>
+              <TableCell sx={POSITION_HEAD_CELL} align="right">
+                VK-Etikett
+              </TableCell>
               <TableCell sx={POSITION_HEAD_CELL} align="right">
                 Soll
               </TableCell>
@@ -502,6 +535,7 @@ function PositionsSection({
           {positions.map((p) => {
             const positionIssues = openIssues.filter((i) => i.positionNo === p.positionNo);
             const flags = POSITION_FLAG_CHIPS.filter((f) => p[f.key]);
+            const warenart = positionWarenart(p);
             return (
               <TableBody key={p.id}>
                 <TableRow sx={{ bgcolor: 'action.hover' }}>
@@ -510,7 +544,7 @@ function PositionsSection({
                       Pos {p.positionNo}
                     </Typography>
                   </TableCell>
-                  <TableCell colSpan={6} sx={{ verticalAlign: 'top' }}>
+                  <TableCell colSpan={9} sx={{ verticalAlign: 'top' }}>
                     <Stack
                       direction="row"
                       spacing={2}
@@ -520,14 +554,34 @@ function PositionsSection({
                       <Box sx={{ minWidth: 0 }}>
                         <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                           <Typography sx={{ fontWeight: 700 }}>
-                            WGR {p.wgr}
+                            {p.supplierArticleNo} · WGR {p.wgr}
                             {p.wgrDescription ? ` ${p.wgrDescription}` : ''} · {p.supplierColor}
+                            {p.season ? ` · Saison ${p.season}` : ''}
                           </Typography>
+                          {p.nosFlag && <Chip size="small" color="success" label="♻️ NOS" />}
+                          {!p.nosFlag && warenart && (
+                            <Chip size="small" color="secondary" variant="outlined" label={warenart} />
+                          )}
                           {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
                           {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
                           {flags.map((f) => (
                             <Chip key={f.key} size="small" color={f.color} label={f.label} />
                           ))}
+                        </Stack>
+                        {/* Positions-Kontext (wie PWA): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip. */}
+                        <Stack direction="row" alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {positionMetaText(p)}
+                          </Typography>
+                          {p.catManDate && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              label={`📅 ${formatDate(p.catManDate)}`}
+                              sx={{ height: 22, '& .MuiChip-label': { px: 0.75 } }}
+                            />
+                          )}
                         </Stack>
                         {positionIssues.length > 0 && (
                           <Stack direction="row" sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}>
@@ -559,6 +613,15 @@ function PositionsSection({
                       <TableCell />
                       <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
+                      <TableCell align="right" sx={NUMERIC_CELL}>
+                        {s.ekPrice !== null ? EUR.format(s.ekPrice) : '–'}
+                      </TableCell>
+                      <TableCell align="right" sx={NUMERIC_CELL}>
+                        {s.vkPrice !== null ? EUR.format(s.vkPrice) : '–'}
+                      </TableCell>
+                      <TableCell align="right" sx={NUMERIC_CELL}>
+                        {s.vkLabelPrice !== null ? EUR.format(s.vkLabelPrice) : '–'}
+                      </TableCell>
                       <TableCell align="right" sx={NUMERIC_CELL}>
                         {s.expectedQuantity}
                       </TableCell>
@@ -664,7 +727,7 @@ function AbschlussTab({
   );
 }
 
-const ISSUE_EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
 /** Problemart-Label: Katalog-Snapshot bei manuellen Problemen, sonst die feste Art. */
 function issueLabel(i: BelegIssue): string {
@@ -745,8 +808,8 @@ function IssuesTab({
             )}
             {i.correctedVkPrice !== null && (
               <Typography variant="body2">
-                Preis: VK-Etikett {i.expectedVkPrice !== null ? ISSUE_EUR.format(i.expectedVkPrice) : '–'} →
-                Etikettpreis {ISSUE_EUR.format(i.correctedVkPrice)}
+                Preis: VK-Etikett {i.expectedVkPrice !== null ? EUR.format(i.expectedVkPrice) : '–'} →
+                Etikettpreis {EUR.format(i.correctedVkPrice)}
               </Typography>
             )}
             {i.description && (

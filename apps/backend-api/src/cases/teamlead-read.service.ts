@@ -26,7 +26,7 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { distinctShopNos, isLabelsRequired, mapBoxTarget, mapDeliveryGroupRef, mapWorkInstruction,
+import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapWorkInstruction,
   wgrDescription,
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
@@ -813,7 +813,7 @@ export class TeamleadReadService {
 
   /**
    * §10.4 Belegdetails: one rich case read — header + work instruction +
-   * positions (with instruction flags + SKU lines) + transport boxes +
+   * positions (with instruction flags, Positions-Kontext + SKU lines) +
    * the case's audit history (newest first). 404 if unknown.
    */
   async caseDetail(caseId: string): Promise<CaseDetailDto> {
@@ -830,7 +830,6 @@ export class TeamleadReadService {
             skuLines: { orderBy: { ean: 'asc' } },
           },
         },
-        transportBoxes: { orderBy: { boxNo: 'asc' } },
         issues: { orderBy: { reportedAt: 'desc' } },
         zstRecords: { orderBy: { completedAt: 'asc' } },
       },
@@ -884,8 +883,11 @@ export class TeamleadReadService {
       loadPlanDate: isoDay(found.loadPlanDate),
       goodsType: found.goodsTypeText,
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
-      positions: found.positions.map((p) => this.mapPositionDetail(p)),
-      transportBoxes: found.transportBoxes.map((b) => mapBoxTarget(b)),
+      // Positions-Kontext (Shopbereich/Warenart) stammt aus dem Beleg-Kopf und wird
+      // je Position gespiegelt — wie in der PWA (der frühere Boxen-Umweg entfällt).
+      positions: found.positions.map((p) =>
+        this.mapPositionDetail(p, found.primaryShopAreaNo, found.goodsTypeText),
+      ),
       issues: found.issues.map((i) => this.mapIssue(i, found.positions)),
       zstRecords: found.zstRecords.map((z) => ({
         id: z.id,
@@ -984,20 +986,29 @@ export class TeamleadReadService {
     };
   }
 
-  private mapPositionDetail(p: {
-    id: string;
-    positionNo: number;
-    orderNo?: string | null;
-    wgr: string;
-    supplierColor: string;
-    status: string;
-    instruction: {
-      priceLabelRequired: boolean;
-      securityRequired: boolean;
-      onlineHandlingRequired: boolean;
-    } | null;
-    catMan?: boolean | null;
-    skuLines: Array<{
+  private mapPositionDetail(
+    p: {
+      id: string;
+      positionNo: number;
+      orderNo?: string | null;
+      wgr: string;
+      supplierArticleNo: string;
+      supplierColor: string;
+      season?: string | null;
+      nosFlag?: boolean | null;
+      branchNo: string;
+      shopNo: string;
+      hShopNo?: string | null;
+      floor?: string | null;
+      status: string;
+      instruction: {
+        priceLabelRequired: boolean;
+        securityRequired: boolean;
+        onlineHandlingRequired: boolean;
+      } | null;
+      catMan?: boolean | null;
+      catManDate?: Date | null;
+      skuLines: Array<{
       id: string;
       ean: string;
       size: string;
@@ -1008,7 +1019,10 @@ export class TeamleadReadService {
       vkLabelPrice: number | null;
       status: string;
     }>;
-  }): PositionDetailDto {
+    },
+    primaryShopAreaNo: string | null,
+    goodsTypeText: string | null,
+  ): PositionDetailDto {
     const skuLines: SkuLineDto[] = p.skuLines.map((s) => ({
       id: s.id,
       ean: s.ean,
@@ -1034,7 +1048,19 @@ export class TeamleadReadService {
       wgr: p.wgr,
       wgrDescription: wgrDescription(p.wgr),
       catMan: p.catMan ?? null,
+      catManDate: p.catManDate ? p.catManDate.toISOString().slice(0, 10) : null,
+      supplierArticleNo: p.supplierArticleNo,
       supplierColor: p.supplierColor,
+      season: p.season ?? null,
+      nosFlag: p.nosFlag ?? null,
+      branchNo: p.branchNo,
+      shopNo: p.shopNo,
+      hShopNo: p.hShopNo ?? null,
+      floor: p.floor ?? null,
+      // Shopbereich/Warenart stammen aus dem Beleg-Kopf und werden je Position
+      // gespiegelt (wie PWA) — kein Boxen-Umweg mehr.
+      shopAreaNo: primaryShopAreaNo,
+      goodsType: goodsTypeText,
       expectedQuantity,
       confirmedQuantity,
       priceLabelRequired: p.instruction?.priceLabelRequired ?? false,

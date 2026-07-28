@@ -4636,8 +4636,55 @@
             "nullable": true,
             "description": "CatMan-Kennzeichen (Anzeige, A3)"
           },
+          "catManDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "CatMan-Termin der Position (ISO-Datum) — Positions-Kontext wie in der PWA"
+          },
+          "supplierArticleNo": {
+            "type": "string",
+            "description": "Lieferanten-Artikelnummer (Artikelidentität)"
+          },
           "supplierColor": {
             "type": "string"
+          },
+          "season": {
+            "type": "string",
+            "nullable": true,
+            "description": "Saison (Positions-Kontext)"
+          },
+          "nosFlag": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "NOS (Never Out of Stock) article flag"
+          },
+          "branchNo": {
+            "type": "string",
+            "description": "Filiale (Positions-Kontext, wie PWA)"
+          },
+          "shopNo": {
+            "type": "string",
+            "description": "Shopnummer der Position (Positions-Kontext, wie PWA)"
+          },
+          "hShopNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hauptshop-Nummer der Position (HS)"
+          },
+          "floor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Etage der Position"
+          },
+          "shopAreaNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shopbereich (Beleg-Kopf primaryShopAreaNo, je Position gespiegelt wie PWA)"
+          },
+          "goodsType": {
+            "type": "string",
+            "nullable": true,
+            "description": "Warenart (Beleg-Kopf goodsTypeText, je Position gespiegelt wie PWA)"
           },
           "expectedQuantity": {
             "type": "number",
@@ -4672,7 +4719,10 @@
           "id",
           "positionNo",
           "wgr",
+          "supplierArticleNo",
           "supplierColor",
+          "branchNo",
+          "shopNo",
           "expectedQuantity",
           "priceLabelRequired",
           "securityRequired",
@@ -4956,12 +5006,6 @@
               "$ref": "#/components/schemas/PositionDetailDto"
             }
           },
-          "transportBoxes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TransportBoxTargetDto"
-            }
-          },
           "issues": {
             "description": "Reported problems, newest first",
             "type": "array",
@@ -4999,7 +5043,6 @@
           "effortPoints",
           "effortComputed",
           "positions",
-          "transportBoxes",
           "issues",
           "zstRecords",
           "history"

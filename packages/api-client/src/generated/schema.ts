@@ -1662,7 +1662,27 @@ export interface components {
             wgrDescription?: string | null;
             /** @description CatMan-Kennzeichen (Anzeige, A3) */
             catMan?: boolean | null;
+            /** @description CatMan-Termin der Position (ISO-Datum) — Positions-Kontext wie in der PWA */
+            catManDate?: string | null;
+            /** @description Lieferanten-Artikelnummer (Artikelidentität) */
+            supplierArticleNo: string;
             supplierColor: string;
+            /** @description Saison (Positions-Kontext) */
+            season?: string | null;
+            /** @description NOS (Never Out of Stock) article flag */
+            nosFlag?: boolean | null;
+            /** @description Filiale (Positions-Kontext, wie PWA) */
+            branchNo: string;
+            /** @description Shopnummer der Position (Positions-Kontext, wie PWA) */
+            shopNo: string;
+            /** @description Hauptshop-Nummer der Position (HS) */
+            hShopNo?: string | null;
+            /** @description Etage der Position */
+            floor?: string | null;
+            /** @description Shopbereich (Beleg-Kopf primaryShopAreaNo, je Position gespiegelt wie PWA) */
+            shopAreaNo?: string | null;
+            /** @description Warenart (Beleg-Kopf goodsTypeText, je Position gespiegelt wie PWA) */
+            goodsType?: string | null;
             /** @description Σ expected over the position SKU lines */
             expectedQuantity: number;
             /** @description Σ confirmed over the SKU lines, null if none confirmed yet */
@@ -1763,7 +1783,6 @@ export interface components {
             goodsType?: string | null;
             workInstruction?: components["schemas"]["WorkInstructionHeaderDto"] | null;
             positions: components["schemas"]["PositionDetailDto"][];
-            transportBoxes: components["schemas"]["TransportBoxTargetDto"][];
             /** @description Reported problems, newest first */
             issues: components["schemas"]["IssueSummaryDto"][];
             /** @description ZST completion records, oldest first */

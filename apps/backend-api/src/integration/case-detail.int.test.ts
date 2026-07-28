@@ -17,7 +17,7 @@ import { Role, type Principal } from '../auth/rbac.js';
  * §10.4 GET /api/teamlead/cases/:caseId — the rich Belegdetails read backing the
  * teamlead detail page. Seeds a case with positions (+ SKU lines + instruction
  * flags), a transport box, an assignment + a teamlead event, and asserts the
- * detail returns the header, positions, boxes, and history; a missing case 404s.
+ * detail returns the header, positions (with Positions-Kontext), and history; a missing case 404s.
  */
 
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -111,10 +111,6 @@ async function seed(): Promise<{ caseId: string }> {
     },
   });
 
-  await prisma.transportBox.create({
-    data: { caseId: c.id, boxNo: 1, branchNo: '1', shopAreaNo: '21', plannedQuantity: 30 },
-  });
-
   const bundle = await prisma.assignmentBundle.create({
     data: { employeeId: emp.id, date: asDate(DATE), status: 'assigned' },
   });
@@ -153,7 +149,7 @@ afterAll(async () => {
 });
 
 describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
-  it('returns header + positions + boxes + history', async () => {
+  it('returns header + positions (with Positions-Kontext) + history', async () => {
     const { caseId } = await seed();
 
     const detail = await readSvc.caseDetail(caseId);
@@ -188,10 +184,13 @@ describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
     // No SKU line on p2 is confirmed yet → aggregate is null, not 0.
     expect(p2?.confirmedQuantity).toBeNull();
 
-    // Transport boxes
-    expect(detail.transportBoxes).toHaveLength(1);
-    expect(detail.transportBoxes[0]?.boxNo).toBe(1);
-    expect(detail.transportBoxes[0]?.plannedQuantity).toBe(30);
+    // Positions-Kontext je Position (wie PWA; früher der Boxen-Umweg): Shopbereich
+    // + Warenart aus dem Beleg-Kopf gespiegelt, Filiale/Shop je Position.
+    expect(p1?.shopAreaNo).toBe('21');
+    expect(p1?.goodsType).toBe('Vororder');
+    expect(p1?.branchNo).toBe('1');
+    expect(p1?.shopNo).toBe('21');
+    expect(p1?.supplierArticleNo).toBe('ART-001');
 
     // History (newest first) includes the teamlead prioritize
     expect(detail.history.length).toBeGreaterThan(0);
