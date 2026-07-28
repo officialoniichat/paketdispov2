@@ -49,6 +49,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
+import { oskProps } from '../components/OnScreenKeyboard.js';
 import { ProblemDialog } from '../components/ProblemDialog.js';
 import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
@@ -239,7 +240,7 @@ function EtikettpreisInput({
           endAdornment: <InputAdornment position="end">€</InputAdornment>,
         },
         htmlInput: {
-          inputMode: 'decimal',
+          ...oskProps('decimal'),
           'aria-label': `Größe ${sizeLabel}: Etikettpreis erfassen`,
           style: { textAlign: 'right' },
         },

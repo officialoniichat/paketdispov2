@@ -15,6 +15,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { oskProps } from './OnScreenKeyboard.js';
 import { useProblemReasons } from '../data/useProblemReasons.js';
 import type { PositionView, RecordedProblem } from '../domain/types.js';
 
@@ -111,6 +112,7 @@ export function ProblemDialog({ open, position, onClose, onSave }: ProblemDialog
             onChange={(e) => setNote(e.target.value)}
             multiline
             minRows={2}
+            slotProps={{ htmlInput: oskProps('text') }}
           />
         </Stack>
       </DialogContent>

@@ -10,6 +10,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import { AppHeader } from './components/AppHeader.js';
+import { OnScreenKeyboard } from './components/OnScreenKeyboard.js';
 import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
 import { useFocusRefresh } from './data/useFocusRefresh.js';
 import { useLiveUpdates } from './data/useLiveUpdates.js';
@@ -45,7 +46,12 @@ export function App(): JSX.Element {
   useLiveUpdates();
 
   if (!session) {
-    return <LoginScreen onLoggedIn={setSessionState} />;
+    return (
+      <>
+        <LoginScreen onLoggedIn={setSessionState} />
+        <OnScreenKeyboard />
+      </>
+    );
   }
 
   return (
@@ -56,6 +62,8 @@ export function App(): JSX.Element {
         <Route path="/case/:caseId" element={<BelegProcessScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {/* Punkt 1: aufklappbare digitale Tastatur für Touchscreen-Monitore. */}
+      <OnScreenKeyboard />
     </Box>
   );
 }

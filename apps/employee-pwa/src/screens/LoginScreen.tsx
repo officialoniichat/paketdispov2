@@ -12,6 +12,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { oskProps } from '../components/OnScreenKeyboard.js';
 import { login, LoginError } from '../data/auth.js';
 import type { Session } from '../data/session.js';
 import { resolveEnv } from '../config/runtimeEnv.js';
@@ -77,6 +78,7 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps): JSX.Element {
         autoFocus
         disabled={submitting}
         sx={{ mb: 3 }}
+        slotProps={{ htmlInput: oskProps('text') }}
       />
       <Button type="submit" variant="contained" fullWidth disabled={submitting || !employeeNo.trim()}>
         {submitting ? 'Anmelden…' : 'Anmelden'}

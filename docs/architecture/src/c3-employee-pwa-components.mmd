@@ -18,7 +18,8 @@ flowchart TB
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
             home["BundleHomeScreen<br/><i>/ — Ware holen inline (je Beleg Kopf-Infos + Barcode-Pop-up) + Bearbeiten (frei wählbar, Problemfälle ganz unten) + Rest parken; Problemfall rot geparkt / grün geklärt</i>"]:::screen
             barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — encoder: domain/code128.ts (pure)</i>"]:::logic
-            process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis (keine Order, kein Boxzettel)</i>"]:::screen
+            process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis mit € + Komma; Problem markiert Größe/ganze POS rot</i>"]:::screen
+            osk["OnScreenKeyboard (components/, App-mounted)<br/><i>aufklappbare digitale Tastatur für data-osk-Felder; nur Touch, blendet bei Hardware-Tastatur aus</i>"]:::logic
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
             teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
         end
@@ -46,6 +47,9 @@ flowchart TB
     process --> useCaseFlow
     process --> problemDlg
     process --> teilDlg
+    login -->|"data-osk"| osk
+    process -->|"data-osk"| osk
+    problemDlg -->|"data-osk"| osk
     problemDlg --> reasons
     useCaseFlow --> model
     useCaseFlow --> caseAgg
