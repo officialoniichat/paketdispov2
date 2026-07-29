@@ -1,4 +1,4 @@
-import { Chip, Tooltip } from '@mui/material';
+import { Box, Chip, Tooltip } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import type { DeliveryGroupRef } from '../data/types';
 
@@ -20,9 +20,16 @@ const CONFIDENCE_META: Record<
 interface LieferungChipProps {
   group: DeliveryGroupRef | null | undefined;
   size?: 'small' | 'medium';
+  /**
+   * Frage 8: dezenter, je Gruppe konsistenter Farbton (Punkt vor dem Text), damit in
+   * der Tabelle sichtbar ist, WELCHE Zeilen zusammengehören. Die Chip-Farbe selbst
+   * bleibt die Vertrauensstufe (grün/gelb/orange/Schloss) — der Punkt ist ein
+   * zusätzlicher Kanal, kein Ersatz.
+   */
+  identityColor?: string;
 }
 
-export function LieferungChip({ group, size = 'small' }: LieferungChipProps) {
+export function LieferungChip({ group, size = 'small', identityColor }: LieferungChipProps) {
   if (!group || group.presentSize < 2) return null;
   const meta = CONFIDENCE_META[group.confidence];
   const completeness =
@@ -30,14 +37,33 @@ export function LieferungChip({ group, size = 'small' }: LieferungChipProps) {
       ? ` · ${group.presentSize} von ${group.expectedSize}`
       : '';
   const missing = group.missingCount > 0 ? ` · ${group.missingCount} fehlt` : '';
-  const label = `${meta.dot} Lieferung ×${group.presentSize}${completeness}${missing}`;
+  const label = `${meta.dot} Lieferung ×${group.presentSize}${completeness}${missing} · ${group.label}`;
   return (
-    <Tooltip title={`Zusammengehörige Lieferung — ${meta.text}`}>
+    <Tooltip title={`Zusammengehörige Lieferung ${group.label} — ${meta.text}`}>
       <Chip
         size={size}
         color={meta.color}
         variant="outlined"
-        label={label}
+        label={
+          identityColor ? (
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+              <Box
+                component="span"
+                aria-hidden
+                sx={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  bgcolor: identityColor,
+                  flexShrink: 0,
+                }}
+              />
+              {label}
+            </Box>
+          ) : (
+            label
+          )
+        }
         icon={group.locked ? <LockIcon fontSize="inherit" /> : undefined}
       />
     </Tooltip>

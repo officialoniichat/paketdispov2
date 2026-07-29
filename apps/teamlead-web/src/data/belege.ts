@@ -38,6 +38,7 @@ import {
 } from './narrow.js';
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
+type DeliveryGroupRefDto = components['schemas']['DeliveryGroupRefDto'];
 type CaseLookupResultDto = components['schemas']['CaseLookupResultDto'];
 type CaseSearchResultDto = components['schemas']['CaseSearchResultDto'];
 type PoolListDto = components['schemas']['PoolListDto'];
@@ -467,18 +468,7 @@ export async function lookupBeleg(weBelegNo: string): Promise<BelegLookup> {
     assignedEmployeeName: dto.assignedEmployeeName ?? null,
     assignable: dto.assignable,
     reasonCode: dto.reasonCode ?? null,
-    deliveryGroup: dto.deliveryGroup
-      ? {
-          id: dto.deliveryGroup.id,
-          signal: dto.deliveryGroup.signal,
-          confidence: dto.deliveryGroup.confidence,
-          presentSize: dto.deliveryGroup.presentSize,
-          expectedSize: dto.deliveryGroup.expectedSize ?? null,
-          missingCount: dto.deliveryGroup.missingCount,
-          locked: dto.deliveryGroup.locked,
-          released: dto.deliveryGroup.released,
-        }
-      : null,
+    deliveryGroup: dto.deliveryGroup ? toDeliveryGroupRef(dto.deliveryGroup) : null,
   };
 }
 
@@ -534,18 +524,7 @@ function toSearchResult(item: CaseSearchResultDto): CaseSearchResult {
     estimatedMinutes: item.estimatedMinutes,
     storageLocationCode: item.storageLocationCode ?? null,
     priorityFlags: toPriorityFlags(item.priorityFlags),
-    deliveryGroup: item.deliveryGroup
-      ? {
-          id: item.deliveryGroup.id,
-          signal: item.deliveryGroup.signal,
-          confidence: item.deliveryGroup.confidence,
-          presentSize: item.deliveryGroup.presentSize,
-          expectedSize: item.deliveryGroup.expectedSize ?? null,
-          missingCount: item.deliveryGroup.missingCount,
-          locked: item.deliveryGroup.locked,
-          released: item.deliveryGroup.released,
-        }
-      : null,
+    deliveryGroup: item.deliveryGroup ? toDeliveryGroupRef(item.deliveryGroup) : null,
   };
 }
 
@@ -662,18 +641,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     missingFields: item.missingFields,
     bereich: item.bereich ?? null,
     forwardedTo: item.forwardedTo ?? null,
-    deliveryGroup: item.deliveryGroup
-      ? {
-          id: item.deliveryGroup.id,
-          signal: item.deliveryGroup.signal,
-          confidence: item.deliveryGroup.confidence,
-          presentSize: item.deliveryGroup.presentSize,
-          expectedSize: item.deliveryGroup.expectedSize ?? null,
-          missingCount: item.deliveryGroup.missingCount,
-          locked: item.deliveryGroup.locked,
-          released: item.deliveryGroup.released,
-        }
-      : null,
+    deliveryGroup: item.deliveryGroup ? toDeliveryGroupRef(item.deliveryGroup) : null,
     bundleQueue: item.bundleQueue
       ? {
           bundleId: item.bundleQueue.bundleId,
@@ -726,14 +694,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     history: dto.history.map(toBelegHistoryEntry),
     deliveryGroup: dto.deliveryGroup
       ? {
-          id: dto.deliveryGroup.id,
-          signal: dto.deliveryGroup.signal,
-          confidence: dto.deliveryGroup.confidence,
-          presentSize: dto.deliveryGroup.presentSize,
-          expectedSize: dto.deliveryGroup.expectedSize ?? null,
-          missingCount: dto.deliveryGroup.missingCount,
-          locked: dto.deliveryGroup.locked,
-          released: dto.deliveryGroup.released,
+          ...toDeliveryGroupRef(dto.deliveryGroup),
           members: dto.deliveryGroup.members.map((m) => ({
             caseId: m.caseId,
             weBelegNo: m.weBelegNo,
@@ -743,6 +704,24 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
           })),
         }
       : null,
+  };
+}
+
+/**
+ * DTO→View-Projektion des „Lieferung ×n"-Refs — eine Kopie für Zeile, Lookup,
+ * Suche und Detail, damit die Kennung (`label`, Frage 8) überall identisch ankommt.
+ */
+function toDeliveryGroupRef(dto: DeliveryGroupRefDto): DeliveryGroupRef {
+  return {
+    id: dto.id,
+    label: dto.label,
+    signal: dto.signal,
+    confidence: dto.confidence,
+    presentSize: dto.presentSize,
+    expectedSize: dto.expectedSize ?? null,
+    missingCount: dto.missingCount,
+    locked: dto.locked,
+    released: dto.released,
   };
 }
 

@@ -116,6 +116,23 @@ interface BelegeSavedView {
 
 const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
 
+/**
+ * Frage 8: dezente Kennfarben für den Gruppen-Punkt im Lieferungs-Chip. Je Lieferung
+ * EIN konsistenter Ton innerhalb der aktuellen Tabellen-Seite (Reihenfolge des ersten
+ * Auftretens), damit zusammengehörige Zeilen auf einen Blick erkennbar sind. Bewusst
+ * getrennt von den Vertrauensstufen-Farben des Chips (grün/gelb/orange/Schloss).
+ */
+const GROUP_IDENTITY_COLORS = [
+  '#7e57c2', // deepPurple 400
+  '#26a69a', // teal 400
+  '#ef6c00', // orange 800
+  '#5c6bc0', // indigo 400
+  '#8d6e63', // brown 400
+  '#d81b60', // pink 600
+  '#558b2f', // lightGreen 800
+  '#0288d1', // lightBlue 700
+];
+
 export function BelegListPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -268,6 +285,19 @@ export function BelegListPage(): JSX.Element {
     URL.revokeObjectURL(url);
   };
 
+  // Frage 8: Gruppen-Id → Kennfarbe für die aktuell sichtbare Seite (stabil in
+  // Zeilenreihenfolge). Reine Darstellung — die Gruppen-Identität kommt vom Server.
+  const groupColorById = useMemo(() => {
+    const colors = new Map<string, string>();
+    for (const r of rows) {
+      const g = r.deliveryGroup;
+      if (g && g.presentSize >= 2 && !colors.has(g.id)) {
+        colors.set(g.id, GROUP_IDENTITY_COLORS[colors.size % GROUP_IDENTITY_COLORS.length]!);
+      }
+    }
+    return colors;
+  }, [rows]);
+
   const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
     const defs: ColumnDef<BelegRow>[] = [
       { accessorKey: 'weBelegNo', header: 'WE-Beleg', id: 'weBelegNo' },
@@ -348,7 +378,15 @@ export function BelegListPage(): JSX.Element {
         id: 'lieferung',
         header: 'Lieferung',
         enableSorting: false,
-        cell: (ctx) => <LieferungChip group={ctx.row.original.deliveryGroup} />,
+        cell: (ctx) => {
+          const group = ctx.row.original.deliveryGroup;
+          return (
+            <LieferungChip
+              group={group}
+              identityColor={group ? groupColorById.get(group.id) : undefined}
+            />
+          );
+        },
       },
       {
         id: 'assignedTo',
@@ -486,7 +524,7 @@ export function BelegListPage(): JSX.Element {
     });
 
     return defs;
-  }, [scope, store, releaseIntakeMutation, unflagMutation]);
+  }, [scope, store, releaseIntakeMutation, unflagMutation, groupColorById]);
 
   const splitBeleg = useMemo<SplitDialogBeleg | null>(() => {
     const row = rows.find((r) => r.id === splitCaseId);

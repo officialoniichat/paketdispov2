@@ -84,6 +84,7 @@ describe('cardMatchesFilter', () => {
     const grouped = makeCard({
       deliveryGroup: {
         id: 'dg-1',
+        label: 'LS-25-1',
         signal: 'source',
         confidence: 'confirmed',
         presentSize: 3,

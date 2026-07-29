@@ -116,6 +116,8 @@ export interface Lane {
 /** Per-case Lieferung context (Teamlead-Punkt 1) shared by Board, Pool and Detail. */
 export interface DeliveryGroupRef {
   id: string;
+  /** Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE …". */
+  label: string;
   signal: 'source' | 'note' | 'run' | 'manual' | 'mixed';
   confidence: 'confirmed' | 'likely' | 'suspected' | 'locked';
   presentSize: number;
