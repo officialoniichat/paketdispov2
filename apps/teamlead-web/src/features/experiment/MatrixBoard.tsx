@@ -10,8 +10,15 @@
  * des Parents, nie direkt.
  */
 import { useState, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import Popover from '@mui/material/Popover';
+import Stack from '@mui/material/Stack';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { alpha } from '@mui/material/styles';
 import { useCockpitData } from '../../data/store.js';
 import type { BoardCase, BoardRow } from '../../data/types.js';
@@ -19,10 +26,15 @@ import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { DragDots } from '../board/KanbanBoard.js';
 import { tierLabel } from '../../components/TierChip.js';
 import {
+  lieferungHinweis,
+  lieferungSatz,
+  splitLieferungWarnung,
+} from '../../components/LieferungChip.js';
+import {
   matrixDropAction,
   type ExperimentDragPayload,
 } from './experimentDnd.js';
-import { derivePacks, stripStyle } from './matrixPacks.js';
+import { STRIP_LEGEND, derivePacks, stripStyle } from './matrixPacks.js';
 
 export interface MatrixBoardProps {
   board: BoardRow[];
@@ -245,80 +257,182 @@ interface CaseStripProps {
   onDragEnd: () => void;
 }
 
-/** Dünner Beleg-Strich: Statusfarbe überschreibt die Gruppenfarbe (Punkt hält sie sichtbar). */
+/**
+ * Dünner Beleg-Strich: Statusfarbe überschreibt die Gruppenfarbe (Punkt hält
+ * sie sichtbar); Klick öffnet die Belegdetails; bei Gruppen-Belegen nennt eine
+ * Extra-Zeile die Zugehörigkeit im Wortlaut des Mitarbeiterboards.
+ */
 function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProps): JSX.Element {
+  const navigate = useNavigate();
   const style = stripStyle(c.status);
   const color = style?.color ?? groupColor;
   // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen verschieden.
   const itemBundleId = c.bundleId ?? row.bundleId;
   const draggable = c.status === 'assigned' && itemBundleId != null;
+  const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
+  const statusTitle = style ? `${c.weBelegNo} — ${style.statusLabel}` : c.weBelegNo;
   return (
     <Box
-      title={style ? `${c.weBelegNo} — ${style.statusLabel}` : c.weBelegNo}
+      title={group ? `${statusTitle} · ${lieferungHinweis(group)}` : statusTitle}
+      onClick={() => navigate(`/belege/${c.caseId}`)}
       sx={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
+        flexDirection: 'column',
         px: 0.5,
-        minHeight: 20,
+        py: 0.25,
         borderRadius: 0.5,
         borderLeft: '3px solid',
         borderLeftColor: color ?? 'divider',
         bgcolor: color ? alpha(color, 0.1) : 'action.hover',
+        cursor: 'pointer',
       }}
     >
-      {draggable && (
-        <Box
-          role="button"
-          aria-label={`${c.weBelegNo} aus Bündel ziehen`}
-          draggable
-          onClick={(e) => e.stopPropagation()}
-          onDragStart={(e) => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', c.weBelegNo);
-            if (typeof e.dataTransfer.setDragImage === 'function') {
-              e.dataTransfer.setDragImage(e.currentTarget, 12, 10);
-            }
-            onDragStart({
-              source: 'matrix',
-              caseId: c.caseId,
-              weBelegNo: c.weBelegNo,
-              status: c.status,
-              bundleId: itemBundleId ?? '',
-              employeeId: row.employeeId,
-              employeeName: row.displayName,
-            });
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
+        {draggable && (
+          <Box
+            role="button"
+            aria-label={`${c.weBelegNo} aus Bündel ziehen`}
+            draggable
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', c.weBelegNo);
+              if (typeof e.dataTransfer.setDragImage === 'function') {
+                e.dataTransfer.setDragImage(e.currentTarget, 12, 10);
+              }
+              onDragStart({
+                source: 'matrix',
+                caseId: c.caseId,
+                weBelegNo: c.weBelegNo,
+                status: c.status,
+                bundleId: itemBundleId ?? '',
+                employeeId: row.employeeId,
+                employeeName: row.displayName,
+              });
+            }}
+            onDragEnd={onDragEnd}
+            sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+          >
+            <DragDots />
+          </Box>
+        )}
+        <Typography
+          sx={{
+            fontSize: '0.66rem',
+            fontWeight: 600,
+            color: style?.color,
+            textDecoration: style?.strike ? 'line-through' : 'none',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
-          onDragEnd={onDragEnd}
-          sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
         >
-          <DragDots />
-        </Box>
+          {c.weBelegNo}
+        </Typography>
+        {style && groupColor && (
+          // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
+          // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
+          <Box
+            aria-hidden
+            sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: groupColor, flexShrink: 0 }}
+          />
+        )}
+        <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}>
+          {c.totalQuantity} Teile
+        </Typography>
+      </Box>
+      {group && (
+        <Typography
+          sx={{
+            fontSize: '0.56rem',
+            color: 'text.secondary',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {lieferungSatz(group)}
+        </Typography>
       )}
-      <Typography
-        sx={{
-          fontSize: '0.66rem',
-          fontWeight: 600,
-          color: style?.color,
-          textDecoration: style?.strike ? 'line-through' : 'none',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {c.weBelegNo}
-      </Typography>
-      {style && groupColor && (
-        // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
-        // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
-        <Box
-          aria-hidden
-          sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: groupColor, flexShrink: 0 }}
-        />
-      )}
-      <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}>
-        {c.totalQuantity} Teile
-      </Typography>
     </Box>
+  );
+}
+
+/**
+ * Info-Kreis der Matrix (Fenster-Kopfleiste oben rechts): Farb-Legende, Gesten
+ * und — wie im Mitarbeiterboard, gleicher Wortlaut — die Warnung, wenn eine
+ * zusammengehörige Lieferung auf mehrere Mitarbeiter verteilt ist.
+ */
+export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const employeesByGroup = new Map<string, Set<string>>();
+  for (const row of board) {
+    for (const c of row.cases) {
+      const id = c.deliveryGroup?.id;
+      if (!id) continue;
+      const set = employeesByGroup.get(id) ?? new Set<string>();
+      set.add(row.employeeId);
+      employeesByGroup.set(id, set);
+    }
+  }
+  const splitCount = [...employeesByGroup.values()].filter((s) => s.size > 1).length;
+  const warnung = splitLieferungWarnung(splitCount);
+  return (
+    <>
+      <Tooltip title="Legende & Gesten">
+        <IconButton
+          size="small"
+          aria-label="Matrix-Infos anzeigen"
+          onClick={(e) => setAnchor(e.currentTarget)}
+          sx={{ p: 0.25 }}
+        >
+          <Badge color="warning" variant="dot" invisible={warnung === null}>
+            <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+          </Badge>
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={anchor !== null}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Stack spacing={0.75} sx={{ p: 1.5, maxWidth: 360 }}>
+          {warnung !== null && (
+            <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 700 }}>
+              {warnung}
+            </Typography>
+          )}
+          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+            Farben der Beleg-Striche
+          </Typography>
+          {STRIP_LEGEND.map((l) => (
+            <Stack key={l.text} direction="row" spacing={0.75} alignItems="center">
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: l.color, flexShrink: 0 }} />
+              <Typography
+                variant="caption"
+                sx={{ textDecoration: l.strike ? 'line-through' : 'none' }}
+              >
+                {l.text}
+              </Typography>
+            </Stack>
+          ))}
+          <Typography variant="caption">
+            Geplante Belege tragen die Kennfarbe ihrer Lieferung; überdeckt eine Statusfarbe sie,
+            bleibt die Lieferung als kleiner Farbpunkt sichtbar — die Zeile unter dem Strich nennt
+            die Zugehörigkeit im Wortlaut des Mitarbeiterboards.
+          </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+            Gesten
+          </Typography>
+          <Typography variant="caption">
+            Ablage → Zeile: zuweisen · Beleg-Strich → andere Zeile: verschieben · Beleg-Strich →
+            Ablagen/rote Zone: entziehen · Klick auf einen Strich: Belegdetails · Fenster-Grenzen
+            ziehen — über den Anschlag hinaus wechselt die Anordnung.
+          </Typography>
+        </Stack>
+      </Popover>
+    </>
   );
 }

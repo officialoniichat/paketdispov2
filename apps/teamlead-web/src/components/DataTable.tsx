@@ -58,6 +58,11 @@ export interface DataTableProps<T> {
    * identisch mit der `data`-Reihenfolge.
    */
   getRowSx?: (row: T, index: number) => RowSx | undefined;
+  /**
+   * Kompakte Dichte (Beleg-Liste): engere Zellen, kleinere Schrift, 20px-Chips —
+   * damit alle Spalten ohne Horizontal-Scroll auf den Screen passen.
+   */
+  dense?: boolean;
 }
 
 export function DataTable<T>({
@@ -74,6 +79,7 @@ export function DataTable<T>({
   rowHeight = 44,
   serverMode = false,
   getRowSx,
+  dense = false,
 }: DataTableProps<T>): JSX.Element {
   const table = useReactTable({
     data,
@@ -119,13 +125,24 @@ export function DataTable<T>({
   return (
     <Box
       ref={scrollRef}
-      sx={{
-        maxHeight,
-        overflow: maxHeight ? 'auto' : 'visible',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-      }}
+      sx={[
+        {
+          maxHeight,
+          overflow: maxHeight ? 'auto' : 'visible',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+        },
+        dense && {
+          '& .MuiTableCell-root': { px: 0.75, py: 0.25, fontSize: '0.74rem' },
+          '& .MuiTableCell-head': { py: 0.5, fontSize: '0.72rem' },
+          '& .MuiChip-root': { height: 20, fontSize: '0.68rem' },
+          '& .MuiChip-label': { px: 0.75 },
+          // Aktionen-Zelle: Kebab/Buttons dürfen die Zeile nicht aufblähen.
+          '& .MuiIconButton-root': { p: 0.25 },
+          '& .MuiButton-root': { py: 0, minHeight: 24, fontSize: '0.68rem' },
+        },
+      ]}
     >
       <Table size="small" stickyHeader={maxHeight != null}>
         <TableHead>

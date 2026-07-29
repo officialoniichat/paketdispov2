@@ -4,11 +4,15 @@
  * unberührt: die Beleg-Liste wird unverändert eingebettet, Ablagen und Matrix
  * sind Experiment-eigene Ansichten über denselben Daten (useCockpitData).
  *
- * Aufteilung (Default): unten 1/2 Matrix, oben links 1/4 Belege, oben rechts
- * 1/4 Ablagen. Beide Splitter sind ziehbar (persistiert unter
- * `paket.view.experiment`), jedes Fenster hat einen Vollbild-Umschalter.
- * Drag-&-Drop-Gesten aller Fenster münden im hiesigen §8.4-ReasonDialog bzw.
- * ForwardDialog; der Drag-Zustand lebt screen-global (KanbanBoard-Muster).
+ * Layout: randlos bis an die Fenster-Kanten (AppShell rendert /experiment ohne
+ * Container). Drei Anordnungen — Matrix unten/rechts/links, s.
+ * experimentLayout.ts; ein Drag über den Anschlag hinaus baut die Anordnung um
+ * (z. B. Belege-Unterkante ganz nach unten → Belege volle Höhe, Matrix rückt
+ * nach rechts). Die drei Fenster sind IMMER dieselben Baum-Geschwister; Umbau
+ * und Vollbild sind reines CSS — ein Remount würde Seitenzahl, Filter-Entwürfe
+ * und Scroll-Positionen der eingebetteten Fenster verwerfen. Drag-&-Drop-Gesten
+ * aller Fenster münden im hiesigen §8.4-ReasonDialog bzw. ForwardDialog; der
+ * Drag-Zustand lebt screen-global (KanbanBoard-Muster).
  */
 import {
   useMemo,
@@ -42,38 +46,19 @@ import {
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { BelegListPage } from '../belege/BelegListPage.js';
 import { AblagenPane, WithdrawZone, buildWithdrawAction } from './AblagenPane.js';
-import { MatrixBoard } from './MatrixBoard.js';
+import { MatrixBoard, MatrixInfo } from './MatrixBoard.js';
 import { canWithdraw, type ExperimentDragPayload } from './experimentDnd.js';
-
-type PaneId = 'belege' | 'ablagen' | 'matrix';
-
-/** Persistierte Splitter-Verhältnisse (Prozent der Workspace-Fläche). */
-interface ExperimentSplit {
-  /** Höhe der oberen Fensterzeile. */
-  topPct: number;
-  /** Breite des linken oberen Fensters (Belege). */
-  leftPct: number;
-}
-
-const DEFAULT_SPLIT: ExperimentSplit = { topPct: 50, leftPct: 50 };
-
-function clampPct(value: number): number {
-  return Math.min(80, Math.max(20, value));
-}
-
-/** Korrupte/alte localStorage-Blobs defensiv auf gültige Werte zurückführen. */
-function sanitizeSplit(raw: Partial<ExperimentSplit> | null | undefined): ExperimentSplit {
-  return {
-    topPct:
-      typeof raw?.topPct === 'number' && Number.isFinite(raw.topPct)
-        ? clampPct(raw.topPct)
-        : DEFAULT_SPLIT.topPct,
-    leftPct:
-      typeof raw?.leftPct === 'number' && Number.isFinite(raw.leftPct)
-        ? clampPct(raw.leftPct)
-        : DEFAULT_SPLIT.leftPct,
-  };
-}
+import {
+  DEFAULT_SPLIT,
+  applySegDrag,
+  paneRects,
+  sanitizeSplit,
+  splitterSegs,
+  type ExperimentSplit,
+  type PaneId,
+  type PaneRect,
+  type SplitterSeg,
+} from './experimentLayout.js';
 
 export function ExperimentPage(): JSX.Element {
   const { board, lanes, forwardCase, withdraw, assignToEmployee, moveCase } = useCockpitData();
@@ -85,6 +70,9 @@ export function ExperimentPage(): JSX.Element {
     sanitizeSplit(loadViewState<Partial<ExperimentSplit>>(EXPERIMENT_VIEW_KEY, DEFAULT_SPLIT)),
   );
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  // Frische Split-Sicht für die window-Listener (pointermove läuft außerhalb des React-Zyklus).
+  const splitRef = useRef(split);
+  splitRef.current = split;
 
   // Erste fehlgeschlagene DnD-Mutation treibt die Fehler-Snackbar (Board-Muster).
   const failed = [withdraw, assignToEmployee, moveCase].find((m) => m.isError);
@@ -108,32 +96,42 @@ export function ExperimentPage(): JSX.Element {
     [board, lanes],
   );
 
-  const startSplitDrag =
-    (kind: 'top' | 'left') =>
+  const startSegDrag =
+    (segId: SplitterSeg['id'], axis: SplitterSeg['axis']) =>
     (e: ReactPointerEvent): void => {
       // Nur Primärtaste/-pointer: ein Rechtsklick öffnet das Kontextmenü und
       // verschluckt das pointerup — die Listener blieben sonst hängen.
       if (e.button !== 0 || !e.isPrimary) return;
       e.preventDefault();
+      const start = splitRef.current;
+      let last = start;
+      const cleanup = (): void => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+      };
       const onMove = (ev: PointerEvent): void => {
         // Rect je Bewegung frisch lesen: bei Scroll/Resize während des Drags
         // wäre ein beim pointerdown eingefrorenes Rect versetzt.
         const rect = workspaceRef.current?.getBoundingClientRect();
         if (rect === undefined) return;
-        setSplit((s) =>
-          kind === 'top'
-            ? { ...s, topPct: clampPct(((ev.clientY - rect.top) / rect.height) * 100) }
-            : { ...s, leftPct: clampPct(((ev.clientX - rect.left) / rect.width) * 100) },
-        );
+        const raw =
+          axis === 'y'
+            ? ((ev.clientY - rect.top) / rect.height) * 100
+            : ((ev.clientX - rect.left) / rect.width) * 100;
+        const next = applySegDrag(last, segId, raw, start);
+        const restructured = next.matrixPos !== last.matrixPos;
+        last = next;
+        setSplit(next);
+        if (restructured) {
+          // Umbau: das gezogene Segment existiert in der neuen Anordnung nicht mehr.
+          cleanup();
+          saveViewState(EXPERIMENT_VIEW_KEY, next);
+        }
       };
       const onUp = (): void => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onUp);
-        setSplit((s) => {
-          saveViewState(EXPERIMENT_VIEW_KEY, s);
-          return s;
-        });
+        cleanup();
+        saveViewState(EXPERIMENT_VIEW_KEY, last);
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
@@ -176,6 +174,7 @@ export function ExperimentPage(): JSX.Element {
       title="Mitarbeiter-Matrix"
       focused={focus === 'matrix'}
       onToggleFullscreen={() => toggleFocus('matrix')}
+      actions={<MatrixInfo board={board} />}
     >
       <MatrixBoard
         board={board}
@@ -188,62 +187,22 @@ export function ExperimentPage(): JSX.Element {
     </Pane>
   );
 
-  return (
-    <Stack spacing={1} sx={{ height: 'calc(100vh - 140px)', minHeight: 480 }}>
-      <Stack direction="row" alignItems="baseline" spacing={1.5} flexWrap="wrap" useFlexGap>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>
-          Experiment DA.M.B
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Ziehen zwischen den Fenstern: Ablage ⇄ Ablage · Ablage → Mitarbeiter (zuweisen) · Beleg →
-          anderer Mitarbeiter (verschieben) · Beleg → Ablagen (entziehen)
-        </Typography>
-      </Stack>
+  const rects = paneRects(split);
 
-      <Box
-        ref={workspaceRef}
-        sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}
-      >
-        {/* Vollbild ist REINES CSS (absolut/none) an stabilen Baumpositionen —
-            ein Remount würde Seitenzahl, Filter-Entwürfe und Scroll-Positionen
-            der eingebetteten Fenster verwerfen. */}
-        <Box
-          sx={
-            focus === 'matrix'
-              ? { display: 'none' }
-              : { height: `${split.topPct}%`, minHeight: 120, display: 'flex', minWidth: 0 }
-          }
-        >
-          <Box
-            sx={paneSlotSx(focus, 'belege', {
-              width: `${split.leftPct}%`,
-              minWidth: 180,
-              minHeight: 0,
-              display: 'flex',
-            })}
-          >
-            {belegePane}
-          </Box>
-          {focus === null && (
-            <Splitter orientation="vertical" onPointerDown={startSplitDrag('left')} />
-          )}
-          <Box
-            sx={paneSlotSx(focus, 'ablagen', {
-              flex: 1,
-              minWidth: 180,
-              minHeight: 0,
-              display: 'flex',
-            })}
-          >
-            {ablagenPane}
-          </Box>
-        </Box>
-        {focus === null && (
-          <Splitter orientation="horizontal" onPointerDown={startSplitDrag('top')} />
-        )}
-        <Box sx={paneSlotSx(focus, 'matrix', { flex: 1, minHeight: 120, display: 'flex' })}>
-          {matrixPane}
-        </Box>
+  return (
+    <Stack sx={{ flex: 1, minHeight: 0 }}>
+      <Box ref={workspaceRef} sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <Box sx={paneSlotSx(focus, 'belege', rects.belege)}>{belegePane}</Box>
+        <Box sx={paneSlotSx(focus, 'ablagen', rects.ablagen)}>{ablagenPane}</Box>
+        <Box sx={paneSlotSx(focus, 'matrix', rects.matrix)}>{matrixPane}</Box>
+        {focus === null &&
+          splitterSegs(split).map((seg) => (
+            <SplitterBar
+              key={seg.id}
+              seg={seg}
+              onPointerDown={startSegDrag(seg.id, seg.axis)}
+            />
+          ))}
         {/* Im Matrix-Vollbild sind die Ablagen versteckt — die Entziehen-Zone
             muss trotzdem erreichbar bleiben (gleicher Dialog, gleiche Gründe). */}
         {focus === 'matrix' && canWithdraw(dragging) && (
@@ -288,13 +247,22 @@ export function ExperimentPage(): JSX.Element {
   );
 }
 
-/** Slot-Styles eines Fensters: Normal-Layout, Vollbild (absolut im Workspace) oder versteckt. */
-function paneSlotSx(
-  focus: PaneId | null,
-  id: PaneId,
-  base: SxProps<Theme>,
-): SxProps<Theme> {
-  if (focus === null) return base;
+/**
+ * Slot-Styles eines Fensters: absolutes Prozent-Rechteck (Normal-Layout),
+ * Vollbild (inset 0) oder versteckt — alles an stabilen Baumpositionen.
+ */
+function paneSlotSx(focus: PaneId | null, id: PaneId, rect: PaneRect): SxProps<Theme> {
+  if (focus === null)
+    return {
+      position: 'absolute',
+      top: `${rect.top}%`,
+      left: `${rect.left}%`,
+      width: `${rect.width}%`,
+      height: `${rect.height}%`,
+      display: 'flex',
+      minWidth: 0,
+      minHeight: 0,
+    };
   if (focus === id) return { position: 'absolute', inset: 0, display: 'flex', zIndex: 1 };
   return { display: 'none' };
 }
@@ -303,11 +271,13 @@ interface PaneProps {
   title: string;
   focused: boolean;
   onToggleFullscreen: () => void;
+  /** Zusätzliche Kopfleisten-Aktionen (z. B. der Info-Kreis der Matrix). */
+  actions?: ReactNode;
   children: ReactNode;
 }
 
-/** Fenster-Rahmen: Titelleiste mit Vollbild-Umschalter, Inhalt füllt den Rest. */
-function Pane({ title, focused, onToggleFullscreen, children }: PaneProps): JSX.Element {
+/** Fenster-Rahmen: Titelleiste mit Aktionen + Vollbild-Umschalter, Inhalt füllt den Rest. */
+function Pane({ title, focused, onToggleFullscreen, actions, children }: PaneProps): JSX.Element {
   return (
     <Paper
       variant="outlined"
@@ -318,6 +288,7 @@ function Pane({ title, focused, onToggleFullscreen, children }: PaneProps): JSX.
         minWidth: 0,
         minHeight: 0,
         overflow: 'hidden',
+        borderRadius: 0,
       }}
     >
       <Box
@@ -333,47 +304,68 @@ function Pane({ title, focused, onToggleFullscreen, children }: PaneProps): JSX.
         }}
       >
         <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{title}</Typography>
-        <IconButton
-          size="small"
-          aria-label={focused ? `${title}: Vollbild verlassen` : `${title}: Vollbild`}
-          onClick={onToggleFullscreen}
-          sx={{ ml: 'auto', p: 0.25 }}
-        >
-          {focused ? (
-            <FullscreenExitIcon sx={{ fontSize: 16 }} />
-          ) : (
-            <FullscreenIcon sx={{ fontSize: 16 }} />
-          )}
-        </IconButton>
+        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+          {actions}
+          <IconButton
+            size="small"
+            aria-label={focused ? `${title}: Vollbild verlassen` : `${title}: Vollbild`}
+            onClick={onToggleFullscreen}
+            sx={{ p: 0.25 }}
+          >
+            {focused ? (
+              <FullscreenExitIcon sx={{ fontSize: 16 }} />
+            ) : (
+              <FullscreenIcon sx={{ fontSize: 16 }} />
+            )}
+          </IconButton>
+        </Box>
       </Box>
       <Box sx={{ flex: 1, minHeight: 0 }}>{children}</Box>
     </Paper>
   );
 }
 
-interface SplitterProps {
-  orientation: 'vertical' | 'horizontal';
+interface SplitterBarProps {
+  seg: SplitterSeg;
   onPointerDown: (e: ReactPointerEvent) => void;
 }
 
-/** Schieberegler zwischen zwei Fenstern (Pointer-Drag, ohne Zusatz-Dependency). */
-function Splitter({ orientation, onPointerDown }: SplitterProps): JSX.Element {
-  const vertical = orientation === 'vertical';
+/**
+ * Schieberegler auf einer Fenster-Grenze (Pointer-Drag, ohne Zusatz-Dependency).
+ * Liegt als 8px-Griff mittig über der Naht; ein Zug über den Anschlag hinaus
+ * wechselt die Anordnung (Tooltip nennt die Geste).
+ */
+function SplitterBar({ seg, onPointerDown }: SplitterBarProps): JSX.Element {
+  const horizontal = seg.axis === 'y';
   return (
     <Box
       role="separator"
-      aria-orientation={vertical ? 'vertical' : 'horizontal'}
-      aria-label={vertical ? 'Fensterbreite anpassen' : 'Fensterhöhe anpassen'}
+      aria-orientation={horizontal ? 'horizontal' : 'vertical'}
+      aria-label={seg.label}
+      title={seg.hint ?? seg.label}
       onPointerDown={onPointerDown}
       sx={{
-        flexShrink: 0,
-        width: vertical ? 8 : 'auto',
-        height: vertical ? 'auto' : 8,
-        cursor: vertical ? 'col-resize' : 'row-resize',
+        position: 'absolute',
+        zIndex: 2,
+        touchAction: 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        touchAction: 'none',
+        ...(horizontal
+          ? {
+              top: `calc(${seg.at}% - 4px)`,
+              left: `${seg.from}%`,
+              width: `${seg.to - seg.from}%`,
+              height: 8,
+              cursor: 'row-resize',
+            }
+          : {
+              left: `calc(${seg.at}% - 4px)`,
+              top: `${seg.from}%`,
+              height: `${seg.to - seg.from}%`,
+              width: 8,
+              cursor: 'col-resize',
+            }),
         '&:hover > .balken': { bgcolor: 'primary.main' },
       }}
     >
@@ -382,8 +374,8 @@ function Splitter({ orientation, onPointerDown }: SplitterProps): JSX.Element {
         sx={{
           bgcolor: 'divider',
           borderRadius: 1,
-          width: vertical ? 3 : 36,
-          height: vertical ? 36 : 3,
+          width: horizontal ? 36 : 3,
+          height: horizontal ? 3 : 36,
         }}
       />
     </Box>

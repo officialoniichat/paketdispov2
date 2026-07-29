@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LieferungChip } from '../../components/LieferungChip';
+import { LieferungChip, splitLieferungWarnung } from '../../components/LieferungChip';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -149,9 +149,7 @@ export function MitarbeiterBoard(): JSX.Element {
       </Stack>
       {splitGroupCount > 0 && (
         <Alert severity="warning" variant="outlined">
-          {splitGroupCount === 1
-            ? '1 zusammengehörige Lieferung ist auf mehrere Mitarbeiter verteilt — bitte zusammen einem Mitarbeiter zuweisen.'
-            : `${splitGroupCount} zusammengehörige Lieferungen sind auf mehrere Mitarbeiter verteilt — bitte jeweils einem Mitarbeiter zuweisen.`}
+          {splitLieferungWarnung(splitGroupCount)}
         </Alert>
       )}
       {viewState.view === 'raster' ? (

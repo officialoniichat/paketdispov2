@@ -23,7 +23,11 @@ const mocks = vi.hoisted(() => {
 });
 vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
 
-function bc(caseId: string, status: BoardCase['status']): BoardCase {
+function bc(
+  caseId: string,
+  status: BoardCase['status'],
+  deliveryGroup: BoardCase['deliveryGroup'] = null,
+): BoardCase {
   return {
     caseId,
     weBelegNo: `WE-${caseId}`,
@@ -32,9 +36,22 @@ function bc(caseId: string, status: BoardCase['status']): BoardCase {
     estimatedMinutes: 6,
     effortPoints: 5,
     storageCode: '',
-    deliveryGroup: null,
+    deliveryGroup,
   };
 }
+
+/** 2er-Lieferung (1 fehlt) — treibt die Zugehörigkeits-Zeile der Striche. */
+const GROUP: BoardCase['deliveryGroup'] = {
+  id: 'g1',
+  label: 'LS-77',
+  signal: 'note',
+  confidence: 'likely',
+  presentSize: 2,
+  expectedSize: 3,
+  missingCount: 1,
+  locked: false,
+  released: false,
+};
 
 function row(
   employeeId: string,
@@ -62,7 +79,7 @@ function row(
 }
 
 const BOARD: BoardRow[] = [
-  row('emp1', 'Anna Berger', [bc('k1', 'in_progress'), bc('k2', 'assigned')], [['k1', 'k2']]),
+  row('emp1', 'Anna Berger', [bc('k1', 'in_progress'), bc('k2', 'assigned', GROUP)], [['k1', 'k2']]),
   row('emp2', 'Bernd Voss', []),
 ];
 
@@ -120,6 +137,11 @@ describe('MatrixBoard', () => {
     expect(screen.getByText('Pack 1 · 2 Belege · 20 Teile')).toBeTruthy();
     expect(screen.getByText('WE-k1')).toBeTruthy();
     expect(screen.getByText(/Keine Belege — zum Zuweisen hierher ziehen/)).toBeTruthy();
+  });
+
+  it('nennt die Zugehörigkeit eines Gruppen-Belegs im Wortlaut des Boards', () => {
+    renderMatrix(null);
+    expect(screen.getByText('🟡 Lieferung ×2 · 2 von 3 · 1 fehlt · LS-77')).toBeTruthy();
   });
 
   it('Ablage-Drop auf eine Zeile fragt den Grund ab und ruft assignToEmployee', () => {

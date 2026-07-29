@@ -101,6 +101,21 @@ export interface StripStyle {
  * Arbeit, rot = Problem, grün + durchgestrichen = fertig. Geplante Belege
  * liefern null und erben die Lieferungs-Gruppenfarbe.
  */
+/** Einträge der Farb-Legende (Info-Kreis der Matrix) — aus stripStyle abgeleitet. */
+const LEGEND_STATUSES: ReadonlyArray<{ status: BoardCase['status']; text: string }> = [
+  { status: 'in_progress', text: 'in Arbeit — liegt immer oben' },
+  { status: 'issue_open', text: 'Problem offen' },
+  { status: 'problem_resolved', text: 'Problem geklärt' },
+  { status: 'completed', text: 'fertig / Tagesabschluss — durchgestrichen' },
+  { status: 'cancelled', text: 'storniert — durchgestrichen' },
+];
+
+export const STRIP_LEGEND: ReadonlyArray<{ color: string; strike: boolean; text: string }> =
+  LEGEND_STATUSES.map(({ status, text }) => {
+    const style = stripStyle(status);
+    return { color: style?.color ?? '#000', strike: style?.strike ?? false, text };
+  });
+
 export function stripStyle(status: BoardCase['status']): StripStyle | null {
   switch (status) {
     case 'in_progress':

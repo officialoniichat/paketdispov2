@@ -1,16 +1,15 @@
 /**
- * Teamlead cockpit shell: a persistent nav rail + top bar around the routed
- * surfaces (§10 Dashboard, §11 Admin). Denser than the Mitarbeiter-App but still
- * keyboard- and filter-friendly (Anhang E.6).
+ * Teamlead cockpit shell: a persistent, collapsible nav rail around the routed
+ * surfaces (§10 Dashboard, §11 Admin). Bewusst OHNE Top-Bar — die Fläche gehört
+ * den Inhalten; der Absprung zur Mitarbeiter-App ist ein Button in der Rail
+ * unter dem letzten Reiter. Die Experiment-Route rendert randlos bis an die
+ * Fenster-Kanten, alle übrigen Reiter behalten den gepolsterten Container.
  */
 import { Suspense, lazy, useState, type JSX } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import AppBar from '@mui/material/AppBar';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import IconButton from '@mui/material/IconButton';
-import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -29,10 +28,11 @@ import { devPanelRuntimeEnabled } from '../config/devPanel.js';
 import { NAV_VIEW_KEY, loadViewState, saveViewState } from '../lib/viewState.js';
 
 /**
- * Dev-Panel gate (A1/A3): global time-override badge in the app bar. The
- * build-time expression MUST stay inline (Vite define + Rollup dead-code
- * elimination strip the lazy chunk from production builds); see
- * src/config/devPanel.ts and the identical gate in features/admin/AdminPage.tsx.
+ * Dev-Panel gate (A1/A3): global time-override badge, seit dem Wegfall der
+ * Top-Bar als fixiertes Overlay oben rechts. The build-time expression MUST
+ * stay inline (Vite define + Rollup dead-code elimination strip the lazy chunk
+ * from production builds); see src/config/devPanel.ts and the identical gate in
+ * features/admin/AdminPage.tsx.
  */
 const DEV_PANEL_BUILT: boolean =
   import.meta.env.VITE_DEV_PANEL === '0'
@@ -80,6 +80,8 @@ export function AppShell(): JSX.Element {
       return !prev;
     });
   };
+  // Experiment DA.M.B will die volle Fläche: Fenster bis in die Bildschirm-Ecken.
+  const fullBleed = useLocation().pathname.startsWith('/experiment');
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -137,6 +139,35 @@ export function AppShell(): JSX.Element {
             </li>
           ))}
         </Box>
+        {/* Absprung zur Mitarbeiter-App: Button direkt unter „Experiment DA.M.B"
+            (ersetzt die frühere Top-Bar samt „Teamlead-Dashboard"-Titel). */}
+        <Box sx={{ px: collapsed ? 1 : 2, pt: 1.5 }}>
+          <Tooltip title={collapsed ? 'Zur Mitarbeiter-App' : ''} placement="right">
+            <Box
+              component="a"
+              href={EMPLOYEE_APP_URL}
+              aria-label="Zur Mitarbeiter-App"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                border: '1px solid rgba(255,255,255,0.45)',
+                borderRadius: 1,
+                color: '#fff',
+                textDecoration: 'none',
+                px: collapsed ? 0 : 1.25,
+                py: 0.75,
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+              }}
+            >
+              <PhoneAndroidIcon fontSize="small" />
+              {!collapsed && 'Zur Mitarbeiter-App'}
+            </Box>
+          </Tooltip>
+        </Box>
         <Box sx={{ mt: 'auto', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end', p: 1 }}>
           <IconButton
             onClick={toggleCollapsed}
@@ -149,37 +180,31 @@ export function AppShell(): JSX.Element {
         </Box>
       </Box>
 
-      <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <AppBar
-          position="sticky"
-          color="default"
-          elevation={0}
-          sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
-        >
-          <Toolbar variant="dense">
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Teamlead-Dashboard
-            </Typography>
-            {showDevBadge && DevTimeBadge !== null && (
-              <Suspense fallback={null}>
-                <DevTimeBadge />
-              </Suspense>
-            )}
-            <Button
-              component="a"
-              href={EMPLOYEE_APP_URL}
-              size="small"
-              variant="outlined"
-              startIcon={<PhoneAndroidIcon />}
-              sx={{ ml: 'auto' }}
+      <Box
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          ...(fullBleed ? { height: '100vh', overflow: 'hidden' } : {}),
+        }}
+      >
+        {showDevBadge && DevTimeBadge !== null && (
+          <Suspense fallback={null}>
+            <Box
+              sx={{ position: 'fixed', top: 8, right: 12, zIndex: (theme) => theme.zIndex.appBar }}
             >
-              Zur Mitarbeiter-App
-            </Button>
-          </Toolbar>
-        </AppBar>
-        <Container maxWidth={false} sx={{ py: 3, flexGrow: 1 }}>
+              <DevTimeBadge />
+            </Box>
+          </Suspense>
+        )}
+        {fullBleed ? (
           <Outlet />
-        </Container>
+        ) : (
+          <Container maxWidth={false} sx={{ py: 3, flexGrow: 1 }}>
+            <Outlet />
+          </Container>
+        )}
       </Box>
     </Box>
   );
