@@ -149,7 +149,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
 
     // Ausgangslage: nichts geholt — die Belege sind ausgegraut, aber ein weiteres
     // Bündel ließe sich jederzeit anfordern (kein „Erst Ware holen"-Sperrknopf mehr).
-    await expect(page.getByText(`0/${total} Plätze`)).toBeVisible();
+    await expect(page.getByText(`0/${total} Belege`)).toBeVisible();
     await expect(page.getByText(/Ausgegraute Belege erst holen/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Weiteres Bündel anfordern' })).toBeEnabled();
 
@@ -158,7 +158,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
       await expect(rows.nth(index).getByText('offen', { exact: true })).toBeVisible();
       await toggleStop(rows.nth(index));
       await expect(rows.nth(index).getByText('geholt', { exact: true })).toBeVisible();
-      await expect(page.getByText(`${index + 1}/${total} Plätze`)).toBeVisible();
+      await expect(page.getByText(`${index + 1}/${total} Belege`)).toBeVisible();
     }
 
     // Nach dem letzten Haken verschwindet der Hinweis …
@@ -215,18 +215,18 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     await loginAndWaitForHome(page, MA_101.employeeNo);
     const [mitEtiketten, ohneEtiketten] = belegNos(MA_101);
 
-    // Beide Belege liegen auf demselben Lagerplatz. Der Stop-Text wird an den
-    // WE-Nummern in die beiden Beleg-Einträge zerlegt, damit jede Info dem
-    // RICHTIGEN Beleg zugeordnet ist — nicht bloß „irgendwo am Stop".
-    const stopText = await stopRows(page).first().innerText();
-    const startMit = stopText.indexOf(`WE ${mitEtiketten}`);
-    const startOhne = stopText.indexOf(`WE ${ohneEtiketten}`);
-    expect(startMit, 'Beleg MIT Etikettendruck steht auf der Liste').toBeGreaterThanOrEqual(0);
-    expect(startOhne, 'Beleg OHNE Etikettendruck folgt (Engine-Reihenfolge)').toBeGreaterThan(
-      startMit,
+    // Einzelcontainer (Kundenwunsch 29.07.2026): beide Belege liegen auf
+    // demselben Lagerplatz, bekommen aber je einen EIGENEN Container in
+    // Bündel-Reihenfolge — jede Kopf-Info steht damit zwangsläufig am
+    // RICHTIGEN Beleg.
+    const eintragMit = await stopRows(page).nth(0).innerText();
+    const eintragOhne = await stopRows(page).nth(1).innerText();
+    expect(eintragMit, 'Beleg MIT Etikettendruck ist der erste Container').toContain(
+      `WE ${mitEtiketten}`,
     );
-    const eintragMit = stopText.slice(startMit, startOhne);
-    const eintragOhne = stopText.slice(startOhne);
+    expect(eintragOhne, 'Beleg OHNE Etikettendruck folgt (Engine-Reihenfolge)').toContain(
+      `WE ${ohneEtiketten}`,
+    );
 
     // Etiketten-Art wie in „2 · Bearbeiten": Druckpflicht vs. digital bleibt am
     // Stop unterscheidbar — Dustin sieht weiter, ob er zum Drucker muss (F5).
@@ -255,11 +255,13 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     page,
   }) => {
     await loginAndWaitForHome(page, MA_101.employeeNo);
-    const stop = stopRows(page).first();
+    const stops = stopRows(page);
     const [ersterBeleg] = belegNos(MA_101);
 
-    // Je Beleg des Stops ein Button (MA_101: zwei Belege auf einem Platz) …
-    await expect(stop.getByRole('button', { name: 'Barcode anzeigen' })).toHaveCount(2);
+    // Einzelcontainer: je Beleg genau EIN Container mit genau EINEM Button
+    // (MA_101: zwei Belege auf einem Platz → zwei Container).
+    await expect(stops.getByRole('button', { name: 'Barcode anzeigen' })).toHaveCount(2);
+    await expect(stops.first().getByRole('button', { name: 'Barcode anzeigen' })).toHaveCount(1);
     // … und auf den Beleg-Zeilen in „2 · Bearbeiten" KEINER mehr.
     for (const weBelegNo of belegNos(MA_101)) {
       await expect(
@@ -268,15 +270,15 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     }
 
     // Der Klick öffnet das Code-128-Pop-up des RICHTIGEN Belegs …
-    await stop.getByRole('button', { name: 'Barcode anzeigen' }).first().click();
+    await stops.first().getByRole('button', { name: 'Barcode anzeigen' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: `WE ${ersterBeleg}` })).toBeVisible();
     await expect(dialog.getByRole('img', { name: `Barcode ${ersterBeleg}` })).toBeVisible();
     await dialog.getByRole('button', { name: 'Schließen' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    // … und hakt den Stop dabei NICHT als „geholt" ab (stopPropagation).
-    await expect(stop.getByText('offen', { exact: true })).toBeVisible();
+    // … und hakt den Container dabei NICHT als „geholt" ab (stopPropagation).
+    await expect(stops.first().getByText('offen', { exact: true })).toBeVisible();
   });
 });
 

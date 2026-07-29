@@ -55,41 +55,41 @@ export interface CollectStopView extends RouteStopDto {
 }
 
 /**
- * Pick list for „Ware holen": one stop per Lagerplatz that actually carries
- * Belege of the bundle. Die Belege selbst sind die Wahrheit darüber, was geholt
- * werden muss — deshalb wird die Liste IMMER aus ihren `storageLocationCode`
- * gebaut. Die Engine-`routeStops` liefern nur Reihenfolge und Scan-Info, wo
- * vorhanden; fehlen sie (z. B. manuell zugewiesenes / nachgezogenes Bündel ohne
+ * Pick list für „1 · Ware holen": EIN Container je BELEG (Kundenwunsch
+ * 29.07.2026) — Belege werden einzeln geholt und abgehakt, auch wenn mehrere
+ * auf demselben Lagerplatz liegen (z. B. eine zusammengehörige Lieferung),
+ * denn bearbeitet wird ohnehin ein Beleg nach dem anderen. Die Reihenfolge
+ * bleibt die Engine-Route: Container folgen der `routeStops`-Sequenz ihres
+ * Lagerplatzes, innerhalb desselben Lagerplatzes der Bündel-Reihenfolge.
+ * Die Belege selbst sind die Wahrheit darüber, was geholt werden muss —
+ * fehlen `routeStops` (z. B. manuell zugewiesenes / nachgezogenes Bündel ohne
  * Routen-Neuberechnung), bleibt die Liste trotzdem vollständig statt „weirdly
- * leer" (Nachtrag 15.07.2026). Ein Lagerplatz ohne Beleg (alles geparkt) fällt
- * automatisch weg, weil er keine Gruppe bildet.
+ * leer" (Nachtrag 15.07.2026). `id` ist die Case-Id: eindeutig je Container
+ * und stabil über das Backend-Resequencing nach „Rest parken".
  */
 export function deriveStops(
   routeStops: RouteStopDto[],
   cases: CaseSummaryDto[],
 ): CollectStopView[] {
-  const caseIdsByLocation = new Map<string, string[]>();
+  const metaByLocation = new Map(routeStops.map((stop) => [stop.locationCode, stop]));
+  const entries: Array<{ c: CaseSummaryDto; loc: string; seq: number }> = [];
   for (const c of cases) {
     const loc = c.storageLocationCode;
     if (!loc) continue;
-    caseIdsByLocation.set(loc, [...(caseIdsByLocation.get(loc) ?? []), c.id]);
+    entries.push({ c, loc, seq: metaByLocation.get(loc)?.sequence ?? Number.MAX_SAFE_INTEGER });
   }
-  const metaByLocation = new Map(routeStops.map((stop) => [stop.locationCode, stop]));
-  return [...caseIdsByLocation.entries()]
-    .sort(([a], [b]) => {
-      const seqA = metaByLocation.get(a)?.sequence ?? Number.MAX_SAFE_INTEGER;
-      const seqB = metaByLocation.get(b)?.sequence ?? Number.MAX_SAFE_INTEGER;
-      return seqA - seqB || a.localeCompare(b);
-    })
-    .map(([locationCode, caseIds], index) => {
-      const stop = metaByLocation.get(locationCode);
+  // Stabiler Sort: gleiche Sequenz (= derselbe Lagerplatz) behält die Bündel-Reihenfolge.
+  return entries
+    .sort((a, b) => a.seq - b.seq || a.loc.localeCompare(b.loc))
+    .map(({ c, loc }, index) => {
+      const stop = metaByLocation.get(loc);
       return {
-        id: stop?.id ?? `loc-${locationCode}`,
-        sequence: stop?.sequence ?? index + 1,
-        locationCode,
+        id: c.id,
+        sequence: index + 1,
+        locationCode: loc,
         scanRequired: stop?.scanRequired ?? false,
         scanned: stop?.scanned ?? false,
-        caseIds,
+        caseIds: [c.id],
       };
     });
 }
@@ -207,15 +207,14 @@ export function BundleHomeScreen(): JSX.Element {
   const session = getSession();
 
   // TODO(task-13+): there is no backend mutation yet to persist a "Ware holen"
-  // stop check-off (RouteStopDto has no scan-submit endpoint). Until one
-  // exists this is a local-only echo of the pick UI, seeded from the route
-  // stop's `scanned` flag whenever a *new* bundle is assigned.
+  // check-off (RouteStopDto has no scan-submit endpoint). Until one exists
+  // this is a local-only echo of the pick UI, seeded from the route stops'
+  // `scanned` flags whenever a *new* bundle is assigned.
   //
-  // Tracked by the stop's own `id`, NOT its `sequence`: "Rest parken" causes
-  // the backend to resequence every remaining stop (0..n) in the same
-  // bundle — the bundle id doesn't change, so a sequence-keyed set would
-  // silently point at the wrong stop (or the wrong "geholt" state) after any
-  // park action. `id` is stable across that resequencing.
+  // Tracked per Beleg-Container by its Case-Id, NOT the route sequence:
+  // "Rest parken" causes the backend to resequence every remaining stop
+  // (0..n) in the same bundle — the Case-Id is stable across that, a
+  // sequence-keyed set would silently point at the wrong Container.
   const [collectedStopIds, setCollectedStopIds] = useState<Set<string>>(new Set());
   const [seededBundleId, setSeededBundleId] = useState<string | undefined>(undefined);
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
@@ -229,13 +228,17 @@ export function BundleHomeScreen(): JSX.Element {
 
   useEffect(() => {
     if (bundle && bundle.bundleId !== seededBundleId) {
+      // Vom Backend als gescannt gemeldete Lagerplätze markieren alle ihre
+      // Beleg-Container als geholt (lokales Echo, siehe Kommentar oben).
       const scanned = new Set(
-        bundle.routeStops.filter((stop) => stop.scanned).map((stop) => stop.id),
+        deriveStops(bundle.routeStops, cases)
+          .filter((s) => s.scanned)
+          .map((s) => s.id),
       );
       setCollectedStopIds(scanned);
       setSeededBundleId(bundle.bundleId);
     }
-  }, [bundle, seededBundleId]);
+  }, [bundle, seededBundleId, cases]);
 
   const collected = collectedStopIds;
 
@@ -382,7 +385,7 @@ export function BundleHomeScreen(): JSX.Element {
             1 · Ware holen
             {stops.length > 0 ? (
               <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                {counts.collected}/{counts.total} Plätze
+                {counts.collected}/{counts.total} Belege
               </Typography>
             ) : null}
           </Typography>
@@ -466,7 +469,7 @@ export function BundleHomeScreen(): JSX.Element {
               );
             })}
           </Stack>
-          {/* B4: Karren voll → Rest (Belege noch nicht geholter Plätze) parken. */}
+          {/* B4: Karren voll → Rest (noch nicht geholte Belege) parken. */}
           {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
             <Button
               size="small"

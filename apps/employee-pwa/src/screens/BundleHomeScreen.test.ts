@@ -10,42 +10,50 @@ function kase(id: string, storageLocationCode: string) {
 }
 
 describe('deriveStops', () => {
-  it('orders stops by sequence and attaches the matching cases', () => {
+  it('ein Container je Beleg, geordnet nach der Routen-Sequenz des Lagerplatzes', () => {
     const stops = deriveStops(
       [stop('s2', 1, 'B-2'), stop('s1', 0, 'A-1')],
-      [kase('c1', 'A-1'), kase('c2', 'B-2')],
+      [kase('c2', 'B-2'), kase('c1', 'A-1')],
     );
-    expect(stops.map((s) => s.id)).toEqual(['s1', 's2']);
-    expect(stops.find((s) => s.id === 's1')?.caseIds).toEqual(['c1']);
-    expect(stops.find((s) => s.id === 's2')?.caseIds).toEqual(['c2']);
+    expect(stops.map((s) => s.id)).toEqual(['c1', 'c2']);
+    expect(stops.map((s) => s.locationCode)).toEqual(['A-1', 'B-2']);
+    expect(stops.map((s) => s.caseIds)).toEqual([['c1'], ['c2']]);
   });
 
-  it('drops a stop whose only case was parked away (no ghost stop left blocking collectComplete)', () => {
+  it('mehrere Belege am SELBEN Lagerplatz bleiben Einzelcontainer in Bündel-Reihenfolge (z. B. eine Lieferung)', () => {
+    const stops = deriveStops(
+      [stop('s1', 0, 'A-1')],
+      [kase('c1', 'A-1'), kase('c2', 'A-1'), kase('c3', 'A-1')],
+    );
+    expect(stops.map((s) => s.id)).toEqual(['c1', 'c2', 'c3']);
+    expect(stops.every((s) => s.locationCode === 'A-1')).toBe(true);
+    expect(stops.map((s) => s.sequence)).toEqual([1, 2, 3]);
+  });
+
+  it('geparkte Belege verlieren ihren Container (kein Geist-Container blockiert collectComplete)', () => {
     // The case for A-1 is gone from `cases` (parked); B-2's case remains.
     const stops = deriveStops([stop('s1', 0, 'A-1'), stop('s2', 1, 'B-2')], [kase('c2', 'B-2')]);
-    expect(stops.map((s) => s.id)).toEqual(['s2']);
+    expect(stops.map((s) => s.id)).toEqual(['c2']);
   });
 
-  it('keeps stop identity stable across a backend resequence (park renumbers sequence, not id)', () => {
-    // Before park: three stops, sequence 0/1/2. The employee collected s1 (id-tracked).
+  it('Container-Identität (Case-Id) bleibt über ein Backend-Resequencing stabil', () => {
+    // Before park: three Belege on three locations, sequence 0/1/2.
     const before = deriveStops(
       [stop('s1', 0, 'A-1'), stop('s2', 1, 'B-2'), stop('s3', 2, 'C-3')],
       [kase('c1', 'A-1'), kase('c2', 'B-2'), kase('c3', 'C-3')],
     );
-    expect(before.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+    expect(before.map((s) => s.id)).toEqual(['c1', 'c2', 'c3']);
 
-    // After park: the backend renumbered s3 to sequence 0 (it's now first) and
-    // removed the case for s2 (parked). The stop *ids* are unchanged.
+    // After park: the backend renumbered C-3 to sequence 0 (now first) and the
+    // Beleg on B-2 is gone (parked). The Case-Ids are unchanged — a collected
+    // Set keyed by Case-Id still identifies c1 as "already collected" even
+    // though its display position changed.
     const after = deriveStops(
       [stop('s3', 0, 'C-3'), stop('s1', 1, 'A-1'), stop('s2', 2, 'B-2')],
       [kase('c1', 'A-1'), kase('c3', 'C-3')],
     );
-    // s2 is gone (its case was parked); s1 and s3 remain, keyed by id — a
-    // collected-state Set keyed by `id` (not `sequence`) still correctly
-    // identifies s1 as "the stop I already collected" even though its
-    // sequence number changed from 0 to 1.
-    expect(after.map((s) => s.id)).toEqual(['s3', 's1']);
-    expect(after.find((s) => s.id === 's1')?.sequence).toBe(1);
+    expect(after.map((s) => s.id)).toEqual(['c3', 'c1']);
+    expect(after.find((s) => s.id === 'c1')?.sequence).toBe(2);
   });
 });
 
