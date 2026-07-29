@@ -179,7 +179,7 @@ export function AppShell(): JSX.Element {
             {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton>
         </Box>
-        {/* Hexagon-Ausklapper (Außenkante, vertikale Mitte): zweite Sidebar mit
+        {/* Trapez-Ausklapper (Außenkante, vertikale Mitte): zweite Sidebar mit
             den Schnellaktionen des Tagescockpits — rot, sobald Meldungen da sind. */}
         <SchnellaktionenFlyout />
       </Box>

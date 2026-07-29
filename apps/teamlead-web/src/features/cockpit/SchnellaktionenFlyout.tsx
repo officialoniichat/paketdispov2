@@ -1,10 +1,11 @@
 /**
- * Hexagon-Ausklapper an der Außenkante der Sidebar (vertikale Mitte): ein
- * asymmetrischer Sechseck-Knopf nach Nutzer-Skizze (oberste/unterste Kante
- * stark nach innen gezogen, die zweiten flacher, die Mitte perfekt senkrecht),
- * der eine ZWEITE Sidebar mit den Schnellaktionen des Tagescockpits ausklappt.
- * Default weiß, rot sobald Meldungen vorliegen — Knopf und Panel voll deckend;
- * das blaue gleichschenklige Dreieck zeigt nach rechts (geöffnet nach links).
+ * Trapez-Ausklapper an der Außenkante der Sidebar (vertikale Mitte): ein
+ * Trapez-Knopf (linke Kante volle Höhe, rechts eine durchgehend senkrechte
+ * Front auf Höhe des früheren Hexagon-„Hügels", oben/unten je EINE gerade
+ * Schräge), der eine ZWEITE Sidebar mit den Schnellaktionen des Tagescockpits
+ * ausklappt. Default weiß, rot sobald Meldungen vorliegen — Knopf und Panel
+ * voll deckend; das blaue gleichschenklige Dreieck zeigt nach rechts
+ * (geöffnet nach links).
  */
 import { useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -32,7 +33,7 @@ export function SchnellaktionenFlyout(): JSX.Element {
 
   return (
     // Der Rahmen hängt an der Nav-Rail (left: 100 %) und trägt Panel + Knopf —
-    // der Hexagon-Knopf wandert beim Öffnen mit an die Außenkante des Panels.
+    // der Trapez-Knopf wandert beim Öffnen mit an die Außenkante des Panels.
     <Box
       sx={{
         position: 'absolute',
@@ -114,10 +115,10 @@ export function SchnellaktionenFlyout(): JSX.Element {
             p: 0,
             m: 0,
             cursor: 'pointer',
-            // Asymmetrisches Hexagon (Nutzer-Skizze): oberste/unterste Kante
-            // deutlich nach außen geneigt (starke Ecken), dann flachere Schräge,
-            // senkrechte Vorderkante, gespiegelt zurück.
-            clipPath: 'polygon(0% 0%, 68% 15%, 100% 40%, 100% 60%, 68% 85%, 0% 100%)',
+            // Trapez (Nutzer-Wunsch): oben und unten je EINE gerade Schräge,
+            // rechts eine durchgehend senkrechte Front — in voller Breite, dort
+            // wo vorher der Hexagon-„Hügel" saß.
+            clipPath: 'polygon(0% 0%, 100% 15%, 100% 85%, 0% 100%)',
             // Default WEISS, rot nur bei Meldungen — immer voll deckend; der
             // Schatten ersetzt den Rand (ein CSS-Border folgt der Clip-Form nicht).
             bgcolor: alarm ? ltColors.danger : '#fff',
