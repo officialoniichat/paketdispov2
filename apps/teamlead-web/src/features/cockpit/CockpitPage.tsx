@@ -32,7 +32,7 @@ import { useEmployeeNames } from '../../data/employeeNames.js';
 import { useCaseLabels } from '../../data/caseLabels.js';
 import { formatAuditAction } from '../../data/audit.js';
 import { SimulationPanel } from '../simulation/SimulationPanel.js';
-import { SchnellaktionenListe, useSchnellaktionen } from './schnellaktionen.js';
+import { SchnellaktionenListe, useOffeneSchnellaktionen } from './schnellaktionen.js';
 import { useAutomatik } from './automatik.js';
 import { formatDate, formatDateTime, formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 
@@ -76,7 +76,8 @@ export function CockpitPage(): JSX.Element {
   const healthTotal = verteilt + poolRest;
 
   // Schnellaktionen: geteilte Ableitung mit dem Sidebar-Hexagon — schnellaktionen.tsx.
-  const decisions = useSchnellaktionen();
+  // Offene (nicht abgehakte) Meldungen — Abhak-Stand geteilt mit dem Flyout.
+  const { offen: decisions, abhaken: decisionAbhaken } = useOffeneSchnellaktionen();
 
   // --- Plan status / trigger label ---
   const planCurrent = freeOpen === 0;
@@ -260,7 +261,7 @@ export function CockpitPage(): JSX.Element {
         ) : decisions.length === 0 ? (
           <Alert severity="success">Nichts wartet auf dich — die Automatik hat alles verteilt.</Alert>
         ) : (
-          <SchnellaktionenListe decisions={decisions} />
+          <SchnellaktionenListe decisions={decisions} onAbhaken={decisionAbhaken} />
         )}
       </Box>
 

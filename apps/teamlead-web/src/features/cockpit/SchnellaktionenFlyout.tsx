@@ -10,7 +10,7 @@
  * alle Ebenen hebt (die Rail selbst ist sticky — ein z-Index hier drin allein
  * könnte den Seiteninhalt nie unterbieten lassen).
  */
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -18,7 +18,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import { ltColors } from '@paket/ui';
-import { SchnellaktionenListe, useSchnellaktionen } from './schnellaktionen.js';
+import { SchnellaktionenListe, useOffeneSchnellaktionen } from './schnellaktionen.js';
 
 const HEX_W = 26;
 const HEX_H = 84;
@@ -35,8 +35,15 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
     setOpenState(next);
     onOpenChange?.(next);
   };
-  const decisions = useSchnellaktionen();
+  const { offen: decisions, abhaken } = useOffeneSchnellaktionen();
   const alarm = decisions.length > 0;
+  // Alles abgehakt/erledigt → Panel klappt automatisch zu; der Knopf wird weiß
+  // und fährt anschließend langsam ein (width → 0), bis wieder etwas anliegt.
+  useEffect(() => {
+    if (open && decisions.length === 0) setOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, decisions.length]);
+  const sichtbar = alarm || open;
   const label = open
     ? 'Schnellaktionen einklappen'
     : `Schnellaktionen ausklappen${
@@ -103,7 +110,7 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
                 Nichts wartet auf dich — die Automatik hat alles verteilt.
               </Alert>
             ) : (
-              <SchnellaktionenListe decisions={decisions} />
+              <SchnellaktionenListe decisions={decisions} onAbhaken={abhaken} />
             )}
           </Box>
         </Box>
@@ -115,14 +122,19 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
           type="button"
           aria-label={label}
           aria-expanded={open}
+          aria-hidden={!sichtbar}
+          tabIndex={sichtbar ? 0 : -1}
           onClick={() => setOpen(!open)}
           sx={{
             position: 'absolute',
             top: '50%',
-            right: -HEX_W,
+            right: sichtbar ? -HEX_W : 0,
             transform: 'translateY(-50%)',
-            width: HEX_W,
+            // Leerer Stand: Knopf fährt langsam ein (Breite → 0) und ist weg.
+            width: sichtbar ? HEX_W : 0,
             height: HEX_H,
+            pointerEvents: sichtbar ? 'auto' : 'none',
+            overflow: 'hidden',
             border: 'none',
             p: 0,
             m: 0,
@@ -136,7 +148,7 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
             bgcolor: alarm ? ltColors.danger : '#fff',
             opacity: 1,
             filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.4))',
-            transition: 'background-color 150ms ease',
+            transition: 'background-color 150ms ease, width 700ms ease, right 700ms ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
