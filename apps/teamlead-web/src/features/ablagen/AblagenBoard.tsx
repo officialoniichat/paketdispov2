@@ -9,9 +9,7 @@
  * + note. C5: „Weiterleiten an …" + Weitergeleitet lane grouped by recipient.
  *
  * Ohne eigene Überschrift (Platz für die Lanes); die Filterleiste sitzt hinter
- * einem Ausklapp-Button. Unten (nur Original-Reiter) ein Fenster „Bündel
- * erstellen": Karten hineinziehen, Mitarbeiter wählen → bestehende auditierte
- * assignBundle-Mutation. Die Komponente ist einbettbar (Experiment DA.M.B):
+ * einem Ausklapp-Button. Die Komponente ist einbettbar (Experiment DA.M.B):
  * `embedded` + eigener `viewStateKey` + generische `dnd`-Hooks — Karten werden
  * als GANZES gezogen (voller Geist, nicht nur die Griff-Punkte).
  *
@@ -30,10 +28,8 @@ import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -41,7 +37,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import type { components } from '@paket/api-client';
@@ -54,7 +49,6 @@ import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewSt
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
-import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useSplits } from '../split/SplitProvider.js';
@@ -82,7 +76,7 @@ export interface AblagenCardDragInfo {
 /**
  * Generische DnD-Hooks des Einbetters (Experiment DA.M.B): Karten ziehen,
  * Lanes als Ziele markieren/bedienen, optionales Overlay (Entziehen-Zone).
- * Ohne `dnd` (Original-Reiter) sind Karten nur für das Bündel-Fenster ziehbar.
+ * Ohne `dnd` (Original-Reiter) sind die Karten nicht ziehbar.
  */
 export interface AblagenDnd {
   cardDraggable: (card: LaneCard) => boolean;
@@ -94,7 +88,7 @@ export interface AblagenDnd {
 }
 
 export interface AblagenBoardProps {
-  /** Experiment DA.M.B: füllt den Pane (100 %), ohne Bündel-Fenster. */
+  /** Experiment DA.M.B: füllt den Pane (100 %). */
   embedded?: boolean;
   /** Saved-View-Key; eingebettete Instanzen isolieren sich vom Basis-Tab. */
   viewStateKey?: string;
@@ -147,8 +141,6 @@ export function AblagenBoard({
 }: AblagenBoardProps = {}): JSX.Element {
   const {
     lanes,
-    board,
-    assignBundle,
     parkCase,
     releaseCase,
     prioritiseCase,
@@ -253,29 +245,13 @@ export function AblagenBoard({
     unflagAttention,
   };
 
-  // Bündel-Fenster (nur Original-Reiter): gesammelte Karten + interner Drag.
-  const [tray, setTray] = useState<LaneCard[]>([]);
-  const [trayDrag, setTrayDrag] = useState<LaneCard | null>(null);
-  const [trayPending, setTrayPending] = useState<{ employeeNo: string; name: string } | null>(null);
-  const trayEligible = (card: LaneCard): boolean =>
-    card.status === 'ready' && card.forwardedTo === null && !card.assignedTo;
-
-  const cardDraggable = (card: LaneCard): boolean =>
-    dnd ? dnd.cardDraggable(card) : !embedded && trayEligible(card);
+  // Karten sind nur über die dnd-Hooks des Einbetters (Experiment) ziehbar.
+  const cardDraggable = (card: LaneCard): boolean => (dnd ? dnd.cardDraggable(card) : false);
   const handleCardDragStart = (info: AblagenCardDragInfo, e: ReactDragEvent): void => {
-    if (dnd) {
-      dnd.onCardDragStart(info, e);
-      return;
-    }
-    // 'copyMove': das Bündel-Fenster SAMMELT (dropEffect 'copy', Karte bleibt in
-    // der Lane) — bei effectAllowed 'move' würde Chromium den Copy-Drop abbrechen.
-    e.dataTransfer.effectAllowed = 'copyMove';
-    e.dataTransfer.setData('text/plain', info.card.weBelegNo);
-    setTrayDrag(info.card);
+    dnd?.onCardDragStart(info, e);
   };
   const handleCardDragEnd = (): void => {
-    if (dnd) dnd.onCardDragEnd();
-    setTrayDrag(null);
+    dnd?.onCardDragEnd();
   };
 
   const allCards = lanes.flatMap((l) => l.cards);
@@ -362,41 +338,7 @@ export function AblagenBoard({
         ))}
       </Box>
 
-      {/* Fenster-Prinzip unter den Spalten (nur Original): Bündel per Ziehen bauen. */}
-      {!embedded && (
-        <BundleTray
-          tray={tray}
-          trayDrag={trayDrag !== null && trayEligible(trayDrag) ? trayDrag : null}
-          alreadyCollected={(card) => tray.some((t) => t.caseId === card.caseId)}
-          onCollect={(card) => setTray((prev) => [...prev, card])}
-          onRemove={(caseId) => setTray((prev) => prev.filter((c) => c.caseId !== caseId))}
-          onClear={() => setTray([])}
-          employees={board
-            .filter((r) => r.absence == null)
-            .map((r) => ({ employeeNo: r.employeeId, name: r.displayName }))}
-          onRequestAssign={(employeeNo, name) => setTrayPending({ employeeNo, name })}
-        />
-      )}
-
       {dnd?.overlay}
-
-      <ReasonDialog
-        open={trayPending !== null}
-        title={`Bündel (${tray.length} Belege) an ${trayPending?.name ?? ''} zuweisen`}
-        description="Alle gesammelten Belege werden dem Tages-Bündel des Mitarbeiters zugeteilt (bei Bedarf wird ein Bündel angelegt)."
-        suggestions={['Kapazität frei', 'Bereich passt', 'Eilig für Verladung']}
-        onConfirm={(reason) => {
-          if (trayPending !== null && tray.length > 0) {
-            assignBundle.mutate({
-              employeeNo: trayPending.employeeNo,
-              caseIds: tray.map((c) => c.caseId),
-              reason,
-            });
-            setTray([]);
-          }
-        }}
-        onClose={() => setTrayPending(null)}
-      />
 
       <AssignFromListDialog
         open={assignCard !== null}
@@ -777,144 +719,5 @@ function LaneCardView({
         />
       </CardActions>
     </Card>
-  );
-}
-
-interface BundleTrayProps {
-  tray: LaneCard[];
-  /** Aktuell gezogene, sammelbare Karte (ready · nicht weitergeleitet · frei). */
-  trayDrag: LaneCard | null;
-  alreadyCollected: (card: LaneCard) => boolean;
-  onCollect: (card: LaneCard) => void;
-  onRemove: (caseId: string) => void;
-  onClear: () => void;
-  employees: { employeeNo: string; name: string }[];
-  onRequestAssign: (employeeNo: string, name: string) => void;
-}
-
-/**
- * „Bündel erstellen" — Fenster unter den Spalten (Fenster-Prinzip wie im
- * Experiment): bereite Belege hineinziehen, Mitarbeiter wählen, zuweisen. Läuft
- * über die bestehende auditierte assignBundle-Mutation (A1/A2) — keine neue Logik.
- */
-function BundleTray({
-  tray,
-  trayDrag,
-  alreadyCollected,
-  onCollect,
-  onRemove,
-  onClear,
-  employees,
-  onRequestAssign,
-}: BundleTrayProps): JSX.Element {
-  const [over, setOver] = useState(false);
-  const [employeeNo, setEmployeeNo] = useState('');
-  const acceptable = trayDrag !== null && !alreadyCollected(trayDrag);
-  const teile = tray.reduce((sum, c) => sum + c.totalQuantity, 0);
-  const minutes = tray.reduce((sum, c) => sum + c.estimatedMinutes, 0);
-  const selected = employees.find((e) => e.employeeNo === employeeNo);
-
-  return (
-    <Paper
-      variant="outlined"
-      data-testid="ablagen-buendel-fenster"
-      onDragOver={(e) => {
-        if (!acceptable) return;
-        e.preventDefault();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-        setOver(true);
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
-      }}
-      onDrop={(e) => {
-        if (!acceptable || trayDrag === null) return;
-        e.preventDefault();
-        setOver(false);
-        onCollect(trayDrag);
-      }}
-      sx={{
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        borderStyle: acceptable ? 'dashed' : 'solid',
-        borderColor: over && acceptable ? 'primary.main' : acceptable ? 'primary.light' : 'divider',
-        bgcolor: over && acceptable ? 'action.hover' : 'background.paper',
-      }}
-    >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.75,
-          px: 1,
-          py: 0.25,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'action.hover',
-        }}
-      >
-        <Inventory2OutlinedIcon sx={{ fontSize: 16 }} />
-        <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
-          Bündel erstellen
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          bereite Belege hierher ziehen
-        </Typography>
-        {tray.length > 0 && (
-          <Typography variant="caption" sx={{ ml: 'auto', fontWeight: 600 }}>
-            {tray.length} {tray.length === 1 ? 'Beleg' : 'Belege'} · {teile} Teile ·{' '}
-            {formatMinutes(minutes)}
-          </Typography>
-        )}
-      </Box>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 1, flexWrap: 'wrap', rowGap: 1 }}>
-        {tray.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Noch leer — Karten aus den Spalten hierher ziehen (nur „Bereit", nicht weitergeleitet).
-          </Typography>
-        ) : (
-          tray.map((c) => (
-            <Chip
-              key={c.caseId}
-              size="small"
-              label={`${c.weBelegNo} · ${c.totalQuantity} Teile`}
-              onDelete={() => onRemove(c.caseId)}
-            />
-          ))
-        )}
-        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TextField
-            select
-            size="small"
-            label="Mitarbeiter"
-            value={employeeNo}
-            onChange={(e) => setEmployeeNo(e.target.value)}
-            sx={{ minWidth: 180 }}
-          >
-            {employees.map((e) => (
-              <MenuItem key={e.employeeNo} value={e.employeeNo}>
-                {e.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <Button
-            size="small"
-            variant="contained"
-            disabled={tray.length === 0 || selected === undefined}
-            onClick={() => {
-              if (selected !== undefined) onRequestAssign(selected.employeeNo, selected.name);
-            }}
-          >
-            Bündel zuweisen ({tray.length})
-          </Button>
-          {tray.length > 0 && (
-            <Button size="small" onClick={onClear}>
-              Leeren
-            </Button>
-          )}
-        </Box>
-      </Stack>
-    </Paper>
   );
 }

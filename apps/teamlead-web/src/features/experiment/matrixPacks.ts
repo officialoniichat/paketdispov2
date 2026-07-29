@@ -17,13 +17,17 @@ export interface MatrixPack {
   teile: number;
 }
 
+/** Status, die in der Matrix als „Laufend" gelten (eigene Spalte links der Packs). */
+export const LAUFEND_STATUSES: ReadonlyArray<BoardCase['status']> = [
+  'in_progress',
+  'issue_open',
+  'problem_resolved',
+];
+
 /** Anzeige-Rang: Laufendes oben (blau/rot), Geplantes mittig, Fertiges unten. */
 function displayRank(status: BoardCase['status']): number {
+  if (LAUFEND_STATUSES.includes(status)) return 0;
   switch (status) {
-    case 'in_progress':
-    case 'issue_open':
-    case 'problem_resolved':
-      return 0;
     case 'completed':
     case 'zst_done':
     case 'cancelled':
@@ -31,6 +35,21 @@ function displayRank(status: BoardCase['status']): number {
     default:
       return 1;
   }
+}
+
+/**
+ * Spalten-Aufteilung einer Matrix-Zeile (wie die Board-Karte): „Laufend" steht
+ * als eigene Spalte links, der Rest (Geplant + Fertig) bleibt in seinen
+ * Pack-Rechtecken — die Pack-Zusammensetzung wird daraus neu gezählt.
+ */
+export function splitLaufend(cases: readonly BoardCase[]): {
+  laufend: BoardCase[];
+  rest: BoardCase[];
+} {
+  return {
+    laufend: cases.filter((c) => LAUFEND_STATUSES.includes(c.status)),
+    rest: cases.filter((c) => !LAUFEND_STATUSES.includes(c.status)),
+  };
 }
 
 /** Stabil sortiert: der Beleg in Arbeit (blau) oben, Fertige (grün) unten. */

@@ -133,9 +133,14 @@ export interface BelegListPageProps {
    * Basis-Tab /belege nicht umkonfigurieren.
    */
   viewStateKey?: string;
+  /** Experiment DA.M.B: Tabelle füllt die verfügbare Höhe (Pane/Vollbild) bis ganz unten. */
+  fill?: boolean;
 }
 
-export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageProps = {}): JSX.Element {
+export function BelegListPage({
+  viewStateKey = BELEGE_VIEW_KEY,
+  fill = false,
+}: BelegListPageProps = {}): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Saved view (C2): scope/sorting/filters survive reloads via localStorage.
@@ -578,7 +583,7 @@ export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageP
   }, [rows, splitCaseId]);
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={fill ? { height: '100%', minHeight: 0 } : undefined}>
       {/* Kopfzeile: Titel, Scopes, Lupe (Volltextsuche) und Filter-Umschalter in
           EINER Zeile — die frühere zweite Zeile entfällt (Platz für die Tabelle). */}
       <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap alignItems="center">
@@ -820,7 +825,15 @@ export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageP
           ))}
         </Stack>
       ) : (
-        <>
+        // Füll-Modus (Experiment): Tabelle nimmt die Resthöhe bis ganz unten ein,
+        // die Paginierung bleibt darunter sichtbar.
+        <Box
+          sx={
+            fill
+              ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+              : undefined
+          }
+        >
           <DataTable
             data={rows}
             columns={columns}
@@ -835,7 +848,8 @@ export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageP
             }}
             getRowId={(r) => r.id}
             onRowClick={(r) => navigate(`/belege/${r.id}`)}
-            maxHeight={560}
+            maxHeight={fill ? undefined : 560}
+            fillHeight={fill}
             emptyText="Keine Belege in diesem Scope."
           />
           <TablePagination
@@ -846,8 +860,9 @@ export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageP
             rowsPerPage={BELEGE_PAGE_LIMIT}
             rowsPerPageOptions={[BELEGE_PAGE_LIMIT]}
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} von ${count}`}
+            sx={fill ? { flexShrink: 0 } : undefined}
           />
-        </>
+        </Box>
       )}
 
       <AssignFromListDialog

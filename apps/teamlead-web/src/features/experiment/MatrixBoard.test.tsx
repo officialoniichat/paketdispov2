@@ -19,9 +19,23 @@ const mocks = vi.hoisted(() => {
     error: null,
     reset: vi.fn(),
   });
-  return { assignToEmployee: mutation(), moveCase: mutation() };
+  return { assignToEmployee: mutation(), moveCase: mutation(), pauseResume: mutation() };
 });
 vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
+// Schnellinfo der Beleg-Striche: die Kopf-Daten kommen lazy aus fetchBelegDetail.
+vi.mock('../../data/belege.js', () => ({
+  fetchBelegDetail: vi.fn(async () => ({
+    branchNo: '001',
+    deliveryNoteNo: 'LS-2026-000302',
+    goodsType: 'NOS_Nachorder',
+    bookingDate: '2026-07-29T00:00:00.000Z',
+    positions: [],
+    assignedEmployeeName: 'Bernd Voss',
+    hasOpenIssue: false,
+    attentionFlag: false,
+    attentionNote: null,
+  })),
+}));
 
 function bc(
   caseId: string,
@@ -128,15 +142,58 @@ function renderMatrix(dragging: ExperimentDragPayload | null): {
 beforeEach(() => {
   mocks.assignToEmployee.mutate.mockClear();
   mocks.moveCase.mutate.mockClear();
+  mocks.pauseResume.mutate.mockClear();
 });
 
 describe('MatrixBoard', () => {
-  it('zeigt je Mitarbeiter eine Zeile mit Pack-Rechteck und Belegstrichen', () => {
+  it('teilt die Zeile in Spalten: Laufend-Strich links, Pack-Rechteck unter „Geplant"', () => {
     renderMatrix(null);
     expect(screen.getByText('Anna Berger')).toBeTruthy();
-    expect(screen.getByText('Pack 1 · 2 Belege · 20 Teile')).toBeTruthy();
+    // Spaltenköpfe — die vertikalen Trennlinien fluchten damit (Board-Karte).
+    expect(screen.getByText('Laufend')).toBeTruthy();
+    expect(screen.getByText('Geplant')).toBeTruthy();
+    // k1 (in Arbeit) steht in der Laufend-Spalte — das Pack zählt nur den Rest.
     expect(screen.getByText('WE-k1')).toBeTruthy();
+    expect(screen.getByText('Pack 1 · 1 Beleg · 10 Teile')).toBeTruthy();
+    // Bernd hat nichts Laufendes — Wortlaut der Board-Karte.
+    expect(screen.getByText('Nichts in Arbeit.')).toBeTruthy();
     expect(screen.getByText(/Keine Belege — zum Zuweisen hierher ziehen/)).toBeTruthy();
+  });
+
+  it('Hover auf einen Beleg-Strich öffnet die Schnellinfo der Board-Karte', async () => {
+    renderMatrix(null);
+    fireEvent.mouseOver(screen.getByText('WE-k1'));
+    expect(
+      await screen.findByText('Klick auf die Karte öffnet die vollständigen Details.', undefined, {
+        timeout: 2000,
+      }),
+    ).toBeTruthy();
+    expect(await screen.findByText('Lieferschein')).toBeTruthy();
+    expect(screen.getByText('LS-2026-000302')).toBeTruthy();
+    expect(screen.getByText('NOS_Nachorder')).toBeTruthy();
+  });
+
+  it('der farbige Schicht-Griff zieht nach rechts und öffnet den Pausen-Dialog', () => {
+    const { requestReason } = renderMatrix(null);
+    const handle = screen.getByLabelText('Anna Berger: nach rechts ziehen für Pause');
+    // jsdom kennt keinen PointerEvent-Konstruktor — MouseEvent trägt button/clientX,
+    // isPrimary kommt als Expando dazu (React liest beides vom nativen Event).
+    const pointer = (type: string, init: MouseEventInit): MouseEvent => {
+      const e = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.assign(e, { isPrimary: true, pointerId: 1 });
+      return e;
+    };
+    fireEvent(handle, pointer('pointerdown', { button: 0, clientX: 5, clientY: 5 }));
+    fireEvent(handle, pointer('pointermove', { clientX: 90, clientY: 6 }));
+    expect(requestReason).toHaveBeenCalledTimes(1);
+    const action = requestReason.mock.calls[0]![0] as PendingAction;
+    expect(action.title).toBe('Anna Berger: Pause/Abwesenheit');
+    action.run('Pause');
+    expect(mocks.pauseResume.mutate).toHaveBeenCalledWith({
+      bundleId: 'b-emp1',
+      reason: 'Pause',
+      paused: false,
+    });
   });
 
   it('nennt die Zugehörigkeit eines Gruppen-Belegs im Wortlaut des Boards', () => {

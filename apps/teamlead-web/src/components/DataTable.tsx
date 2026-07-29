@@ -44,6 +44,12 @@ export interface DataTableProps<T> {
   emptyText?: string;
   /** When set, the body scrolls within this height and rows are virtualized. */
   maxHeight?: number;
+  /**
+   * Füll-Modus (Experiment-Pane/Vollbild): der Container nimmt die verfügbare
+   * Höhe des Flex-Elters ein (flex:1, bis ganz unten) statt einer festen
+   * maxHeight — Zeilen sind ebenfalls virtualisiert.
+   */
+  fillHeight?: boolean;
   rowHeight?: number;
   /**
    * Server mode: sorting/filtering/pagination happen on the backend — the table
@@ -76,6 +82,7 @@ export function DataTable<T>({
   getRowId,
   emptyText = 'Keine Einträge.',
   maxHeight,
+  fillHeight = false,
   rowHeight = 44,
   serverMode = false,
   getRowSx,
@@ -106,29 +113,31 @@ export function DataTable<T>({
 
   const rows = table.getRowModel().rows;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Scroll-/Virtualisierungs-Modus: feste maxHeight ODER Füll-Modus (flex:1).
+  const scrolls = maxHeight != null || fillHeight;
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
     overscan: 12,
-    enabled: maxHeight != null,
+    enabled: scrolls,
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  const paddingTop = maxHeight && virtualRows.length ? virtualRows[0]!.start : 0;
+  const paddingTop = scrolls && virtualRows.length ? virtualRows[0]!.start : 0;
   const paddingBottom =
-    maxHeight && virtualRows.length
+    scrolls && virtualRows.length
       ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1]!.end
       : 0;
-  const bodyRows = maxHeight ? virtualRows.map((v) => rows[v.index]!) : rows;
+  const bodyRows = scrolls ? virtualRows.map((v) => rows[v.index]!) : rows;
 
   return (
     <Box
       ref={scrollRef}
       sx={[
         {
-          maxHeight,
-          overflow: maxHeight ? 'auto' : 'visible',
+          ...(fillHeight ? { flex: 1, minHeight: 0 } : { maxHeight }),
+          overflow: scrolls ? 'auto' : 'visible',
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
@@ -144,7 +153,7 @@ export function DataTable<T>({
         },
       ]}
     >
-      <Table size="small" stickyHeader={maxHeight != null}>
+      <Table size="small" stickyHeader={scrolls}>
         <TableHead>
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id}>

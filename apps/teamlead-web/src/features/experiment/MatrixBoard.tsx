@@ -1,13 +1,15 @@
 /**
  * Experiment DA.M.B — Mitarbeiter-Matrix (unteres Fenster).
  *
- * Eine Zeile je Mitarbeiter (Name links, sticky), rechts daneben ein Rechteck
- * je Engine-Pack (horizontal scrollbar). Die Belege eines Packs sind dünne
- * Striche: blau = in Arbeit (immer oben), rot = Problem, grün + durchgestrichen
- * = fertig; geplante Belege tragen die Lieferungs-Gruppenfarbe. Drops auf eine
- * Zeile lösen die EXISTIERENDEN auditierten Mutationen aus (Ablage → Zeile =
- * zuweisen, Zeile → Zeile = verschieben) — immer über den §8.4-ReasonDialog
- * des Parents, nie direkt.
+ * Spalten wie die Board-Karte, durch vertikale Linien getrennt: Name (sticky,
+ * mit farbigem Schicht-Griff als Pausen-Schieber und „!"-Zeileninfo oben
+ * rechts) | „Laufend" | „Geplant" (ein Rechteck je Engine-Pack, horizontal
+ * scrollbar). Die Belege sind dünne Striche: blau = in Arbeit, rot = Problem,
+ * grün + durchgestrichen = fertig; geplante tragen die Lieferungs-Gruppenfarbe.
+ * Hover auf einen Strich öffnet die Schnellinfo des Mitarbeiterboards. Drops
+ * auf eine Zeile lösen die EXISTIERENDEN auditierten Mutationen aus (Ablage →
+ * Zeile = zuweisen, Zeile → Zeile = verschieben) — immer über den
+ * §8.4-ReasonDialog des Parents, nie direkt.
  */
 import { useRef, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,13 +20,15 @@ import Popover from '@mui/material/Popover';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { alpha } from '@mui/material/styles';
+import { assignmentStatusLabels } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import type { BoardCase, BoardRow } from '../../data/types.js';
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
-import { DragDots } from '../board/KanbanBoard.js';
-import { tierLabel } from '../../components/TierChip.js';
+import { CaseQuickInfoTooltip, DragDots } from '../board/KanbanBoard.js';
+import { isManualOnlyTier, tierLabel } from '../../components/TierChip.js';
 import { formatMinutes } from '../../lib/format.js';
 import {
   ABSENCE_LABEL,
@@ -32,16 +36,22 @@ import {
   shiftKindLabel,
   shiftKindOfStart,
 } from '../../lib/schichtFarben.js';
-import {
-  lieferungHinweis,
-  lieferungSatz,
-  splitLieferungWarnung,
-} from '../../components/LieferungChip.js';
+import { lieferungSatz, splitLieferungWarnung } from '../../components/LieferungChip.js';
 import {
   matrixDropAction,
   type ExperimentDragPayload,
 } from './experimentDnd.js';
-import { STRIP_LEGEND, derivePacks, stripStyle } from './matrixPacks.js';
+import {
+  LAUFEND_STATUSES,
+  STRIP_LEGEND,
+  derivePacks,
+  splitLaufend,
+  stripStyle,
+} from './matrixPacks.js';
+
+/** Spaltenraster der Matrix: Name | Laufend | Geplant — Kopf und Zeilen teilen die Breiten. */
+const NAME_COL = 150;
+const LAUFEND_COL = 200;
 
 export interface MatrixBoardProps {
   board: BoardRow[];
@@ -63,6 +73,7 @@ export function MatrixBoard({
 }: MatrixBoardProps): JSX.Element {
   return (
     <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
+      <MatrixHeader />
       {/* Abwesende (Krank/Urlaub) ganz nach unten — sonst stabile Reihenfolge. */}
       {[...board]
         .sort((a, b) => Number(a.absence != null) - Number(b.absence != null))
@@ -110,7 +121,9 @@ function MatrixRow({
   const absent = row.absence ?? null;
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
-  const packs = derivePacks(row.cases, row.packs);
+  // Spalten wie die Board-Karte: „Laufend" separat links, die Packs zeigen den Rest.
+  const { laufend, rest } = splitLaufend(row.cases);
+  const packs = derivePacks(rest, row.packs);
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
@@ -174,7 +187,6 @@ function MatrixRow({
       sx={{
         display: 'flex',
         alignItems: 'stretch',
-        gap: 0.75,
         px: 0.5,
         py: 0.5,
         minWidth: 'max-content',
@@ -213,120 +225,176 @@ function MatrixRow({
           position: 'sticky',
           left: 0,
           zIndex: 1,
-          width: 150,
+          width: NAME_COL,
           flexShrink: 0,
           bgcolor: 'background.paper',
           borderRight: '1px solid',
           borderColor: 'divider',
-          borderLeft: row.shiftStart != null && absent === null ? '3px solid' : undefined,
-          borderLeftColor:
-            row.shiftStart != null && absent === null
-              ? shiftKindColor(shiftKindOfStart(row.shiftStart))
-              : undefined,
-          px: 0.75,
+          pl: 0.25,
+          pr: 0.75,
           py: 0.25,
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
+          alignItems: 'stretch',
+          gap: 0.5,
           opacity: absent !== null ? 0.6 : 1,
           touchAction: 'none',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        {absent === null && (
+          // Der farbige Schicht-Strich IST der Pausen-Schieber: anfassen und
+          // nach rechts ziehen (gleiches Ziel wie der Wisch über den Namen).
+          <PauseHandle
+            color={
+              row.shiftStart != null
+                ? shiftKindColor(shiftKindOfStart(row.shiftStart))
+                : '#b0bec5'
+            }
+            label={`${row.displayName}: nach rechts ziehen für ${row.paused ? 'Weiter' : 'Pause'}`}
+            onFire={fireSwipePause}
+          />
+        )}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+          }}
+        >
           <Typography
             sx={{
               fontSize: '0.74rem',
               fontWeight: 700,
               lineHeight: 1.2,
+              pr: 1.5,
               textDecoration: absent !== null ? 'line-through' : 'none',
             }}
             noWrap
           >
             {row.displayName}
           </Typography>
-          <RowInfoButton row={row} />
-        </Box>
-        <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }} noWrap>
-          {tierLabel(row.skillTier)} · {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} %
-        </Typography>
-        {absent !== null ? (
-          <Typography
-            sx={{
-              fontSize: '0.6rem',
-              fontWeight: 700,
-              textDecoration: 'line-through',
-              color: absent === 'krank' ? 'error.main' : 'warning.main',
-            }}
-          >
-            {ABSENCE_LABEL[absent]}
+          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }} noWrap>
+            {tierLabel(row.skillTier)} · {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} %
           </Typography>
-        ) : (
-          row.shiftStart != null && (
-            <ShiftPill startIso={row.shiftStart} endIso={row.shiftEnd ?? null} />
-          )
-        )}
-        {row.paused && (
-          <Typography sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 700 }}>
-            Pausiert
+          {absent !== null ? (
+            <Typography
+              sx={{
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                textDecoration: 'line-through',
+                color: absent === 'krank' ? 'error.main' : 'warning.main',
+              }}
+            >
+              {ABSENCE_LABEL[absent]}
+            </Typography>
+          ) : (
+            row.shiftStart != null && (
+              <ShiftPill startIso={row.shiftStart} endIso={row.shiftEnd ?? null} />
+            )
+          )}
+          {row.paused && (
+            <Typography sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 700 }}>
+              Pausiert
+            </Typography>
+          )}
+        </Box>
+        <RowInfoButton row={row} />
+      </Box>
+
+      {/* Spalte „Laufend" — die Trennlinie rechts läuft vertikal durch alle Zeilen. */}
+      <Box
+        sx={{
+          width: LAUFEND_COL,
+          flexShrink: 0,
+          borderRight: '1px solid',
+          borderColor: 'divider',
+          px: 0.75,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0.375,
+          justifyContent: 'center',
+        }}
+      >
+        {laufend.map((c) => (
+          <CaseStrip
+            key={c.caseId}
+            c={c}
+            row={row}
+            groupColor={
+              c.deliveryGroup && c.deliveryGroup.presentSize >= 2
+                ? groupColorById.get(c.deliveryGroup.id)
+                : undefined
+            }
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          />
+        ))}
+        {laufend.length === 0 && (
+          <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
+            Nichts in Arbeit.
           </Typography>
         )}
       </Box>
 
-      {packs.map((pack) => (
-        <Box
-          key={pack.key}
-          sx={{
-            width: 200,
-            flexShrink: 0,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-            p: 0.5,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.375,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
-            {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
-            {pack.teile} Teile
-          </Typography>
-          {pack.cases.map((c) => (
-            <CaseStrip
-              key={c.caseId}
-              c={c}
-              row={row}
-              groupColor={
-                c.deliveryGroup && c.deliveryGroup.presentSize >= 2
-                  ? groupColorById.get(c.deliveryGroup.id)
-                  : undefined
-              }
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-            />
-          ))}
-        </Box>
-      ))}
-      {packs.length === 0 && (
-        <Box
-          sx={{
-            flexShrink: 0,
-            width: 200,
-            border: '1px dashed',
-            borderColor: 'divider',
-            borderRadius: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 36,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
-            Keine Belege — zum Zuweisen hierher ziehen
-          </Typography>
-        </Box>
-      )}
+      {/* Spalte „Geplant": ein Rechteck je Engine-Pack (Fertiges bleibt im Pack). */}
+      <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.75, pl: 0.75 }}>
+        {packs.map((pack) => (
+          <Box
+            key={pack.key}
+            sx={{
+              width: 200,
+              flexShrink: 0,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              p: 0.5,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.375,
+            }}
+          >
+            <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
+              {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+              {pack.teile} Teile
+            </Typography>
+            {pack.cases.map((c) => (
+              <CaseStrip
+                key={c.caseId}
+                c={c}
+                row={row}
+                groupColor={
+                  c.deliveryGroup && c.deliveryGroup.presentSize >= 2
+                    ? groupColorById.get(c.deliveryGroup.id)
+                    : undefined
+                }
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+              />
+            ))}
+          </Box>
+        ))}
+        {packs.length === 0 && (
+          <Box
+            sx={{
+              flexShrink: 0,
+              width: 200,
+              border: '1px dashed',
+              borderColor: 'divider',
+              borderRadius: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 36,
+            }}
+          >
+            <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
+              Keine Belege — zum Zuweisen hierher ziehen
+            </Typography>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }
@@ -341,7 +409,8 @@ interface CaseStripProps {
 
 /**
  * Dünner Beleg-Strich: Statusfarbe überschreibt die Gruppenfarbe (Punkt hält
- * sie sichtbar); Klick öffnet die Belegdetails; bei Gruppen-Belegen nennt eine
+ * sie sichtbar); Hover öffnet die Schnellinfo des Mitarbeiterboards („!" oben
+ * rechts im Strich), Klick die Belegdetails; bei Gruppen-Belegen nennt eine
  * Extra-Zeile die Zugehörigkeit im Wortlaut des Mitarbeiterboards.
  */
 function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProps): JSX.Element {
@@ -352,91 +421,93 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
   const itemBundleId = c.bundleId ?? row.bundleId;
   const draggable = c.status === 'assigned' && itemBundleId != null;
   const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
-  const statusTitle = style ? `${c.weBelegNo} — ${style.statusLabel}` : c.weBelegNo;
   return (
-    <Box
-      title={group ? `${statusTitle} · ${lieferungHinweis(group)}` : statusTitle}
-      onClick={() => navigate(`/belege/${c.caseId}`)}
-      draggable={draggable}
-      onDragStart={(e) => {
-        if (!draggable) return;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', c.weBelegNo);
-        // Kein setDragImage: der ganze Strich wird als Geisterbild mitgezogen
-        // (Nutzer-Vorgabe — nicht nur die vier Griff-Punkte).
-        onDragStart({
-          source: 'matrix',
-          caseId: c.caseId,
-          weBelegNo: c.weBelegNo,
-          status: c.status,
-          bundleId: itemBundleId ?? '',
-          employeeId: row.employeeId,
-          employeeName: row.displayName,
-        });
-      }}
-      onDragEnd={onDragEnd}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        px: 0.5,
-        py: 0.25,
-        borderRadius: 0.5,
-        borderLeft: '3px solid',
-        borderLeftColor: color ?? 'divider',
-        bgcolor: color ? alpha(color, 0.1) : 'action.hover',
-        cursor: 'pointer',
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
-        {draggable && (
-          <Box
-            role="button"
-            aria-label={`${c.weBelegNo} aus Bündel ziehen`}
-            onClick={(e) => e.stopPropagation()}
-            sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+    // Hover irgendwo auf dem Strich → dieselbe Schnellinfo wie das „!" im Board.
+    <CaseQuickInfoTooltip c={c}>
+      <Box
+        onClick={() => navigate(`/belege/${c.caseId}`)}
+        draggable={draggable}
+        onDragStart={(e) => {
+          if (!draggable) return;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', c.weBelegNo);
+          // Kein setDragImage: der ganze Strich wird als Geisterbild mitgezogen
+          // (Nutzer-Vorgabe — nicht nur die vier Griff-Punkte).
+          onDragStart({
+            source: 'matrix',
+            caseId: c.caseId,
+            weBelegNo: c.weBelegNo,
+            status: c.status,
+            bundleId: itemBundleId ?? '',
+            employeeId: row.employeeId,
+            employeeName: row.displayName,
+          });
+        }}
+        onDragEnd={onDragEnd}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          px: 0.5,
+          py: 0.25,
+          borderRadius: 0.5,
+          borderLeft: '3px solid',
+          borderLeftColor: color ?? 'divider',
+          bgcolor: color ? alpha(color, 0.1) : 'action.hover',
+          cursor: 'pointer',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
+          {draggable && (
+            <Box
+              role="button"
+              aria-label={`${c.weBelegNo} aus Bündel ziehen`}
+              onClick={(e) => e.stopPropagation()}
+              sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+            >
+              <DragDots />
+            </Box>
+          )}
+          <Typography
+            sx={{
+              fontSize: '0.66rem',
+              fontWeight: 600,
+              color: style?.color,
+              textDecoration: style?.strike ? 'line-through' : 'none',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
           >
-            <DragDots />
-          </Box>
+            {c.weBelegNo}
+          </Typography>
+          {style && groupColor && (
+            // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
+            // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
+            <Box
+              aria-hidden
+              sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: groupColor, flexShrink: 0 }}
+            />
+          )}
+          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}>
+            {c.totalQuantity} Teile
+          </Typography>
+          <ErrorOutlineIcon aria-hidden sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }} />
+        </Box>
+        {group && (
+          <Typography
+            sx={{
+              fontSize: '0.56rem',
+              color: 'text.secondary',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {lieferungSatz(group)}
+          </Typography>
         )}
-        <Typography
-          sx={{
-            fontSize: '0.66rem',
-            fontWeight: 600,
-            color: style?.color,
-            textDecoration: style?.strike ? 'line-through' : 'none',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {c.weBelegNo}
-        </Typography>
-        {style && groupColor && (
-          // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
-          // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
-          <Box
-            aria-hidden
-            sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: groupColor, flexShrink: 0 }}
-          />
-        )}
-        <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}>
-          {c.totalQuantity} Teile
-        </Typography>
       </Box>
-      {group && (
-        <Typography
-          sx={{
-            fontSize: '0.56rem',
-            color: 'text.secondary',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {lieferungSatz(group)}
-        </Typography>
-      )}
-    </Box>
+    </CaseQuickInfoTooltip>
   );
 }
 
@@ -510,9 +581,10 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
           </Typography>
           <Typography variant="caption">
             Ablage → Zeile: zuweisen · Beleg-Strich → andere Zeile: verschieben · Beleg-Strich →
-            Ablagen/rote Zone: entziehen · Klick auf einen Strich: Belegdetails · Wisch über den
-            Namen (links → rechts): Pause/Weiter · Fenster-Grenzen ziehen — über den Anschlag
-            hinaus wechselt die Anordnung.
+            Ablagen/rote Zone: entziehen · Hover auf einen Strich: Schnellinfo, Klick:
+            Belegdetails · Farbigen Schicht-Griff links am Namen nach rechts ziehen (oder Wisch
+            über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über den Anschlag hinaus
+            wechselt die Anordnung.
           </Typography>
         </Stack>
       </Popover>
@@ -551,15 +623,15 @@ function ShiftPill({ startIso, endIso }: { startIso: string; endIso: string | nu
 }
 
 /**
- * Zeilen-Info (kleines ⓘ neben dem Namen): dieselben Infos wie die Karte der
- * Board-Ansicht — Laufend/Geplant/Fertig mit Status, Teilen, Minuten und dem
+ * Zeilen-Info („!" im Kreis, oben rechts in der Namenszelle — wie am Beleg-
+ * Container des Boards): dieselben Infos wie die Karte der Board-Ansicht —
+ * Kopfzeile (Stufe · Status · Teile · % verplant · nur manuell) und
+ * Laufend/Geplant/Fertig mit Status, Teilen, Minuten und dem
  * Zugehörigkeits-Satz der Lieferung.
  */
 function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const laufend = row.cases.filter((c) =>
-    ['in_progress', 'issue_open', 'problem_resolved'].includes(c.status),
-  );
+  const laufend = row.cases.filter((c) => LAUFEND_STATUSES.includes(c.status));
   const geplant = row.cases.filter((c) => c.status === 'assigned');
   const fertig = row.cases.filter((c) =>
     ['completed', 'zst_done', 'cancelled'].includes(c.status),
@@ -573,9 +645,10 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
           e.stopPropagation();
           setAnchor(e.currentTarget);
         }}
-        sx={{ p: 0, ml: 0.25 }}
+        onPointerDown={(e) => e.stopPropagation()}
+        sx={{ p: 0, position: 'absolute', top: 2, right: 2 }}
       >
-        <InfoOutlinedIcon sx={{ fontSize: 12 }} />
+        <ErrorOutlineIcon sx={{ fontSize: 13 }} />
       </IconButton>
       <Popover
         open={anchor !== null}
@@ -588,8 +661,10 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
             {row.displayName}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {tierLabel(row.skillTier)} · {row.plannedTeile} Teile ·{' '}
-            {Math.round(row.utilisationPct)} % verplant
+            {tierLabel(row.skillTier)}
+            {row.bundleStatus ? ` · ${assignmentStatusLabels[row.bundleStatus]}` : ''} ·{' '}
+            {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} % verplant
+            {isManualOnlyTier(row.skillTier) ? ' · nur manuell' : ''}
           </Typography>
           <RowInfoSection title={`Laufend (${laufend.length})`} cases={laufend} empty="Nichts in Arbeit." />
           <RowInfoSection title={`Geplant (${geplant.length})`} cases={geplant} empty="Nichts geplant." />
@@ -639,5 +714,136 @@ function RowInfoSection({
         );
       })}
     </Stack>
+  );
+}
+
+/** Spaltenkopf der Matrix — die Trennlinien fluchten mit den Zeilen-Spalten. */
+function MatrixHeader(): JSX.Element {
+  const label = (text: string): JSX.Element => (
+    <Typography
+      sx={{
+        fontSize: '0.58rem',
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        color: 'text.secondary',
+        lineHeight: 1.8,
+      }}
+    >
+      {text}
+    </Typography>
+  );
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'stretch',
+        px: 0.5,
+        minWidth: 'max-content',
+        position: 'sticky',
+        top: 0,
+        zIndex: 3,
+        bgcolor: 'background.default',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      <Box
+        sx={{
+          width: NAME_COL,
+          flexShrink: 0,
+          position: 'sticky',
+          left: 0,
+          zIndex: 1,
+          bgcolor: 'background.default',
+          borderRight: '1px solid',
+          borderColor: 'divider',
+          px: 0.75,
+        }}
+      >
+        {label('Mitarbeiter')}
+      </Box>
+      <Box
+        sx={{
+          width: LAUFEND_COL,
+          flexShrink: 0,
+          borderRight: '1px solid',
+          borderColor: 'divider',
+          px: 0.75,
+        }}
+      >
+        {label('Laufend')}
+      </Box>
+      <Box sx={{ px: 0.75 }}>{label('Geplant')}</Box>
+    </Box>
+  );
+}
+
+/**
+ * Pausen-Schieber: der farbige Schicht-Strich links am Namen lässt sich mit
+ * gedrückter Maustaste anfassen und nach rechts ziehen — ab der Schwelle
+ * öffnet sich der Pause/Weiter-Dialog (dieselbe auditierte pauseResume-
+ * Mutation wie überall, via ReasonDialog des Parents).
+ */
+function PauseHandle({
+  color,
+  label,
+  onFire,
+}: {
+  color: string;
+  label: string;
+  onFire: () => void;
+}): JSX.Element {
+  const [dx, setDx] = useState(0);
+  const drag = useRef<{ x: number; fired: boolean } | null>(null);
+  const reset = (): void => {
+    drag.current = null;
+    setDx(0);
+  };
+  return (
+    <Tooltip title={label}>
+      <Box
+        role="button"
+        aria-label={label}
+        onPointerDown={(e) => {
+          if (e.button !== 0 || !e.isPrimary) return;
+          // Nicht zusätzlich den Namens-Wisch starten — sonst feuert es doppelt.
+          e.stopPropagation();
+          drag.current = { x: e.clientX, fired: false };
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // Kein aktiver Pointer (jsdom/synthetische Events) — Drag geht auch ohne Capture.
+          }
+        }}
+        onPointerMove={(e) => {
+          const s = drag.current;
+          if (s === null || s.fired) return;
+          const next = Math.max(0, Math.min(110, e.clientX - s.x));
+          setDx(next);
+          if (next >= 70) {
+            s.fired = true;
+            setDx(0);
+            onFire();
+          }
+        }}
+        onPointerUp={reset}
+        onPointerCancel={reset}
+        onPointerLeave={reset}
+        sx={{
+          width: 8,
+          flexShrink: 0,
+          alignSelf: 'stretch',
+          borderRadius: 0.5,
+          bgcolor: color,
+          cursor: 'grab',
+          touchAction: 'none',
+          transform: `translateX(${dx}px)`,
+          transition: dx === 0 ? 'transform 120ms ease-out' : 'none',
+          '&:hover': { filter: 'brightness(0.9)' },
+          '&:active': { cursor: 'grabbing' },
+        }}
+      />
+    </Tooltip>
   );
 }

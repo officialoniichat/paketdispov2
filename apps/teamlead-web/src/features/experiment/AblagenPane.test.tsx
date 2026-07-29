@@ -50,8 +50,6 @@ const mocks = vi.hoisted(() => {
       lane('geparkt', 'Geparkt', [card('c2', 'WE 200', 'parked')]),
       lane('prio', 'Prio', []),
     ],
-    board: [],
-    assignBundle: mutation(),
     parkCase: vi.fn(),
     releaseCase: vi.fn(),
     prioritiseCase: vi.fn(),
@@ -136,7 +134,7 @@ describe('AblagenPane', () => {
     expect(screen.getByText('WE 200')).toBeTruthy();
     // Original-Design-Merkmal: das Aktions-Menü jeder Karte ist da.
     expect(screen.getAllByText('Details').length).toBeGreaterThan(0);
-    // Das „Bündel erstellen"-Fenster gehört nur zum Original-Reiter.
+    // Das frühere „Bündel erstellen"-Fenster ist komplett entfernt (Nutzer-Vorgabe).
     expect(screen.queryByTestId('ablagen-buendel-fenster')).toBeNull();
   });
 

@@ -166,7 +166,7 @@ export function ExperimentPage(): JSX.Element {
     >
       <Box sx={{ height: '100%', overflow: 'auto', p: 1 }}>
         {/* Eigener Saved-View-Key: das Experiment darf /belege nicht umkonfigurieren. */}
-        <BelegListPage viewStateKey={EXPERIMENT_BELEGE_VIEW_KEY} />
+        <BelegListPage viewStateKey={EXPERIMENT_BELEGE_VIEW_KEY} fill />
       </Box>
     </Pane>
   );
