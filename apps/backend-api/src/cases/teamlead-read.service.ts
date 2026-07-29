@@ -173,35 +173,8 @@ export class TeamleadReadService {
       { weBelegNo: 'asc' },
     ];
 
-    const [rows, total, ruleConfig] = await Promise.all([
-      this.prisma.goodsReceiptCase.findMany({
-        where,
-        include: {
-          ...caseEffortInclude,
-          // C4: latest OPEN problem only — the Problemfälle-lane card preview.
-          issues: {
-            where: { status: { in: [...OPEN_ISSUE_STATUSES] } },
-            orderBy: { reportedAt: 'desc' },
-            take: 1,
-            select: { kind: true, reasonLabel: true, description: true },
-          },
-          assignedBundle: {
-            select: {
-              id: true,
-              employee: { select: { employeeNo: true, displayName: true } },
-              // A5 bundleQueue: position of the Beleg in its Bündel + whether the
-              // Bündel is already running (any case in Arbeit).
-              items: {
-                orderBy: { sequence: 'asc' },
-                select: { caseId: true, case: { select: { status: true } } },
-              },
-            },
-          },
-        },
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
+    const [sortedIds, total, ruleConfig] = await Promise.all([
+      this.prisma.goodsReceiptCase.findMany({ where, orderBy, select: { id: true } }),
       this.prisma.goodsReceiptCase.count({ where }),
       loadRuleConfig(this.prisma),
     ]);
@@ -210,6 +183,63 @@ export class TeamleadReadService {
     // Belege) — the same detection the Belegdetail shows, so chip and „Zugehörige
     // Lieferung" can never contradict each other across scopes or filters.
     const universe = await this.deliveryGroupUniverse(ruleConfig.grouping);
+
+    // Gruppen-adjazente Ordnung (Frage 8): Mitglieder EINER Lieferung stehen in der
+    // Liste zusammen. Die Gruppe wird dort einsortiert, wo ihr erstes Mitglied unter
+    // der aktiven Sortierung erscheint (Anker); innerhalb des Blocks behalten die
+    // Mitglieder ihre Sortier-Relativordnung, Einzel-Belege bleiben unberührt. Nur
+    // gefilterte Mitglieder werden gezogen — der Chip zählt weiter das Universum.
+    // Pagination bleibt zeilenbasiert (ein Block kann an einer Seitengrenze enden).
+    const memberIdsByGroup = new Map<string, string[]>();
+    const anchorSeq: Array<{ single: string } | { groupId: string }> = [];
+    for (const { id } of sortedIds) {
+      const groupId = universe.groupIdByCaseId.get(id);
+      if (!groupId) {
+        anchorSeq.push({ single: id });
+        continue;
+      }
+      const members = memberIdsByGroup.get(groupId);
+      if (members) {
+        members.push(id);
+      } else {
+        memberIdsByGroup.set(groupId, [id]);
+        anchorSeq.push({ groupId });
+      }
+    }
+    const orderedIds = anchorSeq.flatMap((a) =>
+      'single' in a ? [a.single] : memberIdsByGroup.get(a.groupId)!,
+    );
+    const pageIds = orderedIds.slice((page - 1) * limit, page * limit);
+
+    const pageRows = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: pageIds } },
+      include: {
+        ...caseEffortInclude,
+        // C4: latest OPEN problem only — the Problemfälle-lane card preview.
+        issues: {
+          where: { status: { in: [...OPEN_ISSUE_STATUSES] } },
+          orderBy: { reportedAt: 'desc' },
+          take: 1,
+          select: { kind: true, reasonLabel: true, description: true },
+        },
+        assignedBundle: {
+          select: {
+            id: true,
+            employee: { select: { employeeNo: true, displayName: true } },
+            // A5 bundleQueue: position of the Beleg in its Bündel + whether the
+            // Bündel is already running (any case in Arbeit).
+            items: {
+              orderBy: { sequence: 'asc' },
+              select: { caseId: true, case: { select: { status: true } } },
+            },
+          },
+        },
+      },
+    });
+    const rowById = new Map(pageRows.map((r) => [r.id, r]));
+    const rows = pageIds
+      .map((id) => rowById.get(id))
+      .filter((r): r is NonNullable<typeof r> => r !== undefined);
 
     const items: PoolItemDto[] = rows.map((c) => {
       // Show the SAME effort the distribution uses: live-computed for instructionalised

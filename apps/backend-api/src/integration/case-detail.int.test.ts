@@ -283,5 +283,15 @@ describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
     expect(pool.items.find((i) => i.id === parked.id)?.deliveryGroup?.id).toBe(
       detail.deliveryGroup?.id,
     );
+
+    // Frage 8: Gruppen-Mitglieder stehen in der Liste ZUSAMMEN — adjazent am Anker
+    // des ersten Auftretens —, obwohl ihre Buchungstage sie unter der Standard-
+    // Sortierung sonst über die Liste verstreuen würden.
+    const memberRowIndexes = pool.items
+      .map((i, idx) => ({ id: i.id, idx }))
+      .filter((x) => [ready.id, parked.id, target.id].includes(x.id))
+      .map((x) => x.idx);
+    expect(memberRowIndexes).toHaveLength(3);
+    expect(memberRowIndexes[2]! - memberRowIndexes[0]!).toBe(2);
   });
 });
