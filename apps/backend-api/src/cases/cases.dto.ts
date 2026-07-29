@@ -516,6 +516,12 @@ export class BoardRouteStopDto {
 export class BoardCaseDto {
   @ApiProperty() id!: string;
   @ApiProperty() weBelegNo!: string;
+  @ApiProperty({
+    description:
+      'Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg ' +
+      'verschieden (row.bundleId trägt nur das ERSTE Bündel der Zeile).',
+  })
+  bundleId!: string;
   @ApiProperty() status!: string;
   @ApiProperty() totalQuantity!: number;
   @ApiProperty() estimatedMinutes!: number;
@@ -526,6 +532,17 @@ export class BoardCaseDto {
     description: 'Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone',
   })
   deliveryGroup!: DeliveryGroupRefDto | null;
+}
+
+/**
+ * Ein vom System gebildetes Pack (Engine-Terminologie: Starter-Pack bzw.
+ * Folge-Pack). Packs werden beim Erweitern FLACH ins offene Bündel gemerged;
+ * die Grenze lebt nur in den `bundle.created`/`bundle.extended` Audit-Events
+ * und wird hier fürs Board rekonstruiert (reine Anzeige-Gruppierung).
+ */
+export class BoardPackDto {
+  @ApiProperty({ type: [String], description: 'Case ids des Packs in Bündel-Reihenfolge' })
+  caseIds!: string[];
 }
 
 export class BoardRowDto {
@@ -557,6 +574,13 @@ export class BoardRowDto {
   bereiche!: string[];
   @ApiProperty({ type: [BoardCaseDto] }) cases!: BoardCaseDto[];
   @ApiProperty({ type: [BoardRouteStopDto] }) routeStops!: BoardRouteStopDto[];
+  @ApiProperty({
+    type: [BoardPackDto],
+    description:
+      'Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; ' +
+      'manuell zugewiesene Belege gehören keinem Pack an.',
+  })
+  packs!: BoardPackDto[];
 }
 
 export class BoardDto {

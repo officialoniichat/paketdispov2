@@ -20,6 +20,7 @@ flowchart TB
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen·Schichtende·Problemarten</i>"]:::feat
             problemTab["admin/ProblemReasonsTab<br/><i>Problemarten-Katalog editieren (GET·PUT /api/admin/problem-reasons)</i>"]:::feat
             devtab["admin/DevScenariosTab (nur Dev, lazy)<br/><i>Szenario-Katalog (Backend-Quelle) · Zeit-Override · Quick-Knobs —<br/>per Tree-Shaking aus Prod-Builds entfernt (import.meta.env-Gate, config/devPanel.ts)</i>"]:::dev
+            experiment["experiment/ExperimentPage („Experiment DA.M.B“)<br/><i>3-Fenster-Workspace: Beleg-Liste (eingebettet) · AblagenPane (Lane-DnD: parken/entparken/<br/>priorisieren/weiterleiten + Entziehen-Zone) · MatrixBoard (Pack-Rechtecke aus BoardRow.packs,<br/>Belegstriche mit Statusfarben) · Splitter + Vollbild je Fenster · alle Gesten → ReasonDialog/ForwardDialog<br/>→ bestehende auditierte Mutationen (experimentDnd.ts / matrixPacks.ts, reine Anzeige-Helfer)</i>"]:::feat
         end
         devbadge["components/DevTimeBadge (nur Dev, lazy)<br/><i>globales App-Bar-Badge bei aktivem Server-Zeit-Override</i>"]:::dev
         store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>View-Models + Mutationen (TanStack Query)</i>"]:::store
@@ -32,7 +33,7 @@ flowchart TB
         end
         actions["actions/caseActions.ts<br/><i>getAvailableActions(): zentrale Registry (Status + assign/forward/attention-Flags)<br/>→ ReasonDialog (mit Pflicht-Grund) · custom (assign/forward/attention/split) · sofort (Zurückholen, Aufmerksamkeit entfernen)</i>"]:::logic
         shared["components/<br/><i>CaseActionMenu (Dichte compact/detail, EIN gemeinsames Kebab-Menü für alle Oberflächen) · AssignDialog (Live-Such-Combobox + „Durchsuchen“-Drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (Server-Modus) · ReasonDialog</i>"]:::logic
-        viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen)</i>"]:::logic
+        viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen / .board / .nav / .experiment)</i>"]:::logic
     end
 
     cockpit --> store
@@ -53,6 +54,10 @@ flowchart TB
     board --> shared
     ablagen --> shared
     belege --> shared
+    experiment --> store
+    experiment --> belege
+    experiment --> shared
+    experiment --> viewState
     ablagen --> viewState
     belege --> viewState
     store --> remote

@@ -117,12 +117,21 @@ interface BelegeSavedView {
 
 const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
 
-export function BelegListPage(): JSX.Element {
+export interface BelegListPageProps {
+  /**
+   * localStorage-Key der Saved View. Default ist der Basis-Tab-Key; eingebettete
+   * Instanzen (Experiment DA.M.B) übergeben einen eigenen Key, damit sie den
+   * Basis-Tab /belege nicht umkonfigurieren.
+   */
+  viewStateKey?: string;
+}
+
+export function BelegListPage({ viewStateKey = BELEGE_VIEW_KEY }: BelegListPageProps = {}): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Saved view (C2): scope/sorting/filters survive reloads via localStorage.
   const [savedView] = useState<BelegeSavedView>(() =>
-    loadViewState<BelegeSavedView>(BELEGE_VIEW_KEY, DEFAULT_SAVED_VIEW),
+    loadViewState<BelegeSavedView>(viewStateKey, DEFAULT_SAVED_VIEW),
   );
   const [scope, setScope] = useState<BelegeScope>(savedView.scope);
   const [page, setPage] = useState(1);
@@ -131,8 +140,8 @@ export function BelegListPage(): JSX.Element {
   const debouncedFilters = useDebounced(filters);
 
   useEffect(() => {
-    saveViewState<BelegeSavedView>(BELEGE_VIEW_KEY, { scope, sorting, filters: debouncedFilters });
-  }, [scope, sorting, debouncedFilters]);
+    saveViewState<BelegeSavedView>(viewStateKey, { scope, sorting, filters: debouncedFilters });
+  }, [viewStateKey, scope, sorting, debouncedFilters]);
 
   /** Every filter change restarts on page 1 — a filtered page 4 makes no sense. */
   const updateFilters = (patch: Partial<BelegeFilters>): void => {

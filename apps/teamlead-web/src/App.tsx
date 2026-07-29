@@ -14,6 +14,7 @@ import { BelegListPage } from './features/belege/BelegListPage.js';
 import { BelegDetailPage } from './features/belege/BelegDetailPage.js';
 import { AufteilungenPage } from './features/split/AufteilungenPage.js';
 import { AdminPage } from './features/admin/AdminPage.js';
+import { ExperimentPage } from './features/experiment/ExperimentPage.js';
 
 export function App(): JSX.Element {
   return (
@@ -29,6 +30,7 @@ export function App(): JSX.Element {
               <Route path="belege/:caseId" element={<BelegDetailPage />} />
               <Route path="aufteilungen" element={<AufteilungenPage />} />
               <Route path="admin" element={<AdminPage />} />
+              <Route path="experiment" element={<ExperimentPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

@@ -11,6 +11,15 @@ export const ABLAGEN_VIEW_KEY = 'paket.view.ablagen';
 export const BELEGE_VIEW_KEY = 'paket.view.belege';
 /** Mitarbeiterboard: gewählte Ansicht (Liste vs. Kanban-Raster). */
 export const BOARD_VIEW_KEY = 'paket.view.board';
+/** Cockpit-Shell: eingeklappte Sidebar (Nav-Rail). */
+export const NAV_VIEW_KEY = 'paket.view.nav';
+/** Experiment DA.M.B: Splitter-Verhältnisse des 3-Fenster-Screens. */
+export const EXPERIMENT_VIEW_KEY = 'paket.view.experiment';
+/**
+ * Experiment DA.M.B: Saved View der EINGEBETTETEN Beleg-Liste — eigener Key,
+ * damit das Experiment den Basis-Tab /belege nicht umkonfiguriert.
+ */
+export const EXPERIMENT_BELEGE_VIEW_KEY = 'paket.view.experiment.belege';
 
 /** Read a persisted view state; `fallback` on missing/corrupt/blocked storage. */
 export function loadViewState<T>(key: string, fallback: T): T {

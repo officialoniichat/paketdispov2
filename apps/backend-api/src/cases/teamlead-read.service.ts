@@ -585,6 +585,31 @@ export class TeamleadReadService {
       );
     }
 
+    // Pack-Grenzen (Starter-/Folge-Packs) aus dem Audit-Log rekonstruieren:
+    // `bundle.created`/`bundle.extended` tragen die caseIds des jeweiligen Packs.
+    const packsByBundle = new Map<string, string[][]>();
+    if (bundles.length > 0) {
+      const packEvents = await this.prisma.workflowEvent.findMany({
+        where: {
+          entityType: 'AssignmentBundle',
+          entityId: { in: bundles.map((b) => b.id) },
+          eventType: { in: ['bundle.created', 'bundle.extended'] },
+        },
+        orderBy: { seq: 'asc' },
+        select: { entityId: true, payload: true },
+      });
+      for (const e of packEvents) {
+        const raw = (e.payload as { caseIds?: unknown } | null)?.caseIds;
+        const caseIds = Array.isArray(raw)
+          ? raw.filter((id): id is string => typeof id === 'string')
+          : [];
+        if (caseIds.length === 0) continue;
+        const list = packsByBundle.get(e.entityId) ?? [];
+        list.push(caseIds);
+        packsByBundle.set(e.entityId, list);
+      }
+    }
+
     // Seed one IDLE row per scheduled employee first. The engine emits at most ONE
     // bundle per employee per day, so each row maps 1:1 to a bundle once folded; the
     // per-employee fold is kept defensively so a legacy multi-bundle day still renders.
@@ -617,6 +642,7 @@ export class TeamleadReadService {
         bereiche: s.employee.bereiche,
         cases: [],
         routeStops: [],
+        packs: [],
       });
     }
 
@@ -637,6 +663,7 @@ export class TeamleadReadService {
           bereiche: b.employee.bereiche,
           cases: [],
           routeStops: [],
+          packs: [],
         };
         rowByEmployee.set(b.employeeId, row);
       }
@@ -652,6 +679,7 @@ export class TeamleadReadService {
         row.cases.push({
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,
+          bundleId: b.id,
           status: it.case.status,
           totalQuantity: it.case.totalQuantity,
           estimatedMinutes: effort.minutes,
@@ -679,6 +707,9 @@ export class TeamleadReadService {
           scanRequired: rs.scanRequired,
           scanned: rs.scannedAt !== null,
         });
+      }
+      for (const caseIds of packsByBundle.get(b.id) ?? []) {
+        row.packs.push({ caseIds });
       }
     }
 

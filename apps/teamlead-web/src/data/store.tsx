@@ -402,7 +402,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
           }),
         ),
       onError: (_e, _v, context) => rollback(context),
-      onSettled: invalidateCockpit,
+      // Bündel-Interventionen ändern Case-Status/Zuteilung, die auch Beleg-Liste
+      // und Belegdetails anzeigen — deshalb beide Query-Familien invalidieren.
+      onSettled: invalidateCockpitAndBelege,
     },
   );
 
@@ -430,7 +432,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         return { ...withRow, pool: withRow.pool.filter((p) => p.caseId !== caseId) };
       }),
     onError: (_e, _v, context) => rollback(context),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // Manual assign (§8.4). No optimistic patch: a free employee has no bundleId to
@@ -439,7 +441,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const assignToEmployee = useMutation<unknown, Error, AssignVars>({
     mutationFn: ({ employeeNo, caseId, reason }) =>
       assignToEmployeeRequest(api, { employeeNo, caseId, reason, date }),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // A1/A2 manual multi-Beleg Bündel creation. Same reasoning as assignToEmployee:
@@ -448,7 +450,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const assignBundle = useMutation<unknown, Error, AssignBundleVars>({
     mutationFn: ({ employeeNo, caseIds, reason }) =>
       assignBundleToEmployeeRequest(api, { employeeNo, caseIds, reason, date }),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // B2 move a Beleg between two employees' Bündel. Touches two board rows at once,
@@ -457,7 +459,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const moveCase = useMutation<unknown, Error, MoveCaseVars>({
     mutationFn: ({ bundleId, caseId, targetEmployeeNo, reason }) =>
       moveCaseRequest(api, { bundleId, caseId, targetEmployeeNo, reason, date }),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const reorder = useMutation<unknown, Error, ReorderVars, { previous: CockpitSnapshot | undefined }>({
@@ -474,7 +476,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         }),
       ),
     onError: (_e, _v, context) => rollback(context),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const pauseResume = useMutation<unknown, Error, PauseVars, { previous: CockpitSnapshot | undefined }>(

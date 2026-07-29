@@ -1443,6 +1443,8 @@ export interface components {
         BoardCaseDto: {
             id: string;
             weBelegNo: string;
+            /** @description Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg verschieden (row.bundleId trägt nur das ERSTE Bündel der Zeile). */
+            bundleId: string;
             status: string;
             totalQuantity: number;
             estimatedMinutes: number;
@@ -1456,6 +1458,10 @@ export interface components {
             locationCode: string;
             scanRequired: boolean;
             scanned: boolean;
+        };
+        BoardPackDto: {
+            /** @description Case ids des Packs in Bündel-Reihenfolge */
+            caseIds: string[];
         };
         BoardRowDto: {
             employeeNo: string;
@@ -1474,6 +1480,8 @@ export interface components {
             bereiche: string[];
             cases: components["schemas"]["BoardCaseDto"][];
             routeStops: components["schemas"]["BoardRouteStopDto"][];
+            /** @description Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an. */
+            packs: components["schemas"]["BoardPackDto"][];
         };
         BoardDto: {
             /** @description ISO date YYYY-MM-DD */

@@ -185,6 +185,7 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     paused: row.bundleStatus === 'paused',
     bereiche: row.bereiche,
     cases: row.cases.map(toBoardCase),
+    packs: row.packs.map((p) => p.caseIds),
   };
 }
 
@@ -192,6 +193,7 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
   return {
     caseId: c.id,
     weBelegNo: c.weBelegNo,
+    bundleId: c.bundleId,
     status: toCaseStatus(c.status),
     totalQuantity: c.totalQuantity,
     estimatedMinutes: c.estimatedMinutes,

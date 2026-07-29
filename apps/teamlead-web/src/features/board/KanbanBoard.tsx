@@ -647,8 +647,9 @@ function CaseCard({
             onDragStart({
               caseId: c.caseId,
               weBelegNo: c.weBelegNo,
-              // draggable garantiert bundleId — Belege existieren nur im Bündel.
-              bundleId: row.bundleId ?? '',
+              // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen
+              // (Recalc bei laufendem Alt-Bündel) sind die beiden verschieden.
+              bundleId: c.bundleId ?? row.bundleId ?? '',
               employeeId: row.employeeId,
               employeeName: row.displayName,
               phase,
@@ -813,7 +814,7 @@ function CaseQuickInfo({ c }: { c: BoardCase }): JSX.Element {
 }
 
 /** 2×2-Punkte-Quadrat (2 Punkte oben, 2 darunter) als Drag-Griff eines Belegs. */
-function DragDots(): JSX.Element {
+export function DragDots(): JSX.Element {
   return (
     <Box
       aria-hidden

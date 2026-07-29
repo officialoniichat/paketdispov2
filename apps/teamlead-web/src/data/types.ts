@@ -132,6 +132,12 @@ export interface DeliveryGroupRef {
 export interface BoardCase {
   caseId: string;
   weBelegNo: string;
+  /**
+   * Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg
+   * verschieden (row.bundleId trägt nur das erste Bündel der Zeile). Optional,
+   * damit Test-Fixtures und optimistische Platzhalter schlank bleiben.
+   */
+  bundleId?: string;
   status: GoodsReceiptCase['status'];
   /** Teile of the Beleg — the primary size display (B3). */
   totalQuantity: number;
@@ -165,6 +171,12 @@ export interface BoardRow {
   bereiche: string[];
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
+  /**
+   * Engine-Packs (Starter- + Folge-Packs) als caseId-Listen in chronologischer
+   * Reihenfolge (aus `bundle.created`/`bundle.extended`); manuell zugewiesene
+   * Belege gehören keinem Pack an. Optional, damit Test-Fixtures schlank bleiben.
+   */
+  packs?: string[][];
 }
 
 /** A free (ready, unassigned) case available to assign to an employee (§10.3). */

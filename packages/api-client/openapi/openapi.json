@@ -3918,6 +3918,10 @@
           "weBelegNo": {
             "type": "string"
           },
+          "bundleId": {
+            "type": "string",
+            "description": "Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg verschieden (row.bundleId trägt nur das ERSTE Bündel der Zeile)."
+          },
           "status": {
             "type": "string"
           },
@@ -3944,6 +3948,7 @@
         "required": [
           "id",
           "weBelegNo",
+          "bundleId",
           "status",
           "totalQuantity",
           "estimatedMinutes",
@@ -3975,6 +3980,21 @@
           "locationCode",
           "scanRequired",
           "scanned"
+        ]
+      },
+      "BoardPackDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Case ids des Packs in Bündel-Reihenfolge",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "caseIds"
         ]
       },
       "BoardRowDto": {
@@ -4027,6 +4047,13 @@
             "items": {
               "$ref": "#/components/schemas/BoardRouteStopDto"
             }
+          },
+          "packs": {
+            "description": "Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardPackDto"
+            }
           }
         },
         "required": [
@@ -4039,7 +4066,8 @@
           "capacityMinutes",
           "bereiche",
           "cases",
-          "routeStops"
+          "routeStops",
+          "packs"
         ]
       },
       "BoardDto": {
