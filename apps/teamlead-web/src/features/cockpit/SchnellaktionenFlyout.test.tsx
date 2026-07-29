@@ -16,11 +16,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
 
 describe('SchnellaktionenFlyout', () => {
-  it('Hexagon meldet die Anzahl und klappt die Schnellaktionen als zweite Sidebar aus', () => {
+  it('Knopf meldet die Anzahl, klappt aus und meldet den Zustand nach oben (Overlay über allem)', () => {
+    const onOpenChange = vi.fn();
     render(
       <AppProviders queryClient={createQueryClient({ retry: 0 })}>
         <MemoryRouter>
-          <SchnellaktionenFlyout />
+          <SchnellaktionenFlyout onOpenChange={onOpenChange} />
         </MemoryRouter>
       </AppProviders>,
     );
@@ -30,7 +31,10 @@ describe('SchnellaktionenFlyout', () => {
     fireEvent.click(button);
     expect(screen.getByText('Schnellaktionen (1)')).toBeTruthy();
     expect(screen.getByText('Probleme offen')).toBeTruthy();
+    // Die AppShell hört mit und hebt die Rail über alle Ebenen.
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
     fireEvent.click(screen.getByLabelText('Schnellaktionen schließen'));
     expect(screen.queryByText('Probleme offen')).toBeNull();
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
   });
 });

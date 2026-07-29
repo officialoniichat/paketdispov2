@@ -5,7 +5,10 @@
  * Schräge), der eine ZWEITE Sidebar mit den Schnellaktionen des Tagescockpits
  * ausklappt. Default weiß, rot sobald Meldungen vorliegen — Knopf und Panel
  * voll deckend; das blaue gleichschenklige Dreieck zeigt nach rechts
- * (geöffnet nach links).
+ * (geöffnet nach links). Geöffnet liegt das Popout über ALLEM: onOpenChange
+ * meldet den Zustand an die AppShell, die den Stacking-Context der Rail über
+ * alle Ebenen hebt (die Rail selbst ist sticky — ein z-Index hier drin allein
+ * könnte den Seiteninhalt nie unterbieten lassen).
  */
 import { useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -21,8 +24,17 @@ const HEX_W = 26;
 const HEX_H = 84;
 const PANEL_W = 340;
 
-export function SchnellaktionenFlyout(): JSX.Element {
-  const [open, setOpen] = useState(false);
+export interface SchnellaktionenFlyoutProps {
+  /** Meldet Auf-/Zuklappen — die AppShell hebt die Rail dann über alle Ebenen. */
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutProps): JSX.Element {
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean): void => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const decisions = useSchnellaktionen();
   const alarm = decisions.length > 0;
   const label = open
@@ -103,7 +115,7 @@ export function SchnellaktionenFlyout(): JSX.Element {
           type="button"
           aria-label={label}
           aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(!open)}
           sx={{
             position: 'absolute',
             top: '50%',

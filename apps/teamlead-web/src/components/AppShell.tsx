@@ -83,6 +83,12 @@ export function AppShell(): JSX.Element {
   };
   // Experiment DA.M.B will die volle Fläche: Fenster bis in die Bildschirm-Ecken.
   const fullBleed = useLocation().pathname.startsWith('/experiment');
+  // Schnellaktionen-Popout: die Rail (sticky = eigener Stacking-Context) liegt
+  // im Ruhezustand auf appBar-Höhe, damit der herausragende Trapez-Knopf nie
+  // vom Seiteninhalt überdeckt wird (Dialog-Backdrops dimmen sie weiterhin);
+  // GEÖFFNET hebt sie sich über ALLE Ebenen (inkl. Tooltips) — nichts darf das
+  // Panel überlappen.
+  const [schnellaktionenOffen, setSchnellaktionenOffen] = useState(false);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -100,6 +106,7 @@ export function AppShell(): JSX.Element {
           position: 'sticky',
           top: 0,
           height: '100vh',
+          zIndex: (t) => (schnellaktionenOffen ? t.zIndex.tooltip + 1 : t.zIndex.appBar),
         }}
       >
         <Box sx={{ px: collapsed ? 1 : 2.5, py: 2.5, textAlign: collapsed ? 'center' : 'left' }}>
@@ -181,7 +188,7 @@ export function AppShell(): JSX.Element {
         </Box>
         {/* Trapez-Ausklapper (Außenkante, vertikale Mitte): zweite Sidebar mit
             den Schnellaktionen des Tagescockpits — rot, sobald Meldungen da sind. */}
-        <SchnellaktionenFlyout />
+        <SchnellaktionenFlyout onOpenChange={setSchnellaktionenOffen} />
       </Box>
 
       <Box
