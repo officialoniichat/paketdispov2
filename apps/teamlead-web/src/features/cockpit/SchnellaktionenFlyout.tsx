@@ -3,8 +3,8 @@
  * asymmetrischer Sechseck-Knopf nach Nutzer-Skizze (oberste/unterste Kante
  * stark nach innen gezogen, die zweiten flacher, die Mitte perfekt senkrecht),
  * der eine ZWEITE Sidebar mit den Schnellaktionen des Tagescockpits ausklappt.
- * Der Knopf wird rot, sobald Meldungen vorliegen; das blaue gleichschenklige
- * Dreieck zeigt nach rechts (geöffnet nach links).
+ * Default weiß, rot sobald Meldungen vorliegen — Knopf und Panel voll deckend;
+ * das blaue gleichschenklige Dreieck zeigt nach rechts (geöffnet nach links).
  */
 import { useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -51,7 +51,9 @@ export function SchnellaktionenFlyout(): JSX.Element {
           sx={{
             position: 'absolute',
             inset: 0,
-            bgcolor: 'background.paper',
+            // Voll deckend (Nutzer-Vorgabe „höchste Deckkraft") — nichts scheint durch.
+            bgcolor: '#fff',
+            opacity: 1,
             color: 'text.primary',
             borderRight: '1px solid',
             borderColor: 'divider',
@@ -112,15 +114,20 @@ export function SchnellaktionenFlyout(): JSX.Element {
             p: 0,
             m: 0,
             cursor: 'pointer',
-            // Asymmetrisches Hexagon (Nutzer-Skizze): von oben — starke Schräge,
-            // flachere Schräge, senkrechte Vorderkante, dann gespiegelt zurück.
-            clipPath: 'polygon(0% 0%, 55% 18%, 100% 38%, 100% 62%, 55% 82%, 0% 100%)',
-            bgcolor: alarm ? ltColors.danger : ltColors.brand,
+            // Asymmetrisches Hexagon (Nutzer-Skizze): oberste/unterste Kante
+            // deutlich nach außen geneigt (starke Ecken), dann flachere Schräge,
+            // senkrechte Vorderkante, gespiegelt zurück.
+            clipPath: 'polygon(0% 0%, 68% 15%, 100% 40%, 100% 60%, 68% 85%, 0% 100%)',
+            // Default WEISS, rot nur bei Meldungen — immer voll deckend; der
+            // Schatten ersetzt den Rand (ein CSS-Border folgt der Clip-Form nicht).
+            bgcolor: alarm ? ltColors.danger : '#fff',
+            opacity: 1,
+            filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.4))',
             transition: 'background-color 150ms ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            '&:hover': { filter: 'brightness(1.2)' },
+            '&:hover': { filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.4)) brightness(0.94)' },
           }}
         >
           {/* Blaues gleichschenkliges Dreieck: zeigt nach rechts, geöffnet nach links. */}
@@ -132,8 +139,8 @@ export function SchnellaktionenFlyout(): JSX.Element {
               borderTop: '7px solid transparent',
               borderBottom: '7px solid transparent',
               ...(open
-                ? { borderRight: '9px solid #4da3ff', mr: '2px' }
-                : { borderLeft: '9px solid #4da3ff', ml: '2px' }),
+                ? { borderRight: '9px solid #1976d2', mr: '2px' }
+                : { borderLeft: '9px solid #1976d2', ml: '2px' }),
             }}
           />
         </Box>
