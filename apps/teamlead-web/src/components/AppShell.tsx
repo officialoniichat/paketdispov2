@@ -25,6 +25,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { ltColors } from '@paket/ui';
 import { EMPLOYEE_APP_URL } from '../config/appLinks.js';
 import { devPanelRuntimeEnabled } from '../config/devPanel.js';
+import { SchnellaktionenFlyout } from '../features/cockpit/SchnellaktionenFlyout.js';
 import { NAV_VIEW_KEY, loadViewState, saveViewState } from '../lib/viewState.js';
 
 /**
@@ -178,6 +179,9 @@ export function AppShell(): JSX.Element {
             {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton>
         </Box>
+        {/* Hexagon-Ausklapper (Außenkante, vertikale Mitte): zweite Sidebar mit
+            den Schnellaktionen des Tagescockpits — rot, sobald Meldungen da sind. */}
+        <SchnellaktionenFlyout />
       </Box>
 
       <Box
