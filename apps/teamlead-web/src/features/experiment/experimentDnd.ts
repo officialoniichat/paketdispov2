@@ -30,6 +30,24 @@ export type ExperimentDragPayload =
       bundleId: string;
       employeeId: string;
       employeeName: string;
+    }
+  | {
+      /** Einzelne Beleg-Zeile aus einem Vorverteilungs-Bündel (Rückseite des Beleg-Fensters). */
+      source: 'vorschlag';
+      caseId: string;
+      weBelegNo: string;
+      /** Slot-Index des Bündels, aus dem gezogen wird. */
+      slot: number;
+    }
+  | {
+      /** Ganzes vorbereitetes Bündel — Drop auf eine Matrix-Zeile = echtes A1/A2-Zuweisen. */
+      source: 'vorschlag-bundle';
+      slot: number;
+      /** Belege in Abhol-Reihenfolge (erster Beleg wird erstes Bündel-Mitglied). */
+      caseIds: string[];
+      teile: number;
+      /** Nur wenn ALLE Belege `ready` sind, ist echtes Zuweisen erlaubt. */
+      allReady: boolean;
     };
 
 /** Aktion, die ein Drop auf eine Ablage-Lane auslöst. */
@@ -88,7 +106,7 @@ export function ablagenDropAction(
 }
 
 /** Aktion, die ein Drop auf eine Mitarbeiter-Zeile der Matrix auslöst. */
-export type MatrixDropAction = { kind: 'assign' } | { kind: 'move' };
+export type MatrixDropAction = { kind: 'assign' } | { kind: 'move' } | { kind: 'assign-bundle' };
 
 export function matrixDropAction(
   drag: ExperimentDragPayload,
@@ -97,6 +115,13 @@ export function matrixDropAction(
   if (drag.source === 'ablage') {
     // Zuweisen verlangt exakt `ready` ohne Weiterleitungs-Umweg (Registry-Regel).
     return drag.status === 'ready' && drag.forwardedTo === null ? { kind: 'assign' } : null;
+  }
+  // Vorschau-Zeilen ordnet nur die Rückseite selbst um — kein Matrix-Ziel.
+  if (drag.source === 'vorschlag') return null;
+  if (drag.source === 'vorschlag-bundle') {
+    // Vorbereitetes Bündel → ECHTES A1/A2-Zuweisen (assign-bundle); die Vorschau
+    // enthält auch re-geplante `assigned`-Belege, daher nur wenn alle `ready` sind.
+    return drag.allReady && drag.caseIds.length > 0 ? { kind: 'assign-bundle' } : null;
   }
   if (drag.employeeId === targetEmployeeId) return null;
   // Nur ungestartete Belege sind verschiebbar (§7.1: move verlangt `assigned`).

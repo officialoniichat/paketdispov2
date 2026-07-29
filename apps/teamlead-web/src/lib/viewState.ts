@@ -27,6 +27,11 @@ export const EXPERIMENT_ZOOM_VIEW_KEY = 'paket.view.experiment.zoom';
  * Key, damit das Experiment den Basis-Tab /ablagen nicht umkonfiguriert.
  */
 export const EXPERIMENT_ABLAGEN_VIEW_KEY = 'paket.view.experiment.ablagen';
+/**
+ * Experiment DA.M.B: Vorverteilung (Rückseite des Beleg-Fensters) — Anzahl
+ * vorzubereitender Bündel + Sperr-Schalter des Zahnrad-Menüs.
+ */
+export const EXPERIMENT_VORVERTEILUNG_VIEW_KEY = 'paket.view.experiment.vorverteilung';
 
 /** Read a persisted view state; `fallback` on missing/corrupt/blocked storage. */
 export function loadViewState<T>(key: string, fallback: T): T {

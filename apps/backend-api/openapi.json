@@ -5414,6 +5414,68 @@
           "bundleCount"
         ]
       },
+      "PlannedBundleCaseDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "teile": {
+            "type": "number"
+          },
+          "minutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "caseId",
+          "weBelegNo",
+          "teile",
+          "minutes"
+        ]
+      },
+      "PlannedBundleDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "caseIds": {
+            "description": "Belege in Abhol-Reihenfolge.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cases": {
+            "description": "Selbe Reihenfolge wie caseIds.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedBundleCaseDto"
+            }
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          },
+          "effortPoints": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bundleId",
+          "employeeId",
+          "caseIds",
+          "cases",
+          "plannedEffortMinutes",
+          "effortPoints"
+        ]
+      },
       "RecalculateResultDto": {
         "type": "object",
         "properties": {
@@ -5438,6 +5500,13 @@
             "items": {
               "$ref": "#/components/schemas/EmployeeLoadDto"
             }
+          },
+          "bundles": {
+            "description": "Geplante Bündel des Laufs (§8.3).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedBundleDto"
+            }
           }
         },
         "required": [
@@ -5446,7 +5515,8 @@
           "assignedCaseCount",
           "unassignedCaseCount",
           "durationMs",
-          "loads"
+          "loads",
+          "bundles"
         ]
       },
       "ZstExportResultDto": {

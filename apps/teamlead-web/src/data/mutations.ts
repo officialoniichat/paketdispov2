@@ -242,6 +242,19 @@ function toPreviewResult(dto: RecalculateResultDto): PreviewResult {
       assignedPoints: load.assignedPoints,
       bundleCount: load.bundleCount,
     })),
+    bundles: dto.bundles.map((bundle) => ({
+      bundleId: bundle.bundleId,
+      employeeId: bundle.employeeId,
+      caseIds: [...bundle.caseIds],
+      cases: bundle.cases.map((c) => ({
+        caseId: c.caseId,
+        weBelegNo: c.weBelegNo,
+        teile: c.teile,
+        minutes: c.minutes,
+      })),
+      plannedEffortMinutes: bundle.plannedEffortMinutes,
+      effortPoints: bundle.effortPoints,
+    })),
   };
 }
 

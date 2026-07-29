@@ -114,7 +114,7 @@ function MatrixRow({
   onDragEnd,
   requestReason,
 }: MatrixRowProps): JSX.Element {
-  const { assignToEmployee, moveCase, pauseResume } = useCockpitData();
+  const { assignToEmployee, assignBundle, moveCase, pauseResume } = useCockpitData();
   const [over, setOver] = useState(false);
   // Krank/Urlaub (Schichtplan-Kalender): Zeile wird nur noch angezeigt (ganz
   // unten, durchgestrichen) — Drops sind gesperrt, Abwesende bekommen nichts.
@@ -139,7 +139,7 @@ function MatrixRow({
     setOver(false);
     if (dragging === null || action === null) return;
     const src = dragging;
-    if (action.kind === 'assign') {
+    if (action.kind === 'assign' && src.source === 'ablage') {
       requestReason({
         title: `${src.weBelegNo} an ${row.displayName} zuweisen`,
         description:
@@ -147,6 +147,16 @@ function MatrixRow({
         suggestions: ['Kapazität frei', 'Bereich passt', 'Eilig für Verladung'],
         run: (reason) =>
           assignToEmployee.mutate({ employeeNo: row.employeeId, caseId: src.caseId, reason }),
+      });
+    } else if (action.kind === 'assign-bundle' && src.source === 'vorschlag-bundle') {
+      // Vorverteilung → Matrix: das vorbereitete Bündel wird ECHT zugewiesen (A1/A2).
+      requestReason({
+        title: `Vorbereitetes Bündel (${src.caseIds.length} Belege · ${src.teile} Teile) an ${row.displayName} zuweisen`,
+        description:
+          'Alle Belege des vorbereiteten Bündels werden dem Tages-Bündel des Mitarbeiters zugeteilt (alles-oder-nichts).',
+        suggestions: ['Vorverteilung übernehmen', 'Kapazität frei', 'Bereich passt'],
+        run: (reason) =>
+          assignBundle.mutate({ employeeNo: row.employeeId, caseIds: src.caseIds, reason }),
       });
     } else if (src.source === 'matrix') {
       requestReason({

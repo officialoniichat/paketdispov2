@@ -42,6 +42,30 @@ export class EmployeeLoadDto {
   @ApiProperty() bundleCount!: number;
 }
 
+/**
+ * One planned Bündel of an engine run, in engine emission order. For preview this
+ * is pure Vorschau (nothing persisted) — the Teamlead-Vorverteilung renders these
+ * containers; committing happens only via the existing audited assign endpoints.
+ */
+/** Anzeige-Metadaten eines geplanten Belegs (die UI joint nicht selbst). */
+export class PlannedBundleCaseDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty() weBelegNo!: string;
+  @ApiProperty() teile!: number;
+  @ApiProperty() minutes!: number;
+}
+
+export class PlannedBundleDto {
+  @ApiProperty() bundleId!: string;
+  @ApiProperty() employeeId!: string;
+  @ApiProperty({ type: [String], description: 'Belege in Abhol-Reihenfolge.' })
+  caseIds!: string[];
+  @ApiProperty({ type: [PlannedBundleCaseDto], description: 'Selbe Reihenfolge wie caseIds.' })
+  cases!: PlannedBundleCaseDto[];
+  @ApiProperty() plannedEffortMinutes!: number;
+  @ApiProperty() effortPoints!: number;
+}
+
 /** Result of an assignment run (§8.3). */
 export class RecalculateResultDto {
   @ApiProperty() date!: string;
@@ -51,4 +75,6 @@ export class RecalculateResultDto {
   @ApiProperty({ description: 'Wall-clock of the engine run (Anhang E.5 budget < 5000ms).' })
   durationMs!: number;
   @ApiProperty({ type: [EmployeeLoadDto] }) loads!: EmployeeLoadDto[];
+  @ApiProperty({ type: [PlannedBundleDto], description: 'Geplante Bündel des Laufs (§8.3).' })
+  bundles!: PlannedBundleDto[];
 }

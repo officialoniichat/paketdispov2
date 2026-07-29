@@ -80,11 +80,35 @@ describe('ablagenDropAction', () => {
   });
 });
 
+type VorschlagBundleDrag = Extract<ExperimentDragPayload, { source: 'vorschlag-bundle' }>;
+
+function vorschlagBundle(overrides: Partial<VorschlagBundleDrag> = {}): VorschlagBundleDrag {
+  return {
+    source: 'vorschlag-bundle',
+    slot: 0,
+    caseIds: ['c1', 'c2'],
+    teile: 55,
+    allReady: true,
+    ...overrides,
+  };
+}
+
 describe('matrixDropAction', () => {
   it('Ablage-Drag: nur ready + nicht weitergeleitet = zuweisen', () => {
     expect(matrixDropAction(ablage(), 'emp2')).toEqual({ kind: 'assign' });
     expect(matrixDropAction(ablage({ status: 'parked' }), 'emp2')).toBeNull();
     expect(matrixDropAction(ablage({ forwardedTo: 'retourenabteilung' }), 'emp2')).toBeNull();
+  });
+
+  it('Vorschau-Bündel: komplett ready = assign-bundle, sonst kein Ziel', () => {
+    expect(matrixDropAction(vorschlagBundle(), 'emp2')).toEqual({ kind: 'assign-bundle' });
+    expect(matrixDropAction(vorschlagBundle({ allReady: false }), 'emp2')).toBeNull();
+    expect(matrixDropAction(vorschlagBundle({ caseIds: [] }), 'emp2')).toBeNull();
+    // Einzelne Vorschau-Zeile ordnet nur die Rückseite um — nie ein Matrix-Ziel.
+    expect(
+      matrixDropAction({ source: 'vorschlag', caseId: 'c1', weBelegNo: 'WE 1', slot: 0 }, 'emp2'),
+    ).toBeNull();
+    expect(ablagenDropAction(vorschlagBundle(), 'geparkt')).toBeNull();
   });
 
   it('Matrix-Drag: nur ungestartete Belege auf ANDERE Mitarbeiter = verschieben', () => {

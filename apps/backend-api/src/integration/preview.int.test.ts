@@ -122,6 +122,14 @@ describe('§E.4 assignment preview (no-persist)', () => {
     expect(plan.durationMs).toBeLessThan(5_000);
     expect(Array.isArray(plan.loads)).toBe(true);
 
+    // Bündel-Details (Vorverteilungs-Vorschau): Inhalte decken exakt die
+    // vorgeschlagenen Zuweisungen ab, jedes Bündel nennt seinen Ziel-MA.
+    expect(plan.bundles).toHaveLength(plan.bundleCount);
+    expect(plan.bundles.reduce((sum, b) => sum + b.caseIds.length, 0)).toBe(
+      plan.assignedCaseCount,
+    );
+    for (const bundle of plan.bundles) expect(bundle.employeeId).not.toBe('');
+
     // Nothing persisted: every row count and the pool composition are unchanged.
     const after = await counts();
     expect(after).toEqual(before);

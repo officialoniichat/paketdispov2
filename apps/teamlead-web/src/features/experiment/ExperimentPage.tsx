@@ -28,12 +28,15 @@ import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { ltColors } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import type { LaneCard } from '../../data/types.js';
 import { buildGroupColorMap } from '../../components/LieferungChip.js';
@@ -50,6 +53,7 @@ import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { BelegListPage } from '../belege/BelegListPage.js';
 import { AblagenPane, WithdrawZone, buildWithdrawAction } from './AblagenPane.js';
 import { MatrixBoard, MatrixInfo } from './MatrixBoard.js';
+import { VorverteilungPane } from './VorverteilungPane.js';
 import { canWithdraw, type ExperimentDragPayload } from './experimentDnd.js';
 import {
   DEFAULT_SPLIT,
@@ -69,6 +73,8 @@ export function ExperimentPage(): JSX.Element {
   const [dragging, setDragging] = useState<ExperimentDragPayload | null>(null);
   const [forwardCard, setForwardCard] = useState<LaneCard | null>(null);
   const [focus, setFocus] = useState<PaneId | null>(null);
+  // Flip-Karte des Beleg-Fensters: Vorderseite Beleg-Liste, Rückseite Vorverteilung.
+  const [vorverteilungOffen, setVorverteilungOffen] = useState(false);
   const [split, setSplit] = useState<ExperimentSplit>(() =>
     sanitizeSplit(loadViewState<Partial<ExperimentSplit>>(EXPERIMENT_VIEW_KEY, DEFAULT_SPLIT)),
   );
@@ -158,15 +164,95 @@ export function ExperimentPage(): JSX.Element {
 
   const belegePane = (
     <Pane
-      title="Beleg-Übersicht"
+      title={vorverteilungOffen ? 'Vorverteilung' : 'Beleg-Übersicht'}
       focused={focus === 'belege'}
       onToggleFullscreen={() => toggleFocus('belege')}
       zoom={zoom.belege}
       onZoomDelta={(delta) => changeZoom('belege', delta)}
+      center={
+        <Tooltip
+          title={
+            vorverteilungOffen
+              ? 'Karte zurückdrehen — Beleg-Übersicht'
+              : 'Karte umdrehen — Vorverteilung (Bündel vorbereiten)'
+          }
+        >
+          {/* Flip-Knopf (Nutzer-Wunsch): dezentes abgerundetes Quadrat im
+              Sidebar-Blau mit weißer Bündel-Tasche, oben mittig zentriert. */}
+          <Box
+            component="button"
+            type="button"
+            aria-label={
+              vorverteilungOffen ? 'Zur Beleg-Übersicht drehen' : 'Zur Vorverteilung drehen'
+            }
+            onClick={() => setVorverteilungOffen((v) => !v)}
+            sx={{
+              width: 22,
+              height: 22,
+              p: 0,
+              border: 'none',
+              borderRadius: 1,
+              bgcolor: ltColors.brand,
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              '&:hover': { filter: 'brightness(1.15)' },
+            }}
+          >
+            <LocalMallOutlinedIcon sx={{ fontSize: 14 }} />
+          </Box>
+        </Tooltip>
+      }
     >
-      <Box sx={{ height: '100%', overflow: 'auto', p: 1 }}>
-        {/* Eigener Saved-View-Key: das Experiment darf /belege nicht umkonfigurieren. */}
-        <BelegListPage viewStateKey={EXPERIMENT_BELEGE_VIEW_KEY} fill />
+      {/* Flip-Karte: 3D-Drehung um die Y-Achse. Beide Seiten bleiben gemountet,
+          damit Tabellen-Filter/Scroll und der Vorschlag ihren Zustand behalten;
+          die verdeckte Seite ist inert (aria-hidden + pointerEvents none). */}
+      <Box sx={{ height: '100%', perspective: '1600px' }}>
+        <Box
+          sx={{
+            position: 'relative',
+            height: '100%',
+            transformStyle: 'preserve-3d',
+            transition: 'transform 500ms ease',
+            transform: vorverteilungOffen ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          }}
+        >
+          <Box
+            aria-hidden={vorverteilungOffen}
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              backfaceVisibility: 'hidden',
+              overflow: 'auto',
+              p: 1,
+              pointerEvents: vorverteilungOffen ? 'none' : 'auto',
+              bgcolor: 'background.paper',
+            }}
+          >
+            {/* Eigener Saved-View-Key: das Experiment darf /belege nicht umkonfigurieren. */}
+            <BelegListPage viewStateKey={EXPERIMENT_BELEGE_VIEW_KEY} fill />
+          </Box>
+          <Box
+            aria-hidden={!vorverteilungOffen}
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              backfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
+              pointerEvents: vorverteilungOffen ? 'auto' : 'none',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <VorverteilungPane
+              active={vorverteilungOffen}
+              dragging={dragging}
+              onDragStart={setDragging}
+              onDragEnd={clearDrag}
+            />
+          </Box>
+        </Box>
       </Box>
     </Pane>
   );
@@ -296,6 +382,8 @@ interface PaneProps {
   onZoomDelta: (delta: number) => void;
   /** Zusätzliche Kopfleisten-Aktionen (z. B. der Info-Kreis der Matrix). */
   actions?: ReactNode;
+  /** Mittig zentrierte Kopf-Aktion (z. B. der Flip-Knopf des Beleg-Fensters). */
+  center?: ReactNode;
   children: ReactNode;
 }
 
@@ -307,6 +395,7 @@ function Pane({
   zoom,
   onZoomDelta,
   actions,
+  center,
   children,
 }: PaneProps): JSX.Element {
   return (
@@ -324,6 +413,7 @@ function Pane({
     >
       <Box
         sx={{
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
           px: 1,
@@ -335,6 +425,13 @@ function Pane({
         }}
       >
         <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{title}</Typography>
+        {center !== undefined && (
+          <Box
+            sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex' }}
+          >
+            {center}
+          </Box>
+        )}
         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25 }}>
           <IconButton
             size="small"

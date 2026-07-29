@@ -33,28 +33,8 @@ import { useCaseLabels } from '../../data/caseLabels.js';
 import { formatAuditAction } from '../../data/audit.js';
 import { SimulationPanel } from '../simulation/SimulationPanel.js';
 import { SchnellaktionenListe, useSchnellaktionen } from './schnellaktionen.js';
+import { useAutomatik } from './automatik.js';
 import { formatDate, formatDateTime, formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
-
-const AUTOMATIK_KEY = 'paket.automatik';
-
-function useAutomatik(): readonly [boolean, (on: boolean) => void] {
-  const [on, setOn] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(AUTOMATIK_KEY) !== 'off';
-    } catch {
-      return true;
-    }
-  });
-  const set = (v: boolean): void => {
-    setOn(v);
-    try {
-      localStorage.setItem(AUTOMATIK_KEY, v ? 'on' : 'off');
-    } catch {
-      /* ignore storage errors */
-    }
-  };
-  return [on, set] as const;
-}
 
 export function CockpitPage(): JSX.Element {
   const { cockpit, board, lanes, recentOverrides, isLoading, error, refetch, recalculate } =

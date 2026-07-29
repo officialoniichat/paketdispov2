@@ -1919,6 +1919,22 @@ export interface components {
             assignedPoints: number;
             bundleCount: number;
         };
+        PlannedBundleCaseDto: {
+            caseId: string;
+            weBelegNo: string;
+            teile: number;
+            minutes: number;
+        };
+        PlannedBundleDto: {
+            bundleId: string;
+            employeeId: string;
+            /** @description Belege in Abhol-Reihenfolge. */
+            caseIds: string[];
+            /** @description Selbe Reihenfolge wie caseIds. */
+            cases: components["schemas"]["PlannedBundleCaseDto"][];
+            plannedEffortMinutes: number;
+            effortPoints: number;
+        };
         RecalculateResultDto: {
             date: string;
             bundleCount: number;
@@ -1927,6 +1943,8 @@ export interface components {
             /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
             durationMs: number;
             loads: components["schemas"]["EmployeeLoadDto"][];
+            /** @description Geplante Bündel des Laufs (§8.3). */
+            bundles: components["schemas"]["PlannedBundleDto"][];
         };
         ZstExportResultDto: {
             /** @description ISO date YYYY-MM-DD the export ran */

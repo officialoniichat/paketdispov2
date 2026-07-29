@@ -211,6 +211,26 @@ export interface PreviewEmployeeLoad {
  * Produced by `/assignments/preview`; persists nothing until committed via
  * `/assignments/recalculate`.
  */
+/** Anzeige-Metadaten eines geplanten Belegs (kommen aus dem Engine-Lauf mit). */
+export interface PreviewBundleCase {
+  caseId: string;
+  weBelegNo: string;
+  teile: number;
+  minutes: number;
+}
+
+/** Ein vom Engine-Lauf geplantes Bündel (Preview: reine Vorschau, nichts persistiert). */
+export interface PreviewBundle {
+  bundleId: string;
+  employeeId: string;
+  /** Belege in Abhol-Reihenfolge. */
+  caseIds: string[];
+  /** Selbe Reihenfolge wie caseIds. */
+  cases: PreviewBundleCase[];
+  plannedEffortMinutes: number;
+  effortPoints: number;
+}
+
 export interface PreviewResult {
   date: string;
   bundleCount: number;
@@ -218,5 +238,7 @@ export interface PreviewResult {
   unassignedCaseCount: number;
   durationMs: number;
   loads: PreviewEmployeeLoad[];
+  /** Geplante Bündel in Engine-Reihenfolge — Datenquelle der Vorverteilungs-Vorschau. */
+  bundles: PreviewBundle[];
 }
 
