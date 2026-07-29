@@ -3853,6 +3853,10 @@
             "type": "string",
             "description": "Delivery-group id"
           },
+          "label": {
+            "type": "string",
+            "description": "Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE <kleinste Beleg-Nr>\""
+          },
           "signal": {
             "type": "string",
             "enum": [
@@ -3896,6 +3900,7 @@
         },
         "required": [
           "id",
+          "label",
           "signal",
           "confidence",
           "presentSize",
@@ -4881,6 +4886,10 @@
             "type": "string",
             "description": "Delivery-group id"
           },
+          "label": {
+            "type": "string",
+            "description": "Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE <kleinste Beleg-Nr>\""
+          },
           "signal": {
             "type": "string",
             "enum": [
@@ -4931,6 +4940,7 @@
         },
         "required": [
           "id",
+          "label",
           "signal",
           "confidence",
           "presentSize",

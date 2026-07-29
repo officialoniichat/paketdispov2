@@ -19,14 +19,29 @@ import type {
 /**
  * Project a detected {@link DeliveryGroup} onto the per-case {@link DeliveryGroupRefDto}
  * shown on every surface (Board, Pool, Detail). `missingCount` realises the „X von N"
- * completeness — how many Belege of the delivery have not been booked yet.
+ * completeness — how many Belege of the delivery have not been booked yet. `label` is
+ * the human identity of the delivery (Frage 8: WELCHE Zeilen gehören zusammen): the
+ * shared Lieferschein-Nr when all members carry the same one, otherwise the smallest
+ * member WE-Nr („ab WE …" — source-key- und Lauf-Gruppen haben je eigene Lieferscheine).
  */
-export function mapDeliveryGroupRef(group: DeliveryGroup): DeliveryGroupRefDto {
+export function mapDeliveryGroupRef(
+  group: DeliveryGroup,
+  membersById: ReadonlyMap<string, { weBelegNo: string; deliveryNoteNo: string | null }>,
+): DeliveryGroupRefDto {
   const missingCount = group.expectedSize
     ? Math.max(0, group.expectedSize - group.presentSize)
     : 0;
+  const members = group.caseIds
+    .map((id) => membersById.get(id))
+    .filter((m): m is { weBelegNo: string; deliveryNoteNo: string | null } => m !== undefined);
+  const notes = new Set(
+    members.map((m) => m.deliveryNoteNo?.trim()).filter((n): n is string => !!n),
+  );
+  const label =
+    notes.size === 1 ? [...notes][0]! : `ab WE ${members[0]?.weBelegNo ?? group.id}`;
   return {
     id: group.id,
+    label,
     signal: group.signal,
     confidence: group.confidence,
     presentSize: group.presentSize,

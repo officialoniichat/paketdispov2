@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag, Prisma } from '@prisma/client';
-import { detectDeliveryGroups, indexDeliveryGroups } from '@paket/assignment-engine';
+import {
+  detectDeliveryGroups,
+  indexDeliveryGroups,
+  type DeliveryGroup,
+  type GroupingConfig,
+} from '@paket/assignment-engine';
 import { bereichFromLocationKind, locationKindSchema } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
@@ -201,43 +206,15 @@ export class TeamleadReadService {
       loadRuleConfig(this.prisma),
     ]);
 
-    // Detect delivery groups over ALL filtered Belege (not just this page) so the Eingang
-    // shows groups BEFORE distribution and a group is never split by pagination.
-    const groupRows = await this.prisma.goodsReceiptCase.findMany({
-      where,
-      select: {
-        id: true,
-        weBelegNo: true,
-        deliveryNoteNo: true,
-        deliverySourceGroupKey: true,
-        deliverySourceGroupSize: true,
-        manualDeliveryGroupKey: true,
-        deliveryGroupReleased: true,
-        bookingDate: true,
-        section: true,
-      },
-    });
-    const groups = detectDeliveryGroups(
-      groupRows.map((c) => ({
-        id: c.id,
-        weBelegNo: c.weBelegNo,
-        deliveryNoteNo: c.deliveryNoteNo,
-        deliverySourceGroupKey: c.deliverySourceGroupKey,
-        deliverySourceGroupSize: c.deliverySourceGroupSize,
-        manualDeliveryGroupKey: c.manualDeliveryGroupKey,
-        bookingDate: c.bookingDate.toISOString().slice(0, 10),
-        section: c.section,
-        deliveryGroupReleased: c.deliveryGroupReleased,
-      })),
-      ruleConfig.grouping,
-    );
-    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+    // Delivery groups come from the canonical, status-independent universe (all
+    // Belege) — the same detection the Belegdetail shows, so chip and „Zugehörige
+    // Lieferung" can never contradict each other across scopes or filters.
+    const universe = await this.deliveryGroupUniverse(ruleConfig.grouping);
 
     const items: PoolItemDto[] = rows.map((c) => {
       // Show the SAME effort the distribution uses: live-computed for instructionalised
       // cases, stored estimate otherwise (see resolveCaseEffort).
       const effort = resolveCaseEffort(c, ruleConfig.effort);
-      const group = groupById.get(groupIdByCaseId.get(c.id) ?? '');
       return {
         id: c.id,
         weBelegNo: c.weBelegNo,
@@ -264,7 +241,7 @@ export class TeamleadReadService {
         forwardedTo: c.forwardedTo,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
-        deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
+        deliveryGroup: universe.refFor(c.id),
         bereich: c.storageLocation
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
@@ -348,7 +325,7 @@ export class TeamleadReadService {
     }
 
     // Delivery-group context so the dialog shows the „Lieferung ×n" chip before assigning.
-    const detail = await this.deliveryGroupDetail(found.id, found.bookingDate);
+    const detail = await this.deliveryGroupDetail(found.id);
     const deliveryGroup = detail ? (({ members: _members, ...ref }) => ref)(detail) : null;
 
     return {
@@ -409,28 +386,13 @@ export class TeamleadReadService {
     }));
     const ranked = rankCaseSearchCandidates(candidates, query.q).slice(0, limit);
 
-    // Delivery-group detection over the ranked/returned set only — this is a
-    // discovery feed, not the full-day board, so groups need only be correct
-    // among the Belege actually shown.
-    const groups = detectDeliveryGroups(
-      ranked.map((r) => ({
-        id: r.row.id,
-        weBelegNo: r.row.weBelegNo,
-        deliveryNoteNo: r.row.deliveryNoteNo,
-        deliverySourceGroupKey: r.row.deliverySourceGroupKey,
-        deliverySourceGroupSize: r.row.deliverySourceGroupSize,
-        manualDeliveryGroupKey: r.row.manualDeliveryGroupKey,
-        bookingDate: r.row.bookingDate.toISOString().slice(0, 10),
-        section: r.row.section,
-        deliveryGroupReleased: r.row.deliveryGroupReleased,
-      })),
-      ruleConfig.grouping,
-    );
-    const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+    // Delivery groups from the SAME canonical universe as Liste/Detail — the assign
+    // dialog shows this chip next to the WE-lookup one, so a ranked-set-only
+    // detection would contradict the lookup for the very same Beleg.
+    const universe = await this.deliveryGroupUniverse(ruleConfig.grouping);
 
     return ranked.map((r) => {
       const effort = resolveCaseEffort(r.row, ruleConfig.effort);
-      const group = groupById.get(groupIdByCaseId.get(r.row.id) ?? '');
       return {
         caseId: r.row.id,
         weBelegNo: r.row.weBelegNo,
@@ -442,7 +404,7 @@ export class TeamleadReadService {
         estimatedMinutes: effort.minutes,
         storageLocationCode: r.row.storageLocation?.code ?? null,
         priorityFlags: r.row.priorityFlags,
-        deliveryGroup: group ? mapDeliveryGroupRef(group) : null,
+        deliveryGroup: universe.refFor(r.row.id),
       };
     });
   }
@@ -695,6 +657,7 @@ export class TeamleadReadService {
     // configured grouping rule. Standalone Belege keep null / size 1.
     const groups = detectDeliveryGroups(groupInputs, ruleConfig.grouping);
     const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
+    const groupInputById = new Map(groupInputs.map((g) => [g.id, g]));
     // Stable, deterministic order by name (idle heads stay interspersed, never hidden
     // at the end) with employeeNo as tie-break.
     const rows = [...rowByEmployee.values()].sort(
@@ -704,7 +667,7 @@ export class TeamleadReadService {
     for (const row of rows) {
       for (const c of row.cases) {
         const group = groupById.get(groupIdByCaseId.get(c.id) ?? '');
-        if (group) c.deliveryGroup = mapDeliveryGroupRef(group);
+        if (group) c.deliveryGroup = mapDeliveryGroupRef(group, groupInputById);
       }
     }
 
@@ -898,21 +861,26 @@ export class TeamleadReadService {
         source: z.source,
       })),
       history,
-      deliveryGroup: await this.deliveryGroupDetail(found.id, found.bookingDate),
+      deliveryGroup: await this.deliveryGroupDetail(found.id),
     };
   }
 
   /**
-   * Zugehörige Lieferung for the Belegdetailview (Teamlead-Punkt 1): detect the group
-   * containing `caseId` across the whole booking day and list every sibling with who
-   * holds it. `null` when the Beleg is standalone.
+   * Kanonische Lieferungs-Erkennung (Teamlead-Punkt 1): die reine Engine-Detection über
+   * ALLE Belege — status- und buchungstagsUNabhängig. Eine physische Lieferung endet
+   * weder am Lebenszyklus eines Mitglieds (zugewiesen/in Arbeit/fertig) noch am
+   * Buchungstag: die T1/T2-Signale (Quell-Schlüssel, gleiche Lieferschein-Nr) verbinden
+   * Nachzügler über Tage hinweg. Liste, Suche, WE-Lookup und Belegdetail lesen dieselbe
+   * Erkennung — ein je-Tag oder je-Filter gescopetes Universum ließe Chip („Lieferung ×4")
+   * und „Zugehörige Lieferung" widersprechen, genau der damit behobene Fehler.
    */
-  private async deliveryGroupDetail(
-    caseId: string,
-    bookingDate: Date,
-  ): Promise<DeliveryGroupDetailDto | null> {
-    const dayCases = await this.prisma.goodsReceiptCase.findMany({
-      where: { bookingDate },
+  private async deliveryGroupUniverse(grouping: GroupingConfig): Promise<{
+    groupIdByCaseId: ReadonlyMap<string, string>;
+    groupById: ReadonlyMap<string, DeliveryGroup>;
+    casesById: ReadonlyMap<string, { id: string; weBelegNo: string; deliveryNoteNo: string | null }>;
+    refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
+  }> {
+    const rows = await this.prisma.goodsReceiptCase.findMany({
       select: {
         id: true,
         weBelegNo: true,
@@ -923,13 +891,10 @@ export class TeamleadReadService {
         deliveryGroupReleased: true,
         bookingDate: true,
         section: true,
-        status: true,
-        assignedBundle: { select: { employee: { select: { displayName: true } } } },
       },
     });
-    const grouping = (await loadRuleConfig(this.prisma)).grouping;
     const groups = detectDeliveryGroups(
-      dayCases.map((c) => ({
+      rows.map((c) => ({
         id: c.id,
         weBelegNo: c.weBelegNo,
         deliveryNoteNo: c.deliveryNoteNo,
@@ -943,9 +908,35 @@ export class TeamleadReadService {
       grouping,
     );
     const { groupIdByCaseId, groupById } = indexDeliveryGroups(groups);
-    const group = groupById.get(groupIdByCaseId.get(caseId) ?? '');
+    const casesById = new Map(rows.map((c) => [c.id, c]));
+    const refFor = (caseId: string) => {
+      const group = groupById.get(groupIdByCaseId.get(caseId) ?? '');
+      return group ? mapDeliveryGroupRef(group, casesById) : null;
+    };
+    return { groupIdByCaseId, groupById, casesById, refFor };
+  }
+
+  /**
+   * Zugehörige Lieferung for the Belegdetailview (Teamlead-Punkt 1): the case's group
+   * from the canonical universe ({@link deliveryGroupUniverse}) and every sibling with
+   * who holds it. `null` when the Beleg is standalone.
+   */
+  private async deliveryGroupDetail(caseId: string): Promise<DeliveryGroupDetailDto | null> {
+    const grouping = (await loadRuleConfig(this.prisma)).grouping;
+    const universe = await this.deliveryGroupUniverse(grouping);
+    const group = universe.groupById.get(universe.groupIdByCaseId.get(caseId) ?? '');
     if (!group) return null;
-    const byId = new Map(dayCases.map((c) => [c.id, c]));
+    // Status + Zuteilung nur für die Gruppenmitglieder nachladen (das Universum bleibt schmal).
+    const memberRows = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: [...group.caseIds] } },
+      select: {
+        id: true,
+        weBelegNo: true,
+        status: true,
+        assignedBundle: { select: { employee: { select: { displayName: true } } } },
+      },
+    });
+    const byId = new Map(memberRows.map((c) => [c.id, c]));
     const members: DeliveryGroupMemberDto[] = group.caseIds.map((id) => {
       const c = byId.get(id);
       return {
@@ -956,7 +947,7 @@ export class TeamleadReadService {
         isCurrent: id === caseId,
       };
     });
-    return { ...mapDeliveryGroupRef(group), members };
+    return { ...mapDeliveryGroupRef(group, universe.casesById), members };
   }
 
   // --- projection helpers ---------------------------------------------------

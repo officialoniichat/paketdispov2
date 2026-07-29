@@ -203,4 +203,85 @@ describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
   it('404s a missing case', async () => {
     await expect(readSvc.caseDetail('does-not-exist')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  // Regression: die Erkennung ist status- UND buchungstagsunabhängig. Vorher scopte der
+  // Detail-Pfad auf den exakten bookingDate des Belegs — eine über T2 (gleiche
+  // Lieferschein-Nr) verbundene Gruppe mit Mitgliedern auf anderen Tagen fiel auseinander:
+  // Liste zeigte „Lieferung ×4", das Detail keinen Kasten „Zugehörige Lieferung".
+  it('returns the delivery group for an ASSIGNED member across booking days (Liste = Detail)', async () => {
+    const greta = await prisma.user.create({
+      data: { employeeNo: 'ma-202', displayName: 'Greta Test' },
+    });
+    const loc = await prisma.location.create({
+      data: { code: 'R13', displayName: 'Regal 13', kind: 'regal', sequenceIndex: 13 },
+    });
+    const baseData = {
+      source: 'manual' as const,
+      deliveryNoteNo: 'LS-GRP-77',
+      branchNo: '1',
+      storageLocationId: loc.id,
+      section: 4,
+      goodsTypeText: 'Nachorder',
+      totalQuantity: 10,
+      effortPoints: 4,
+      estimatedMinutes: 10,
+    };
+    // Vier Mitglieder derselben Lieferung auf VIER verschiedenen Buchungstagen und in
+    // unterschiedlichen Lebenszyklen (bereit / fertig / zugewiesen) — wie die echte
+    // B1-Konstellation um WE 3.540.011 (LS-25-101, Offsets 0/1/4/5).
+    const ready = await prisma.goodsReceiptCase.create({
+      data: { ...baseData, externalRef: 'grp-10', weBelegNo: 'WE-GRP-10', bookingDate: asDate('2026-06-12'), status: 'ready' },
+    });
+    const done = await prisma.goodsReceiptCase.create({
+      data: { ...baseData, externalRef: 'grp-11', weBelegNo: 'WE-GRP-11', bookingDate: asDate('2026-06-13'), status: 'completed' },
+    });
+    const parked = await prisma.goodsReceiptCase.create({
+      data: { ...baseData, externalRef: 'grp-12', weBelegNo: 'WE-GRP-12', bookingDate: asDate('2026-06-14'), status: 'parked' },
+    });
+    const target = await prisma.goodsReceiptCase.create({
+      data: { ...baseData, externalRef: 'grp-13', weBelegNo: 'WE-GRP-13', bookingDate: asDate(DATE), status: 'in_progress' },
+    });
+    const bundle = await prisma.assignmentBundle.create({
+      data: { employeeId: greta.id, date: asDate(DATE), status: 'active' },
+    });
+    await prisma.goodsReceiptCase.update({
+      where: { id: target.id },
+      data: { assignedBundleId: bundle.id },
+    });
+    await prisma.assignmentItem.create({ data: { bundleId: bundle.id, caseId: target.id } });
+
+    const detail = await readSvc.caseDetail(target.id);
+
+    // Der Kasten „Zugehörige Lieferung" existiert für den zugewiesenen Beleg …
+    expect(detail.deliveryGroup).not.toBeNull();
+    expect(detail.deliveryGroup?.signal).toBe('note');
+    expect(detail.deliveryGroup?.confidence).toBe('likely');
+    expect(detail.deliveryGroup?.presentSize).toBe(4);
+    expect(detail.deliveryGroup?.label).toBe('LS-GRP-77');
+    // … inklusive ALLER Mitglieder mit Status + Halter, sortiert nach WE-Nr.
+    const members = detail.deliveryGroup?.members ?? [];
+    expect(members.map((m) => m.weBelegNo)).toEqual([
+      'WE-GRP-10',
+      'WE-GRP-11',
+      'WE-GRP-12',
+      'WE-GRP-13',
+    ]);
+    expect(members.find((m) => m.caseId === target.id)?.isCurrent).toBe(true);
+    expect(members.find((m) => m.caseId === target.id)?.status).toBe('in_progress');
+    expect(members.find((m) => m.caseId === target.id)?.assignedEmployeeName).toBe('Greta Test');
+    expect(members.find((m) => m.caseId === done.id)?.status).toBe('completed');
+    expect(members.find((m) => m.caseId === ready.id)?.assignedEmployeeName).toBeNull();
+
+    // … und die Liste zeigt für denselben Beleg EXAKT dieselbe Gruppe (Chip = Kasten),
+    // auch im Lebenszyklus-Scope „aktiv", der das fertige Mitglied als Zeile ausblendet.
+    const pool = await readSvc.listPool({ scope: 'aktiv' });
+    const row = pool.items.find((i) => i.id === target.id);
+    expect(row?.deliveryGroup?.id).toBe(detail.deliveryGroup?.id);
+    expect(row?.deliveryGroup?.presentSize).toBe(4);
+    expect(row?.deliveryGroup?.label).toBe('LS-GRP-77');
+    expect(pool.items.some((i) => i.id === done.id)).toBe(false);
+    expect(pool.items.find((i) => i.id === parked.id)?.deliveryGroup?.id).toBe(
+      detail.deliveryGroup?.id,
+    );
+  });
 });

@@ -1423,6 +1423,8 @@ export interface components {
         DeliveryGroupRefDto: {
             /** @description Delivery-group id */
             id: string;
+            /** @description Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE <kleinste Beleg-Nr>" */
+            label: string;
             /** @enum {string} */
             signal: "source" | "note" | "run" | "manual" | "mixed";
             /** @enum {string} */
@@ -1747,6 +1749,8 @@ export interface components {
         DeliveryGroupDetailDto: {
             /** @description Delivery-group id */
             id: string;
+            /** @description Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE <kleinste Beleg-Nr>" */
+            label: string;
             /** @enum {string} */
             signal: "source" | "note" | "run" | "manual" | "mixed";
             /** @enum {string} */

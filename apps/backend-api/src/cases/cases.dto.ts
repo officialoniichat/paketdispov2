@@ -144,6 +144,11 @@ export class BundleQueueRefDto {
  */
 export class DeliveryGroupRefDto {
   @ApiProperty({ description: 'Delivery-group id' }) id!: string;
+  @ApiProperty({
+    description:
+      'Kurz-Kennung der Lieferung (Frage 8): gemeinsame Lieferschein-Nr, sonst „ab WE <kleinste Beleg-Nr>"',
+  })
+  label!: string;
   @ApiProperty({ enum: ['source', 'note', 'run', 'manual', 'mixed'] }) signal!: string;
   @ApiProperty({ enum: ['confirmed', 'likely', 'suspected', 'locked'] }) confidence!: string;
   @ApiProperty({ description: 'Belege of this group present in the pool' }) presentSize!: number;
