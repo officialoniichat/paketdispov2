@@ -24,10 +24,38 @@ interface ApiResult<T> {
   error?: unknown;
 }
 
+/**
+ * Verständliche deutsche Meldung für einen abgelehnten Übergangs-POST — statt
+ * eines rohen JSON-Dumps des Fehler-Bodys. Die häufigste Ablehnung ist die
+ * State-Machine des Backends („Illegal case transition: completed →
+ * in_progress"), wenn ein bereits fertiger Beleg erneut gestartet würde; die
+ * übrigen Backend-Meldungen (BadRequest) sind bereits deutsch und werden
+ * durchgereicht. Ohne lesbaren Body bleibt der generische Retry-Hinweis.
+ */
+export function transitionErrorMessage(label: string, error: unknown): string {
+  const raw =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? (error as { message?: unknown }).message
+      : undefined;
+  const message = Array.isArray(raw) ? raw.join(' · ') : raw;
+  if (typeof message === 'string' && message.length > 0) {
+    const illegal = /^Illegal case transition: (\S+) → \S+$/.exec(message);
+    if (illegal) {
+      const from = illegal[1];
+      if (from === 'completed' || from === 'zst_done') {
+        return `${label} nicht möglich – der Beleg ist bereits abgeschlossen.`;
+      }
+      return `${label} nicht möglich – der Beleg wurde zwischenzeitlich geändert (Status „${from}").`;
+    }
+    return `${label} fehlgeschlagen: ${message}`;
+  }
+  return `${label} fehlgeschlagen – bitte erneut versuchen.`;
+}
+
 /** Unwrap an openapi-fetch result, throwing on any non-2xx/error response. */
 function unwrap(label: string, result: ApiResult<TransitionResultDto>): TransitionResultDto {
   if (result.error || !result.data) {
-    throw new Error(`${label} fehlgeschlagen (${JSON.stringify(result.error)})`);
+    throw new Error(transitionErrorMessage(label, result.error));
   }
   return result.data;
 }

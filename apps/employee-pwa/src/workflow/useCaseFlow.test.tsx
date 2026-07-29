@@ -21,67 +21,75 @@ const CASE_ID = 'case-1';
 const TODAY_KEY = ['me', 'today'] as const;
 
 /** Minimal but structurally valid aggregate DTO — only fields the mapper reads. */
-const AGGREGATE_DTO = {
-  case: {
-    id: CASE_ID,
-    weBelegNo: '1234567',
-    bookingDate: '2026-07-06',
-    branchNo: '1',
-    totalQuantity: 1,
-    status: 'in_progress',
-    estimatedMinutes: 5,
-    attentionFlag: false,
-    missingFields: [],
-    priorityFlags: [],
-  },
-  workInstruction: {
-    priceLabelPrintRequired: false,
-    sortByArticleColorSizeRequired: false,
-    goodsReceiptCheckMode: 'quantity_only',
-    boxLabelRequired: false,
-    zstRequired: true,
-  },
-  positions: [
-    {
-      id: 'pos-1',
-      positionNo: 1,
-      wgr: '218110',
-      supplierArticleNo: 'art-1',
-      supplierColor: 'black',
-      branchNo: '1',
-      shopNo: '2143',
-      instruction: {
-        priceLabelRequired: false,
-        priceLabelAttachRequired: false,
-        securityRequired: false,
-        onlineHandlingRequired: false,
-      },
-      skuLines: [
-        {
-          id: 'sku-1',
-          ean: '4000000000001',
-          size: '9',
-          expectedQuantity: 1,
-          status: 'open',
-        },
-      ],
-      status: 'open',
-    },
-  ],
-  boxTargets: [],
-  instructionPoints: [],
-} as unknown as CaseAggregateDto;
-
-const TODAY_DTO = {
-  date: '2026-07-06',
-  cases: [
-    {
+function aggregateDto(status: string): CaseAggregateDto {
+  return {
+    case: {
       id: CASE_ID,
       weBelegNo: '1234567',
-      status: 'in_progress',
+      bookingDate: '2026-07-06',
+      branchNo: '1',
+      totalQuantity: 1,
+      status,
+      estimatedMinutes: 5,
+      attentionFlag: false,
+      missingFields: [],
+      priorityFlags: [],
     },
-  ],
-} as unknown as TodayResponseDto;
+    workInstruction: {
+      priceLabelPrintRequired: false,
+      sortByArticleColorSizeRequired: false,
+      goodsReceiptCheckMode: 'quantity_only',
+      boxLabelRequired: false,
+      zstRequired: true,
+    },
+    positions: [
+      {
+        id: 'pos-1',
+        positionNo: 1,
+        wgr: '218110',
+        supplierArticleNo: 'art-1',
+        supplierColor: 'black',
+        branchNo: '1',
+        shopNo: '2143',
+        instruction: {
+          priceLabelRequired: false,
+          priceLabelAttachRequired: false,
+          securityRequired: false,
+          onlineHandlingRequired: false,
+        },
+        skuLines: [
+          {
+            id: 'sku-1',
+            ean: '4000000000001',
+            size: '9',
+            expectedQuantity: 1,
+            status: 'open',
+          },
+        ],
+        status: 'open',
+      },
+    ],
+    boxTargets: [],
+    instructionPoints: [],
+  } as unknown as CaseAggregateDto;
+}
+
+const AGGREGATE_DTO = aggregateDto('in_progress');
+
+function todayDto(status: string): TodayResponseDto {
+  return {
+    date: '2026-07-06',
+    cases: [
+      {
+        id: CASE_ID,
+        weBelegNo: '1234567',
+        status,
+      },
+    ],
+  } as unknown as TodayResponseDto;
+}
+
+const TODAY_DTO = todayDto('in_progress');
 
 function makeClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -176,10 +184,12 @@ describe('useCaseFlow — runMilestone commit/rollback (complete())', () => {
 describe('useCaseFlow — ensureStarted fires exactly once on genuinely-first local action', () => {
   it('calls start-preparation when togglePositionChecked runs on a fresh, untouched case', async () => {
     const client = makeClient();
-    client.setQueryData(TODAY_KEY, TODAY_DTO);
+    client.setQueryData(TODAY_KEY, todayDto('assigned'));
 
+    // Nur aus `assigned` (bzw. problem_resolved) ist der Start-Übergang legal —
+    // exakt dann muss die erste lokale Aktion ihn auch anstoßen.
     const mockGet = vi.fn().mockResolvedValue({
-      data: AGGREGATE_DTO,
+      data: aggregateDto('assigned'),
       error: undefined,
       response: { status: 200 },
     });
@@ -216,10 +226,10 @@ describe('useCaseFlow — ensureStarted fires exactly once on genuinely-first lo
 
   it('does not call start-preparation again on a second action once progress already exists', async () => {
     const client = makeClient();
-    client.setQueryData(TODAY_KEY, TODAY_DTO);
+    client.setQueryData(TODAY_KEY, todayDto('assigned'));
 
     const mockGet = vi.fn().mockResolvedValue({
-      data: AGGREGATE_DTO,
+      data: aggregateDto('assigned'),
       error: undefined,
       response: { status: 200 },
     });
@@ -253,5 +263,98 @@ describe('useCaseFlow — ensureStarted fires exactly once on genuinely-first lo
     );
 
     expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Railway-Bug: ein FERTIGER Beleg (completed) wird erneut geöffnet — die erste
+ * lokale Aktion stieß vorher `start-preparation` an und das Backend lehnte mit
+ * „Illegal case transition: completed → in_progress" (400) ab. Fertige Belege
+ * sind jetzt reine Ansicht: kein Start-Übergang, keine Mutation, kein POST.
+ */
+describe('useCaseFlow — fertiger Beleg wird geöffnet (read-only)', () => {
+  function setup(status: string) {
+    const client = makeClient();
+    client.setQueryData(TODAY_KEY, todayDto(status));
+    const mockGet = vi.fn().mockResolvedValue({
+      data: aggregateDto(status),
+      error: undefined,
+      response: { status: 200 },
+    });
+    const mockPost = vi.fn().mockResolvedValue({
+      data: { caseId: CASE_ID, status: 'in_progress', version: 1 },
+      error: undefined,
+    });
+    vi.spyOn(apiModule, 'getApiClient').mockReturnValue({
+      GET: mockGet,
+      POST: mockPost,
+    } as unknown as ReturnType<typeof apiModule.getApiClient>);
+    return { client, mockPost };
+  }
+
+  it('completed: readOnly, keine Aktion löst einen POST aus, Mutationen sind no-ops', async () => {
+    const { client, mockPost } = setup('completed');
+    const { result } = renderHook(() => useCaseFlow(CASE_ID), {
+      wrapper: wrapperFor(client),
+    });
+    await waitFor(() => expect(result.current.progress).toBeDefined());
+
+    expect(result.current.readOnly).toBe(true);
+
+    // Der erste Tipper auf „Position geprüft" darf KEINEN Start-Übergang mehr anstoßen …
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+    // … und auch lokal nichts verändern (Nur-Ansicht).
+    expect(result.current.progress?.quantityCheckedPositionIds).toEqual([]);
+
+    act(() => {
+      result.current.setSkuQuantity('sku-1', 3, 1);
+    });
+    expect(result.current.progress?.confirmedQuantities).toEqual({});
+
+    // „Beleg erledigt"/Teilabschluss sind defensiv abgesichert (UI blendet sie aus).
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.complete();
+    });
+    expect(ok).toBe(false);
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(result.current.actionError).toBeUndefined();
+  });
+
+  it('zst_done: ebenfalls readOnly ohne jeden POST', async () => {
+    const { client, mockPost } = setup('zst_done');
+    const { result } = renderHook(() => useCaseFlow(CASE_ID), {
+      wrapper: wrapperFor(client),
+    });
+    await waitFor(() => expect(result.current.progress).toBeDefined());
+
+    expect(result.current.readOnly).toBe(true);
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('in_progress (z. B. nach Reload): bearbeitbar, aber KEIN erneuter Start-Übergang', async () => {
+    const { client, mockPost } = setup('in_progress');
+    const { result } = renderHook(() => useCaseFlow(CASE_ID), {
+      wrapper: wrapperFor(client),
+    });
+    await waitFor(() => expect(result.current.progress).toBeDefined());
+
+    expect(result.current.readOnly).toBe(false);
+
+    // Lokale Arbeit bleibt möglich — aber in_progress → in_progress wäre eine
+    // illegale Kante, also darf kein start-preparation-POST rausgehen.
+    act(() => {
+      result.current.togglePositionChecked('pos-1');
+    });
+    await waitFor(() =>
+      expect(result.current.progress?.quantityCheckedPositionIds).toEqual(['pos-1']),
+    );
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

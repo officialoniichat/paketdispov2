@@ -27,6 +27,7 @@
  */
 import { useCallback, useState } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import type { CaseStatus } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
 import { useCaseAggregate } from '../data/useCaseAggregate.js';
 import { mapCaseAggregate } from '../data/caseAggregateMapper.js';
@@ -53,12 +54,34 @@ import {
 
 type TodayResponseDto = components['schemas']['TodayResponseDto'];
 
+/**
+ * Nur aus diesen Status heraus darf der Mitarbeiter den Beleg bearbeiten. Alles
+ * andere (completed, zst_done, issue_open, cancelled, …) ist in der PWA reine
+ * Ansicht: die §7.1-State-Machine des Backends kennt von dort keinen Weg zurück
+ * nach in_progress — ein Start-/Abschluss-POST würde mit 400 abgelehnt.
+ */
+const EDITABLE_STATUSES: readonly CaseStatus[] = ['assigned', 'in_progress', 'problem_resolved'];
+
+/**
+ * Der Start-Übergang (start-preparation) ist nur aus assigned/problem_resolved
+ * eine legale Kante. Ein Beleg, der bereits in_progress ist (z. B. nach einem
+ * Seiten-Reload, der den lokalen Fortschritt verwirft), braucht KEINEN neuen
+ * Start — in_progress → in_progress wäre ebenfalls illegal.
+ */
+const STARTABLE_STATUSES: readonly CaseStatus[] = ['assigned', 'problem_resolved'];
+
 export interface CaseFlow {
   loading: boolean;
   isError: boolean;
   error: unknown;
   aggregate?: CaseAggregate;
   progress?: CaseProgress;
+  /**
+   * True, sobald der Beleg-Status keine Bearbeitung mehr erlaubt (fertig,
+   * Problemfall, storniert). Die UI zeigt dann eine reine Ansicht; alle
+   * Mutationen dieses Hooks sind zusätzlich selbst abgesichert (no-op).
+   */
+  readOnly: boolean;
   /** Last failed milestone action's message, or undefined. Never swallowed silently. */
   actionError?: string;
   clearActionError: () => void;
@@ -90,6 +113,8 @@ export function useCaseFlow(caseId: string): CaseFlow {
   const queryClient = useQueryClient();
   const aggregateQuery = useCaseAggregate(caseId);
   const aggregate = aggregateQuery.data ? mapCaseAggregate(caseId, aggregateQuery.data) : undefined;
+  const caseStatus = aggregate?.case.status;
+  const readOnly = caseStatus !== undefined && !EDITABLE_STATUSES.includes(caseStatus);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
   const key = progressQueryKey(caseId);
@@ -103,11 +128,14 @@ export function useCaseFlow(caseId: string): CaseFlow {
 
   const applyLocal = useCallback(
     (transition: (p: CaseProgress) => CaseProgress): void => {
+      // Nur-Ansicht: kein lokaler Fortschritt an einem fertigen/gesperrten Beleg —
+      // die UI blendet die Controls aus, dieser Guard sichert es zusätzlich ab.
+      if (readOnly) return;
       const current = queryClient.getQueryData<CaseProgress>(key);
       if (!current) return;
       queryClient.setQueryData<CaseProgress>(key, transition(current));
     },
-    [queryClient, key],
+    [queryClient, key, readOnly],
   );
 
   /**
@@ -131,6 +159,12 @@ export function useCaseFlow(caseId: string): CaseFlow {
       } catch (err) {
         if (previousToday) queryClient.setQueryData(TODAY_KEY, previousToday);
         setActionError(err instanceof Error ? err.message : 'Aktion fehlgeschlagen');
+        // Der lokale Stand kann dem Server hinterherhängen (z. B. Beleg wurde auf
+        // einem anderen Gerät abgeschlossen): nach einem abgelehnten Übergang die
+        // Wahrheit neu laden, damit die UI in den korrekten (ggf. Nur-Ansicht-)
+        // Zustand wechselt statt weitere illegale Aktionen anzubieten.
+        void queryClient.invalidateQueries({ queryKey: TODAY_KEY });
+        void queryClient.invalidateQueries({ queryKey: ['me', 'case', caseId, 'aggregate'] });
         return false;
       }
       setActionError(undefined);
@@ -141,12 +175,21 @@ export function useCaseFlow(caseId: string): CaseFlow {
     [queryClient, caseId],
   );
 
-  /** First recorded local action → mark the case in_progress on the backend. */
+  /**
+   * First recorded local action → mark the case in_progress on the backend.
+   *
+   * Nur wenn der Beleg-Status den Start-Übergang tatsächlich erlaubt
+   * (assigned/problem_resolved): ein bereits laufender Beleg (in_progress nach
+   * Reload) braucht keinen erneuten Start, und für fertige Belege
+   * (completed/zst_done) würde das Backend mit „Illegal case transition"
+   * ablehnen — genau der Railway-Fehler beim erneuten Öffnen fertiger Belege.
+   */
   const ensureStarted = useCallback((): void => {
+    if (caseStatus === undefined || !STARTABLE_STATUSES.includes(caseStatus)) return;
     const current = queryClient.getQueryData<CaseProgress>(key);
     if (!current || hasProgress(current)) return;
     void runMilestone('in_progress', () => persistStartPreparation(caseId));
-  }, [queryClient, key, runMilestone, caseId]);
+  }, [queryClient, key, runMilestone, caseId, caseStatus]);
 
   const togglePositionChecked = useCallback(
     (positionId: string): void => {
@@ -188,15 +231,15 @@ export function useCaseFlow(caseId: string): CaseFlow {
   );
 
   const complete = useCallback(async (): Promise<boolean> => {
-    if (!progress || !aggregate) return false;
+    if (!progress || !aggregate || readOnly) return false;
     const body = skuQuantitiesBody(progress, aggregate);
     const ok = await runMilestone('completed', () => persistComplete(caseId, body));
     if (ok) applyLocal((p) => completeCaseTx(setZstTx(p)));
     return ok;
-  }, [runMilestone, applyLocal, caseId, progress, aggregate]);
+  }, [runMilestone, applyLocal, caseId, progress, aggregate, readOnly]);
 
   const partialComplete = useCallback(async (): Promise<boolean> => {
-    if (!progress || !aggregate) return false;
+    if (!progress || !aggregate || readOnly) return false;
     const skuBody = skuQuantitiesBody(progress, aggregate);
     const probBody = problemsBody(progress);
     // Der Beleg bleibt beim selben MA rot geparkt (issue_open), bis der Teamlead klärt.
@@ -205,7 +248,7 @@ export function useCaseFlow(caseId: string): CaseFlow {
     );
     if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
     return ok;
-  }, [runMilestone, applyLocal, caseId, progress, aggregate]);
+  }, [runMilestone, applyLocal, caseId, progress, aggregate, readOnly]);
 
   return {
     loading: aggregateQuery.isLoading || (aggregate !== undefined && progressQuery.isLoading),
@@ -213,6 +256,7 @@ export function useCaseFlow(caseId: string): CaseFlow {
     error: aggregateQuery.error,
     aggregate,
     progress,
+    readOnly,
     actionError,
     clearActionError: () => setActionError(undefined),
     togglePositionChecked,

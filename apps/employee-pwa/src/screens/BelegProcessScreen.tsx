@@ -25,6 +25,10 @@
  * ist entfallen (Punkt 8). Eine Mehr-/Minderlieferung oder Preisabweichung ist
  * automatisch ein Problem (Punkt 7): „Beleg erledigt" ist dann gesperrt, nur der
  * Teilabschluss (mit gesammelten Problemen, Punkt 10) bleibt.
+ *
+ * Fertige/gesperrte Belege (completed, zst_done, issue_open, cancelled) öffnen
+ * als reine Ansicht (`flow.readOnly`): Hinweis-Banner statt Aktionen, Werte
+ * statt Eingabe-Controls — kein Start-Übergang mehr für erledigte Belege.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -46,7 +50,7 @@ import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { DEFAULT_WGR_CATALOG, type OnlineSizeMark } from '@paket/domain-types';
+import { DEFAULT_WGR_CATALOG, type CaseStatus, type OnlineSizeMark } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { oskProps } from '../components/OnScreenKeyboard.js';
@@ -313,6 +317,32 @@ const PROBLEM_ROW_SX = {
   borderLeftColor: 'error.main',
 } as const;
 
+/**
+ * Nur-Ansicht-Hinweis je Beleg-Status: ein fertiger/gesperrter Beleg lässt sich
+ * weiterhin öffnen und ansehen, aber nicht mehr bearbeiten — vorher stieß der
+ * erste Tipper einen illegalen Start-Übergang an (completed → in_progress).
+ */
+const READ_ONLY_NOTICE: Partial<Record<CaseStatus, { severity: 'success' | 'warning' | 'info'; text: string }>> = {
+  completed: {
+    severity: 'success',
+    text: 'Dieser Beleg ist bereits erledigt. Nur Ansicht – Änderungen sind nicht mehr möglich.',
+  },
+  zst_done: {
+    severity: 'success',
+    text: 'Dieser Beleg ist erledigt und im Tagesabschluss verbucht. Nur Ansicht.',
+  },
+  issue_open: {
+    severity: 'warning',
+    text: 'Problem gemeldet – wartet auf Klärung durch die Teamleitung. Nur Ansicht.',
+  },
+  cancelled: { severity: 'info', text: 'Dieser Beleg wurde storniert. Nur Ansicht.' },
+};
+
+const READ_ONLY_FALLBACK = {
+  severity: 'info',
+  text: 'Dieser Beleg ist aktuell nicht bearbeitbar. Nur Ansicht.',
+} as const;
+
 export function BelegProcessScreen(): JSX.Element {
   const { caseId = '' } = useParams();
   const navigate = useNavigate();
@@ -345,8 +375,11 @@ export function BelegProcessScreen(): JSX.Element {
     );
   }
 
-  const { aggregate, progress } = flow;
+  const { aggregate, progress, readOnly } = flow;
   const wi = aggregate.workInstruction;
+  const readOnlyNotice = readOnly
+    ? (READ_ONLY_NOTICE[aggregate.case.status] ?? READ_ONLY_FALLBACK)
+    : undefined;
   const gate = canCompleteCase(progress, aggregate);
   // Teilabschluss ist nur möglich, wenn mindestens ein Problem vorliegt (das
   // Backend würde sonst ablehnen). Ein Problem = manuell erfasst ODER implizit
@@ -397,14 +430,21 @@ export function BelegProcessScreen(): JSX.Element {
       where={`Lagerplatz ${aggregate.case.storageLocation?.code ?? '—'}`}
       title={`WE ${aggregate.case.weBelegNo}`}
       onBack={() => navigate(TAGESSTART)}
-      primary={{ label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
-      secondary={{
-        label: 'Teilabschluss (Problem melden)',
-        onClick: () => setPartialOpen(true),
-        disabled: problemCount === 0,
-      }}
+      primary={readOnly ? undefined : { label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
+      secondary={
+        readOnly
+          ? undefined
+          : {
+              label: 'Teilabschluss (Problem melden)',
+              onClick: () => setPartialOpen(true),
+              disabled: problemCount === 0,
+            }
+      }
     >
       <Stack spacing={2}>
+        {readOnlyNotice ? (
+          <Alert severity={readOnlyNotice.severity}>{readOnlyNotice.text}</Alert>
+        ) : null}
         {/* Kompakte Fakten-Leiste: Warenart · Menge — scanbar, ohne Fließtext
             (Nachtrag 15.07.2026). */}
         <Stack
@@ -487,15 +527,17 @@ export function BelegProcessScreen(): JSX.Element {
         ) : null}
 
         <Typography variant="subtitle2">Positionen</Typography>
-        {wi.goodsReceiptCheckMode === 'quantity_only' ? (
+        {!readOnly && wi.goodsReceiptCheckMode === 'quantity_only' ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
             Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".
           </Typography>
         ) : null}
-        <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-          Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" oder der
-          Teilabschluss sichert ihn dauerhaft.
-        </Typography>
+        {!readOnly ? (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+            Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" oder
+            der Teilabschluss sichert ihn dauerhaft.
+          </Typography>
+        ) : null}
         {/* A1: EINE Tabelle über alle Positionen mit STICKY Kopfzeile (Punkt 3). Die
             Tabelle scrollt vertikal in ihrem Container; die Spaltenüberschriften
             bleiben oben stehen. EK/VK/VK-Etikett/Etikettpreis stehen rechts. */}
@@ -700,35 +742,44 @@ export function BelegProcessScreen(): JSX.Element {
                             <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                               Soll gesamt {soll}
                             </Typography>
-                            {isChecked ? (
-                              <Chip
-                                color="success"
-                                label="Position geprüft ✓"
-                                onClick={() => void flow.togglePositionChecked(pos.id)}
-                                sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
-                              />
-                            ) : (
-                              <Button
-                                variant="contained"
-                                onClick={() => void flow.togglePositionChecked(pos.id)}
-                              >
-                                Position geprüft
-                              </Button>
-                            )}
-                            <Button
-                              color="error"
-                              variant="text"
-                              onClick={() => setProblemTarget(pos)}
-                            >
-                              Problem
-                            </Button>
+                            {/* Nur-Ansicht: keine Prüf-/Problem-Aktionen an fertigen Belegen. */}
+                            {!readOnly ? (
+                              <>
+                                {isChecked ? (
+                                  <Chip
+                                    color="success"
+                                    label="Position geprüft ✓"
+                                    onClick={() => void flow.togglePositionChecked(pos.id)}
+                                    sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
+                                  />
+                                ) : (
+                                  <Button
+                                    variant="contained"
+                                    onClick={() => void flow.togglePositionChecked(pos.id)}
+                                  >
+                                    Position geprüft
+                                  </Button>
+                                )}
+                                <Button
+                                  color="error"
+                                  variant="text"
+                                  onClick={() => setProblemTarget(pos)}
+                                >
+                                  Problem
+                                </Button>
+                              </>
+                            ) : null}
                           </Stack>
                         </Stack>
                       </TableCell>
                     </TableRow>
 
                     {pos.skuLines.map((s) => {
-                      const ist = progress.confirmedQuantities[s.id] ?? s.expectedQuantity;
+                      // Nur-Ansicht zeigt die vom Server verbuchte Ist-Menge (wo
+                      // vorhanden) statt des lokalen — dort leeren — Fortschritts.
+                      const ist = readOnly
+                        ? (s.confirmedQuantity ?? s.expectedQuantity)
+                        : (progress.confirmedQuantities[s.id] ?? s.expectedQuantity);
                       const delta = ist - s.expectedQuantity;
                       const mark = aggregate.onlineMarks[s.id];
                       const corrected = progress.correctedVkPrices[s.id];
@@ -769,15 +820,17 @@ export function BelegProcessScreen(): JSX.Element {
                               alignItems="center"
                               justifyContent="center"
                             >
-                              <IconButton
-                                sx={STEPPER_BUTTON}
-                                aria-label={`Größe ${s.size}: Menge verringern`}
-                                onClick={() =>
-                                  void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
-                                }
-                              >
-                                −
-                              </IconButton>
+                              {!readOnly ? (
+                                <IconButton
+                                  sx={STEPPER_BUTTON}
+                                  aria-label={`Größe ${s.size}: Menge verringern`}
+                                  onClick={() =>
+                                    void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
+                                  }
+                                >
+                                  −
+                                </IconButton>
+                              ) : null}
                               <Typography
                                 sx={{
                                   ...NUMERIC_CELL,
@@ -789,15 +842,17 @@ export function BelegProcessScreen(): JSX.Element {
                               >
                                 {ist}
                               </Typography>
-                              <IconButton
-                                sx={STEPPER_BUTTON}
-                                aria-label={`Größe ${s.size}: Menge erhöhen`}
-                                onClick={() =>
-                                  void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
-                                }
-                              >
-                                +
-                              </IconButton>
+                              {!readOnly ? (
+                                <IconButton
+                                  sx={STEPPER_BUTTON}
+                                  aria-label={`Größe ${s.size}: Menge erhöhen`}
+                                  onClick={() =>
+                                    void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
+                                  }
+                                >
+                                  +
+                                </IconButton>
+                              ) : null}
                             </Stack>
                           </TableCell>
                           <TableCell>
@@ -823,14 +878,18 @@ export function BelegProcessScreen(): JSX.Element {
                             {price(s.vkLabelPrice) ?? '—'}
                           </TableCell>
                           {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte. */}
-                          <TableCell align="right">
-                            <EtikettpreisInput
-                              sizeLabel={s.size}
-                              corrected={corrected}
-                              onChange={(value) =>
-                                flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
-                              }
-                            />
+                          <TableCell align="right" sx={readOnly ? NUMERIC_CELL : undefined}>
+                            {readOnly ? (
+                              '—'
+                            ) : (
+                              <EtikettpreisInput
+                                sizeLabel={s.size}
+                                corrected={corrected}
+                                onChange={(value) =>
+                                  flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
+                                }
+                              />
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -843,7 +902,7 @@ export function BelegProcessScreen(): JSX.Element {
         </Paper>
 
         {/* Why the close is blocked, if it is. */}
-        {!gate.ok ? (
+        {!readOnly && !gate.ok ? (
           <Alert severity="info">
             {gate.reasons.join(' · ')}
             {problemCount > 0
@@ -852,9 +911,11 @@ export function BelegProcessScreen(): JSX.Element {
           </Alert>
         ) : null}
 
+        {/* Die Meldung aus persist.ts ist bereits ein vollständiger deutscher
+            Satz (inkl. etwaigem Retry-Hinweis) — kein Suffix mehr anhängen. */}
         {flow.actionError ? (
           <Alert severity="error" onClose={flow.clearActionError}>
-            {flow.actionError} – bitte erneut versuchen.
+            {flow.actionError}
           </Alert>
         ) : null}
       </Stack>
