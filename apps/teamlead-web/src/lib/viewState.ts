@@ -20,6 +20,13 @@ export const EXPERIMENT_VIEW_KEY = 'paket.view.experiment';
  * damit das Experiment den Basis-Tab /belege nicht umkonfiguriert.
  */
 export const EXPERIMENT_BELEGE_VIEW_KEY = 'paket.view.experiment.belege';
+/** Experiment DA.M.B: Zoom-Faktor je Fenster (Lupe ± in der Fenster-Kopfleiste). */
+export const EXPERIMENT_ZOOM_VIEW_KEY = 'paket.view.experiment.zoom';
+/**
+ * Experiment DA.M.B: Saved View der EINGEBETTETEN Digitalen Ablagen — eigener
+ * Key, damit das Experiment den Basis-Tab /ablagen nicht umkonfiguriert.
+ */
+export const EXPERIMENT_ABLAGEN_VIEW_KEY = 'paket.view.experiment.ablagen';
 
 /** Read a persisted view state; `fallback` on missing/corrupt/blocked storage. */
 export function loadViewState<T>(key: string, fallback: T): T {

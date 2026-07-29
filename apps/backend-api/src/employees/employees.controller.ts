@@ -1,8 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
 import {
+  AbsenceCreateDto,
+  AbsenceDto,
   EmployeeCreateDto,
   EmployeeDetailDto,
   EmployeeListResponseDto,
@@ -50,6 +52,31 @@ export class EmployeesController {
   @ApiOkResponse({ type: [WorkstationDto] })
   listWorkstations(): Promise<WorkstationDto[]> {
     return this.employees.listWorkstations();
+  }
+
+  // NOTE: static 'absences' paths declared before ':id' so they win over the param route.
+  @Get('absences')
+  @ApiOperation({ summary: 'Krank-/Urlaubs-Spannen im Zeitraum (Schichtplan-Kalender).' })
+  @ApiQuery({ name: 'from', required: true, description: 'ISO date YYYY-MM-DD' })
+  @ApiQuery({ name: 'to', required: true, description: 'ISO date YYYY-MM-DD' })
+  @ApiOkResponse({ type: [AbsenceDto] })
+  listAbsences(@Query('from') from: string, @Query('to') to: string): Promise<AbsenceDto[]> {
+    return this.employees.listAbsences(from, to);
+  }
+
+  @Post('absences')
+  @ApiOperation({ summary: 'Krankschreibung/Urlaub eintragen (Rechtsklick im Kalender).' })
+  @ApiCreatedResponse({ type: AbsenceDto })
+  createAbsence(@Body() body: AbsenceCreateDto): Promise<AbsenceDto> {
+    return this.employees.createAbsence(body);
+  }
+
+  @Delete('absences/:absenceId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Abwesenheit löschen (Kalender-Kontextmenü).' })
+  @ApiNoContentResponse()
+  async deleteAbsence(@Param('absenceId') absenceId: string): Promise<void> {
+    await this.employees.deleteAbsence(absenceId);
   }
 
   @Get(':id')

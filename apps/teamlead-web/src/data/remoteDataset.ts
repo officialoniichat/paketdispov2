@@ -184,6 +184,9 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
         : undefined,
     paused: row.bundleStatus === 'paused',
     bereiche: row.bereiche,
+    shiftStart: row.shiftStart,
+    shiftEnd: row.shiftEnd,
+    absence: row.absence,
     cases: row.cases.map(toBoardCase),
     packs: row.packs.map((p) => p.caseIds),
   };

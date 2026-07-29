@@ -169,6 +169,11 @@ export interface BoardRow {
   paused: boolean;
   /** Fixed Bereiche/skills of the employee (shown on idle rows too). */
   bereiche: string[];
+  /** Geplanter Schichtbeginn/-ende (ISO): Früh/Spät-Farbe + „ab HH:MM" in der Matrix. */
+  shiftStart?: string | null;
+  shiftEnd?: string | null;
+  /** Heutige Abwesenheit (Schichtplan-Kalender): Zeile ganz unten, durchgestrichen. */
+  absence?: 'krank' | 'urlaub' | null;
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
   /**

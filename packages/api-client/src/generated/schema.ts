@@ -983,6 +983,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/employees/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Krank-/Urlaubs-Spannen im Zeitraum (Schichtplan-Kalender). */
+        get: operations["EmployeesController_listAbsences"];
+        put?: never;
+        /** Krankschreibung/Urlaub eintragen (Rechtsklick im Kalender). */
+        post: operations["EmployeesController_createAbsence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/employees/absences/{absenceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Abwesenheit löschen (Kalender-Kontextmenü). */
+        delete: operations["EmployeesController_deleteAbsence"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/employees/{id}": {
         parameters: {
             query?: never;
@@ -1478,6 +1513,15 @@ export interface components {
             capacityMinutes: number;
             /** @description Fixed Bereiche/skills of the employee (shown on idle rows too). */
             bereiche: string[];
+            /** @description Geplanter Schichtbeginn (ISO) — die Matrix färbt Früh/Spät und zeigt „ab HH:MM" vor Schichtstart; null ohne Schicht heute. */
+            shiftStart: string | null;
+            /** @description Geplantes Schichtende (ISO). */
+            shiftEnd: string | null;
+            /**
+             * @description Heutige Abwesenheit (Schichtplan-Kalender): Zeile wird ganz unten, durchgestrichen dargestellt.
+             * @enum {string|null}
+             */
+            absence: "krank" | "urlaub" | null;
             cases: components["schemas"]["BoardCaseDto"][];
             routeStops: components["schemas"]["BoardRouteStopDto"][];
             /** @description Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an. */
@@ -2231,6 +2275,25 @@ export interface components {
             code: string;
             name: string;
             active: boolean;
+        };
+        AbsenceDto: {
+            id: string;
+            employeeId: string;
+            /** @enum {string} */
+            kind: "krank" | "urlaub";
+            /** @description ISO YYYY-MM-DD (inklusive) */
+            startDate: string;
+            /** @description ISO YYYY-MM-DD (inklusive — „bis wann mindestens") */
+            endDate: string;
+        };
+        AbsenceCreateDto: {
+            employeeId: string;
+            /** @enum {string} */
+            kind: "krank" | "urlaub";
+            /** @description ISO YYYY-MM-DD */
+            startDate: string;
+            /** @description ISO YYYY-MM-DD */
+            endDate: string;
         };
         EmployeeProfileUpdateDto: {
             active?: boolean;
@@ -3749,6 +3812,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorkstationDto"][];
                 };
+            };
+        };
+    };
+    EmployeesController_listAbsences: {
+        parameters: {
+            query: {
+                /** @description ISO date YYYY-MM-DD */
+                from: string;
+                /** @description ISO date YYYY-MM-DD */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceDto"][];
+                };
+            };
+        };
+    };
+    EmployeesController_createAbsence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceCreateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_deleteAbsence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                absenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

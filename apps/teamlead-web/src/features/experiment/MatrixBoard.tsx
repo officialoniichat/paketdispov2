@@ -9,7 +9,7 @@
  * zuweisen, Zeile → Zeile = verschieben) — immer über den §8.4-ReasonDialog
  * des Parents, nie direkt.
  */
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
@@ -25,6 +25,13 @@ import type { BoardCase, BoardRow } from '../../data/types.js';
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { DragDots } from '../board/KanbanBoard.js';
 import { tierLabel } from '../../components/TierChip.js';
+import { formatMinutes } from '../../lib/format.js';
+import {
+  ABSENCE_LABEL,
+  shiftKindColor,
+  shiftKindLabel,
+  shiftKindOfStart,
+} from '../../lib/schichtFarben.js';
 import {
   lieferungHinweis,
   lieferungSatz,
@@ -56,7 +63,10 @@ export function MatrixBoard({
 }: MatrixBoardProps): JSX.Element {
   return (
     <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
-      {board.map((row) => (
+      {/* Abwesende (Krank/Urlaub) ganz nach unten — sonst stabile Reihenfolge. */}
+      {[...board]
+        .sort((a, b) => Number(a.absence != null) - Number(b.absence != null))
+        .map((row) => (
         <MatrixRow
           key={row.employeeId}
           row={row}
@@ -93,10 +103,26 @@ function MatrixRow({
   onDragEnd,
   requestReason,
 }: MatrixRowProps): JSX.Element {
-  const { assignToEmployee, moveCase } = useCockpitData();
+  const { assignToEmployee, moveCase, pauseResume } = useCockpitData();
   const [over, setOver] = useState(false);
-  const action = dragging === null ? null : matrixDropAction(dragging, row.employeeId);
+  // Krank/Urlaub (Schichtplan-Kalender): Zeile wird nur noch angezeigt (ganz
+  // unten, durchgestrichen) — Drops sind gesperrt, Abwesende bekommen nichts.
+  const absent = row.absence ?? null;
+  const action =
+    absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
   const packs = derivePacks(row.cases, row.packs);
+  // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
+  const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
+  const fireSwipePause = (): void => {
+    const bundleId = row.bundleId;
+    if (bundleId === undefined) return;
+    requestReason({
+      title: `${row.displayName}: ${row.paused ? 'Pause beenden' : 'Pause/Abwesenheit'}`,
+      description: row.paused ? 'Bearbeitung fortsetzen.' : 'Pausiert die Bearbeitung.',
+      suggestions: ['Pause', 'Krank', 'Andere Aufgabe', 'Zurück aus Pause'],
+      run: (reason) => pauseResume.mutate({ bundleId, reason, paused: row.paused }),
+    });
+  };
 
   const handleDrop = (): void => {
     setOver(false);
@@ -161,6 +187,28 @@ function MatrixRow({
       }}
     >
       <Box
+        onPointerDown={(e) => {
+          if (e.button !== 0 || !e.isPrimary) return;
+          swipe.current = { x: e.clientX, y: e.clientY, fired: false };
+        }}
+        onPointerMove={(e) => {
+          const s = swipe.current;
+          if (s === null || s.fired) return;
+          if (Math.abs(e.clientY - s.y) > 24) {
+            swipe.current = null;
+            return;
+          }
+          if (e.clientX - s.x > 60) {
+            s.fired = true;
+            fireSwipePause();
+          }
+        }}
+        onPointerUp={() => {
+          swipe.current = null;
+        }}
+        onPointerLeave={() => {
+          swipe.current = null;
+        }}
         sx={{
           position: 'sticky',
           left: 0,
@@ -170,19 +218,53 @@ function MatrixRow({
           bgcolor: 'background.paper',
           borderRight: '1px solid',
           borderColor: 'divider',
+          borderLeft: row.shiftStart != null && absent === null ? '3px solid' : undefined,
+          borderLeftColor:
+            row.shiftStart != null && absent === null
+              ? shiftKindColor(shiftKindOfStart(row.shiftStart))
+              : undefined,
           px: 0.75,
           py: 0.25,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
+          opacity: absent !== null ? 0.6 : 1,
+          touchAction: 'none',
         }}
       >
-        <Typography sx={{ fontSize: '0.74rem', fontWeight: 700, lineHeight: 1.2 }} noWrap>
-          {row.displayName}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography
+            sx={{
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              textDecoration: absent !== null ? 'line-through' : 'none',
+            }}
+            noWrap
+          >
+            {row.displayName}
+          </Typography>
+          <RowInfoButton row={row} />
+        </Box>
         <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }} noWrap>
           {tierLabel(row.skillTier)} · {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} %
         </Typography>
+        {absent !== null ? (
+          <Typography
+            sx={{
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              textDecoration: 'line-through',
+              color: absent === 'krank' ? 'error.main' : 'warning.main',
+            }}
+          >
+            {ABSENCE_LABEL[absent]}
+          </Typography>
+        ) : (
+          row.shiftStart != null && (
+            <ShiftPill startIso={row.shiftStart} endIso={row.shiftEnd ?? null} />
+          )
+        )}
         {row.paused && (
           <Typography sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 700 }}>
             Pausiert
@@ -275,6 +357,24 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
     <Box
       title={group ? `${statusTitle} · ${lieferungHinweis(group)}` : statusTitle}
       onClick={() => navigate(`/belege/${c.caseId}`)}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', c.weBelegNo);
+        // Kein setDragImage: der ganze Strich wird als Geisterbild mitgezogen
+        // (Nutzer-Vorgabe — nicht nur die vier Griff-Punkte).
+        onDragStart({
+          source: 'matrix',
+          caseId: c.caseId,
+          weBelegNo: c.weBelegNo,
+          status: c.status,
+          bundleId: itemBundleId ?? '',
+          employeeId: row.employeeId,
+          employeeName: row.displayName,
+        });
+      }}
+      onDragEnd={onDragEnd}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -292,25 +392,7 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
           <Box
             role="button"
             aria-label={`${c.weBelegNo} aus Bündel ziehen`}
-            draggable
             onClick={(e) => e.stopPropagation()}
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = 'move';
-              e.dataTransfer.setData('text/plain', c.weBelegNo);
-              if (typeof e.dataTransfer.setDragImage === 'function') {
-                e.dataTransfer.setDragImage(e.currentTarget, 12, 10);
-              }
-              onDragStart({
-                source: 'matrix',
-                caseId: c.caseId,
-                weBelegNo: c.weBelegNo,
-                status: c.status,
-                bundleId: itemBundleId ?? '',
-                employeeId: row.employeeId,
-                employeeName: row.displayName,
-              });
-            }}
-            onDragEnd={onDragEnd}
             sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
           >
             <DragDots />
@@ -428,11 +510,134 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
           </Typography>
           <Typography variant="caption">
             Ablage → Zeile: zuweisen · Beleg-Strich → andere Zeile: verschieben · Beleg-Strich →
-            Ablagen/rote Zone: entziehen · Klick auf einen Strich: Belegdetails · Fenster-Grenzen
-            ziehen — über den Anschlag hinaus wechselt die Anordnung.
+            Ablagen/rote Zone: entziehen · Klick auf einen Strich: Belegdetails · Wisch über den
+            Namen (links → rechts): Pause/Weiter · Fenster-Grenzen ziehen — über den Anschlag
+            hinaus wechselt die Anordnung.
           </Typography>
         </Stack>
       </Popover>
     </>
+  );
+}
+
+/** Schicht-Pill: Früh hellblau / Spät helllila; vor Schichtbeginn „ab HH:MM", fett ab 1 h vorher. */
+function ShiftPill({ startIso, endIso }: { startIso: string; endIso: string | null }): JSX.Element {
+  const kind = shiftKindOfStart(startIso);
+  const start = new Date(startIso);
+  const hhmm = (d: Date): string =>
+    d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const now = Date.now();
+  const beforeStart = now < start.getTime();
+  const soon = beforeStart && start.getTime() - now <= 60 * 60 * 1000;
+  const window = `${hhmm(start)}${endIso ? `–${hhmm(new Date(endIso))}` : ''}`;
+  return (
+    <Box
+      sx={{
+        alignSelf: 'flex-start',
+        px: 0.5,
+        borderRadius: 0.5,
+        bgcolor: shiftKindColor(kind),
+        color: 'rgba(0,0,0,0.78)',
+        fontSize: '0.56rem',
+        fontWeight: soon ? 800 : 600,
+        lineHeight: 1.6,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {shiftKindLabel(kind)} {beforeStart ? `ab ${window}` : window}
+      {soon ? ' · gleich' : ''}
+    </Box>
+  );
+}
+
+/**
+ * Zeilen-Info (kleines ⓘ neben dem Namen): dieselben Infos wie die Karte der
+ * Board-Ansicht — Laufend/Geplant/Fertig mit Status, Teilen, Minuten und dem
+ * Zugehörigkeits-Satz der Lieferung.
+ */
+function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const laufend = row.cases.filter((c) =>
+    ['in_progress', 'issue_open', 'problem_resolved'].includes(c.status),
+  );
+  const geplant = row.cases.filter((c) => c.status === 'assigned');
+  const fertig = row.cases.filter((c) =>
+    ['completed', 'zst_done', 'cancelled'].includes(c.status),
+  );
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Details zu ${row.displayName} anzeigen`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setAnchor(e.currentTarget);
+        }}
+        sx={{ p: 0, ml: 0.25 }}
+      >
+        <InfoOutlinedIcon sx={{ fontSize: 12 }} />
+      </IconButton>
+      <Popover
+        open={anchor !== null}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Stack spacing={0.75} sx={{ p: 1.5, minWidth: 260, maxWidth: 340 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+            {row.displayName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {tierLabel(row.skillTier)} · {row.plannedTeile} Teile ·{' '}
+            {Math.round(row.utilisationPct)} % verplant
+          </Typography>
+          <RowInfoSection title={`Laufend (${laufend.length})`} cases={laufend} empty="Nichts in Arbeit." />
+          <RowInfoSection title={`Geplant (${geplant.length})`} cases={geplant} empty="Nichts geplant." />
+          {fertig.length > 0 && (
+            <RowInfoSection title={`Fertig (${fertig.length})`} cases={fertig} empty="" />
+          )}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
+
+function RowInfoSection({
+  title,
+  cases,
+  empty,
+}: {
+  title: string;
+  cases: BoardCase[];
+  empty: string;
+}): JSX.Element {
+  return (
+    <Stack spacing={0.25}>
+      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+        {title}
+      </Typography>
+      {cases.length === 0 && empty !== '' && (
+        <Typography variant="caption" color="text.secondary">
+          {empty}
+        </Typography>
+      )}
+      {cases.map((c, i) => {
+        const style = stripStyle(c.status);
+        const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
+        return (
+          <Stack key={c.caseId} spacing={0}>
+            <Typography variant="caption">
+              {i + 1}. <b>{c.weBelegNo}</b> · {style?.statusLabel ?? 'Zugewiesen'} ·{' '}
+              {c.totalQuantity} Teile · {formatMinutes(c.estimatedMinutes)}
+            </Typography>
+            {group && (
+              <Typography variant="caption" color="text.secondary" sx={{ pl: 1.5 }}>
+                {lieferungSatz(group)}
+              </Typography>
+            )}
+          </Stack>
+        );
+      })}
+    </Stack>
   );
 }

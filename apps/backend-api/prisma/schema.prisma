@@ -223,6 +223,7 @@ model User {
   bundles         AssignmentBundle[]
   issuesReported  Issue[]            @relation("IssueReporter")
   zstRecords      ZstRecord[]
+  absences        EmployeeAbsence[]
 
   @@map("users")
 }
@@ -290,6 +291,29 @@ model Shift {
   @@unique([employeeId, date], name: "shift_employee_date")
   @@index([date])
   @@map("shifts")
+}
+
+// Krank/Urlaub aus dem Schichtplan-Kalender (Admin, Rechtsklick auf einen Tag):
+// tagesgenaue Spanne je Mitarbeiter. Anzeige-Vertrag (Kalender + Mitarbeiter-Matrix
+// „ganz unten, durchgestrichen") — die Kapazitätswirkung (materializeShift) folgt
+// bewusst in einem späteren Schritt.
+enum AbsenceKind {
+  krank
+  urlaub
+}
+
+model EmployeeAbsence {
+  id         String      @id @default(cuid())
+  employeeId String
+  kind       AbsenceKind
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  createdAt  DateTime    @default(now())
+
+  employee User @relation(fields: [employeeId], references: [id])
+
+  @@index([startDate, endDate])
+  @@map("employee_absences")
 }
 
 model Workstation {

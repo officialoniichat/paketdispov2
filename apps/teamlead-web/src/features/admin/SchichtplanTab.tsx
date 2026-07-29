@@ -8,6 +8,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
@@ -17,7 +18,13 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import { alpha } from '@mui/material/styles';
+import { SHIFT_MODEL_COLORS, type ShiftModelName } from '../../lib/schichtFarben.js';
+import { SchichtplanKalender } from './SchichtplanKalender.js';
 import {
   fetchEmployees,
   updateEmployeeProfile,
@@ -61,7 +68,8 @@ function blankPattern(): WeeklyPattern {
   };
 }
 
-function modelOfDay(day: WeeklyPattern['mon']): string {
+/** Modell-Name eines Wochentags — auch vom Schichtplan-Kalender genutzt. */
+export function modelOfDay(day: WeeklyPattern['mon']): string {
   return day.working ? (day.shiftModel ?? 'Frühschicht') : 'Frei';
 }
 
@@ -83,34 +91,53 @@ export function SchichtplanTab(): JSX.Element {
     queryKey: ['admin', 'employees', 'schichtplan'],
     queryFn: () => fetchEmployees(),
   });
+  // Umschalter rechts: das Wochenmuster minimiert sich, der Kalender öffnet sich.
+  const [ansicht, setAnsicht] = useState<'muster' | 'kalender'>('muster');
 
   return (
     <Stack spacing={2}>
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
-          Schichtplan – Wochenmuster
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Lege je Mitarbeiter und Wochentag eine Schicht fest. Daraus berechnet das System die
-          Kapazität für die Zuteilung.
-        </Typography>
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5 }}>
+              Schichtplan – {ansicht === 'muster' ? 'Wochenmuster' : 'Kalender'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Lege je Mitarbeiter und Wochentag eine Schicht fest. Daraus berechnet das System die
+              Kapazität für die Zuteilung.
+            </Typography>
+          </Box>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={ansicht}
+            onChange={(_e, v: 'muster' | 'kalender' | null) => {
+              if (v !== null) setAnsicht(v);
+            }}
+            aria-label="Schichtplan-Ansicht"
+          >
+            <ToggleButton value="muster">Wochenmuster</ToggleButton>
+            <ToggleButton value="kalender">
+              <CalendarMonthIcon fontSize="small" sx={{ mr: 0.5 }} />
+              Kalender
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
         <Stack direction="row" spacing={2} sx={{ mt: 1 }} flexWrap="wrap">
-          <Typography variant="caption">
-            <b>Frühschicht</b> 06:00–14:00 · 30 min Pause
-          </Typography>
-          <Typography variant="caption">
-            <b>Spätschicht</b> 10:00–18:00 · 30 min Pause
-          </Typography>
-          <Typography variant="caption">
-            <b>Frei</b> – kein Einsatz
-          </Typography>
+          <LegendPill model="Frühschicht" text="06:00–14:00 · 30 min Pause" />
+          <LegendPill model="Spätschicht" text="10:00–18:00 · 30 min Pause" />
+          <LegendPill model="Frei" text="kein Einsatz" />
         </Stack>
       </Paper>
+
+      {query.data && ansicht === 'kalender' && (
+        <SchichtplanKalender employees={query.data.employees} />
+      )}
 
       {query.error && (
         <Alert severity="error">Konnte nicht geladen werden: {query.error.message}</Alert>
       )}
-      {query.data && (
+      {query.data && ansicht === 'muster' && (
         <Paper variant="outlined" sx={{ p: 1, overflowX: 'auto' }}>
           <Table size="small">
             <TableHead>
@@ -187,10 +214,31 @@ function PlannerRow({ emp }: { emp: EmployeeListItem }): JSX.Element {
             variant="standard"
             value={modelOfDay(pattern[d.key])}
             onChange={(ev) => setDay(d.key, ev.target.value)}
-            sx={{ minWidth: 92 }}
+            sx={{
+              minWidth: 92,
+              px: 0.5,
+              borderRadius: 0.5,
+              // Schichtfarbe direkt in der Zelle: Früh hellblau · Spät helllila · Frei orange.
+              bgcolor: alpha(
+                SHIFT_MODEL_COLORS[modelOfDay(pattern[d.key]) as ShiftModelName] ??
+                  SHIFT_MODEL_COLORS.Frei,
+                0.45,
+              ),
+            }}
           >
             {MODEL_NAMES.map((m) => (
               <MenuItem key={m} value={m}>
+                <Box
+                  component="span"
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    bgcolor: SHIFT_MODEL_COLORS[m as ShiftModelName],
+                    mr: 0.75,
+                    display: 'inline-block',
+                  }}
+                />
                 {m}
               </MenuItem>
             ))}
@@ -199,5 +247,24 @@ function PlannerRow({ emp }: { emp: EmployeeListItem }): JSX.Element {
       ))}
       <TableCell align="right">{weeklyHours(pattern)} h</TableCell>
     </TableRow>
+  );
+}
+
+/** Legende mit Farbkachel — dieselben Farben wie Kalender-Blöcke und Matrix-Pill. */
+function LegendPill({ model, text }: { model: ShiftModelName; text: string }): JSX.Element {
+  return (
+    <Typography variant="caption" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+      <Box
+        component="span"
+        sx={{
+          width: 12,
+          height: 12,
+          borderRadius: 0.5,
+          bgcolor: SHIFT_MODEL_COLORS[model],
+          display: 'inline-block',
+        }}
+      />
+      <b>{model}</b> {text}
+    </Typography>
   );
 }

@@ -577,6 +577,28 @@ export class TeamleadReadService {
       loadRuleConfig(this.prisma),
     ]);
 
+    // Heutige Abwesenheiten (Schichtplan-Kalender): krank schlägt urlaub bei Überlappung.
+    const absenceByEmployee = new Map<string, 'krank' | 'urlaub'>();
+    for (const a of await this.prisma.employeeAbsence.findMany({
+      where: { startDate: { lte: day }, endDate: { gte: day } },
+      select: { employeeId: true, kind: true },
+    })) {
+      if (absenceByEmployee.get(a.employeeId) !== 'krank') {
+        absenceByEmployee.set(a.employeeId, a.kind);
+      }
+    }
+
+    // Schichtfenster je Mitarbeiter (Früh/Spät-Farbe + „ab HH:MM" in der Matrix).
+    const shiftWindowByEmployee = new Map<string, { start: string; end: string }>();
+    for (const s of shifts) {
+      if (!shiftWindowByEmployee.has(s.employeeId)) {
+        shiftWindowByEmployee.set(s.employeeId, {
+          start: s.plannedStart.toISOString(),
+          end: s.plannedEnd.toISOString(),
+        });
+      }
+    }
+
     const capacityByEmployee = new Map<string, number>();
     for (const s of shifts) {
       capacityByEmployee.set(
@@ -640,6 +662,9 @@ export class TeamleadReadService {
         plannedTeile: 0,
         capacityMinutes: capacityByEmployee.get(s.employeeId) ?? 0,
         bereiche: s.employee.bereiche,
+        shiftStart: shiftWindowByEmployee.get(s.employeeId)?.start ?? null,
+        shiftEnd: shiftWindowByEmployee.get(s.employeeId)?.end ?? null,
+        absence: absenceByEmployee.get(s.employeeId) ?? null,
         cases: [],
         routeStops: [],
         packs: [],
@@ -661,6 +686,9 @@ export class TeamleadReadService {
           plannedTeile: 0,
           capacityMinutes: capacityByEmployee.get(b.employeeId) ?? 0,
           bereiche: b.employee.bereiche,
+          shiftStart: shiftWindowByEmployee.get(b.employeeId)?.start ?? null,
+          shiftEnd: shiftWindowByEmployee.get(b.employeeId)?.end ?? null,
+          absence: absenceByEmployee.get(b.employeeId) ?? null,
           cases: [],
           routeStops: [],
           packs: [],

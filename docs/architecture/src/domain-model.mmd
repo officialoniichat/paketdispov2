@@ -11,6 +11,7 @@ erDiagram
     USER ||--o{ ASSIGNMENT_BUNDLE : "besitzt"
     USER ||--o{ ISSUE : "meldet"
     USER ||--o{ ZST_RECORD : "schließt ab"
+    USER ||--o{ EMPLOYEE_ABSENCE : "abwesend (krank/urlaub)"
 
     LOCATION ||--o{ WORKSTATION : "beherbergt"
     WORKSTATION ||--o{ SHIFT : "besetzt an"
@@ -62,6 +63,13 @@ erDiagram
         datetime plannedEnd
         float netCapacityMinutes
         enum source "seak|pattern|teamlead"
+    }
+    EMPLOYEE_ABSENCE {
+        string id PK
+        string employeeId FK
+        enum kind "krank | urlaub"
+        date startDate "inklusive"
+        date endDate "inklusive (bis wann mindestens)"
     }
     WORKSTATION { string id PK
         string code UK

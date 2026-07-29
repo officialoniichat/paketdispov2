@@ -32,7 +32,7 @@ flowchart TB
             tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· cases/:id/resolve-problems (Problemfall→problem_resolved)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/lookup (WE-Nr) · cases/search (Suche+Browse im Zuweisen-Flow A1/A2/B1) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2)"]:::ctrl
             casesSvc["CasesService<br/><i>getToday · aggregate · start · complete<br/>· parkRemaining · claimWorkstation</i>"]:::svc
             tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>assignToEmployee/assignBundleToEmployee (find-or-create) · moveCase</i>"]:::svc
-            tlRead["TeamleadReadService<br/><i>dashboard · board · capacity · kpis · pool (Server-Filter/-Sortierung/-Paging) · lookup · search (gerankt, nur zuweisbare) · detail</i>"]:::svc
+            tlRead["TeamleadReadService<br/><i>dashboard · board (Packs · Schichtfenster · Abwesenheit je Zeile) · capacity · kpis · pool (Server-Filter/-Sortierung/-Paging) · lookup · search (gerankt, nur zuweisbare) · detail</i>"]:::svc
         end
 
         subgraph assignment["AssignmentModule"]
@@ -40,8 +40,8 @@ flowchart TB
         end
 
         subgraph empl["EmployeesModule"]
-            emplCtrl["EmployeesController<br/>/api/admin/employees (GET·POST·PATCH)<br/>· employees/workstations (GET)"]:::ctrl
-            emplSvc["EmployeesService<br/><i>list · get · create · updateProfile (skillTier · Workstation)<br/>· materializeShift</i>"]:::svc
+            emplCtrl["EmployeesController<br/>/api/admin/employees (GET·POST·PATCH)<br/>· employees/workstations (GET)<br/>· employees/absences (GET·POST·DELETE — Schichtplan-Kalender: Krank/Urlaub)"]:::ctrl
+            emplSvc["EmployeesService<br/><i>list · get · create · updateProfile (skillTier · Workstation)<br/>· materializeShift · listAbsences · createAbsence · deleteAbsence</i>"]:::svc
         end
 
         subgraph adminMod["AdminModule"]

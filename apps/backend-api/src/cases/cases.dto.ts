@@ -572,6 +572,23 @@ export class BoardRowDto {
     description: 'Fixed Bereiche/skills of the employee (shown on idle rows too).',
   })
   bereiche!: string[];
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Geplanter Schichtbeginn (ISO) — die Matrix färbt Früh/Spät und zeigt „ab HH:MM" vor Schichtstart; null ohne Schicht heute.',
+  })
+  shiftStart!: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Geplantes Schichtende (ISO).' })
+  shiftEnd!: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: ['krank', 'urlaub'],
+    description:
+      'Heutige Abwesenheit (Schichtplan-Kalender): Zeile wird ganz unten, durchgestrichen dargestellt.',
+  })
+  absence!: 'krank' | 'urlaub' | null;
   @ApiProperty({ type: [BoardCaseDto] }) cases!: BoardCaseDto[];
   @ApiProperty({ type: [BoardRouteStopDto] }) routeStops!: BoardRouteStopDto[];
   @ApiProperty({

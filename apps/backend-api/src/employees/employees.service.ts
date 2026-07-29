@@ -13,6 +13,8 @@ import { EventLogService } from '../events/event-log.service.js';
 import { hashPin } from '../auth/pin.js';
 import type { Principal } from '../auth/rbac.js';
 import type {
+  AbsenceCreateDto,
+  AbsenceDto,
   EmployeeCreateDto,
   EmployeeDetailDto,
   EmployeeListItemDto,
@@ -287,6 +289,40 @@ export class EmployeesService {
     });
   }
 
+  // --- Abwesenheiten (Schichtplan-Kalender) ---------------------------------
+
+  /** Krank-/Urlaubs-Spannen, die den Zeitraum [from, to] überlappen. */
+  async listAbsences(from: string, to: string): Promise<AbsenceDto[]> {
+    const rows = await this.prisma.employeeAbsence.findMany({
+      where: { startDate: { lte: absenceDay(to) }, endDate: { gte: absenceDay(from) } },
+      orderBy: { startDate: 'asc' },
+    });
+    return rows.map(toAbsenceDto);
+  }
+
+  /** Rechtsklick im Kalender: Krankschreibung/Urlaub „von dem Tag aus bis wann mindestens". */
+  async createAbsence(body: AbsenceCreateDto): Promise<AbsenceDto> {
+    const start = absenceDay(body.startDate);
+    const end = absenceDay(body.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      throw new BadRequestException('endDate muss ein Datum ≥ startDate sein (YYYY-MM-DD).');
+    }
+    const employee = await this.prisma.user.findUnique({ where: { id: body.employeeId } });
+    if (!employee) throw new NotFoundException(`Employee ${body.employeeId} not found`);
+    const row = await this.prisma.employeeAbsence.create({
+      data: { employeeId: body.employeeId, kind: body.kind, startDate: start, endDate: end },
+    });
+    return toAbsenceDto(row);
+  }
+
+  async deleteAbsence(id: string): Promise<void> {
+    try {
+      await this.prisma.employeeAbsence.delete({ where: { id } });
+    } catch {
+      throw new NotFoundException(`Absence ${id} not found`);
+    }
+  }
+
   // --- internals ------------------------------------------------------------
 
   /**
@@ -487,4 +523,25 @@ function deriveNetCapacity(
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** Datums-String (YYYY-MM-DD) → UTC-Mitternacht — wie alle Tagesgrenzen im Backend. */
+function absenceDay(iso: string): Date {
+  return new Date(`${iso}T00:00:00.000Z`);
+}
+
+function toAbsenceDto(row: {
+  id: string;
+  employeeId: string;
+  kind: 'krank' | 'urlaub';
+  startDate: Date;
+  endDate: Date;
+}): AbsenceDto {
+  return {
+    id: row.id,
+    employeeId: row.employeeId,
+    kind: row.kind,
+    startDate: row.startDate.toISOString().slice(0, 10),
+    endDate: row.endDate.toISOString().slice(0, 10),
+  };
 }

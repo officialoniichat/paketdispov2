@@ -29,7 +29,9 @@ const mocks = vi.hoisted(() => {
     estimatedMinutes: 6,
     storageCode: 'R13-04',
     openIssue: null,
+    issueStatus: null,
     forwardedTo: null,
+    assignedTo: null,
     bereich: 'Regal',
     attentionFlag: false,
     attentionNote: null,
@@ -48,15 +50,29 @@ const mocks = vi.hoisted(() => {
       lane('geparkt', 'Geparkt', [card('c2', 'WE 200', 'parked')]),
       lane('prio', 'Prio', []),
     ],
+    board: [],
+    assignBundle: mutation(),
     parkCase: vi.fn(),
     releaseCase: vi.fn(),
     prioritiseCase: vi.fn(),
     deprioritiseCase: vi.fn(),
+    approveCase: vi.fn(),
+    cancelCase: vi.fn(),
+    resolveProblems: vi.fn(),
+    forwardCase: vi.fn(),
     unforwardCase: vi.fn(),
+    flagAttention: vi.fn(),
+    unflagAttention: vi.fn(),
     withdraw: mutation(),
   };
 });
 vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
+// AblagenBoard-Randbezüge, die im Test nicht real laufen sollen: Audit-Feed,
+// Mitarbeiterliste (Split-Dialog) und der Zuweisen-Dialog.
+vi.mock('../../data/api.js', () => ({ api: { GET: vi.fn(async () => ({ data: [] })) } }));
+vi.mock('../../data/employees.js', () => ({ fetchEmployees: vi.fn(async () => ({ employees: [] })) }));
+vi.mock('../split/SplitProvider.js', () => ({ useSplits: () => ({ recordSplit: vi.fn() }) }));
+vi.mock('../belege/AssignFromListDialog.js', () => ({ AssignFromListDialog: () => null }));
 
 function dt(): {
   effectAllowed: string;
@@ -85,16 +101,17 @@ function ablageDrag(
 function renderPane(dragging: ExperimentDragPayload | null): {
   requestReason: ReturnType<typeof vi.fn>;
   onForward: ReturnType<typeof vi.fn>;
+  onDragStart: ReturnType<typeof vi.fn>;
 } {
   const requestReason = vi.fn();
   const onForward = vi.fn();
+  const onDragStart = vi.fn();
   render(
     <AppProviders queryClient={createQueryClient({ retry: 0 })}>
       <MemoryRouter>
         <AblagenPane
-          groupColorById={new Map()}
           dragging={dragging}
-          onDragStart={vi.fn()}
+          onDragStart={onDragStart}
           onDragEnd={vi.fn()}
           requestReason={requestReason}
           onForward={onForward}
@@ -102,7 +119,7 @@ function renderPane(dragging: ExperimentDragPayload | null): {
       </MemoryRouter>
     </AppProviders>,
   );
-  return { requestReason, onForward };
+  return { requestReason, onForward, onDragStart };
 }
 
 beforeEach(() => {
@@ -112,16 +129,34 @@ beforeEach(() => {
 });
 
 describe('AblagenPane', () => {
-  it('zeigt die Lanes mit Karten und Zähler', () => {
+  it('bettet das Original-Board ein: Lanes + Karten, aber KEIN Bündel-Fenster', () => {
     renderPane(null);
     expect(screen.getByText('Sonstige')).toBeTruthy();
     expect(screen.getByText('WE 100')).toBeTruthy();
     expect(screen.getByText('WE 200')).toBeTruthy();
+    // Original-Design-Merkmal: das Aktions-Menü jeder Karte ist da.
+    expect(screen.getAllByText('Details').length).toBeGreaterThan(0);
+    // Das „Bündel erstellen"-Fenster gehört nur zum Original-Reiter.
+    expect(screen.queryByTestId('ablagen-buendel-fenster')).toBeNull();
+  });
+
+  it('die ganze Karte ist der Drag-Griff und startet den Ablage-Drag', () => {
+    const { onDragStart } = renderPane(null);
+    fireEvent.dragStart(screen.getByLabelText('WE 100 aus Ablage ziehen'), { dataTransfer: dt() });
+    expect(onDragStart).toHaveBeenCalledWith({
+      source: 'ablage',
+      caseId: 'c1',
+      weBelegNo: 'WE 100',
+      status: 'ready',
+      lane: 'sonstige',
+      priorityFlags: [],
+      forwardedTo: null,
+    });
   });
 
   it('ready → „Geparkt" fragt den Grund ab und parkt', () => {
     const { requestReason } = renderPane(ablageDrag());
-    fireEvent.drop(screen.getByTestId('experiment-lane-geparkt'), { dataTransfer: dt() });
+    fireEvent.drop(screen.getByTestId('ablagen-lane-geparkt'), { dataTransfer: dt() });
     const action = requestReason.mock.calls[0]![0] as PendingAction;
     expect(action.title).toBe('WE 100 parken');
     action.run('Wartet auf Klärung');
@@ -132,7 +167,7 @@ describe('AblagenPane', () => {
     const { requestReason } = renderPane(
       ablageDrag({ caseId: 'c2', weBelegNo: 'WE 200', status: 'parked', lane: 'geparkt' }),
     );
-    fireEvent.drop(screen.getByTestId('experiment-lane-sonstige'), { dataTransfer: dt() });
+    fireEvent.drop(screen.getByTestId('ablagen-lane-sonstige'), { dataTransfer: dt() });
     const action = requestReason.mock.calls[0]![0] as PendingAction;
     expect(action.title).toBe('WE 200 entparken');
     action.run('Klärung erfolgt');
@@ -143,7 +178,7 @@ describe('AblagenPane', () => {
     const { requestReason } = renderPane(
       ablageDrag({ caseId: 'c2', status: 'parked', lane: 'geparkt' }),
     );
-    fireEvent.drop(screen.getByTestId('experiment-lane-prio'), { dataTransfer: dt() });
+    fireEvent.drop(screen.getByTestId('ablagen-lane-prio'), { dataTransfer: dt() });
     expect(requestReason).not.toHaveBeenCalled();
   });
 

@@ -31,6 +31,8 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCockpitData } from '../../data/store.js';
 import type { LaneCard } from '../../data/types.js';
@@ -40,6 +42,7 @@ import { ForwardDialog } from '../../components/ForwardDialog.js';
 import {
   EXPERIMENT_BELEGE_VIEW_KEY,
   EXPERIMENT_VIEW_KEY,
+  EXPERIMENT_ZOOM_VIEW_KEY,
   loadViewState,
   saveViewState,
 } from '../../lib/viewState.js';
@@ -61,7 +64,7 @@ import {
 } from './experimentLayout.js';
 
 export function ExperimentPage(): JSX.Element {
-  const { board, lanes, forwardCase, withdraw, assignToEmployee, moveCase } = useCockpitData();
+  const { board, forwardCase, withdraw, assignToEmployee, moveCase } = useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [dragging, setDragging] = useState<ExperimentDragPayload | null>(null);
   const [forwardCard, setForwardCard] = useState<LaneCard | null>(null);
@@ -73,27 +76,39 @@ export function ExperimentPage(): JSX.Element {
   // Frische Split-Sicht für die window-Listener (pointermove läuft außerhalb des React-Zyklus).
   const splitRef = useRef(split);
   splitRef.current = split;
+  // Lupe ± je Fenster: Inhalt rein-/rauszoomen wie ⌘+/⌘− (CSS zoom), persistiert.
+  const [zoom, setZoom] = useState<Record<PaneId, number>>(() => {
+    const raw = loadViewState<Partial<Record<PaneId, number>> | null>(EXPERIMENT_ZOOM_VIEW_KEY, {});
+    const norm = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(1.5, Math.max(0.6, v)) : 1;
+    return { belege: norm(raw?.belege), ablagen: norm(raw?.ablagen), matrix: norm(raw?.matrix) };
+  });
+  const changeZoom = (pane: PaneId, delta: number): void => {
+    setZoom((z) => {
+      const next = {
+        ...z,
+        [pane]: Math.min(1.5, Math.max(0.6, Math.round((z[pane] + delta) * 10) / 10)),
+      };
+      saveViewState(EXPERIMENT_ZOOM_VIEW_KEY, next);
+      return next;
+    });
+  };
 
   // Erste fehlgeschlagene DnD-Mutation treibt die Fehler-Snackbar (Board-Muster).
   const failed = [withdraw, assignToEmployee, moveCase].find((m) => m.isError);
 
-  // Lieferungs-Farben screen-weit konsistent über Matrix UND Ablagen (stabile
-  // Zuordnung unabhängig davon, in welchem Fenster eine Gruppe zuerst auftaucht).
+  // Lieferungs-Farben der Matrix-Striche (das Ablagen-Fenster nutzt seit dem
+  // Original-Design-Embed die LieferungChip-Darstellung des Basis-Boards).
   const groupColorById = useMemo(
     () =>
-      buildGroupColorMap([
-        ...board.flatMap((r) =>
+      buildGroupColorMap(
+        board.flatMap((r) =>
           r.cases.map((c) =>
             c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup.id : null,
           ),
         ),
-        ...lanes.flatMap((l) =>
-          l.cards.map((c) =>
-            c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup.id : null,
-          ),
-        ),
-      ]),
-    [board, lanes],
+      ),
+    [board],
   );
 
   const startSegDrag =
@@ -146,6 +161,8 @@ export function ExperimentPage(): JSX.Element {
       title="Beleg-Übersicht"
       focused={focus === 'belege'}
       onToggleFullscreen={() => toggleFocus('belege')}
+      zoom={zoom.belege}
+      onZoomDelta={(delta) => changeZoom('belege', delta)}
     >
       <Box sx={{ height: '100%', overflow: 'auto', p: 1 }}>
         {/* Eigener Saved-View-Key: das Experiment darf /belege nicht umkonfigurieren. */}
@@ -158,9 +175,10 @@ export function ExperimentPage(): JSX.Element {
       title="Digitale Ablagen"
       focused={focus === 'ablagen'}
       onToggleFullscreen={() => toggleFocus('ablagen')}
+      zoom={zoom.ablagen}
+      onZoomDelta={(delta) => changeZoom('ablagen', delta)}
     >
       <AblagenPane
-        groupColorById={groupColorById}
         dragging={dragging}
         onDragStart={setDragging}
         onDragEnd={clearDrag}
@@ -174,6 +192,8 @@ export function ExperimentPage(): JSX.Element {
       title="Mitarbeiter-Matrix"
       focused={focus === 'matrix'}
       onToggleFullscreen={() => toggleFocus('matrix')}
+      zoom={zoom.matrix}
+      onZoomDelta={(delta) => changeZoom('matrix', delta)}
       actions={<MatrixInfo board={board} />}
     >
       <MatrixBoard
@@ -271,13 +291,24 @@ interface PaneProps {
   title: string;
   focused: boolean;
   onToggleFullscreen: () => void;
+  /** Zoom-Faktor des Fensterinhalts (Lupe ±, 0.6–1.5). */
+  zoom: number;
+  onZoomDelta: (delta: number) => void;
   /** Zusätzliche Kopfleisten-Aktionen (z. B. der Info-Kreis der Matrix). */
   actions?: ReactNode;
   children: ReactNode;
 }
 
-/** Fenster-Rahmen: Titelleiste mit Aktionen + Vollbild-Umschalter, Inhalt füllt den Rest. */
-function Pane({ title, focused, onToggleFullscreen, actions, children }: PaneProps): JSX.Element {
+/** Fenster-Rahmen: Titelleiste mit Lupe ±, Aktionen + Vollbild-Umschalter; Inhalt füllt den Rest. */
+function Pane({
+  title,
+  focused,
+  onToggleFullscreen,
+  zoom,
+  onZoomDelta,
+  actions,
+  children,
+}: PaneProps): JSX.Element {
   return (
     <Paper
       variant="outlined"
@@ -305,6 +336,27 @@ function Pane({ title, focused, onToggleFullscreen, actions, children }: PanePro
       >
         <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{title}</Typography>
         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+          <IconButton
+            size="small"
+            aria-label={`${title}: Ansicht verkleinern`}
+            onClick={() => onZoomDelta(-0.1)}
+            disabled={zoom <= 0.6}
+            sx={{ p: 0.25 }}
+          >
+            <ZoomOutIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', minWidth: 28, textAlign: 'center' }}>
+            {Math.round(zoom * 100)} %
+          </Typography>
+          <IconButton
+            size="small"
+            aria-label={`${title}: Ansicht vergrößern`}
+            onClick={() => onZoomDelta(0.1)}
+            disabled={zoom >= 1.5}
+            sx={{ p: 0.25 }}
+          >
+            <ZoomInIcon sx={{ fontSize: 16 }} />
+          </IconButton>
           {actions}
           <IconButton
             size="small"
@@ -320,7 +372,8 @@ function Pane({ title, focused, onToggleFullscreen, actions, children }: PanePro
           </IconButton>
         </Box>
       </Box>
-      <Box sx={{ flex: 1, minHeight: 0 }}>{children}</Box>
+      {/* CSS zoom = ⌘+/⌘− nur für dieses Fenster; reflowt das Layout (kein transform). */}
+      <Box sx={{ flex: 1, minHeight: 0, zoom }}>{children}</Box>
     </Paper>
   );
 }

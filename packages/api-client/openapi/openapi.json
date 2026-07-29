@@ -2550,6 +2550,119 @@
         ]
       }
     },
+    "/api/admin/employees/absences": {
+      "get": {
+        "operationId": "EmployeesController_listAbsences",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Krank-/Urlaubs-Spannen im Zeitraum (Schichtplan-Kalender).",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "EmployeesController_createAbsence",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Krankschreibung/Urlaub eintragen (Rechtsklick im Kalender).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/admin/employees/absences/{absenceId}": {
+      "delete": {
+        "operationId": "EmployeesController_deleteAbsence",
+        "parameters": [
+          {
+            "name": "absenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abwesenheit löschen (Kalender-Kontextmenü).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/api/admin/employees/{id}": {
       "get": {
         "operationId": "EmployeesController_get",
@@ -4036,6 +4149,25 @@
               "type": "string"
             }
           },
+          "shiftStart": {
+            "type": "string",
+            "nullable": true,
+            "description": "Geplanter Schichtbeginn (ISO) — die Matrix färbt Früh/Spät und zeigt „ab HH:MM\" vor Schichtstart; null ohne Schicht heute."
+          },
+          "shiftEnd": {
+            "type": "string",
+            "nullable": true,
+            "description": "Geplantes Schichtende (ISO)."
+          },
+          "absence": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "krank",
+              "urlaub"
+            ],
+            "description": "Heutige Abwesenheit (Schichtplan-Kalender): Zeile wird ganz unten, durchgestrichen dargestellt."
+          },
           "cases": {
             "type": "array",
             "items": {
@@ -4065,6 +4197,9 @@
           "plannedTeile",
           "capacityMinutes",
           "bereiche",
+          "shiftStart",
+          "shiftEnd",
+          "absence",
           "cases",
           "routeStops",
           "packs"
@@ -6445,6 +6580,68 @@
           "code",
           "name",
           "active"
+        ]
+      },
+      "AbsenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "krank",
+              "urlaub"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD (inklusive)"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD (inklusive — „bis wann mindestens\")"
+          }
+        },
+        "required": [
+          "id",
+          "employeeId",
+          "kind",
+          "startDate",
+          "endDate"
+        ]
+      },
+      "AbsenceCreateDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "krank",
+              "urlaub"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD"
+          }
+        },
+        "required": [
+          "employeeId",
+          "kind",
+          "startDate",
+          "endDate"
         ]
       },
       "EmployeeProfileUpdateDto": {
