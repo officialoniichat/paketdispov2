@@ -28,8 +28,11 @@ export interface LoginScreenProps {
  * `/env.js`, siehe `config/runtimeEnv.ts`). Ohne die Variable startet das Feld leer:
  * ein produktiv genutzter Stand darf keine Nummer vorschlagen, mit der sich jeder
  * Besucher als dieser Mitarbeiter anmeldet. Für die Vorführung setzt man `ma-108` —
- * der Seed-Mitarbeiter mit der reichhaltigsten Datenlage (5 Belege auf 4 Lagerplätzen,
- * Sicherungstyp, drei mit online markierten Größen). Das Feld bleibt stets editierbar.
+ * der Standard-Seed (B1) weist ihm direkt das Demo-Bündel zu: 8 Belege auf 4
+ * Abhol-Stops über alle drei Bereiche, alle Warenarten, Liefergruppe ×3,
+ * Online-Größen, CatMan-Termin sowie Fertig-/Problem-/Geklärt-Zustände
+ * (siehe `seedMa108DemoBundle`, docs/dev/scenarios.md B1). Das Feld bleibt stets
+ * editierbar.
  */
 const demoEmployeeNo = resolveEnv('VITE_DEMO_EMPLOYEE_NO') ?? '';
 

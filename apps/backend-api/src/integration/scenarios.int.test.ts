@@ -109,6 +109,85 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
     expect(summary.deliveryGroups).toBeGreaterThanOrEqual(50);
   });
 
+  it('B1 standard: ma-108 (PWA-Demo-Login) hat sein direkt zugewiesenes Demo-Bündel', async () => {
+    await load('standard');
+
+    const bundle = await prisma.assignmentBundle.findFirst({
+      where: { employee: { employeeNo: 'ma-108' }, date: new Date(`${BASE_DATE}T00:00:00.000Z`) },
+      include: {
+        cases: { include: { storageLocation: true } },
+        routeStops: { orderBy: { sequence: 'asc' } },
+      },
+    });
+    expect(bundle).not.toBeNull();
+    expect(bundle?.status).toBe('active');
+
+    // 8 Belege über 4 Stops / alle drei Bereiche, alle vier Warenarten, plus die
+    // Sonderzustände Fertig / Problem gemeldet / Geklärt.
+    expect(bundle?.cases).toHaveLength(8);
+    const byStatus = new Map<string, number>();
+    for (const c of bundle?.cases ?? []) {
+      byStatus.set(c.status, (byStatus.get(c.status) ?? 0) + 1);
+    }
+    expect(byStatus.get('assigned')).toBe(5);
+    expect(byStatus.get('completed')).toBe(1);
+    expect(byStatus.get('issue_open')).toBe(1);
+    expect(byStatus.get('problem_resolved')).toBe(1);
+
+    const goodsTypes = new Set((bundle?.cases ?? []).map((c) => c.goodsTypeText));
+    for (const wanted of ['Vororder', 'Nachorder', 'NOS', 'Extrabestellung']) {
+      expect(goodsTypes.has(wanted as never)).toBe(true);
+    }
+
+    const kinds = new Set((bundle?.cases ?? []).map((c) => c.storageLocation?.kind));
+    expect(kinds.has('regal')).toBe(true);
+    expect(kinds.has('palette_a')).toBe(true);
+    expect(kinds.has('haengebahn')).toBe(true);
+    expect(bundle?.routeStops.map((s) => s.locationCode)).toEqual([
+      'R7',
+      'R19',
+      'PA-1',
+      'HB-5/234',
+    ]);
+
+    // Liefergruppe ×3: gleicher Lieferschein + fortlaufende WE-Nummern (T2+T3).
+    const group = (bundle?.cases ?? []).filter((c) => c.deliveryNoteNo === 'LS-25-9108');
+    expect(group.map((c) => c.weBelegNo).sort()).toEqual(['9.108.021', '9.108.022', '9.108.023']);
+
+    // Fertig-Beleg: ZST verbucht + verbuchte Ist-Mengen (Nur-Ansicht der PWA).
+    const done = (bundle?.cases ?? []).find((c) => c.status === 'completed');
+    const zst = await prisma.zstRecord.findUnique({
+      where: { idempotencyKey: `seed-zst:${done?.weBelegNo}` },
+    });
+    expect(zst?.completedQuantity).toBe(done?.totalQuantity);
+
+    // Problemfall offen, geklärter Fall resolved — beide mit Position-Scope.
+    const issueCase = (bundle?.cases ?? []).find((c) => c.status === 'issue_open');
+    const openIssues = await prisma.issue.count({
+      where: { caseId: issueCase?.id, status: 'open' },
+    });
+    expect(openIssues).toBe(1);
+    const resolvedCase = (bundle?.cases ?? []).find((c) => c.status === 'problem_resolved');
+    const resolvedIssues = await prisma.issue.count({
+      where: { caseId: resolvedCase?.id, status: 'resolved' },
+    });
+    expect(resolvedIssues).toBe(1);
+
+    // Online-relevante Position mit mehreren Größen-Zeilen (EK/VK/VK-Etikett gesetzt).
+    const nosCase = (bundle?.cases ?? []).find((c) => c.weBelegNo === '9.108.031');
+    const onlinePositions = await prisma.receiptPosition.findMany({
+      where: { caseId: nosCase?.id, onlineRelevant: true },
+      include: { skuLines: true },
+    });
+    expect(onlinePositions).toHaveLength(1);
+    expect(onlinePositions[0]?.skuLines.length).toBeGreaterThanOrEqual(2);
+    for (const line of onlinePositions[0]?.skuLines ?? []) {
+      expect(line.ekPrice).not.toBeNull();
+      expect(line.vkPrice).not.toBeNull();
+      expect(line.vkLabelPrice).not.toBeNull();
+    }
+  });
+
   it('B2 peak-tag: 333 ready-Belege (Spitzen-Volumenprofil)', async () => {
     const summary = await load('peak-tag');
 

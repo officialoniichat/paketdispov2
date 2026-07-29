@@ -75,10 +75,25 @@ Ready-Pool (typisch 171 Belege) über alle Bereiche, Lieferungs-Runs, Lifecycle-
 für alle Scopes, eine Mock-ProHandel-Charge sowie Intake-Gate- und Pool-Hold-Fixtures.
 Das ist zugleich der Seed-Default (`prisma db seed`, „Zurücksetzen auf Standard").
 
+Zusätzlich trägt B1 das **MA-108-Demo-Bündel** für den PWA-Demo-Login
+(`VITE_DEMO_EMPLOYEE_NO=ma-108`, Railway): ein direkt zugewiesenes, aktives
+Tages-Bündel mit 8 Belegen (`9.108.021`–`9.108.053`) über 4 Abhol-Stops und alle
+drei Bereiche (R7/R19 Regal · PA-1 Palette · HB-5/234 Hängebahn) — alle vier
+Warenarten (Vororder/Nachorder/NOS/Extrabestellung), Etikettendruck- UND
+Digital-Etiketten-Fälle, eine Liefergruppe ×3 (LS-25-9108, fortlaufende
+WE-Nummern), mehrere Positionen mit mehreren Größen-Zeilen (EAN · Größe · Soll ·
+EK/VK/VK-Etikett), eine online-relevante Position (38 grün / 40 rot), ein
+CatMan-Termin sowie die Sonderzustände Fertig (completed + ZST, Nur-Ansicht),
+Problem gemeldet (issue_open) und Geklärt (problem_resolved). Der Stop R19 ist
+bereits als geholt markiert, damit die bearbeiteten Fälle sofort antippbar sind.
+
 **Was man danach sehen sollte:** Pool ≈ 189 ready-Belege (171 generiert + 16
 Mock-ProHandel + 2 Pool-Hold), 2 blockierte Belege („zurück an Bucher"),
-~60 Liefergruppen, gefüllte Ablage-Lanes; nach „Neu berechnen" ein voller Tagesplan
-über alle Schichten.
+~60 Liefergruppen, gefüllte Ablage-Lanes; Login als `ma-108` in der
+Mitarbeiter-App zeigt sofort das 8-Beleg-Bündel; nach „Neu berechnen" ein voller
+Tagesplan über alle Schichten — die noch unbegonnenen MA-108-Belege werden dabei
+systemkonform in den Pool zurückgestellt und neu verplant (das Demo-Bündel ist
+für die Nutzung direkt nach dem Szenario-Laden gedacht).
 
 ### B2 · `peak-tag` — Peak-Tag (315 Belege)
 

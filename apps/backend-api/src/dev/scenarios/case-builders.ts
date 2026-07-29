@@ -631,6 +631,484 @@ export async function seedIntakeGateFixtures(
   }
 }
 
+// --- MA-108 Demo-Bündel (Vorführ-Mitarbeiter der Mitarbeiter-App) ---------------
+// Der Quick-Login der PWA (VITE_DEMO_EMPLOYEE_NO, Railway) meldet Besucher als
+// ma-108 an — dieser Mitarbeiter bekommt deshalb direkt beim Seed ein reiches,
+// VOLL DETERMINISTISCHES Tages-Bündel, das jeden App-Zustand vorführbar macht:
+// 4 Abhol-Stops über alle drei Bereiche (Regal/Palette/Hängebahn), eine
+// Liefergruppe („Lieferung ×3": gleicher Lieferschein + fortlaufende WE-Nummern),
+// alle vier Warenarten (Vororder/Nachorder/NOS/Extrabestellung), Etikettendruck-
+// UND Digital-Etiketten-Belege, mehrere Positionen mit mehreren Größen-Zeilen
+// (EAN · Größe · Soll · EK/VK/VK-Etikett), eine online-relevante Position
+// (Rot/Grün 38/40), ein CatMan-Termin, plus die Sonderzustände Fertig
+// (completed + ZST), Problem gemeldet (issue_open) und Geklärt (problem_resolved).
+//
+// Ordnung: NACH `seedCaseDetails` aufrufen — die Belege hier tragen ihre eigenen,
+// expliziten Positionen/Größen und dürfen nicht vom generischen 38/40-Detail
+// überschrieben werden. „Automatik neu berechnen" verhält sich systemkonform:
+// das Bündel überlebt (es enthält begonnene/fertige Belege), aber die noch
+// unbegonnenen `assigned`-Belege wandern zurück in den Pool und werden neu
+// verplant — das Demo-Bündel ist für die Nutzung direkt nach „Szenario laden".
+
+interface Ma108SkuSpec {
+  ean: string;
+  size: string;
+  qty: number;
+  ek: number;
+  vk: number;
+  /** VK-Etikett; weicht er vom VK ab, zeigt die PWA beide Spalten unterschiedlich. */
+  vkLabel: number;
+}
+
+interface Ma108PositionSpec {
+  wgr: string;
+  supplierArticleNo: string;
+  supplierColor: string;
+  nosFlag?: boolean;
+  season?: string;
+  /** CatMan-Termin: Tage NACH baseDate (deterministisch). */
+  catManOffsetDays?: number;
+  onlineRelevant?: boolean;
+  securityTypeCode?: string | null;
+  skuLines: Ma108SkuSpec[];
+}
+
+interface Ma108CaseSpec {
+  weBelegNo: string;
+  deliveryNoteNo: string;
+  storageCode: string;
+  goodsTypeText: GoodsTypeText;
+  status: 'assigned' | 'completed' | 'issue_open' | 'problem_resolved';
+  priceLabelPrintRequired: boolean;
+  checkMode: 'quantity_only' | 'percentage_check' | 'full_check';
+  checkPercentage?: 10 | 20;
+  estimatedMinutes: number;
+  positions: Ma108PositionSpec[];
+  /** HH:mm — nur für completed (ZST-Record + Abschlusszeit). */
+  completedAt?: string;
+  issue?: {
+    reasonId: 'pr_wrong_color' | 'pr_damaged_goods' | 'pr_other';
+    description: string;
+    /** true = bereits durch die Teamleitung geklärt (status resolved). */
+    resolved?: boolean;
+    resolution?: string;
+  };
+}
+
+/** Die Bündel-Belege in Abhol-Reihenfolge (Stops nach Location-sequenceIndex). */
+const MA108_CASES: Ma108CaseSpec[] = [
+  // Stop 1 · R7 (Regal) — Liefergruppe ×3: gleicher Lieferschein LS-25-9108 +
+  // fortlaufende WE-Nummern → beide Erkennungssignale (T2 note + T3 run) feuern.
+  {
+    weBelegNo: '9.108.021', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
+    goodsTypeText: 'Vororder', status: 'assigned', priceLabelPrintRequired: true,
+    checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 18,
+    positions: [
+      {
+        wgr: '111130', supplierArticleNo: 'ART-2101', supplierColor: 'marine', season: 'HW 26',
+        securityTypeCode: 'hard-tag',
+        skuLines: [
+          { ean: '4012345910211', size: 'S', qty: 6, ek: 11.9, vk: 29.99, vkLabel: 29.99 },
+          { ean: '4012345910212', size: 'M', qty: 8, ek: 11.9, vk: 29.99, vkLabel: 29.99 },
+        ],
+      },
+      {
+        wgr: '214520', supplierArticleNo: 'ART-2102', supplierColor: 'grau',
+        skuLines: [
+          { ean: '4012345910221', size: 'L', qty: 5, ek: 14.5, vk: 34.99, vkLabel: 34.99 },
+          { ean: '4012345910222', size: 'XL', qty: 5, ek: 14.5, vk: 34.99, vkLabel: 39.99 },
+        ],
+      },
+    ],
+  },
+  {
+    weBelegNo: '9.108.022', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
+    goodsTypeText: 'Vororder', status: 'assigned', priceLabelPrintRequired: false,
+    checkMode: 'quantity_only', estimatedMinutes: 14,
+    positions: [
+      {
+        wgr: '312400', supplierArticleNo: 'ART-2110', supplierColor: 'oliv', season: 'HW 26',
+        skuLines: [
+          { ean: '4012345910231', size: '30/32', qty: 8, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
+          { ean: '4012345910232', size: '31/32', qty: 10, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
+          { ean: '4012345910233', size: '32/32', qty: 12, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
+        ],
+      },
+    ],
+  },
+  {
+    weBelegNo: '9.108.023', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
+    goodsTypeText: 'Nachorder', status: 'assigned', priceLabelPrintRequired: true,
+    checkMode: 'percentage_check', checkPercentage: 10, estimatedMinutes: 12,
+    positions: [
+      {
+        // CatMan-Fall: echter Termin wenige Tage nach dem Seed-Tag → 📅-Chip in der PWA.
+        wgr: '415210', supplierArticleNo: 'ART-2120', supplierColor: 'schwarz',
+        catManOffsetDays: 7,
+        skuLines: [
+          { ean: '4012345910241', size: '40', qty: 9, ek: 24.5, vk: 59.99, vkLabel: 59.99 },
+          { ean: '4012345910242', size: '42', qty: 9, ek: 24.5, vk: 59.99, vkLabel: 59.99 },
+        ],
+      },
+    ],
+  },
+  // Stop 2 · R19 (Regal) — die Sonderzustände: Fertig / Problem gemeldet / Geklärt.
+  {
+    weBelegNo: '9.108.051', deliveryNoteNo: 'LS-25-9151', storageCode: 'R19',
+    goodsTypeText: 'Vororder', status: 'completed', priceLabelPrintRequired: true,
+    checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 10,
+    completedAt: '11:40',
+    positions: [
+      {
+        wgr: '218110', supplierArticleNo: 'ART-2151', supplierColor: 'weiß',
+        skuLines: [
+          { ean: '4012345910251', size: '38', qty: 7, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
+          { ean: '4012345910252', size: '40', qty: 7, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
+        ],
+      },
+    ],
+  },
+  {
+    weBelegNo: '9.108.052', deliveryNoteNo: 'LS-25-9152', storageCode: 'R19',
+    goodsTypeText: 'Nachorder', status: 'issue_open', priceLabelPrintRequired: false,
+    checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 11,
+    issue: {
+      reasonId: 'pr_wrong_color',
+      description: 'Gelieferte Farbe weicht von der Arbeitsanweisung ab (bordeaux statt marine).',
+    },
+    positions: [
+      {
+        wgr: '111130', supplierArticleNo: 'ART-2152', supplierColor: 'bordeaux',
+        skuLines: [
+          { ean: '4012345910261', size: 'M', qty: 6, ek: 13.9, vk: 32.99, vkLabel: 32.99 },
+          { ean: '4012345910262', size: 'L', qty: 6, ek: 13.9, vk: 32.99, vkLabel: 32.99 },
+        ],
+      },
+    ],
+  },
+  {
+    weBelegNo: '9.108.053', deliveryNoteNo: 'LS-25-9153', storageCode: 'R19',
+    goodsTypeText: 'Extrabestellung', status: 'problem_resolved', priceLabelPrintRequired: true,
+    checkMode: 'quantity_only', estimatedMinutes: 9,
+    issue: {
+      reasonId: 'pr_other',
+      description: 'Karton beschädigt angeliefert — Ware geprüft, alles unbeschädigt.',
+      resolved: true,
+      resolution: 'Teamleitung: Ware in Ordnung, normal weiterbearbeiten.',
+    },
+    positions: [
+      {
+        wgr: '214520', supplierArticleNo: 'ART-2153', supplierColor: 'beige',
+        skuLines: [
+          { ean: '4012345910271', size: 'S', qty: 5, ek: 9.9, vk: 24.99, vkLabel: 24.99 },
+          { ean: '4012345910272', size: 'M', qty: 5, ek: 9.9, vk: 24.99, vkLabel: 24.99 },
+        ],
+      },
+    ],
+  },
+  // Stop 3 · PA-1 (Palette) — NOS-Beleg mit 3 Positionen, online-relevanter
+  // Position (Rot/Grün über die CSV-Präferenzen: WGR 218110 → 38 grün, 40 rot).
+  {
+    weBelegNo: '9.108.031', deliveryNoteNo: 'LS-25-9131', storageCode: 'PA-1',
+    goodsTypeText: 'NOS', status: 'assigned', priceLabelPrintRequired: true,
+    checkMode: 'full_check', estimatedMinutes: 26,
+    positions: [
+      {
+        wgr: '218110', supplierArticleNo: 'ART-2131', supplierColor: 'schwarz', nosFlag: true,
+        onlineRelevant: true, securityTypeCode: 'spider-wrap',
+        skuLines: [
+          { ean: '4012345910311', size: '38', qty: 10, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
+          { ean: '4012345910312', size: '40', qty: 10, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
+        ],
+      },
+      {
+        wgr: '111130', supplierArticleNo: 'ART-2132', supplierColor: 'blau', nosFlag: true,
+        skuLines: [
+          { ean: '4012345910321', size: 'M', qty: 8, ek: 10.9, vk: 27.99, vkLabel: 27.99 },
+          { ean: '4012345910322', size: 'L', qty: 8, ek: 10.9, vk: 27.99, vkLabel: 27.99 },
+          { ean: '4012345910323', size: 'XL', qty: 6, ek: 10.9, vk: 27.99, vkLabel: 27.99 },
+        ],
+      },
+      {
+        wgr: '312400', supplierArticleNo: 'ART-2133', supplierColor: 'khaki',
+        skuLines: [
+          { ean: '4012345910331', size: '32/34', qty: 9, ek: 21.5, vk: 54.99, vkLabel: 54.99 },
+        ],
+      },
+    ],
+  },
+  // Stop 4 · HB-5/234 (Hängebahn) — Hängeware als Extrabestellung, digital etikettiert.
+  {
+    weBelegNo: '9.108.041', deliveryNoteNo: 'LS-25-9141', storageCode: 'HB-5/234',
+    goodsTypeText: 'Extrabestellung', status: 'assigned', priceLabelPrintRequired: false,
+    checkMode: 'quantity_only', estimatedMinutes: 16,
+    positions: [
+      {
+        wgr: '415210', supplierArticleNo: 'ART-2141', supplierColor: 'anthrazit', season: 'HW 26',
+        securityTypeCode: 'ink-tag',
+        skuLines: [
+          { ean: '4012345910411', size: '48', qty: 6, ek: 39.9, vk: 99.99, vkLabel: 99.99 },
+          { ean: '4012345910412', size: '50', qty: 8, ek: 39.9, vk: 99.99, vkLabel: 99.99 },
+          { ean: '4012345910413', size: '52', qty: 6, ek: 39.9, vk: 99.99, vkLabel: 99.99 },
+        ],
+      },
+    ],
+  },
+];
+
+/** Abhol-Reihenfolge der Stops (Location-sequenceIndex: R7 → R19 → PA-1 → HB-5/234). */
+const MA108_STOP_ORDER = ['R7', 'R19', 'PA-1', 'HB-5/234'] as const;
+
+/** Stop 2 (R19) ist bereits geholt — dort liegen die schon bearbeiteten Fälle. */
+const MA108_SCANNED_STOPS = new Set(['R19']);
+
+function ma108TotalQuantity(spec: Ma108CaseSpec): number {
+  return spec.positions.reduce(
+    (sum, p) => sum + p.skuLines.reduce((s, l) => s + l.qty, 0),
+    0,
+  );
+}
+
+function ma108InspectionLevel(spec: Ma108CaseSpec): 'none' | 'p10' | 'p20' | 'full' {
+  if (spec.checkMode === 'quantity_only') return 'none';
+  if (spec.checkMode === 'full_check') return 'full';
+  return spec.checkPercentage === 10 ? 'p10' : 'p20';
+}
+
+export async function seedMa108DemoBundle(
+  prisma: ScenarioPrisma,
+  baseDate: string,
+  locationIds: Record<string, string>,
+  userIds: Record<string, string>,
+): Promise<void> {
+  const employeeId = requireId(userIds, 'ma-108', 'user');
+  const teamleadId = requireId(userIds, 'tl-001', 'user');
+
+  // 1) Belege + explizite Detail-Aggregate (Positionen, Größen-Zeilen, Boxen).
+  const caseIdByWeBelegNo = new Map<string, string>();
+  for (const spec of MA108_CASES) {
+    const totalQuantity = ma108TotalQuantity(spec);
+    const isCompletion = spec.status === 'completed';
+    const caseData = {
+      source: 'prohandel_api' as const,
+      externalRef: `dev-seed:${spec.weBelegNo}`,
+      deliveryNoteNo: spec.deliveryNoteNo,
+      bookingDate: asDate(baseDate),
+      weDate: asDate(baseDate),
+      branchNo: '001',
+      primaryShopAreaNo: '21',
+      primaryShopNo: '21',
+      primaryFloor: 'EG',
+      storageLocationId: requireId(locationIds, spec.storageCode, 'location'),
+      section: 4,
+      goodsTypeText: spec.goodsTypeText,
+      priorityFlags: [] as PriorityFlag[],
+      catManDate: spec.positions.some((p) => p.catManOffsetDays !== undefined)
+        ? offsetDate(baseDate, Math.min(...spec.positions
+            .map((p) => p.catManOffsetDays)
+            .filter((d): d is number => d !== undefined)))
+        : null,
+      totalQuantity,
+      inboundCartonCount: Math.max(1, Math.ceil(totalQuantity / 25)),
+      status: spec.status,
+      effortPoints: round2(spec.estimatedMinutes / 2.2),
+      estimatedMinutes: spec.estimatedMinutes,
+      completedAt: isCompletion && spec.completedAt ? asTime(baseDate, spec.completedAt) : null,
+      docuWareUrl: isCompletion ? docuWareUrlFor(spec.weBelegNo) : null,
+    };
+    const gcase = await prisma.goodsReceiptCase.upsert({
+      where: { weBelegNo: spec.weBelegNo },
+      update: { ...caseData, assignedBundleId: null },
+      create: { weBelegNo: spec.weBelegNo, ...caseData },
+    });
+    caseIdByWeBelegNo.set(spec.weBelegNo, gcase.id);
+
+    const headerData = {
+      priceLabelPrintRequired: spec.priceLabelPrintRequired,
+      goodsReceiptCheckMode: spec.checkMode,
+      goodsReceiptCheckPercentage: spec.checkPercentage ?? null,
+      inspectionLevelCode: ma108InspectionLevel(spec),
+      boxLabelRequired: true,
+      zstRequired: true,
+    };
+    await prisma.workInstructionHeader.upsert({
+      where: { caseId: gcase.id },
+      update: headerData,
+      create: { caseId: gcase.id, ...headerData },
+    });
+
+    await prisma.receiptPosition.deleteMany({
+      where: { caseId: gcase.id, positionNo: { gt: spec.positions.length } },
+    });
+    const positionIds: string[] = [];
+    for (const [idx, p] of spec.positions.entries()) {
+      const catManDate =
+        p.catManOffsetDays === undefined ? null : offsetDate(baseDate, p.catManOffsetDays);
+      const positionData = {
+        wgr: p.wgr,
+        supplierArticleNo: p.supplierArticleNo,
+        supplierColor: p.supplierColor,
+        season: p.season ?? null,
+        nosFlag: p.nosFlag ?? null,
+        floor: 'EG',
+        catMan: p.catManOffsetDays !== undefined,
+        catManDate,
+        orderNo: `ORD-${spec.weBelegNo}-${idx + 1}`,
+        shopNo: '21',
+        hShopNo: '21',
+        branchNo: '001',
+        onlineRelevant: p.onlineRelevant ?? false,
+      };
+      const position = await prisma.receiptPosition.upsert({
+        where: { position_case_no: { caseId: gcase.id, positionNo: idx + 1 } },
+        update: positionData,
+        create: { caseId: gcase.id, positionNo: idx + 1, ...positionData },
+      });
+      positionIds.push(position.id);
+
+      const instruction = {
+        priceLabelRequired: spec.priceLabelPrintRequired,
+        priceLabelAttachRequired: idx === 0,
+        securityRequired: (p.securityTypeCode ?? null) !== null,
+        securityTypeCode: p.securityTypeCode ?? null,
+        onlineHandlingRequired: p.onlineRelevant ?? false,
+      };
+      await prisma.positionInstruction.upsert({
+        where: { positionId: position.id },
+        update: instruction,
+        create: { positionId: position.id, ...instruction },
+      });
+
+      await prisma.receiptSkuLine.deleteMany({
+        where: { receiptPositionId: position.id, ean: { notIn: p.skuLines.map((l) => l.ean) } },
+      });
+      for (const line of p.skuLines) {
+        const skuData = {
+          expectedQuantity: line.qty,
+          ekPrice: line.ek,
+          vkPrice: line.vk,
+          vkLabelPrice: line.vkLabel,
+          // Der fertige Beleg trägt die verbuchten Ist-Mengen (Nur-Ansicht der PWA).
+          ...(isCompletion ? { confirmedQuantity: line.qty } : {}),
+        };
+        await prisma.receiptSkuLine.upsert({
+          where: {
+            sku_position_ean_size: {
+              receiptPositionId: position.id,
+              ean: line.ean,
+              size: line.size,
+            },
+          },
+          update: skuData,
+          create: { receiptPositionId: position.id, ean: line.ean, size: line.size, ...skuData },
+        });
+      }
+    }
+
+    await prisma.transportBox.deleteMany({ where: { caseId: gcase.id } });
+    await prisma.transportBox.create({
+      data: {
+        caseId: gcase.id,
+        boxNo: 1,
+        branchNo: '001',
+        shopAreaNo: '21',
+        shopNo: '21',
+        floor: 'EG',
+        plannedQuantity: totalQuantity,
+        positionIds,
+        goodsType: boxGoodsTypeFromCase(spec.goodsTypeText),
+        goodsTypeText: spec.goodsTypeText,
+      },
+    });
+
+    // ZST des fertigen Belegs (KPI-Kachel + Archiv-Ansicht).
+    if (isCompletion && spec.completedAt) {
+      await prisma.zstRecord.upsert({
+        where: { idempotencyKey: `seed-zst:${spec.weBelegNo}` },
+        update: {
+          completedQuantity: totalQuantity,
+          effortPoints: caseData.effortPoints,
+          completedAt: asTime(baseDate, spec.completedAt),
+        },
+        create: {
+          idempotencyKey: `seed-zst:${spec.weBelegNo}`,
+          caseId: gcase.id,
+          employeeId,
+          completedQuantity: totalQuantity,
+          effortPoints: caseData.effortPoints,
+          startedAt: asTime(baseDate, '11:05'),
+          completedAt: asTime(baseDate, spec.completedAt),
+          source: 'mobile_app',
+        },
+      });
+    }
+
+    // Offenes bzw. geklärtes Problem — hängt an Position 1 (Kundenfeedback 14.07.2026).
+    if (spec.issue) {
+      const existing = await prisma.issue.findFirst({ where: { caseId: gcase.id } });
+      if (!existing) {
+        const reason = await prisma.problemReason.findUnique({
+          where: { id: spec.issue.reasonId },
+        });
+        await prisma.issue.create({
+          data: {
+            caseId: gcase.id,
+            scope: 'position',
+            scopeId: positionIds[0],
+            employeeId,
+            kind: 'manual',
+            reasonId: reason?.id,
+            reasonLabel: reason?.label,
+            description: spec.issue.description,
+            status: spec.issue.resolved ? 'resolved' : 'open',
+            resolution: spec.issue.resolved ? (spec.issue.resolution ?? null) : null,
+            releasedBy: spec.issue.resolved ? teamleadId : null,
+            releasedAt: spec.issue.resolved ? asTime(baseDate, '12:15') : null,
+          },
+        });
+      }
+    }
+  }
+
+  // 2) Das Bündel selbst: heute, aktiv (Arbeit hat begonnen — der Fertig-Beleg
+  //    beweist es), direkt von der Teamleitung zugewiesen.
+  const bundle = await prisma.assignmentBundle.create({
+    data: {
+      employeeId,
+      date: asDate(baseDate),
+      plannedEffortMinutes: MA108_CASES.reduce((s, c) => s + c.estimatedMinutes, 0),
+      effortPoints: round2(
+        MA108_CASES.reduce((s, c) => s + c.estimatedMinutes / 2.2, 0),
+      ),
+      status: 'active',
+      createdBy: 'teamlead',
+    },
+  });
+  for (const [index, spec] of MA108_CASES.entries()) {
+    const caseId = caseIdByWeBelegNo.get(spec.weBelegNo);
+    if (!caseId) continue;
+    await prisma.assignmentItem.create({
+      data: { bundleId: bundle.id, caseId, sequence: index },
+    });
+    await prisma.goodsReceiptCase.update({
+      where: { id: caseId },
+      data: { assignedBundleId: bundle.id },
+    });
+  }
+  for (const [index, code] of MA108_STOP_ORDER.entries()) {
+    await prisma.routeStop.create({
+      data: {
+        bundleId: bundle.id,
+        sequence: index + 1,
+        locationId: requireId(locationIds, code, 'location'),
+        locationCode: code,
+        scanRequired: true,
+        scannedAt: MA108_SCANNED_STOPS.has(code) ? asTime(baseDate, '09:20') : null,
+      },
+    });
+  }
+}
+
 /**
  * A7 TL-Topf: flag ONE ready pool case for „Besondere Aufmerksamkeit" so the Topf
  * also shows a plan-/zuweisbarer Beleg (not only triage states). Deterministic:
