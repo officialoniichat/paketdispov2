@@ -47,7 +47,7 @@ import {
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
 import { DataTable } from '../../components/DataTable.js';
-import { LieferungChip } from '../../components/LieferungChip.js';
+import { LieferungChip, buildGroupColorMap } from '../../components/LieferungChip.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { ForwardDialog } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
@@ -116,23 +116,6 @@ interface BelegeSavedView {
 }
 
 const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
-
-/**
- * Frage 8: dezente Kennfarben für den Gruppen-Punkt im Lieferungs-Chip. Je Lieferung
- * EIN konsistenter Ton innerhalb der aktuellen Tabellen-Seite (Reihenfolge des ersten
- * Auftretens), damit zusammengehörige Zeilen auf einen Blick erkennbar sind. Bewusst
- * getrennt von den Vertrauensstufen-Farben des Chips (grün/gelb/orange/Schloss).
- */
-const GROUP_IDENTITY_COLORS = [
-  '#7e57c2', // deepPurple 400
-  '#26a69a', // teal 400
-  '#ef6c00', // orange 800
-  '#5c6bc0', // indigo 400
-  '#8d6e63', // brown 400
-  '#d81b60', // pink 600
-  '#558b2f', // lightGreen 800
-  '#0288d1', // lightBlue 700
-];
 
 export function BelegListPage(): JSX.Element {
   const navigate = useNavigate();
@@ -288,16 +271,15 @@ export function BelegListPage(): JSX.Element {
 
   // Frage 8: Gruppen-Id → Kennfarbe für die aktuell sichtbare Seite (stabil in
   // Zeilenreihenfolge). Reine Darstellung — die Gruppen-Identität kommt vom Server.
-  const groupColorById = useMemo(() => {
-    const colors = new Map<string, string>();
-    for (const r of rows) {
-      const g = r.deliveryGroup;
-      if (g && g.presentSize >= 2 && !colors.has(g.id)) {
-        colors.set(g.id, GROUP_IDENTITY_COLORS[colors.size % GROUP_IDENTITY_COLORS.length]!);
-      }
-    }
-    return colors;
-  }, [rows]);
+  const groupColorById = useMemo(
+    () =>
+      buildGroupColorMap(
+        rows.map((r) =>
+          r.deliveryGroup && r.deliveryGroup.presentSize >= 2 ? r.deliveryGroup.id : null,
+        ),
+      ),
+    [rows],
+  );
 
   // Frage 8: zusammenhängende Gruppen-Zeilen (der Server liefert Mitglieder adjazent)
   // werden als Block markiert — farbige Kante + dezenter Tint in der Kennfarbe. Ein

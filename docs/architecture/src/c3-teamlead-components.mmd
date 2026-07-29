@@ -14,7 +14,7 @@ flowchart TB
         subgraph features["features/ (Routen via App.tsx)"]
             cockpit["cockpit/CockpitPage<br/><i>§10.1 Steuerzentrale: Verteilungsstatus · „Schnellaktionen“-Entscheidungsliste<br/>(aus lanes + board) · SimulationPanel · Automatik-Schalter</i>"]:::feat
             ablagen["ablagen/AblagenBoard<br/><i>§10.2 Kanban (8 Lanes: probleme→weitergeleitet→geparkt→… ·<br/>verschiebbar + einklappbar, persistiert)</i>"]:::feat
-            board["board/MitarbeiterBoard<br/><i>§10.3 Mitarbeiter × Bündel · Bündel anlegen (AssignDialog, A1/A2 Mehrfach-Beleg)<br/>· Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
+            board["board/MitarbeiterBoard<br/><i>§10.3 Mitarbeiter × Bündel · Liste ↔ Kanban-Raster (KanbanBoard: Laufend/Geplant,<br/>Drag-&amp;-Drop-Umhängen) · Bündel anlegen (AssignDialog, A1/A2) · Beleg verschieben (MoveCaseDialog, B2)</i>"]:::feat
             belege["belege/BelegListPage + BelegDetailPage + AssignFromListDialog<br/><i>§10.4 servergetriebene Liste + Detail; Beleg-Tab = Kopf+Positionen+Probleme in EINER Ansicht<br/>(BelegTab/PositionsSection, PWA-Vorlage: Positions-Kontext HS/Shop/Etage/Filiale/Bereich/CatMan + EK/VK/VK-Etikett je Größe;<br/>Reiter: Beleg·Aufwand·Abschluss·Historie·Priorität);<br/>Klärungs-UX (IssuesTab) in der Beleg-Ansicht: alle Probleme mit Grund/Order/Delta/Preis → „Probleme geklärt“</i>"]:::feat
             split["split/AufteilungenPage + SplitDialog<br/><i>splitMath.apportion() · SplitProvider</i>"]:::feat
             admin["admin/AdminPage<br/><i>§11: Priorität·Bündel·Aufwand·Lieferungen·Verladeplan·Lagerplätze·Mitarbeiter·Schichtplan·Integrationen·Schichtende·Problemarten</i>"]:::feat

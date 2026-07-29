@@ -6,6 +6,10 @@
  * actions – Beleg entziehen/zuweisen (per WE-Nr-Eingabe, B1), Reihenfolge neu
  * setzen, Pause/Abwesenheit – are audited (§8.4; der Grund der Zuweisung ist
  * optional, B2) and POSTed to the real backend with optimistic update + rollback.
+ *
+ * Zwei umschaltbare Ansichten (persistiert als Saved View, C2): die klassische
+ * vertikale Liste (Accordions) und das Kanban-Raster ({@link KanbanBoard}) mit
+ * Drag-&-Drop-Umhängen zwischen Mitarbeitern.
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,11 +23,15 @@ import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import { assignmentStatusLabels, CaseStatusChip, ProblemChip } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
@@ -31,9 +39,38 @@ import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { AssignDialog } from '../../components/AssignDialog.js';
 import { MoveCaseDialog, type MoveCaseTarget } from '../../components/MoveCaseDialog.js';
 import { TierChip, isManualOnlyTier } from '../../components/TierChip.js';
+import { BOARD_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
+import type { SkillTier } from '@paket/domain-types';
 import type { BoardRow } from '../../data/types.js';
+import { KanbanBoard } from './KanbanBoard.js';
+import { BOARD_SORTS, SKILL_TIER_ORDER, type BoardSort } from './kanbanOrder.js';
 
-interface PendingAction {
+/** Persistierte Board-Ansicht: klassische Liste oder Kanban-Raster. */
+type BoardView = 'liste' | 'raster';
+
+/** Gesamter persistierter View-State des Boards (Saved View, C2). */
+interface BoardViewState {
+  view: BoardView;
+  /** Anzeige-Sortierung der Raster-Karten. */
+  sort: BoardSort;
+  /** Erfahrungs-Filter der Raster-Karten; leer = alle. */
+  tiers: SkillTier[];
+}
+
+const DEFAULT_BOARD_VIEW: BoardViewState = { view: 'liste', sort: 'standard', tiers: [] };
+
+/** Korrupte/alte localStorage-Blobs defensiv auf gültige Werte zurückführen. */
+function sanitizeBoardView(raw: Partial<BoardViewState> | null | undefined): BoardViewState {
+  return {
+    view: raw?.view === 'raster' ? 'raster' : 'liste',
+    sort: BOARD_SORTS.includes(raw?.sort as BoardSort) ? (raw?.sort as BoardSort) : 'standard',
+    tiers: Array.isArray(raw?.tiers)
+      ? raw.tiers.filter((t): t is SkillTier => SKILL_TIER_ORDER.includes(t as SkillTier))
+      : [],
+  };
+}
+
+export interface PendingAction {
   title: string;
   description: string;
   suggestions: string[];
@@ -53,6 +90,18 @@ export function MitarbeiterBoard(): JSX.Element {
     useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [movingCase, setMovingCase] = useState<MovingCase | null>(null);
+  // Ansicht (Liste ↔ Kanban-Raster) + Raster-Sortierung/-Filter, als Saved View
+  // persistiert (C2); korrupte localStorage-Werte fallen defensiv auf Defaults zurück.
+  const [viewState, setViewState] = useState<BoardViewState>(() =>
+    sanitizeBoardView(loadViewState<Partial<BoardViewState>>(BOARD_VIEW_KEY, DEFAULT_BOARD_VIEW)),
+  );
+  function updateView(patch: Partial<BoardViewState>): void {
+    setViewState((prev) => {
+      const next = { ...prev, ...patch };
+      saveViewState(BOARD_VIEW_KEY, next);
+      return next;
+    });
+  }
 
   // First failing intervention drives the error snackbar.
   const failed = [withdraw, addToBundle, assignToEmployee, assignBundle, moveCase, reorder, pauseResume].find(
@@ -75,9 +124,29 @@ export function MitarbeiterBoard(): JSX.Element {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5" sx={{ fontWeight: 800 }}>
-        Mitarbeiterboard
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          Mitarbeiterboard
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={viewState.view}
+          onChange={(_e, v: BoardView | null) => {
+            if (v) updateView({ view: v });
+          }}
+          aria-label="Board-Ansicht"
+        >
+          <ToggleButton value="liste" aria-label="Listenansicht">
+            <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />
+            Liste
+          </ToggleButton>
+          <ToggleButton value="raster" aria-label="Kanban-Raster">
+            <ViewKanbanIcon fontSize="small" sx={{ mr: 0.5 }} />
+            Board
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
       {splitGroupCount > 0 && (
         <Alert severity="warning" variant="outlined">
           {splitGroupCount === 1
@@ -85,16 +154,27 @@ export function MitarbeiterBoard(): JSX.Element {
             : `${splitGroupCount} zusammengehörige Lieferungen sind auf mehrere Mitarbeiter verteilt — bitte jeweils einem Mitarbeiter zuweisen.`}
         </Alert>
       )}
-      <Stack spacing={1}>
-        {board.map((row) => (
-          <EmployeeRow
-            key={row.employeeId}
-            row={row}
-            requestReason={setPending}
-            requestMove={setMovingCase}
-          />
-        ))}
-      </Stack>
+      {viewState.view === 'raster' ? (
+        <KanbanBoard
+          board={board}
+          sort={viewState.sort}
+          tiers={viewState.tiers}
+          onSortChange={(sort) => updateView({ sort })}
+          onTiersChange={(tiers) => updateView({ tiers })}
+          requestReason={setPending}
+        />
+      ) : (
+        <Stack spacing={1}>
+          {board.map((row) => (
+            <EmployeeRow
+              key={row.employeeId}
+              row={row}
+              requestReason={setPending}
+              requestMove={setMovingCase}
+            />
+          ))}
+        </Stack>
+      )}
 
       <ReasonDialog
         open={pending !== null}

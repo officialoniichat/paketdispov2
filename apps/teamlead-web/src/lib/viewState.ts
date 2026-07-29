@@ -9,6 +9,8 @@
 export const ABLAGEN_VIEW_KEY = 'paket.view.ablagen';
 /** Beleg list: scope + sorting + column filters. */
 export const BELEGE_VIEW_KEY = 'paket.view.belege';
+/** Mitarbeiterboard: gewählte Ansicht (Liste vs. Kanban-Raster). */
+export const BOARD_VIEW_KEY = 'paket.view.board';
 
 /** Read a persisted view state; `fallback` on missing/corrupt/blocked storage. */
 export function loadViewState<T>(key: string, fallback: T): T {

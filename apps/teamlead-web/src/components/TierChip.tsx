@@ -24,6 +24,11 @@ export function isManualOnlyTier(tier: SkillTier): boolean {
   return tier === 'starter' || tier === 'dummy';
 }
 
+/** Deutsches Label einer Skill-Stufe (z. B. für die Erfahrungs-Filter-Chips im Board). */
+export function tierLabel(tier: SkillTier): string {
+  return TIER_META[tier].label;
+}
+
 export interface TierChipProps {
   tier: SkillTier;
   size?: 'small' | 'medium';

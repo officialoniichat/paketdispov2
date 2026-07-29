@@ -17,6 +17,35 @@ const CONFIDENCE_META: Record<
   locked: { color: 'default', dot: '🔒', text: 'vom Teamlead bestätigt' },
 };
 
+/**
+ * Frage 8: dezente Kennfarben für Gruppen-Punkt/Kante. Je Lieferung EIN konsistenter
+ * Ton innerhalb der aktuellen Fläche (Reihenfolge des ersten Auftretens), damit
+ * zusammengehörige Belege auf einen Blick erkennbar sind. Bewusst getrennt von den
+ * Vertrauensstufen-Farben des Chips (grün/gelb/orange/Schloss).
+ */
+export const GROUP_IDENTITY_COLORS = [
+  '#7e57c2', // deepPurple 400
+  '#26a69a', // teal 400
+  '#ef6c00', // orange 800
+  '#5c6bc0', // indigo 400
+  '#8d6e63', // brown 400
+  '#d81b60', // pink 600
+  '#558b2f', // lightGreen 800
+  '#0288d1', // lightBlue 700
+];
+
+/** Gruppen-Id → Kennfarbe in Reihenfolge des ersten Auftretens (Palette zyklisch). */
+export function buildGroupColorMap(
+  groupIds: Iterable<string | null | undefined>,
+): Map<string, string> {
+  const colors = new Map<string, string>();
+  for (const id of groupIds) {
+    if (!id || colors.has(id)) continue;
+    colors.set(id, GROUP_IDENTITY_COLORS[colors.size % GROUP_IDENTITY_COLORS.length]!);
+  }
+  return colors;
+}
+
 interface LieferungChipProps {
   group: DeliveryGroupRef | null | undefined;
   size?: 'small' | 'medium';
