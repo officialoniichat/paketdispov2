@@ -7,6 +7,7 @@
  * lifted to the caller so it can be persisted as a saved view.
  */
 import { useRef, type JSX } from 'react';
+import type { SxProps, Theme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -26,6 +27,9 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+/** Ein einzelnes sx-Objekt (kein Array) — das Element-Format des TableRow-sx-Arrays. */
+type RowSx = Exclude<SxProps<Theme>, ReadonlyArray<unknown>>;
 
 export interface DataTableProps<T> {
   data: T[];
@@ -48,6 +52,12 @@ export interface DataTableProps<T> {
    * sorted/filtered row models for the other cockpit tables.
    */
   serverMode?: boolean;
+  /**
+   * Optionales Zeilen-Styling (z. B. Gruppen-Block-Markierung der Belege-Liste).
+   * `index` ist die Position in der gerenderten Reihenfolge — bei serverMode
+   * identisch mit der `data`-Reihenfolge.
+   */
+  getRowSx?: (row: T, index: number) => RowSx | undefined;
 }
 
 export function DataTable<T>({
@@ -63,6 +73,7 @@ export function DataTable<T>({
   maxHeight,
   rowHeight = 44,
   serverMode = false,
+  getRowSx,
 }: DataTableProps<T>): JSX.Element {
   const table = useReactTable({
     data,
@@ -165,7 +176,10 @@ export function DataTable<T>({
               key={row.id}
               hover
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              sx={{ cursor: onRowClick ? 'pointer' : 'default' }}
+              sx={[
+                { cursor: onRowClick ? 'pointer' : 'default' },
+                getRowSx?.(row.original, row.index) ?? false,
+              ]}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>

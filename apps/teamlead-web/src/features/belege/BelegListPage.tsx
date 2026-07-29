@@ -8,6 +8,7 @@
  * Row click opens the Belegdetails; „Zuweisen" opens the A4 assign dialog.
  */
 import { useEffect, useMemo, useState, type JSX } from 'react';
+import { alpha } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
@@ -297,6 +298,23 @@ export function BelegListPage(): JSX.Element {
     }
     return colors;
   }, [rows]);
+
+  // Frage 8: zusammenhängende Gruppen-Zeilen (der Server liefert Mitglieder adjazent)
+  // werden als Block markiert — farbige Kante + dezenter Tint in der Kennfarbe. Ein
+  // einzeln sichtbares Mitglied (Rest außerhalb von Filter/Seite) bekommt nur die Kante.
+  const groupRowSx = (r: BelegRow, index: number) => {
+    const group = r.deliveryGroup;
+    if (!group || group.presentSize < 2) return undefined;
+    const color = groupColorById.get(group.id);
+    if (!color) return undefined;
+    const inBlock =
+      rows[index - 1]?.deliveryGroup?.id === group.id ||
+      rows[index + 1]?.deliveryGroup?.id === group.id;
+    return {
+      '& > td:first-of-type': { borderLeft: `3px solid ${color}` },
+      ...(inBlock ? { backgroundColor: alpha(color, 0.05) } : {}),
+    };
+  };
 
   const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
     const defs: ColumnDef<BelegRow>[] = [
@@ -736,6 +754,7 @@ export function BelegListPage(): JSX.Element {
             data={rows}
             columns={columns}
             serverMode
+            getRowSx={groupRowSx}
             sorting={sorting}
             onSortingChange={(next) => {
               setSorting(next);
