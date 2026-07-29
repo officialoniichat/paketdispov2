@@ -17,39 +17,64 @@ export interface MatrixPack {
   teile: number;
 }
 
-/** Status, die in der Matrix als „Laufend" gelten (eigene Spalte links der Packs). */
+/** Status, die im Pack als „Laufend" gelten (oberster Abschnitt des Containers). */
 export const LAUFEND_STATUSES: ReadonlyArray<BoardCase['status']> = [
   'in_progress',
   'issue_open',
   'problem_resolved',
 ];
 
+/** Fertig-Status (grün, durchgestrichen) — unterster Abschnitt des Containers. */
+export const FERTIG_STATUSES: ReadonlyArray<BoardCase['status']> = [
+  'completed',
+  'zst_done',
+  'cancelled',
+];
+
 /** Anzeige-Rang: Laufendes oben (blau/rot), Geplantes mittig, Fertiges unten. */
 function displayRank(status: BoardCase['status']): number {
   if (LAUFEND_STATUSES.includes(status)) return 0;
-  switch (status) {
-    case 'completed':
-    case 'zst_done':
-    case 'cancelled':
-      return 2;
-    default:
-      return 1;
-  }
+  return FERTIG_STATUSES.includes(status) ? 2 : 1;
+}
+
+/** Abschnitt eines Pack-Containers — die Aufteilung der Board-Karte im Kleinen. */
+export interface PackSection {
+  key: 'laufend' | 'geplant' | 'fertig';
+  title: string;
+  cases: BoardCase[];
+  /** Text bei leerem Abschnitt; null = Abschnitt wird bei Leere ganz weggelassen. */
+  empty: string | null;
 }
 
 /**
- * Spalten-Aufteilung einer Matrix-Zeile (wie die Board-Karte): „Laufend" steht
- * als eigene Spalte links, der Rest (Geplant + Fertig) bleibt in seinen
- * Pack-Rechtecken — die Pack-Zusammensetzung wird daraus neu gezählt.
+ * Teilt die Belege EINES Packs auf wie die Karte des Mitarbeiterboards:
+ * „Laufend (n)" / „Geplant (n)" / „Fertig (n)". Laufend und Geplant erscheinen
+ * immer (mit dem Leertext des Boards), Fertig nur, wenn etwas fertig ist.
  */
-export function splitLaufend(cases: readonly BoardCase[]): {
-  laufend: BoardCase[];
-  rest: BoardCase[];
-} {
-  return {
-    laufend: cases.filter((c) => LAUFEND_STATUSES.includes(c.status)),
-    rest: cases.filter((c) => !LAUFEND_STATUSES.includes(c.status)),
-  };
+export function packSections(cases: readonly BoardCase[]): PackSection[] {
+  const laufend = cases.filter((c) => LAUFEND_STATUSES.includes(c.status));
+  const fertig = cases.filter((c) => FERTIG_STATUSES.includes(c.status));
+  const geplant = cases.filter(
+    (c) => !LAUFEND_STATUSES.includes(c.status) && !FERTIG_STATUSES.includes(c.status),
+  );
+  const sections: PackSection[] = [
+    {
+      key: 'laufend',
+      title: `Laufend (${laufend.length})`,
+      cases: laufend,
+      empty: 'Nichts in Arbeit.',
+    },
+    {
+      key: 'geplant',
+      title: `Geplant (${geplant.length})`,
+      cases: geplant,
+      empty: 'Nichts geplant.',
+    },
+  ];
+  if (fertig.length > 0) {
+    sections.push({ key: 'fertig', title: `Fertig (${fertig.length})`, cases: fertig, empty: null });
+  }
+  return sections;
 }
 
 /** Stabil sortiert: der Beleg in Arbeit (blau) oben, Fertige (grün) unten. */

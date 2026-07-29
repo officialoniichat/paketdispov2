@@ -5,6 +5,7 @@ import { AppProviders, createQueryClient } from '@paket/ui';
 import type { BoardCase, BoardRow } from '../../data/types.js';
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { MatrixBoard } from './MatrixBoard.js';
+import { packSections } from './matrixPacks.js';
 import type { ExperimentDragPayload } from './experimentDnd.js';
 
 const mocks = vi.hoisted(() => {
@@ -146,18 +147,25 @@ beforeEach(() => {
 });
 
 describe('MatrixBoard', () => {
-  it('teilt die Zeile in Spalten: Laufend-Strich links, Pack-Rechteck unter „Geplant"', () => {
+  it('EIN Pack je Zeile, innen aufgeteilt wie die Board-Karte (Laufend/Geplant)', () => {
     renderMatrix(null);
     expect(screen.getByText('Anna Berger')).toBeTruthy();
-    // Spaltenköpfe — die vertikalen Trennlinien fluchten damit (Board-Karte).
-    expect(screen.getByText('Laufend')).toBeTruthy();
-    expect(screen.getByText('Geplant')).toBeTruthy();
-    // k1 (in Arbeit) steht in der Laufend-Spalte — das Pack zählt nur den Rest.
+    // Das Pack zählt ALLE Belege — die Aufteilung passiert IM Container.
+    expect(screen.getByText('Pack 1 · 2 Belege · 20 Teile')).toBeTruthy();
+    expect(screen.getByText('Laufend (1)')).toBeTruthy();
+    expect(screen.getByText('Geplant (1)')).toBeTruthy();
     expect(screen.getByText('WE-k1')).toBeTruthy();
-    expect(screen.getByText('Pack 1 · 1 Beleg · 10 Teile')).toBeTruthy();
-    // Bernd hat nichts Laufendes — Wortlaut der Board-Karte.
-    expect(screen.getByText('Nichts in Arbeit.')).toBeTruthy();
     expect(screen.getByText(/Keine Belege — zum Zuweisen hierher ziehen/)).toBeTruthy();
+  });
+
+  it('packSections teilt wie die Board-Karte auf — Fertig nur bei Bedarf', () => {
+    const titles = (cs: BoardCase[]): string[] => packSections(cs).map((s) => s.title);
+    expect(titles([bc('a', 'assigned'), bc('b', 'in_progress'), bc('c', 'completed')])).toEqual([
+      'Laufend (1)',
+      'Geplant (1)',
+      'Fertig (1)',
+    ]);
+    expect(titles([bc('a', 'assigned')])).toEqual(['Laufend (0)', 'Geplant (1)']);
   });
 
   it('Hover auf einen Beleg-Strich öffnet die Schnellinfo der Board-Karte', async () => {
@@ -173,9 +181,9 @@ describe('MatrixBoard', () => {
     expect(screen.getByText('NOS_Nachorder')).toBeTruthy();
   });
 
-  it('der farbige Schicht-Griff zieht nach rechts und öffnet den Pausen-Dialog', () => {
+  it('der Schicht-Streifen bedeckt beim Aufziehen die Zelle und öffnet den Pausen-Dialog', () => {
     const { requestReason } = renderMatrix(null);
-    const handle = screen.getByLabelText('Anna Berger: nach rechts ziehen für Pause');
+    const handle = screen.getByLabelText('Anna Berger: Streifen über die Zelle ziehen für Pause');
     // jsdom kennt keinen PointerEvent-Konstruktor — MouseEvent trägt button/clientX,
     // isPrimary kommt als Expando dazu (React liest beides vom nativen Event).
     const pointer = (type: string, init: MouseEventInit): MouseEvent => {
@@ -184,7 +192,9 @@ describe('MatrixBoard', () => {
       return e;
     };
     fireEvent(handle, pointer('pointerdown', { button: 0, clientX: 5, clientY: 5 }));
-    fireEvent(handle, pointer('pointermove', { clientX: 90, clientY: 6 }));
+    // Bis ans andere Ende der Zelle ziehen (jsdom-Fallback-Breite 150px) — erst
+    // wenn das Farbband die Zelle bedeckt, feuert der Dialog.
+    fireEvent(handle, pointer('pointermove', { clientX: 200, clientY: 6 }));
     expect(requestReason).toHaveBeenCalledTimes(1);
     const action = requestReason.mock.calls[0]![0] as PendingAction;
     expect(action.title).toBe('Anna Berger: Pause/Abwesenheit');

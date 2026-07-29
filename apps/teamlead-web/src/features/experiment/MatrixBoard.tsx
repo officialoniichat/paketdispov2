@@ -1,15 +1,16 @@
 /**
  * Experiment DA.M.B — Mitarbeiter-Matrix (unteres Fenster).
  *
- * Spalten wie die Board-Karte, durch vertikale Linien getrennt: Name (sticky,
- * mit farbigem Schicht-Griff als Pausen-Schieber und „!"-Zeileninfo oben
- * rechts) | „Laufend" | „Geplant" (ein Rechteck je Engine-Pack, horizontal
- * scrollbar). Die Belege sind dünne Striche: blau = in Arbeit, rot = Problem,
- * grün + durchgestrichen = fertig; geplante tragen die Lieferungs-Gruppenfarbe.
- * Hover auf einen Strich öffnet die Schnellinfo des Mitarbeiterboards. Drops
- * auf eine Zeile lösen die EXISTIERENDEN auditierten Mutationen aus (Ablage →
- * Zeile = zuweisen, Zeile → Zeile = verschieben) — immer über den
- * §8.4-ReasonDialog des Parents, nie direkt.
+ * Eine Zeile je Mitarbeiter: Name sticky links (farbiger Schicht-Streifen =
+ * Pausen-Schieber, der beim Ziehen als Farbband über die Zelle wächst; „!"-
+ * Zeileninfo oben rechts), daneben ein Rechteck je Engine-Pack (horizontal
+ * scrollbar), INNEN aufgeteilt wie die Board-Karte: Laufend (n) / Geplant (n)
+ * / Fertig (n). Die Belege sind dünne Striche: blau = in Arbeit, rot =
+ * Problem, grün + durchgestrichen = fertig; geplante tragen die
+ * Lieferungs-Gruppenfarbe. Hover auf einen Strich öffnet die Schnellinfo des
+ * Mitarbeiterboards. Drops auf eine Zeile lösen die EXISTIERENDEN auditierten
+ * Mutationen aus (Ablage → Zeile = zuweisen, Zeile → Zeile = verschieben) —
+ * immer über den §8.4-ReasonDialog des Parents, nie direkt.
  */
 import { useRef, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -42,16 +43,16 @@ import {
   type ExperimentDragPayload,
 } from './experimentDnd.js';
 import {
+  FERTIG_STATUSES,
   LAUFEND_STATUSES,
   STRIP_LEGEND,
   derivePacks,
-  splitLaufend,
+  packSections,
   stripStyle,
 } from './matrixPacks.js';
 
-/** Spaltenraster der Matrix: Name | Laufend | Geplant — Kopf und Zeilen teilen die Breiten. */
+/** Breite der sticky Namenszelle — zugleich Zielstrecke des Pausen-Streifens. */
 const NAME_COL = 150;
-const LAUFEND_COL = 200;
 
 export interface MatrixBoardProps {
   board: BoardRow[];
@@ -73,7 +74,6 @@ export function MatrixBoard({
 }: MatrixBoardProps): JSX.Element {
   return (
     <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
-      <MatrixHeader />
       {/* Abwesende (Krank/Urlaub) ganz nach unten — sonst stabile Reihenfolge. */}
       {[...board]
         .sort((a, b) => Number(a.absence != null) - Number(b.absence != null))
@@ -121,9 +121,7 @@ function MatrixRow({
   const absent = row.absence ?? null;
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
-  // Spalten wie die Board-Karte: „Laufend" separat links, die Packs zeigen den Rest.
-  const { laufend, rest } = splitLaufend(row.cases);
-  const packs = derivePacks(rest, row.packs);
+  const packs = derivePacks(row.cases, row.packs);
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
@@ -166,6 +164,22 @@ function MatrixRow({
     }
   };
 
+  /** Strich inkl. Lieferungs-Gruppenfarbe — in allen Pack-Abschnitten identisch. */
+  const stripFor = (c: BoardCase): JSX.Element => (
+    <CaseStrip
+      key={c.caseId}
+      c={c}
+      row={row}
+      groupColor={
+        c.deliveryGroup && c.deliveryGroup.presentSize >= 2
+          ? groupColorById.get(c.deliveryGroup.id)
+          : undefined
+      }
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    />
+  );
+
   return (
     <Box
       data-testid={`matrix-row-${row.employeeId}`}
@@ -187,6 +201,7 @@ function MatrixRow({
       sx={{
         display: 'flex',
         alignItems: 'stretch',
+        gap: 0.75,
         px: 0.5,
         py: 0.5,
         minWidth: 'max-content',
@@ -230,171 +245,142 @@ function MatrixRow({
           bgcolor: 'background.paper',
           borderRight: '1px solid',
           borderColor: 'divider',
-          pl: 0.25,
+          pl: '14px',
           pr: 0.75,
           py: 0.25,
           display: 'flex',
-          alignItems: 'stretch',
-          gap: 0.5,
+          flexDirection: 'column',
+          justifyContent: 'center',
           opacity: absent !== null ? 0.6 : 1,
           touchAction: 'none',
         }}
       >
         {absent === null && (
-          // Der farbige Schicht-Strich IST der Pausen-Schieber: anfassen und
-          // nach rechts ziehen (gleiches Ziel wie der Wisch über den Namen).
+          // Der farbige Schicht-Streifen bleibt links stehen; beim Ziehen wächst
+          // er als Farbband über die Zelle — bedeckt er sie, kommt Pause/Weiter.
           <PauseHandle
             color={
               row.shiftStart != null
                 ? shiftKindColor(shiftKindOfStart(row.shiftStart))
                 : '#b0bec5'
             }
-            label={`${row.displayName}: nach rechts ziehen für ${row.paused ? 'Weiter' : 'Pause'}`}
+            label={`${row.displayName}: Streifen über die Zelle ziehen für ${row.paused ? 'Weiter' : 'Pause'}`}
             onFire={fireSwipePause}
           />
         )}
-        <Box
+        <Typography
           sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            lineHeight: 1.2,
+            pr: 1.5,
+            textDecoration: absent !== null ? 'line-through' : 'none',
           }}
+          noWrap
         >
+          {row.displayName}
+        </Typography>
+        <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }} noWrap>
+          {tierLabel(row.skillTier)} · {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} %
+        </Typography>
+        {absent !== null ? (
           <Typography
             sx={{
-              fontSize: '0.74rem',
+              fontSize: '0.6rem',
               fontWeight: 700,
-              lineHeight: 1.2,
-              pr: 1.5,
-              textDecoration: absent !== null ? 'line-through' : 'none',
+              textDecoration: 'line-through',
+              color: absent === 'krank' ? 'error.main' : 'warning.main',
             }}
-            noWrap
           >
-            {row.displayName}
+            {ABSENCE_LABEL[absent]}
           </Typography>
-          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary' }} noWrap>
-            {tierLabel(row.skillTier)} · {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} %
+        ) : (
+          row.shiftStart != null && (
+            <ShiftPill startIso={row.shiftStart} endIso={row.shiftEnd ?? null} />
+          )
+        )}
+        {row.paused && (
+          <Typography sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 700 }}>
+            Pausiert
           </Typography>
-          {absent !== null ? (
-            <Typography
-              sx={{
-                fontSize: '0.6rem',
-                fontWeight: 700,
-                textDecoration: 'line-through',
-                color: absent === 'krank' ? 'error.main' : 'warning.main',
-              }}
-            >
-              {ABSENCE_LABEL[absent]}
-            </Typography>
-          ) : (
-            row.shiftStart != null && (
-              <ShiftPill startIso={row.shiftStart} endIso={row.shiftEnd ?? null} />
-            )
-          )}
-          {row.paused && (
-            <Typography sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 700 }}>
-              Pausiert
-            </Typography>
-          )}
-        </Box>
+        )}
         <RowInfoButton row={row} />
       </Box>
 
-      {/* Spalte „Laufend" — die Trennlinie rechts läuft vertikal durch alle Zeilen. */}
-      <Box
-        sx={{
-          width: LAUFEND_COL,
-          flexShrink: 0,
-          borderRight: '1px solid',
-          borderColor: 'divider',
-          px: 0.75,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.375,
-          justifyContent: 'center',
-        }}
-      >
-        {laufend.map((c) => (
-          <CaseStrip
-            key={c.caseId}
-            c={c}
-            row={row}
-            groupColor={
-              c.deliveryGroup && c.deliveryGroup.presentSize >= 2
-                ? groupColorById.get(c.deliveryGroup.id)
-                : undefined
-            }
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-          />
-        ))}
-        {laufend.length === 0 && (
-          <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
-            Nichts in Arbeit.
+      {packs.map((pack) => (
+        <Box
+          key={pack.key}
+          sx={{
+            width: 200,
+            flexShrink: 0,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            p: 0.5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.375,
+          }}
+        >
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
+            {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+            {pack.teile} Teile
           </Typography>
-        )}
-      </Box>
-
-      {/* Spalte „Geplant": ein Rechteck je Engine-Pack (Fertiges bleibt im Pack). */}
-      <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.75, pl: 0.75 }}>
-        {packs.map((pack) => (
-          <Box
-            key={pack.key}
-            sx={{
-              width: 200,
-              flexShrink: 0,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              bgcolor: 'background.paper',
-              p: 0.5,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0.375,
-            }}
-          >
-            <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
-              {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
-              {pack.teile} Teile
-            </Typography>
-            {pack.cases.map((c) => (
-              <CaseStrip
-                key={c.caseId}
-                c={c}
-                row={row}
-                groupColor={
-                  c.deliveryGroup && c.deliveryGroup.presentSize >= 2
-                    ? groupColorById.get(c.deliveryGroup.id)
-                    : undefined
-                }
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-              />
-            ))}
-          </Box>
-        ))}
-        {packs.length === 0 && (
-          <Box
-            sx={{
-              flexShrink: 0,
-              width: 200,
-              border: '1px dashed',
-              borderColor: 'divider',
-              borderRadius: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 36,
-            }}
-          >
-            <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
-              Keine Belege — zum Zuweisen hierher ziehen
-            </Typography>
-          </Box>
-        )}
-      </Box>
+          {/* EIN Pack, innen aufgeteilt wie die Board-Karte (Nutzer-Vorgabe):
+              Laufend (n) / Geplant (n) / Fertig (n). */}
+          {packSections(pack.cases).map((sec, index) => (
+            <Box
+              key={sec.key}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.375,
+                borderTop: index > 0 ? '1px solid' : 'none',
+                borderColor: 'divider',
+                pt: index > 0 ? 0.375 : 0,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: '0.56rem',
+                  fontWeight: 700,
+                  letterSpacing: 0.3,
+                  textTransform: 'uppercase',
+                  color: 'text.secondary',
+                }}
+              >
+                {sec.title}
+              </Typography>
+              {sec.cases.map(stripFor)}
+              {sec.cases.length === 0 && sec.empty !== null && (
+                <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary' }}>
+                  {sec.empty}
+                </Typography>
+              )}
+            </Box>
+          ))}
+        </Box>
+      ))}
+      {packs.length === 0 && (
+        <Box
+          sx={{
+            flexShrink: 0,
+            width: 200,
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 36,
+          }}
+        >
+          <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
+            Keine Belege — zum Zuweisen hierher ziehen
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -582,9 +568,9 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
           <Typography variant="caption">
             Ablage → Zeile: zuweisen · Beleg-Strich → andere Zeile: verschieben · Beleg-Strich →
             Ablagen/rote Zone: entziehen · Hover auf einen Strich: Schnellinfo, Klick:
-            Belegdetails · Farbigen Schicht-Griff links am Namen nach rechts ziehen (oder Wisch
-            über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über den Anschlag hinaus
-            wechselt die Anordnung.
+            Belegdetails · Farbigen Schicht-Streifen links über die Namenszelle aufziehen, bis er
+            sie bedeckt (oder Wisch über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über
+            den Anschlag hinaus wechselt die Anordnung.
           </Typography>
         </Stack>
       </Popover>
@@ -633,9 +619,7 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const laufend = row.cases.filter((c) => LAUFEND_STATUSES.includes(c.status));
   const geplant = row.cases.filter((c) => c.status === 'assigned');
-  const fertig = row.cases.filter((c) =>
-    ['completed', 'zst_done', 'cancelled'].includes(c.status),
-  );
+  const fertig = row.cases.filter((c) => FERTIG_STATUSES.includes(c.status));
   return (
     <>
       <IconButton
@@ -717,73 +701,12 @@ function RowInfoSection({
   );
 }
 
-/** Spaltenkopf der Matrix — die Trennlinien fluchten mit den Zeilen-Spalten. */
-function MatrixHeader(): JSX.Element {
-  const label = (text: string): JSX.Element => (
-    <Typography
-      sx={{
-        fontSize: '0.58rem',
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
-        color: 'text.secondary',
-        lineHeight: 1.8,
-      }}
-    >
-      {text}
-    </Typography>
-  );
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'stretch',
-        px: 0.5,
-        minWidth: 'max-content',
-        position: 'sticky',
-        top: 0,
-        zIndex: 3,
-        bgcolor: 'background.default',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      <Box
-        sx={{
-          width: NAME_COL,
-          flexShrink: 0,
-          position: 'sticky',
-          left: 0,
-          zIndex: 1,
-          bgcolor: 'background.default',
-          borderRight: '1px solid',
-          borderColor: 'divider',
-          px: 0.75,
-        }}
-      >
-        {label('Mitarbeiter')}
-      </Box>
-      <Box
-        sx={{
-          width: LAUFEND_COL,
-          flexShrink: 0,
-          borderRight: '1px solid',
-          borderColor: 'divider',
-          px: 0.75,
-        }}
-      >
-        {label('Laufend')}
-      </Box>
-      <Box sx={{ px: 0.75 }}>{label('Geplant')}</Box>
-    </Box>
-  );
-}
-
 /**
- * Pausen-Schieber: der farbige Schicht-Strich links am Namen lässt sich mit
- * gedrückter Maustaste anfassen und nach rechts ziehen — ab der Schwelle
- * öffnet sich der Pause/Weiter-Dialog (dieselbe auditierte pauseResume-
- * Mutation wie überall, via ReasonDialog des Parents).
+ * Pausen-Streifen: der farbige Schicht-Streifen bleibt links in der Namenszelle
+ * verankert; mit gedrückter Maustaste zieht man ihn zum anderen Ende auf — er
+ * wächst als Farbband ("verschmiert"), bis er die Zelle als Rechteck bedeckt,
+ * dann öffnet sich der Pause/Weiter-Dialog (dieselbe auditierte
+ * pauseResume-Mutation wie überall, via ReasonDialog des Parents).
  */
 function PauseHandle({
   color,
@@ -794,11 +717,12 @@ function PauseHandle({
   label: string;
   onFire: () => void;
 }): JSX.Element {
-  const [dx, setDx] = useState(0);
-  const drag = useRef<{ x: number; fired: boolean } | null>(null);
+  // Zusatzbreite über die 8-px-Ruhelage hinaus (0 = Streifen liegt links an).
+  const [w, setW] = useState(0);
+  const drag = useRef<{ x: number; max: number; fired: boolean } | null>(null);
   const reset = (): void => {
     drag.current = null;
-    setDx(0);
+    setW(0);
   };
   return (
     <Tooltip title={label}>
@@ -809,7 +733,12 @@ function PauseHandle({
           if (e.button !== 0 || !e.isPrimary) return;
           // Nicht zusätzlich den Namens-Wisch starten — sonst feuert es doppelt.
           e.stopPropagation();
-          drag.current = { x: e.clientX, fired: false };
+          drag.current = {
+            x: e.clientX,
+            // Zellbreite = Zielstrecke; jsdom liefert 0 → Spaltenbreite als Ersatz.
+            max: e.currentTarget.parentElement?.clientWidth || NAME_COL,
+            fired: false,
+          };
           try {
             e.currentTarget.setPointerCapture(e.pointerId);
           } catch {
@@ -819,11 +748,11 @@ function PauseHandle({
         onPointerMove={(e) => {
           const s = drag.current;
           if (s === null || s.fired) return;
-          const next = Math.max(0, Math.min(110, e.clientX - s.x));
-          setDx(next);
-          if (next >= 70) {
+          const next = Math.max(0, Math.min(s.max - 8, e.clientX - s.x));
+          setW(next);
+          if (8 + next >= s.max - 8) {
             s.fired = true;
-            setDx(0);
+            setW(0);
             onFire();
           }
         }}
@@ -831,15 +760,19 @@ function PauseHandle({
         onPointerCancel={reset}
         onPointerLeave={reset}
         sx={{
-          width: 8,
-          flexShrink: 0,
-          alignSelf: 'stretch',
-          borderRadius: 0.5,
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 2,
+          width: 8 + w,
           bgcolor: color,
           cursor: 'grab',
           touchAction: 'none',
-          transform: `translateX(${dx}px)`,
-          transition: dx === 0 ? 'transform 120ms ease-out' : 'none',
+          borderTopRightRadius: 4,
+          borderBottomRightRadius: 4,
+          opacity: w > 0 ? 0.92 : 1,
+          transition: w === 0 ? 'width 140ms ease-out' : 'none',
           '&:hover': { filter: 'brightness(0.9)' },
           '&:active': { cursor: 'grabbing' },
         }}
