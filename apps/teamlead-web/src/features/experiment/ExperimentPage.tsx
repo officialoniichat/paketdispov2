@@ -38,6 +38,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { ltColors } from '@paket/ui';
@@ -244,8 +245,9 @@ export function ExperimentPage(): JSX.Element {
               : 'Karte umdrehen — Vorverteilung (Bündel vorbereiten)'
           }
         >
-          {/* Flip-Knopf (Nutzer-Wunsch): dezentes abgerundetes Quadrat im
-              Sidebar-Blau mit weißer Bündel-Tasche, oben mittig zentriert. */}
+          {/* Flip-Knopf (Nutzer-Wunsch): RECHTECKIG im Sidebar-Blau, oben mittig;
+              das weiße Icon zeigt das ZIEL der Drehung — Bündel-Tasche auf der
+              Beleg-Seite, Papier-Beleg auf der Vorverteilungs-Seite. */}
           <Box
             component="button"
             type="button"
@@ -254,11 +256,11 @@ export function ExperimentPage(): JSX.Element {
             }
             onClick={() => setVorverteilungOffen((v) => !v)}
             sx={{
-              width: 22,
-              height: 22,
+              width: 38,
+              height: 20,
               p: 0,
               border: 'none',
-              borderRadius: 1,
+              borderRadius: 0.5,
               bgcolor: ltColors.brand,
               color: '#fff',
               display: 'flex',
@@ -268,7 +270,11 @@ export function ExperimentPage(): JSX.Element {
               '&:hover': { filter: 'brightness(1.15)' },
             }}
           >
-            <LocalMallOutlinedIcon sx={{ fontSize: 14 }} />
+            {vorverteilungOffen ? (
+              <DescriptionOutlinedIcon sx={{ fontSize: 14 }} />
+            ) : (
+              <LocalMallOutlinedIcon sx={{ fontSize: 14 }} />
+            )}
           </Box>
         </Tooltip>
       }

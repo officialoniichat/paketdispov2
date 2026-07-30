@@ -4,6 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, createQueryClient } from '@paket/ui';
 import { SchnellaktionenFlyout } from './SchnellaktionenFlyout.js';
 import { abgehaktZuruecksetzen } from './schnellaktionen.js';
+import {
+  schreibeStarterStatus,
+  starterStatusZuruecksetzen,
+} from '../experiment/starterStatus.js';
 
 // Minimaler Cockpit-Ausschnitt: 2 offene Probleme → genau EINE Meldung.
 const mocks = vi.hoisted(() => ({
@@ -24,6 +28,7 @@ vi.mock('../../data/nachrichten.js', () => ({
 beforeEach(() => {
   localStorage.clear();
   abgehaktZuruecksetzen();
+  starterStatusZuruecksetzen();
 });
 
 describe('SchnellaktionenFlyout', () => {
@@ -83,5 +88,20 @@ describe('SchnellaktionenFlyout', () => {
     expect(
       screen.getByRole('button', { name: 'Schnellaktionen ausklappen — 1 Meldung' }),
     ).toBeTruthy();
+  });
+
+  it('zeigt „Starterbündel generiert" aus der Vorverteilung im Popout an', () => {
+    schreibeStarterStatus({ generiertAm: new Date().toISOString(), anzahl: 3, auto: true });
+    render(
+      <AppProviders queryClient={createQueryClient({ retry: 0 })}>
+        <MemoryRouter>
+          <SchnellaktionenFlyout onOpenChange={vi.fn()} />
+        </MemoryRouter>
+      </AppProviders>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Schnellaktionen ausklappen — 1 Meldung' }));
+    expect(screen.getByText('Starterbündel generiert')).toBeTruthy();
+    expect(screen.getByText(/3 Bündel/)).toBeTruthy();
+    expect(screen.getByText(/automatisch erstellt/)).toBeTruthy();
   });
 });

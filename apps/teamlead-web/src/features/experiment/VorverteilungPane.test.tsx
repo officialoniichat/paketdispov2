@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
       displayName: 'Lena Fuchs',
       paused: false,
       absence: null,
+      shiftStart: null as string | null,
       cases: [
         {
           caseId: 'b1',
@@ -24,7 +25,15 @@ const mocks = vi.hoisted(() => ({
         },
       ],
     },
-    { employeeId: 'ma-2', displayName: 'Omar Nasser', paused: false, absence: null, cases: [] },
+    {
+      employeeId: 'ma-2',
+      displayName: 'Omar Nasser',
+      paused: false,
+      absence: null,
+      cases: [],
+      // Starter-Kandidat: Schichtstart in 30 Min (Tests überschreiben bei Bedarf).
+      shiftStart: new Date(Date.now() + 30 * 60 * 1000).toISOString() as string | null,
+    },
   ],
   lanes: [
     {
@@ -72,6 +81,7 @@ const mocks = vi.hoisted(() => ({
       ],
     },
   ],
+  assignBundle: { mutate: vi.fn() },
   preview: {
     mutate: vi.fn(),
     isPending: false,
@@ -125,6 +135,8 @@ function renderPane(): void {
 
 beforeEach(() => {
   localStorage.clear();
+  mocks.assignBundle.mutate.mockClear();
+  mocks.board[1]!.shiftStart = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 });
 
 describe('VorverteilungPane', () => {
@@ -170,5 +182,52 @@ describe('VorverteilungPane', () => {
     });
     expect(screen.queryByTestId('vorschlag-slot-1')).toBeNull();
     expect(screen.getByText('Als Nächstes — 1 Bündel vorbereitet')).toBeTruthy();
+  });
+
+  it('Starterbündel-Knopf ersetzt den Vorschau-Hinweis und öffnet die Starter-Ansicht', () => {
+    renderPane();
+    // Der frühere Hinweis-Satz ist weg (Nutzer-Vorgabe).
+    expect(screen.queryByText(/Vorschau — verbindlich erst beim Zuweisen/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Starterbündel' }));
+    // Haupt-Kopf (Titel · Automatik · Sperre · Anzahl) ist in der Ansicht weg.
+    expect(screen.queryByText(/Als Nächstes/)).toBeNull();
+    expect(screen.queryByText('Automatik')).toBeNull();
+    expect(screen.getByText('Starterbündel — Schichtstart in der nächsten Stunde')).toBeTruthy();
+    // Kandidat: Omar (Start in ~30 Min, keine Belege); Lena arbeitet → fehlt.
+    expect(screen.getByTestId('starter-slot-ma-2')).toBeTruthy();
+    expect(screen.queryByTestId('starter-slot-ma-1')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück zur Vorverteilung' }));
+    expect(screen.getByText('Als Nächstes — 2 Bündel vorbereitet')).toBeTruthy();
+  });
+
+  it('Starter-Vorschlag: orange bis zum Klick — dann übernommen (einzeln verifizieren)', () => {
+    renderPane();
+    fireEvent.click(screen.getByRole('button', { name: 'Starterbündel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vorschlag ansehen' }));
+    const slot = within(screen.getByTestId('starter-slot-ma-2'));
+    expect(slot.getByText('1. WE-0001')).toBeTruthy();
+    expect(slot.getByText(/Klicken zum Übernehmen/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Starterbündel für Omar Nasser übernehmen'));
+    expect(slot.getByText(/Übernommen — Zuweisung automatisch zu Schichtbeginn/)).toBeTruthy();
+    expect(screen.queryByLabelText('Starterbündel für Omar Nasser übernehmen')).toBeNull();
+    // Schichtstart liegt in der Zukunft → noch KEINE echte Zuweisung.
+    expect(mocks.assignBundle.mutate).not.toHaveBeenCalled();
+  });
+
+  it('Auto-Übernahme: zum Schichtbeginn wird das Starterbündel wirklich zugewiesen', () => {
+    localStorage.setItem(
+      'paket.view.experiment.vorverteilung',
+      JSON.stringify({ count: 3, starterAuto: true }),
+    );
+    mocks.board[1]!.shiftStart = new Date(Date.now() - 60 * 1000).toISOString();
+    renderPane();
+    fireEvent.click(screen.getByRole('button', { name: 'Starterbündel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vorschlag ansehen' }));
+    expect(mocks.assignBundle.mutate).toHaveBeenCalledWith({
+      employeeNo: 'ma-2',
+      caseIds: ['c1', 'c2'],
+      reason: 'Starterbündel automatisch zu Schichtbeginn übernommen',
+    });
+    expect(screen.getByText('Zugewiesen ✓')).toBeTruthy();
   });
 });

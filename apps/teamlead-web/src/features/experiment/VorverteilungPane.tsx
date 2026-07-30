@@ -15,6 +15,18 @@
  * Zuweisen — Container auf eine Zeile der Mitarbeiter-Matrix ziehen (A1/A2).
  * Zahnrad: Anzahl vorzubereitender Bündel + „Vorverteilung sperren";
  * dazu der geteilte Automatik-Schalter des Tagescockpits.
+ *
+ * Starterbündel-Ansicht (rechteckiger Knopf unten, ersetzt den früheren
+ * Vorschau-Hinweis): NUR Arbeiter, deren Schicht in der nächsten Stunde
+ * beginnt und die noch keine Belege haben — ohne Haupt-Titel, Sperre,
+ * Automatik-Schalter und Anzahl-Zahnrad. „Vorschlag ansehen" packt je
+ * Kandidat das Starterbündel (Engine-Dry-Run) als ORANGEN Container; per
+ * Starter-Einstellung wird einzeln per Klick übernommen (Container wird
+ * normal) oder automatisch übernommen — die echte Zuweisung (assignBundle,
+ * A1/A2) erfolgt exakt zum Schichtbeginn. Zweiter Toggler „Automatisch
+ * erstellen": der Vorschlag wird ohne Klick generiert (läuft auch im
+ * Hintergrund); jede Generierung meldet sich im Schnellaktionen-Popout
+ * (starterStatus.ts).
  */
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -34,6 +46,7 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import CloseIcon from '@mui/icons-material/Close';
@@ -41,6 +54,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { alpha } from '@mui/material/styles';
+import { ltColors } from '@paket/ui';
 import { isManualOnlyTier } from '../../components/TierChip.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useCockpitData } from '../../data/store.js';
@@ -53,6 +67,7 @@ import {
 import { useAutomatik } from '../cockpit/automatik.js';
 import type { ExperimentDragPayload } from './experimentDnd.js';
 import { FERTIG_STATUSES, stripStyle } from './matrixPacks.js';
+import { schreibeStarterStatus } from './starterStatus.js';
 
 /** Zahnrad-Einstellungen der Vorverteilung (Saved View). */
 interface VorverteilungSettings {
@@ -60,6 +75,10 @@ interface VorverteilungSettings {
   count: number;
   /** Gesperrt: Vorschlag wird weder neu berechnet noch verändert. */
   locked: boolean;
+  /** Starterbündel: automatisch übernehmen (sonst orange + Klick je Bündel). */
+  starterAuto: boolean;
+  /** Starterbündel: Vorschlag automatisch erstellen (ohne „Vorschlag ansehen"). */
+  starterAutoErstellen: boolean;
 }
 
 function sanitizeSettings(raw: Partial<VorverteilungSettings> | null): VorverteilungSettings {
@@ -67,7 +86,17 @@ function sanitizeSettings(raw: Partial<VorverteilungSettings> | null): Vorvertei
     typeof raw?.count === 'number' && Number.isFinite(raw.count)
       ? Math.min(6, Math.max(1, Math.round(raw.count)))
       : 3;
-  return { count, locked: raw?.locked === true };
+  return {
+    count,
+    locked: raw?.locked === true,
+    starterAuto: raw?.starterAuto === true,
+    starterAutoErstellen: raw?.starterAutoErstellen === true,
+  };
+}
+
+/** ISO → „HH:MM" (lokal) für Schichtbeginn-Texte. */
+function hhmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
 /** Ein lokal zurechtgerückter Vorschlags-Slot (Basis: erstes Engine-Bündel des MA). */
@@ -97,7 +126,7 @@ export function VorverteilungPane({
   onDragStart,
   onDragEnd,
 }: VorverteilungPaneProps): JSX.Element {
-  const { board, lanes, preview } = useCockpitData();
+  const { board, lanes, preview, assignBundle } = useCockpitData();
   const [automatik, setAutomatik] = useAutomatik();
   const [settings, setSettings] = useState<VorverteilungSettings>(() =>
     sanitizeSettings(
@@ -109,6 +138,14 @@ export function VorverteilungPane({
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [overSlot, setOverSlot] = useState<number | null>(null);
   const [overRemove, setOverRemove] = useState(false);
+  // Starterbündel-Ansicht (Knopf unten): Schichtstarter der nächsten Stunde.
+  const [ansicht, setAnsicht] = useState<'naechste' | 'starter'>('naechste');
+  const [starterVorschlagAktiv, setStarterVorschlagAktiv] = useState(false);
+  const [starterStand, setStarterStand] = useState<
+    Record<string, 'verifiziert' | 'zugewiesen'>
+  >({});
+  const [starterGearAnchor, setStarterGearAnchor] = useState<HTMLElement | null>(null);
+  const [jetzt, setJetzt] = useState(() => Date.now());
 
   const saveSettings = (next: VorverteilungSettings): void => {
     setSettings(next);
@@ -309,8 +346,95 @@ export function VorverteilungPane({
 
   const locked = settings.locked;
 
+  const verlasseStarter = (): void => {
+    setAnsicht('naechste');
+    setStarterVorschlagAktiv(false);
+    setStarterStand({});
+  };
+
+  // Uhr der Starter-Ansicht: alle 30 s, damit Countdown und Schichtbeginn ziehen.
+  useEffect(() => {
+    if (ansicht !== 'starter' && !settings.starterAutoErstellen) return;
+    setJetzt(Date.now());
+    const t = window.setInterval(() => setJetzt(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, [ansicht, settings.starterAutoErstellen]);
+
+  // Wer braucht als Nächstes ein Starterbündel? Schichtstart in der nächsten
+  // Stunde (10-Min-Nachlauf für die Übernahme), noch OHNE Belege — nicht die,
+  // die bereits arbeiten; Manuell-only-Kräfte packt die Engine nie.
+  const starterKandidaten = useMemo(
+    () =>
+      board.filter((r) => {
+        if ((r.absence ?? null) !== null || isManualOnlyTier(r.skillTier)) return false;
+        if (r.shiftStart == null || r.cases.length > 0) return false;
+        const start = Date.parse(r.shiftStart);
+        return start > jetzt - 10 * 60_000 && start - jetzt <= 60 * 60_000;
+      }),
+    [board, jetzt],
+  );
+
+  // „Automatisch erstellen": sobald jemand in der nächsten Stunde startet,
+  // wird der Vorschlag ohne Klick generiert (läuft auch außerhalb der Ansicht).
+  useEffect(() => {
+    if (!settings.starterAutoErstellen || starterVorschlagAktiv) return;
+    if (starterKandidaten.length === 0) return;
+    setStarterVorschlagAktiv(true);
+    if (!preview.isPending) runPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.starterAutoErstellen, starterKandidaten.length, starterVorschlagAktiv]);
+
+  // Vorschlags-Bündel je Kandidat (erstes Engine-Bündel, gleiche Id-Brücke).
+  const starterSlots = useMemo(() => {
+    if (!starterVorschlagAktiv || previewData === undefined) return null;
+    const byEmployee = new Map<string, PreviewBundle>();
+    for (const b of previewData.bundles) {
+      const no = employeeNoById.get(b.employeeId) ?? b.employeeId;
+      if (!byEmployee.has(no)) byEmployee.set(no, b);
+    }
+    return starterKandidaten.map((row) => ({
+      row,
+      bundle: byEmployee.get(row.employeeId) ?? null,
+    }));
+  }, [starterVorschlagAktiv, previewData, employeeNoById, starterKandidaten]);
+
+  // Generierte Starterbündel im Schnellaktionen-Popout melden (starterStatus).
+  useEffect(() => {
+    if (starterSlots === null) return;
+    const anzahl = starterSlots.filter((s) => s.bundle !== null).length;
+    if (anzahl === 0) return;
+    schreibeStarterStatus({
+      generiertAm: new Date().toISOString(),
+      anzahl,
+      auto: settings.starterAutoErstellen,
+    });
+  }, [starterSlots, settings.starterAutoErstellen]);
+
+  // Übernommene Bündel EXAKT zum Schichtbeginn wirklich zuweisen (A1/A2) —
+  // einmal je Mitarbeiter; der Board-Refetch nimmt ihn danach aus der Liste.
+  useEffect(() => {
+    if ((ansicht !== 'starter' && !settings.starterAutoErstellen) || starterSlots === null) return;
+    for (const { row, bundle } of starterSlots) {
+      if (bundle === null || row.shiftStart == null || bundle.caseIds.length === 0) continue;
+      const start = Date.parse(row.shiftStart);
+      const stand = starterStand[row.employeeId];
+      const bereit = settings.starterAuto || stand === 'verifiziert';
+      if (start <= jetzt && bereit && stand !== 'zugewiesen') {
+        setStarterStand((p) => ({ ...p, [row.employeeId]: 'zugewiesen' }));
+        assignBundle.mutate({
+          employeeNo: row.employeeId,
+          caseIds: [...bundle.caseIds],
+          reason: 'Starterbündel automatisch zu Schichtbeginn übernommen',
+        });
+      }
+    }
+    // assignBundle (Mutation-Objekt) bewusst keine Dep — Guard über starterStand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ansicht, starterSlots, starterStand, settings.starterAuto, jetzt]);
+
   return (
     <Stack sx={{ height: '100%', minHeight: 0, p: 1, gap: 0.75 }}>
+      {ansicht === 'naechste' ? (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
         <Typography sx={{ fontWeight: 800, fontSize: '0.85rem' }}>
           Als Nächstes — {slots?.length ?? 0} Bündel vorbereitet
@@ -361,6 +485,46 @@ export function VorverteilungPane({
           </Tooltip>
         </Box>
       </Box>
+      ) : (
+        // Starter-Ansicht: bewusst OHNE Haupt-Titel, Sperre, Automatik, Anzahl.
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <IconButton
+            size="small"
+            aria-label="Starterbündel verlassen"
+            onClick={verlasseStarter}
+            sx={{ p: 0.25 }}
+          >
+            <ArrowBackIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+          <Typography sx={{ fontWeight: 800, fontSize: '0.85rem' }}>
+            Starterbündel — Schichtstart in der nächsten Stunde
+          </Typography>
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Button
+              size="small"
+              startIcon={<VisibilityOutlinedIcon />}
+              onClick={() => {
+                setStarterVorschlagAktiv(true);
+                runPreview();
+              }}
+              disabled={preview.isPending}
+              sx={{ fontSize: '0.7rem' }}
+            >
+              Vorschlag ansehen
+            </Button>
+            <Tooltip title="Starterbündel einstellen (Übernahme)">
+              <IconButton
+                size="small"
+                aria-label="Starterbündel einstellen"
+                onClick={(e) => setStarterGearAnchor(e.currentTarget)}
+                sx={{ p: 0.25 }}
+              >
+                <SettingsIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+      )}
 
       {preview.isPending && <LinearProgress sx={{ flexShrink: 0 }} />}
       {preview.isError && (
@@ -377,6 +541,194 @@ export function VorverteilungPane({
       )}
 
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {ansicht === 'starter' ? (
+          starterKandidaten.length === 0 ? (
+            <Paper
+              variant="outlined"
+              sx={{ p: 2, textAlign: 'center', color: 'text.secondary', fontSize: '0.78rem' }}
+            >
+              Kein Schichtstart in der nächsten Stunde — gerade braucht niemand ein Starterbündel.
+            </Paper>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${starterKandidaten.length}, minmax(190px, 1fr))`,
+                gap: 0.75,
+                alignItems: 'start',
+              }}
+            >
+              {(starterSlots ?? starterKandidaten.map((row) => ({ row, bundle: null }))).map(
+                ({ row, bundle }) => {
+                  const startText = row.shiftStart != null ? hhmm(row.shiftStart) : '—';
+                  const inMin =
+                    row.shiftStart != null
+                      ? Math.round((Date.parse(row.shiftStart) - jetzt) / 60_000)
+                      : null;
+                  const stand = starterStand[row.employeeId];
+                  const bereit =
+                    settings.starterAuto || stand === 'verifiziert' || stand === 'zugewiesen';
+                  // Orange = unbestätigter Vorschlag (Einstellung: einzeln verifizieren).
+                  const orange = starterVorschlagAktiv && bundle !== null && !bereit;
+                  return (
+                    <Paper
+                      key={row.employeeId}
+                      variant="outlined"
+                      data-testid={`starter-slot-${row.employeeId}`}
+                      role={orange ? 'button' : undefined}
+                      aria-label={
+                        orange ? `Starterbündel für ${row.displayName} übernehmen` : undefined
+                      }
+                      onClick={
+                        orange
+                          ? () =>
+                              setStarterStand((p) => ({
+                                ...p,
+                                [row.employeeId]: 'verifiziert',
+                              }))
+                          : undefined
+                      }
+                      sx={{
+                        minWidth: 0,
+                        borderRadius: 1,
+                        p: 0.5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.375,
+                        ...(orange
+                          ? {
+                              cursor: 'pointer',
+                              borderColor: ltColors.warning,
+                              boxShadow: `inset 0 0 0 1px ${ltColors.warning}`,
+                              bgcolor: alpha(ltColors.warning, 0.14),
+                            }
+                          : {}),
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography
+                          sx={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            flexShrink: 0,
+                          }}
+                        >
+                          Starterbündel
+                        </Typography>
+                        {bundle !== null && (
+                          <Typography
+                            variant="caption"
+                            sx={{ color: 'text.secondary', fontSize: '0.6rem', fontWeight: 700 }}
+                            noWrap
+                          >
+                            · {bundle.cases.length}{' '}
+                            {bundle.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+                            {bundle.cases.reduce((s, c) => s + c.teile, 0)} Teile
+                          </Typography>
+                        )}
+                        <Chip
+                          size="small"
+                          label={row.displayName}
+                          sx={{ ml: 'auto', height: 18, fontSize: '0.62rem', fontWeight: 700 }}
+                        />
+                      </Box>
+                      <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
+                        Schicht ab {startText}
+                        {inMin !== null && (inMin > 0 ? ` · in ≈ ${inMin} Min` : ' · JETZT')}
+                      </Typography>
+                      {!starterVorschlagAktiv && (
+                        <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary' }}>
+                          „Vorschlag ansehen" lässt die Engine das Starterbündel packen.
+                        </Typography>
+                      )}
+                      {starterVorschlagAktiv && bundle === null && (
+                        <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary' }}>
+                          Kein Engine-Vorschlag für diesen Mitarbeiter.
+                        </Typography>
+                      )}
+                      {starterVorschlagAktiv && bundle !== null && (
+                        <>
+                          <Typography
+                            sx={{
+                              fontSize: '0.56rem',
+                              fontWeight: 700,
+                              letterSpacing: 0.3,
+                              textTransform: 'uppercase',
+                              color: 'text.secondary',
+                              px: 0.25,
+                            }}
+                          >
+                            Geplant ({bundle.cases.length})
+                          </Typography>
+                          {bundle.cases.map((c, idx) => (
+                            <Box
+                              key={c.caseId}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.25,
+                                px: 0.5,
+                                py: 0.25,
+                                borderRadius: 0.5,
+                                borderLeft: '3px solid',
+                                borderLeftColor: 'divider',
+                                bgcolor: 'action.hover',
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize: '0.66rem',
+                                  fontWeight: 600,
+                                  flex: 1,
+                                  minWidth: 0,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {idx + 1}. {c.weBelegNo}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'text.secondary',
+                                  fontSize: '0.6rem',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {c.teile} Teile
+                              </Typography>
+                            </Box>
+                          ))}
+                          <Typography
+                            sx={{
+                              fontSize: '0.58rem',
+                              fontWeight: 700,
+                              color:
+                                stand === 'zugewiesen'
+                                  ? 'success.main'
+                                  : orange
+                                    ? ltColors.warning
+                                    : 'text.secondary',
+                            }}
+                          >
+                            {stand === 'zugewiesen'
+                              ? 'Zugewiesen ✓'
+                              : orange
+                                ? 'Klicken zum Übernehmen — sonst keine automatische Zuweisung.'
+                                : `Übernommen — Zuweisung automatisch zu Schichtbeginn (${startText}).`}
+                          </Typography>
+                        </>
+                      )}
+                    </Paper>
+                  );
+                },
+              )}
+            </Box>
+          )
+        ) : (
+          <>
         {slots === null || slots.length === 0 ? (
           <Paper
             variant="outlined"
@@ -591,7 +943,7 @@ export function VorverteilungPane({
           // EIN Container (Nutzer-Vorgabe): die MA-Vorschläge untereinander
           // 1./2./3. — neben jedem Namen der Fortschrittsbalken des aktuellen
           // Bündels (wie weit der MA durch ist) + die Frei-Prognose.
-          <Paper variant="outlined" sx={{ mt: 0.75, p: 0.5, borderRadius: 1 }}>
+          <Paper variant="outlined" sx={{ mt: 0.75, p: 0.5, borderRadius: 1, maxWidth: 520 }}>
             <Typography
               sx={{
                 fontSize: '0.56rem',
@@ -670,9 +1022,19 @@ export function VorverteilungPane({
             </Stack>
           </Paper>
         )}
+          </>
+        )}
       </Box>
 
-      {dragging?.source === 'vorschlag' && !locked ? (
+      {ansicht === 'starter' ? (
+        <Button
+          variant="outlined"
+          onClick={verlasseStarter}
+          sx={{ alignSelf: 'center', flexShrink: 0, borderRadius: 0.5, px: 3, fontWeight: 700 }}
+        >
+          Zurück zur Vorverteilung
+        </Button>
+      ) : dragging?.source === 'vorschlag' && !locked ? (
         <Box
           onDragOver={(e) => {
             e.preventDefault();
@@ -699,11 +1061,15 @@ export function VorverteilungPane({
           Hierher ziehen: zurück in die digitale Ablage (Beleg aus dem Vorschlag nehmen)
         </Box>
       ) : (
-        <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
-          Vorschau — verbindlich erst beim Zuweisen: Bündel-Kopf auf eine Zeile der
-          Mitarbeiter-Matrix ziehen. Belege lassen sich aus der digitalen Ablage hierher ziehen;
-          „✕" legt sie dorthin zurück.
-        </Typography>
+        // Statt des früheren Vorschau-Hinweises (Nutzer-Vorgabe): Einstieg in
+        // die Starterbündel-Ansicht — rechteckig, zentriert.
+        <Button
+          variant="outlined"
+          onClick={() => setAnsicht('starter')}
+          sx={{ alignSelf: 'center', flexShrink: 0, borderRadius: 0.5, px: 3, fontWeight: 700 }}
+        >
+          Starterbündel
+        </Button>
       )}
 
       <Popover
@@ -741,6 +1107,47 @@ export function VorverteilungPane({
           />
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             Gesperrt: Der Vorschlag wird weder neu berechnet noch verändert.
+          </Typography>
+        </Stack>
+      </Popover>
+
+      {/* Einstellungen der Starterbündel-Karte: nur die Übernahme-Art. */}
+      <Popover
+        open={starterGearAnchor !== null}
+        anchorEl={starterGearAnchor}
+        onClose={() => setStarterGearAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Stack sx={{ p: 1.5, width: 320 }} spacing={1}>
+          <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>Starterbündel</Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={settings.starterAuto}
+                onChange={(e) => saveSettings({ ...settings, starterAuto: e.target.checked })}
+              />
+            }
+            label="Automatisch übernehmen"
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={settings.starterAutoErstellen}
+                onChange={(e) =>
+                  saveSettings({ ...settings, starterAutoErstellen: e.target.checked })
+                }
+              />
+            }
+            label="Automatisch erstellen"
+          />
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Übernehmen aus: Vorschläge erscheinen orange und müssen einzeln per Klick übernommen
+            werden; an: Übernahme ohne Klick. Erstellen an: der Vorschlag wird automatisch
+            generiert, sobald jemand in der nächsten Stunde startet (auch im Hintergrund).
+            Die echte Zuweisung erfolgt stets exakt zum Schichtbeginn.
           </Typography>
         </Stack>
       </Popover>

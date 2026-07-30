@@ -22,6 +22,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import { ltColors } from '@paket/ui';
 import { useGesendeteNachrichten } from '../../data/nachrichten.js';
+import { useStarterStatus } from '../experiment/starterStatus.js';
 import { SchnellaktionenListe, useOffeneSchnellaktionen } from './schnellaktionen.js';
 
 const HEX_W = 26;
@@ -46,13 +47,20 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
   const nachrichten = useGesendeteNachrichten();
   const heute = new Date().toISOString().slice(0, 10);
   const heutigeNachrichten = nachrichten.filter((n) => n.createdAt.slice(0, 10) === heute);
-  // Alles abgehakt/erledigt UND keine Nachrichten → Panel klappt automatisch
-  // zu; der Knopf wird weiß und fährt langsam ein (width → 0).
+  // Heute generierte Starterbündel (Vorverteilung) — reine Info, nicht rot.
+  const starterStatus = useStarterStatus();
+  const starterHeute =
+    starterStatus !== null && starterStatus.generiertAm.slice(0, 10) === heute
+      ? starterStatus
+      : null;
+  // Alles abgehakt/erledigt UND keine Nachrichten/Starter-Infos → Panel klappt
+  // automatisch zu; der Knopf wird weiß und fährt langsam ein (width → 0).
   useEffect(() => {
-    if (open && decisions.length === 0 && heutigeNachrichten.length === 0) setOpen(false);
+    if (open && decisions.length === 0 && heutigeNachrichten.length === 0 && starterHeute === null)
+      setOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, decisions.length, heutigeNachrichten.length]);
-  const sichtbar = alarm || open || heutigeNachrichten.length > 0;
+  }, [open, decisions.length, heutigeNachrichten.length, starterHeute]);
+  const sichtbar = alarm || open || heutigeNachrichten.length > 0 || starterHeute !== null;
   const label = open
     ? 'Schnellaktionen einklappen'
     : `Schnellaktionen ausklappen${
@@ -126,6 +134,26 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
                 // bleibt offen (abgehakt wird ausschließlich über den Haken).
                 onAktion={() => setOpen(false)}
               />
+            )}
+            {starterHeute !== null && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Starterbündel
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    Starterbündel generiert
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {starterHeute.anzahl} Bündel ·{' '}
+                    {new Date(starterHeute.generiertAm).toLocaleTimeString('de-DE', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    Uhr{starterHeute.auto ? ' · automatisch erstellt' : ''}
+                  </Typography>
+                </Paper>
+              </Box>
             )}
             {heutigeNachrichten.length > 0 && (
               <Box sx={{ mt: 1.5 }}>

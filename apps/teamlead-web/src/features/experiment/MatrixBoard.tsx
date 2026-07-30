@@ -963,7 +963,7 @@ function PauseHandle({
   label: string;
   onFire: () => void;
 }): JSX.Element {
-  // Zusatzbreite über die 8-px-Ruhelage hinaus (0 = Streifen liegt links an).
+  // Zusatzbreite über die 5-px-Ruhelage hinaus (0 = Streifen liegt links an).
   const [w, setW] = useState(0);
   const drag = useRef<{ x: number; max: number; fired: boolean } | null>(null);
   const reset = (): void => {
@@ -994,9 +994,9 @@ function PauseHandle({
         onPointerMove={(e) => {
           const s = drag.current;
           if (s === null || s.fired) return;
-          const next = Math.max(0, Math.min(s.max - 8, e.clientX - s.x));
+          const next = Math.max(0, Math.min(s.max - 5, e.clientX - s.x));
           setW(next);
-          if (8 + next >= s.max - 8) {
+          if (5 + next >= s.max - 5) {
             s.fired = true;
             setW(0);
             onFire();
@@ -1006,17 +1006,19 @@ function PauseHandle({
         onPointerCancel={reset}
         onPointerLeave={reset}
         sx={{
+          // Dünner und symmetrisch (Nutzer-Vorgabe): 5 px Ruhebreite, gleicher
+          // Abstand oben wie unten statt voller Zellhöhe.
           position: 'absolute',
           left: 0,
-          top: 0,
-          bottom: 0,
+          top: 6,
+          bottom: 6,
           zIndex: 2,
-          width: 8 + w,
+          width: 5 + w,
           bgcolor: color,
           cursor: 'grab',
           touchAction: 'none',
-          borderTopRightRadius: 4,
-          borderBottomRightRadius: 4,
+          borderTopRightRadius: 3,
+          borderBottomRightRadius: 3,
           opacity: w > 0 ? 0.92 : 1,
           transition: w === 0 ? 'width 140ms ease-out' : 'none',
           '&:hover': { filter: 'brightness(0.9)' },
