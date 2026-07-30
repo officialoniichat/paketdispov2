@@ -200,6 +200,18 @@ describe('VorverteilungPane', () => {
     expect(screen.getByText('Als Nächstes — 2 Bündel vorbereitet')).toBeTruthy();
   });
 
+  it('leerer Starter-Zustand: „Kommende Starter anschauen" klappt die Gruppen-Ansicht auf', () => {
+    // Omars Start liegt 5 h entfernt → niemand braucht in der nächsten Stunde etwas.
+    mocks.board[1]!.shiftStart = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+    renderPane();
+    fireEvent.click(screen.getByRole('button', { name: 'Starterbündel' }));
+    expect(screen.getByText(/Kein Schichtstart in der nächsten Stunde/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kommende Starter anschauen' }));
+    // Mitarbeiterliste ist im Test leer → ehrlicher Leer-Hinweis statt Gruppen.
+    expect(screen.getByText('Keine geplanten Schichtstarts in den nächsten 7 Tagen.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kommende Starter ausblenden' })).toBeTruthy();
+  });
+
   it('Starter-Vorschlag: orange bis zum Klick — dann übernommen (einzeln verifizieren)', () => {
     renderPane();
     fireEvent.click(screen.getByRole('button', { name: 'Starterbündel' }));

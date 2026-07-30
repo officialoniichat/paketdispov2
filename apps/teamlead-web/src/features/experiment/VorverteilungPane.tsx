@@ -56,7 +56,9 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { alpha } from '@mui/material/styles';
 import { ltColors } from '@paket/ui';
 import { isManualOnlyTier } from '../../components/TierChip.js';
-import { fetchEmployees } from '../../data/employees.js';
+import { fetchEmployees, type EmployeeListItem } from '../../data/employees.js';
+import { SHIFT_MODEL_COLORS, type ShiftModelName } from '../../lib/schichtFarben.js';
+import { modelOfDay } from '../admin/SchichtplanTab.js';
 import { useCockpitData } from '../../data/store.js';
 import type { BoardCase, PreviewBundle } from '../../data/types.js';
 import {
@@ -97,6 +99,29 @@ function sanitizeSettings(raw: Partial<VorverteilungSettings> | null): Vorvertei
 /** ISO → „HH:MM" (lokal) für Schichtbeginn-Texte. */
 function hhmm(iso: string): string {
   return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+const TAG_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+/** Nächster geplanter Schichtstart eines Mitarbeiters ab `ab` (7-Tage-Blick aufs Wochenmuster). */
+function naechsterSchichtstart(
+  emp: EmployeeListItem,
+  ab: number,
+): { start: Date; model: ShiftModelName } | null {
+  for (let offset = 0; offset < 8; offset += 1) {
+    const tag = new Date(ab);
+    tag.setHours(0, 0, 0, 0);
+    tag.setDate(tag.getDate() + offset);
+    const plan = emp.weeklyPattern?.[TAG_KEYS[(tag.getDay() + 6) % 7] ?? 'mon'];
+    if (!plan || !plan.working || !plan.start) continue;
+    const model = modelOfDay(plan) as ShiftModelName;
+    if (model === 'Frei') continue;
+    const [h, m] = plan.start.split(':').map(Number);
+    const start = new Date(tag);
+    start.setHours(h ?? 0, m ?? 0, 0, 0);
+    if (start.getTime() > ab) return { start, model };
+  }
+  return null;
 }
 
 /** Ein lokal zurechtgerückter Vorschlags-Slot (Basis: erstes Engine-Bündel des MA). */
@@ -146,6 +171,8 @@ export function VorverteilungPane({
   >({});
   const [starterGearAnchor, setStarterGearAnchor] = useState<HTMLElement | null>(null);
   const [jetzt, setJetzt] = useState(() => Date.now());
+  // Leerer Starter-Zustand: „Kommende Starter anschauen" (Früh/Spät-Gruppen).
+  const [kommendeOffen, setKommendeOffen] = useState(false);
 
   const saveSettings = (next: VorverteilungSettings): void => {
     setSettings(next);
@@ -350,7 +377,24 @@ export function VorverteilungPane({
     setAnsicht('naechste');
     setStarterVorschlagAktiv(false);
     setStarterStand({});
+    setKommendeOffen(false);
   };
+
+  // „Kommende Starter": nächster geplanter Schichtstart je Mitarbeiter (aus
+  // dem Wochenmuster), gruppiert nach Schichtgruppe (Frühschicht/Spätschicht).
+  const kommendeGruppen = useMemo(() => {
+    if (!kommendeOffen) return [];
+    const starter = (employeeList?.employees ?? [])
+      .filter((e) => e.active && e.roles.includes('employee'))
+      .flatMap((e) => {
+        const next = naechsterSchichtstart(e, jetzt);
+        return next === null ? [] : [{ id: e.id, name: e.displayName, ...next }];
+      })
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    return (['Frühschicht', 'Spätschicht'] as ShiftModelName[])
+      .map((model) => ({ model, starter: starter.filter((s) => s.model === model) }))
+      .filter((g) => g.starter.length > 0);
+  }, [kommendeOffen, employeeList, jetzt]);
 
   // Uhr der Starter-Ansicht: alle 30 s, damit Countdown und Schichtbeginn ziehen.
   useEffect(() => {
@@ -543,12 +587,75 @@ export function VorverteilungPane({
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {ansicht === 'starter' ? (
           starterKandidaten.length === 0 ? (
-            <Paper
-              variant="outlined"
-              sx={{ p: 2, textAlign: 'center', color: 'text.secondary', fontSize: '0.78rem' }}
-            >
-              Kein Schichtstart in der nächsten Stunde — gerade braucht niemand ein Starterbündel.
-            </Paper>
+            <Stack spacing={0.75}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+              >
+                <Typography
+                  sx={{ color: 'text.secondary', fontSize: '0.78rem', flex: 1, minWidth: 220 }}
+                >
+                  Kein Schichtstart in der nächsten Stunde — gerade braucht niemand ein
+                  Starterbündel.
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setKommendeOffen((v) => !v)}
+                  sx={{ flexShrink: 0, fontSize: '0.7rem' }}
+                >
+                  {kommendeOffen ? 'Kommende Starter ausblenden' : 'Kommende Starter anschauen'}
+                </Button>
+              </Paper>
+              {kommendeOffen && kommendeGruppen.length === 0 && (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Keine geplanten Schichtstarts in den nächsten 7 Tagen.
+                </Typography>
+              )}
+              {kommendeOffen &&
+                kommendeGruppen.map((g) => (
+                  // Eigener Container je Schichtgruppe (Nutzer-Vorgabe).
+                  <Paper key={g.model} variant="outlined" sx={{ p: 0.75 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      <Box
+                        aria-hidden
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 0.5,
+                          bgcolor: SHIFT_MODEL_COLORS[g.model],
+                        }}
+                      />
+                      <Typography sx={{ fontSize: '0.68rem', fontWeight: 800 }}>
+                        {g.model} ({g.starter.length})
+                      </Typography>
+                    </Box>
+                    {/* Grid mit maximal 4 Startern pro Reihe (Nutzer-Vorgabe). */}
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                        gap: 0.5,
+                      }}
+                    >
+                      {g.starter.map((s) => (
+                        <Paper key={s.id} variant="outlined" sx={{ px: 0.75, py: 0.5 }}>
+                          <Typography sx={{ fontSize: '0.7rem', fontWeight: 700 }} noWrap>
+                            {s.name}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{ color: 'text.secondary', fontSize: '0.62rem' }}
+                          >
+                            ab {s.start.toLocaleDateString('de-DE', { weekday: 'short' })}{' '}
+                            {hhmm(s.start.toISOString())}
+                          </Typography>
+                        </Paper>
+                      ))}
+                    </Box>
+                  </Paper>
+                ))}
+            </Stack>
           ) : (
             <Box
               sx={{
