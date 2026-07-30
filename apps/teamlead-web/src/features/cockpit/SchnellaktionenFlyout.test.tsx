@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
   board: [],
 }));
 vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
+// Kein HTTP im Unit-Test: der Nachrichten-Lesestatus kommt gemockt (leer).
+vi.mock('../../data/nachrichten.js', () => ({
+  useGesendeteNachrichten: () => [],
+  sendeNachricht: vi.fn(),
+}));
 
 beforeEach(() => {
   localStorage.clear();

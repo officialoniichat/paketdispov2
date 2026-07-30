@@ -20,6 +20,7 @@ flowchart TB
             barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — Encoder: domain/code128.ts (pur)</i>"]:::logic
             process["BelegProcessScreen<br/><i>/case/:id — sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis mit € + Komma; Problem markiert Größe/ganze POS rot</i>"]:::screen
             osk["OnScreenKeyboard (components/, App-mounted)<br/><i>aufklappbare digitale Tastatur für data-osk-Felder; nur Touch, blendet bei Hardware-Tastatur aus</i>"]:::logic
+            msgBanner["NachrichtenBanner (components/, App-mounted)<br/><i>Teamlead-Nachricht unter dem Header: anzeigen + „Gelesen“ quittieren<br/>(data/useNachrichten.ts: GET /api/me/messages · POST :id/read, Polling 15 s)</i>"]:::logic
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
             teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
         end

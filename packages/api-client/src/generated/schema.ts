@@ -1102,6 +1102,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gesendete Nachrichten (neueste zuerst) inkl. Gelesen-Quittung. */
+        get: operations["TeamleadMessagesController_list"];
+        put?: never;
+        /** Nachricht an die Mitarbeiter-App eines Mitarbeiters senden. */
+        post: operations["TeamleadMessagesController_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeMessagesController_unread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/messages/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Nachricht als gelesen quittieren (nur die eigene). */
+        post: operations["MeMessagesController_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dev/scenarios": {
         parameters: {
             query?: never;
@@ -1987,6 +2038,8 @@ export interface components {
             caseId: string;
             /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
             reason?: string;
+            /** @description true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen") statt an das Tages-Bündel anzuhängen. */
+            newBundle?: boolean;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
             date?: string;
         };
@@ -2340,6 +2393,43 @@ export interface components {
             weBelegNos: string[];
             /** @description Buchungstag der Charge (ISO) */
             date: string;
+        };
+        SendMessageDto: {
+            /** @description employeeNo des Empfängers (Mitarbeiter-App) */
+            employeeNo: string;
+            /** @description Kurznachricht (max. 500 Zeichen) */
+            text: string;
+            /** @description Optionaler Beleg-Bezug (GoodsReceiptCase-Id) */
+            caseId?: string;
+        };
+        TeamleadMessageDto: {
+            id: string;
+            employeeNo: string;
+            employeeName: string;
+            caseId: string | null;
+            /** @description WE-Nr des Bezugs-Belegs */
+            weBelegNo: string | null;
+            text: string;
+            createdAt: string;
+            /** @description „Gelesen"-Quittung aus der PWA */
+            readAt: string | null;
+        };
+        TeamleadMessageListDto: {
+            messages: components["schemas"]["TeamleadMessageDto"][];
+        };
+        MyMessageDto: {
+            id: string;
+            text: string;
+            caseId: string | null;
+            weBelegNo: string | null;
+            createdAt: string;
+        };
+        MyMessageListDto: {
+            messages: components["schemas"]["MyMessageDto"][];
+        };
+        MessageReadDto: {
+            id: string;
+            readAt: string;
         };
         ScenarioInfoDto: {
             /** @description Stable catalog key, e.g. 'standard' */
@@ -4023,6 +4113,89 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    TeamleadMessagesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamleadMessageListDto"];
+                };
+            };
+        };
+    };
+    TeamleadMessagesController_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamleadMessageDto"];
+                };
+            };
+        };
+    };
+    MeMessagesController_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMessageListDto"];
+                };
+            };
+        };
+    };
+    MeMessagesController_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Nachricht-Id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageReadDto"];
+                };
             };
         };
     };

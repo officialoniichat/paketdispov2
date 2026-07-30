@@ -14,10 +14,14 @@ import { useEffect, useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
+import Paper from '@mui/material/Paper';
+import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
 import { ltColors } from '@paket/ui';
+import { useGesendeteNachrichten } from '../../data/nachrichten.js';
 import { SchnellaktionenListe, useOffeneSchnellaktionen } from './schnellaktionen.js';
 
 const HEX_W = 26;
@@ -37,13 +41,18 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
   };
   const { offen: decisions, abhaken } = useOffeneSchnellaktionen();
   const alarm = decisions.length > 0;
-  // Alles abgehakt/erledigt → Panel klappt automatisch zu; der Knopf wird weiß
-  // und fährt anschließend langsam ein (width → 0), bis wieder etwas anliegt.
+  // Heutige Nachrichten an Mitarbeiter (Lesestatus): halten das Panel offen,
+  // machen den Knopf aber NICHT rot — rot sind nur un-abgehakte Meldungen.
+  const nachrichten = useGesendeteNachrichten();
+  const heute = new Date().toISOString().slice(0, 10);
+  const heutigeNachrichten = nachrichten.filter((n) => n.createdAt.slice(0, 10) === heute);
+  // Alles abgehakt/erledigt UND keine Nachrichten → Panel klappt automatisch
+  // zu; der Knopf wird weiß und fährt langsam ein (width → 0).
   useEffect(() => {
-    if (open && decisions.length === 0) setOpen(false);
+    if (open && decisions.length === 0 && heutigeNachrichten.length === 0) setOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, decisions.length]);
-  const sichtbar = alarm || open;
+  }, [open, decisions.length, heutigeNachrichten.length]);
+  const sichtbar = alarm || open || heutigeNachrichten.length > 0;
   const label = open
     ? 'Schnellaktionen einklappen'
     : `Schnellaktionen ausklappen${
@@ -111,6 +120,51 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
               </Alert>
             ) : (
               <SchnellaktionenListe decisions={decisions} onAbhaken={abhaken} />
+            )}
+            {heutigeNachrichten.length > 0 && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Nachrichten an Mitarbeiter
+                </Typography>
+                <Stack spacing={0.75}>
+                  {heutigeNachrichten.map((n) => (
+                    <Paper
+                      key={n.id}
+                      variant="outlined"
+                      sx={{ p: 1, display: 'flex', alignItems: 'flex-start', gap: 1 }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                          {n.employeeName}
+                          {n.weBelegNo !== null ? ` · ${n.weBelegNo}` : ''}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {n.text}
+                        </Typography>
+                      </Box>
+                      {n.readAt !== null ? (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'success.main',
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.25,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <DoneAllIcon sx={{ fontSize: 14 }} /> Gelesen
+                        </Typography>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: 'text.disabled', flexShrink: 0 }}>
+                          Ungelesen
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
+              </Box>
             )}
           </Box>
         </Box>

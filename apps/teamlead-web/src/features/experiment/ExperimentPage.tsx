@@ -38,7 +38,6 @@ import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { ltColors } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
-import type { LaneCard } from '../../data/types.js';
 import { buildGroupColorMap } from '../../components/LieferungChip.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
 import { ForwardDialog } from '../../components/ForwardDialog.js';
@@ -51,7 +50,12 @@ import {
 } from '../../lib/viewState.js';
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { BelegListPage } from '../belege/BelegListPage.js';
-import { AblagenPane, WithdrawZone, buildWithdrawAction } from './AblagenPane.js';
+import {
+  AblagenPane,
+  PoolRueckgabeOverlay,
+  buildWithdrawAction,
+  type ForwardRef,
+} from './AblagenPane.js';
 import { MatrixBoard, MatrixInfo } from './MatrixBoard.js';
 import { VorverteilungPane } from './VorverteilungPane.js';
 import { canWithdraw, type ExperimentDragPayload } from './experimentDnd.js';
@@ -68,10 +72,10 @@ import {
 } from './experimentLayout.js';
 
 export function ExperimentPage(): JSX.Element {
-  const { board, forwardCase, withdraw, assignToEmployee, moveCase } = useCockpitData();
+  const { board, forwardCase, withdraw, assignToEmployee, moveCase, reorder } = useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [dragging, setDragging] = useState<ExperimentDragPayload | null>(null);
-  const [forwardCard, setForwardCard] = useState<LaneCard | null>(null);
+  const [forwardCard, setForwardCard] = useState<ForwardRef | null>(null);
   const [focus, setFocus] = useState<PaneId | null>(null);
   // Flip-Karte des Beleg-Fensters: Vorderseite Beleg-Liste, Rückseite Vorverteilung.
   const [vorverteilungOffen, setVorverteilungOffen] = useState(false);
@@ -101,7 +105,7 @@ export function ExperimentPage(): JSX.Element {
   };
 
   // Erste fehlgeschlagene DnD-Mutation treibt die Fehler-Snackbar (Board-Muster).
-  const failed = [withdraw, assignToEmployee, moveCase].find((m) => m.isError);
+  const failed = [withdraw, assignToEmployee, moveCase, reorder].find((m) => m.isError);
 
   // Lieferungs-Farben der Matrix-Striche (das Ablagen-Fenster nutzt seit dem
   // Original-Design-Embed die LieferungChip-Darstellung des Basis-Boards).
@@ -309,12 +313,13 @@ export function ExperimentPage(): JSX.Element {
               onPointerDown={startSegDrag(seg.id, seg.axis)}
             />
           ))}
-        {/* Im Matrix-Vollbild sind die Ablagen versteckt — die Entziehen-Zone
-            muss trotzdem erreichbar bleiben (gleicher Dialog, gleiche Gründe). */}
+        {/* Im Matrix-Vollbild sind die Ablagen versteckt — die Pool-Rückgabe
+            bleibt als kompakte Leiste erreichbar (gleicher Dialog, gleiche Gründe). */}
         {focus === 'matrix' && canWithdraw(dragging) && (
-          <WithdrawZone
+          <PoolRueckgabeOverlay
+            leiste
             dragging={dragging}
-            onWithdraw={(src) =>
+            onPool={(src) =>
               setPending(buildWithdrawAction(src, (vars) => withdraw.mutate(vars)))
             }
           />

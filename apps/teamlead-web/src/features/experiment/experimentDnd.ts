@@ -128,6 +128,22 @@ export function matrixDropAction(
   return drag.status === 'assigned' && drag.bundleId !== '' ? { kind: 'move' } : null;
 }
 
+/**
+ * Ablage-Drag, der direkt zuweisbar ist (ready, nicht weitergeleitet) — Basis
+ * für Matrix-Zeile, den „+ Nächstes Bündel"-Slot und das Einsortieren zwischen
+ * Geplant-Belegen.
+ */
+export function ablageAssignbar(
+  drag: ExperimentDragPayload | null,
+): drag is Extract<ExperimentDragPayload, { source: 'ablage' }> {
+  return (
+    drag !== null &&
+    drag.source === 'ablage' &&
+    drag.status === 'ready' &&
+    drag.forwardedTo === null
+  );
+}
+
 /** Matrix→Ablagen: Entziehen (withdraw) gilt für ungestartete, zugewiesene Belege. */
 export function canWithdraw(
   drag: ExperimentDragPayload | null,

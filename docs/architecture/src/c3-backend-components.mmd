@@ -60,6 +60,11 @@ flowchart TB
             phSvc["ProhandelService<br/><i>Mock-Connector (A9): beleg-generator + beleg-persist<br/>(gemeinsame Senke mit prisma/seed.ts)</i>"]:::svc
         end
 
+        subgraph msgs["MessagesModule"]
+            msgsCtrl["TeamleadMessagesController · MeMessagesController<br/>POST·GET /api/teamlead/messages (senden · Lesestatus) ·<br/>GET /api/me/messages · POST /api/me/messages/:id/read („Gelesen“-Quittung PWA)"]:::ctrl
+            msgsSvc["MessagesService<br/><i>TeamleadMessage (employeeId · caseId? · text · readAt) — §16.1 self-scoped</i>"]:::svc
+        end
+
         subgraph devMod["DevModule (per Env geschaltet: DEV_PANEL, 404 in Prod)"]
             devCtrl["DevController<br/>GET /api/dev/scenarios · POST scenarios/:key/load<br/>· POST scenarios/reset · POST/DELETE time-override<br/>· POST materialize-shifts<br/><i>@Roles(Admin) + DevPanelGuard</i>"]:::ctrl
             scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typisierte Registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
@@ -123,3 +128,5 @@ flowchart TB
     scenSvc --> prisma
     clock --> prisma
     prisma --> db
+
+    msgsCtrl --> msgsSvc

@@ -12,10 +12,11 @@
  * Mutationen aus (Ablage → Zeile = zuweisen, Zeile → Zeile = verschieben) —
  * immer über den §8.4-ReasonDialog des Parents, nie direkt.
  */
-import { useRef, useState, type JSX } from 'react';
+import { Fragment, useRef, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
+import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import Popover from '@mui/material/Popover';
 import Stack from '@mui/material/Stack';
@@ -39,9 +40,12 @@ import {
 } from '../../lib/schichtFarben.js';
 import { lieferungSatz, splitLieferungWarnung } from '../../components/LieferungChip.js';
 import {
+  ablageAssignbar,
   matrixDropAction,
   type ExperimentDragPayload,
 } from './experimentDnd.js';
+import { LaufendEinfassenDialog, NeuesBuendelDialog } from './NeuesBuendelDialog.js';
+import { sendeNachricht } from '../../data/nachrichten.js';
 import {
   FERTIG_STATUSES,
   LAUFEND_STATUSES,
@@ -64,6 +68,9 @@ export interface MatrixBoardProps {
   requestReason: (action: PendingAction) => void;
 }
 
+/** Ablage-Drag (ready) — Quelle für neuen Slot + Einsortieren. */
+type AblageDrag = Extract<ExperimentDragPayload, { source: 'ablage' }>;
+
 export function MatrixBoard({
   board,
   groupColorById,
@@ -72,28 +79,132 @@ export function MatrixBoard({
   onDragEnd,
   requestReason,
 }: MatrixBoardProps): JSX.Element {
+  const { assignToEmployee, reorder } = useCockpitData();
+  // Drop auf den „+ Nächstes Bündel"-Slot → Frage „soll enthalten / bestehen".
+  const [neuesBuendel, setNeuesBuendel] = useState<{ row: BoardRow; drag: AblageDrag } | null>(
+    null,
+  );
+  // Drop auf einen LAUFEND-Strich → Sicherheitsfrage vor dem Einfassen.
+  const [laufendFrage, setLaufendFrage] = useState<{
+    row: BoardRow;
+    ziel: BoardCase;
+    drag: AblageDrag;
+  } | null>(null);
+
+  /**
+   * Einsortieren aus der digitalen Ablage: bei GEPLANT exakt an die Stelle
+   * (assign → reorder mit derselben Begründung), bei LAUFEND erst die
+   * Sicherheitsfrage (dann hinten angehängt).
+   */
+  const einsortieren = (
+    row: BoardRow,
+    ziel: BoardCase,
+    pos: 'davor' | 'danach',
+    drag: AblageDrag,
+  ): void => {
+    if (LAUFEND_STATUSES.includes(ziel.status)) {
+      setLaufendFrage({ row, ziel, drag });
+      return;
+    }
+    const bundleId = ziel.bundleId ?? row.bundleId;
+    if (bundleId === undefined) return;
+    requestReason({
+      title: `${drag.weBelegNo} ${pos === 'davor' ? 'vor' : 'nach'} ${ziel.weBelegNo} einsortieren`,
+      description: `Der Beleg wird ${row.displayName} zugewiesen und exakt an dieser Stelle in die Abhol-Reihenfolge des geplanten Bündels gesetzt.`,
+      suggestions: ['Passt zur Route', 'Eilig für Verladung'],
+      run: (reason) => {
+        void assignToEmployee
+          .mutateAsync({ employeeNo: row.employeeId, caseId: drag.caseId, reason })
+          .then(() => {
+            const ids = row.cases
+              .filter((c) => (c.bundleId ?? row.bundleId) === bundleId && c.caseId !== drag.caseId)
+              .map((c) => c.caseId);
+            const at = ids.indexOf(ziel.caseId);
+            const einfuegen = at < 0 ? ids.length : at + (pos === 'danach' ? 1 : 0);
+            ids.splice(einfuegen, 0, drag.caseId);
+            reorder.mutate({ bundleId, caseIds: ids, reason });
+          })
+          .catch(() => undefined); // Fehler treibt die Snackbar des Parents.
+      },
+    });
+  };
+
   return (
-    <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
-      {/* Abwesende (Krank/Urlaub) ganz nach unten — sonst stabile Reihenfolge. */}
-      {[...board]
-        .sort((a, b) => Number(a.absence != null) - Number(b.absence != null))
-        .map((row) => (
-        <MatrixRow
-          key={row.employeeId}
-          row={row}
-          groupColorById={groupColorById}
-          dragging={dragging}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          requestReason={requestReason}
-        />
-      ))}
-      {board.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-          Keine Mitarbeiter für heute eingeplant.
-        </Typography>
-      )}
-    </Box>
+    <>
+      <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
+        {/* Abwesende (Krank/Urlaub) ganz nach unten — sonst stabile Reihenfolge. */}
+        {[...board]
+          .sort((a, b) => Number(a.absence != null) - Number(b.absence != null))
+          .map((row) => (
+            <MatrixRow
+              key={row.employeeId}
+              row={row}
+              groupColorById={groupColorById}
+              dragging={dragging}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              requestReason={requestReason}
+              onNeuesBuendel={(r, drag) => setNeuesBuendel({ row: r, drag })}
+              onEinsortieren={einsortieren}
+            />
+          ))}
+        {board.length === 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+            Keine Mitarbeiter für heute eingeplant.
+          </Typography>
+        )}
+      </Box>
+
+      <NeuesBuendelDialog
+        offen={neuesBuendel !== null}
+        weBelegNo={neuesBuendel?.drag.weBelegNo ?? ''}
+        employeeName={neuesBuendel?.row.displayName ?? ''}
+        onClose={() => setNeuesBuendel(null)}
+        onBestaetigen={(wahl, grund, nachricht) => {
+          const ctx = neuesBuendel;
+          if (ctx === null) return;
+          // Die Wahl wandert wortwörtlich in den §8.4-Audit-Grund.
+          const reason = `${wahl === 'bestehen' ? 'Soll bestehen' : 'Soll enthalten'}${
+            grund !== '' ? ` — ${grund}` : ''
+          }`;
+          assignToEmployee.mutate({
+            employeeNo: ctx.row.employeeId,
+            caseId: ctx.drag.caseId,
+            reason,
+            newBundle: true,
+          });
+          if (nachricht !== '')
+            void sendeNachricht({
+              employeeNo: ctx.row.employeeId,
+              text: nachricht,
+              caseId: ctx.drag.caseId,
+            });
+          setNeuesBuendel(null);
+        }}
+      />
+      <LaufendEinfassenDialog
+        offen={laufendFrage !== null}
+        weBelegNo={laufendFrage?.drag.weBelegNo ?? ''}
+        employeeName={laufendFrage?.row.displayName ?? ''}
+        onClose={() => setLaufendFrage(null)}
+        onBestaetigen={(nachricht) => {
+          const ctx = laufendFrage;
+          if (ctx === null) return;
+          assignToEmployee.mutate({
+            employeeNo: ctx.row.employeeId,
+            caseId: ctx.drag.caseId,
+            reason: 'In laufendes Bündel eingefasst',
+          });
+          if (nachricht !== '')
+            void sendeNachricht({
+              employeeNo: ctx.row.employeeId,
+              text: nachricht,
+              caseId: ctx.drag.caseId,
+            });
+          setLaufendFrage(null);
+        }}
+      />
+    </>
   );
 }
 
@@ -104,6 +215,10 @@ interface MatrixRowProps {
   onDragStart: (payload: ExperimentDragPayload) => void;
   onDragEnd: () => void;
   requestReason: (action: PendingAction) => void;
+  /** Drop auf den „+ Nächstes Bündel"-Slot hinter der Trennwand. */
+  onNeuesBuendel: (row: BoardRow, drag: AblageDrag) => void;
+  /** Ablage-Beleg zwischen zwei Belegen einsortieren (Geplant) bzw. Laufend-Frage. */
+  onEinsortieren: (row: BoardRow, ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
 }
 
 function MatrixRow({
@@ -113,6 +228,8 @@ function MatrixRow({
   onDragStart,
   onDragEnd,
   requestReason,
+  onNeuesBuendel,
+  onEinsortieren,
 }: MatrixRowProps): JSX.Element {
   const { assignToEmployee, assignBundle, moveCase, pauseResume } = useCockpitData();
   const [over, setOver] = useState(false);
@@ -187,6 +304,8 @@ function MatrixRow({
       }
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      dragging={dragging}
+      onEinsortieren={(ziel, pos, drag) => onEinsortieren(row, ziel, pos, drag)}
     />
   );
 
@@ -317,9 +436,11 @@ function MatrixRow({
         <RowInfoButton row={row} />
       </Box>
 
-      {packs.map((pack) => (
+      {packs.map((pack, packIndex) => (
+        <Fragment key={pack.key}>
+        {/* Durchlaufende vertikale Trennwand zwischen den Slot-Spalten. */}
+        {packIndex > 0 && <Divider orientation="vertical" flexItem />}
         <Box
-          key={pack.key}
           sx={{
             width: 200,
             flexShrink: 0,
@@ -371,7 +492,20 @@ function MatrixRow({
             </Box>
           ))}
         </Box>
+        </Fragment>
       ))}
+      {absent === null && packs.length > 0 && (
+        <>
+          <Divider orientation="vertical" flexItem />
+          {/* Komplett neuer Slot hinter der Trennwand = das NÄCHSTE Bündel. */}
+          <NeuerSlot
+            aktiv={ablageAssignbar(dragging)}
+            onDropZiel={() => {
+              if (ablageAssignbar(dragging)) onNeuesBuendel(row, dragging);
+            }}
+          />
+        </>
+      )}
       {packs.length === 0 && (
         <Box
           sx={{
@@ -395,12 +529,62 @@ function MatrixRow({
   );
 }
 
+/** Neuer-Slot-Dropzone am Zeilenende: nimmt ready-Ablage-Belege entgegen. */
+function NeuerSlot({
+  aktiv,
+  onDropZiel,
+}: {
+  aktiv: boolean;
+  onDropZiel: () => void;
+}): JSX.Element {
+  const [over, setOver] = useState(false);
+  return (
+    <Box
+      data-testid="neuer-slot"
+      onDragOver={(e) => {
+        if (!aktiv) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        if (!aktiv) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        onDropZiel();
+      }}
+      sx={{
+        width: 200,
+        flexShrink: 0,
+        border: '1px dashed',
+        borderColor: over && aktiv ? 'primary.main' : 'divider',
+        borderRadius: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 36,
+        bgcolor: over && aktiv ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
+      }}
+    >
+      <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
+        + Nächstes Bündel
+      </Typography>
+    </Box>
+  );
+}
+
 interface CaseStripProps {
   c: BoardCase;
   row: BoardRow;
   groupColor: string | undefined;
   onDragStart: (payload: ExperimentDragPayload) => void;
   onDragEnd: () => void;
+  dragging: ExperimentDragPayload | null;
+  /** Ablage-Beleg genau vor/nach diesem Strich einsortieren. */
+  onEinsortieren: (ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
 }
 
 /**
@@ -409,7 +593,15 @@ interface CaseStripProps {
  * rechts im Strich), Klick die Belegdetails; bei Gruppen-Belegen nennt eine
  * Extra-Zeile die Zugehörigkeit im Wortlaut des Mitarbeiterboards.
  */
-function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProps): JSX.Element {
+function CaseStrip({
+  c,
+  row,
+  groupColor,
+  onDragStart,
+  onDragEnd,
+  dragging,
+  onEinsortieren,
+}: CaseStripProps): JSX.Element {
   const navigate = useNavigate();
   const style = stripStyle(c.status);
   const color = style?.color ?? groupColor;
@@ -417,6 +609,13 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
   const itemBundleId = c.bundleId ?? row.bundleId;
   const draggable = c.status === 'assigned' && itemBundleId != null;
   const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
+  // Einsortieren aus der Ablage: Geplant positionsgenau, Laufend nur mit Frage.
+  const [insertPos, setInsertPos] = useState<'davor' | 'danach' | null>(null);
+  const sortierbar =
+    (row.absence ?? null) === null &&
+    ablageAssignbar(dragging) &&
+    itemBundleId != null &&
+    (c.status === 'assigned' || LAUFEND_STATUSES.includes(c.status));
   return (
     // Hover irgendwo auf dem Strich → dieselbe Schnellinfo wie das „!" im Board.
     <CaseQuickInfoTooltip c={c}>
@@ -440,6 +639,22 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
           });
         }}
         onDragEnd={onDragEnd}
+        onDragOver={(e) => {
+          if (!sortierbar) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          const r = e.currentTarget.getBoundingClientRect();
+          setInsertPos(e.clientY < r.top + r.height / 2 ? 'davor' : 'danach');
+        }}
+        onDragLeave={() => setInsertPos(null)}
+        onDrop={(e) => {
+          if (!sortierbar || insertPos === null || !ablageAssignbar(dragging)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onEinsortieren(c, insertPos, dragging);
+          setInsertPos(null);
+        }}
         sx={{
           display: 'flex',
           flexDirection: 'column',
@@ -450,6 +665,13 @@ function CaseStrip({ c, row, groupColor, onDragStart, onDragEnd }: CaseStripProp
           borderLeftColor: color ?? 'divider',
           bgcolor: color ? alpha(color, 0.1) : 'action.hover',
           cursor: 'pointer',
+          // Einfüge-Anzeiger: Linie oben/unten, ohne das Layout zu verschieben.
+          boxShadow: (t) =>
+            insertPos === 'davor'
+              ? `inset 0 2px 0 0 ${t.palette.primary.main}`
+              : insertPos === 'danach'
+                ? `inset 0 -2px 0 0 ${t.palette.primary.main}`
+                : 'none',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>

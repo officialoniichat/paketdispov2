@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   ValidateNested,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FORWARD_RECIPIENTS, type ForwardRecipient } from '@paket/domain-types';
@@ -1193,6 +1194,14 @@ export class AssignToEmployeeDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen") statt an das Tages-Bündel anzuhängen.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  newBundle?: boolean;
 
   @ApiPropertyOptional({
     type: String,

@@ -115,6 +115,8 @@ export interface AssignVars {
   caseId: string;
   /** Optional §8.4 audit reason (B2). */
   reason?: string;
+  /** true = eigenständiges NEUES Bündel anlegen (Vorverteilung „soll bestehen"). */
+  newBundle?: boolean;
 }
 export interface AssignBundleVars {
   /** employeeNo of the target (the only employee id the board exposes). */
@@ -439,8 +441,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   // target with patchBoardRow, and the backend find-or-create decides the target —
   // a plain invalidate-on-settle is the correct, safe choice for both branches.
   const assignToEmployee = useMutation<unknown, Error, AssignVars>({
-    mutationFn: ({ employeeNo, caseId, reason }) =>
-      assignToEmployeeRequest(api, { employeeNo, caseId, reason, date }),
+    mutationFn: ({ employeeNo, caseId, reason, newBundle }) =>
+      assignToEmployeeRequest(api, { employeeNo, caseId, reason, date, newBundle }),
     onSettled: invalidateCockpitAndBelege,
   });
 

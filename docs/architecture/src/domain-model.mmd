@@ -258,3 +258,15 @@ erDiagram
         string preferredSize
         string alternativeSize "optional"
     }
+
+    %% Teamlead → Mitarbeiter-App (Vorverteilungs-Eingriffe): Nachricht + Gelesen-Quittung.
+    TEAMLEAD_MESSAGE {
+        string id PK
+        string employeeId FK
+        string caseId "optional (Beleg-Bezug)"
+        string text
+        string createdBy
+        datetime createdAt
+        datetime readAt "null = ungelesen"
+    }
+    USER ||--o{ TEAMLEAD_MESSAGE : "erhaelt"

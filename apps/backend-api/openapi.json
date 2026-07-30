@@ -2846,6 +2846,131 @@
         ]
       }
     },
+    "/api/teamlead/messages": {
+      "post": {
+        "operationId": "TeamleadMessagesController_send",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamleadMessageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nachricht an die Mitarbeiter-App eines Mitarbeiters senden.",
+        "tags": [
+          "teamlead"
+        ]
+      },
+      "get": {
+        "operationId": "TeamleadMessagesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamleadMessageListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gesendete Nachrichten (neueste zuerst) inkl. Gelesen-Quittung.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/me/messages": {
+      "get": {
+        "operationId": "MeMessagesController_unread",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyMessageListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/messages/{id}/read": {
+      "post": {
+        "operationId": "MeMessagesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Nachricht-Id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageReadDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nachricht als gelesen quittieren (nur die eigene).",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/dev/scenarios": {
       "get": {
         "operationId": "DevController_listScenarios",
@@ -5631,6 +5756,10 @@
             "type": "string",
             "description": "Optional reason logged in the §8.4 audit event (assignment.overridden)"
           },
+          "newBundle": {
+            "type": "boolean",
+            "description": "true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen\") statt an das Tages-Bündel anzuhängen."
+          },
           "date": {
             "type": "string",
             "description": "Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day."
@@ -6797,6 +6926,143 @@
           "blockedCases",
           "weBelegNos",
           "date"
+        ]
+      },
+      "SendMessageDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string",
+            "description": "employeeNo des Empfängers (Mitarbeiter-App)"
+          },
+          "text": {
+            "type": "string",
+            "description": "Kurznachricht (max. 500 Zeichen)"
+          },
+          "caseId": {
+            "type": "string",
+            "description": "Optionaler Beleg-Bezug (GoodsReceiptCase-Id)"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "text"
+        ]
+      },
+      "TeamleadMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "WE-Nr des Bezugs-Belegs"
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "readAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "„Gelesen\"-Quittung aus der PWA"
+          }
+        },
+        "required": [
+          "id",
+          "employeeNo",
+          "employeeName",
+          "caseId",
+          "weBelegNo",
+          "text",
+          "createdAt",
+          "readAt"
+        ]
+      },
+      "TeamleadMessageListDto": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamleadMessageDto"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "MyMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "caseId",
+          "weBelegNo",
+          "createdAt"
+        ]
+      },
+      "MyMessageListDto": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyMessageDto"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "MessageReadDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "readAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "readAt"
         ]
       },
       "ScenarioInfoDto": {

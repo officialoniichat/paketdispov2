@@ -180,7 +180,7 @@ describe('AblagenPane', () => {
     expect(requestReason).not.toHaveBeenCalled();
   });
 
-  it('die Entziehen-Zone erscheint nur bei Matrix-Drags und ruft withdraw', () => {
+  it('die Pool-Rückgabe (blauer Schleier) erscheint nur bei Matrix-Drags und ruft withdraw', () => {
     const { requestReason } = renderPane({
       source: 'matrix',
       caseId: 'k2',
@@ -190,7 +190,8 @@ describe('AblagenPane', () => {
       employeeId: 'emp1',
       employeeName: 'Anna Berger',
     });
-    const zone = screen.getByTestId('experiment-entziehen');
+    const zone = screen.getByTestId('pool-rueckgabe');
+    // Drop irgendwo auf der Fläche = Entziehen, zurück in den Pool.
     fireEvent.drop(zone, { dataTransfer: dt() });
     const action = requestReason.mock.calls[0]![0] as PendingAction;
     expect(action.title).toBe('WE-k2 von Anna Berger entziehen');
@@ -202,8 +203,8 @@ describe('AblagenPane', () => {
     });
   });
 
-  it('ohne Drag gibt es keine Entziehen-Zone', () => {
+  it('ohne Drag gibt es keine Pool-Rückgabe-Fläche', () => {
     renderPane(null);
-    expect(screen.queryByTestId('experiment-entziehen')).toBeNull();
+    expect(screen.queryByTestId('pool-rueckgabe')).toBeNull();
   });
 });

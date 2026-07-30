@@ -716,7 +716,15 @@ export class TeamleadService {
   ): Promise<BundleMutationResultDto> {
     const day = resolveDay(dto.date, now);
     return this.prisma.$transaction(async (tx) => {
-      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(tx, employeeNo, day);
+      // newBundle (Vorverteilung „soll bestehen"): IMMER ein eigenständiges
+      // Bündel anlegen — der Beleg bleibt dessen einziger Inhalt, bis der
+      // Teamlead selbst mehr hineinlegt.
+      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(
+        tx,
+        employeeNo,
+        day,
+        dto.newBundle === true,
+      );
 
       const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(
         tx,
@@ -727,6 +735,7 @@ export class TeamleadService {
         caseId: dto.caseId,
         employeeNo,
         bundleCreated,
+        newBundle: dto.newBundle === true,
       });
       return {
         bundleId: bundle.id,
@@ -864,11 +873,14 @@ export class TeamleadService {
    * (`createdBy=teamlead`, `status=assigned`). Shared by every manual-assign path
    * that targets "the employee's Bündel for the day" — there is no
    * `@@unique([employeeId, date])`, so this is always find-then-create.
+   * `forceNew` überspringt die Suche und legt IMMER ein frisches Bündel an
+   * (Vorverteilung „soll bestehen" — eigenständiger nächster Slot).
    */
   private async findOrCreateBundleTx(
     tx: PrismaTx,
     employeeNo: string,
     day: Date,
+    forceNew = false,
   ): Promise<{
     bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] };
     bundleCreated: boolean;
@@ -880,7 +892,9 @@ export class TeamleadService {
     if (!employee) throw new NotFoundException(`Employee ${employeeNo} not found`);
     if (!employee.active) throw new ConflictException(`Employee ${employeeNo} is inactive`);
 
-    const existing = await tx.assignmentBundle.findFirst({
+    const existing = forceNew
+      ? null
+      : await tx.assignmentBundle.findFirst({
       where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
       orderBy: { createdAt: 'asc' },
       include: { items: { orderBy: { sequence: 'asc' }, select: { id: true, caseId: true } } },

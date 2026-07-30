@@ -224,6 +224,7 @@ model User {
   issuesReported  Issue[]            @relation("IssueReporter")
   zstRecords      ZstRecord[]
   absences        EmployeeAbsence[]
+  teamleadMessages TeamleadMessage[]
 
   @@map("users")
 }
@@ -777,4 +778,22 @@ model WorkflowEvent {
   @@index([eventType])
   @@index([correlationId])
   @@map("workflow_events")
+}
+
+// Teamlead → Mitarbeiter-App: kurze Nachricht zu einem Eingriff (z. B.
+// Vorverteilung / Einsortieren). readAt = „Gelesen"-Quittung aus der PWA;
+// der Sidebar-Ausklapper des Teamleads zeigt den Lesestatus.
+model TeamleadMessage {
+  id         String    @id @default(cuid())
+  employeeId String
+  caseId     String?
+  text       String
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
+
+  employee User @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, readAt])
+  @@map("teamlead_messages")
 }
