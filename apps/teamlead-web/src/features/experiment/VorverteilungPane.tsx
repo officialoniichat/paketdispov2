@@ -1049,8 +1049,12 @@ export function VorverteilungPane({
         {slots !== null && slots.length > 0 && (
           // EIN Container (Nutzer-Vorgabe): die MA-Vorschläge untereinander
           // 1./2./3. — neben jedem Namen der Fortschrittsbalken des aktuellen
-          // Bündels (wie weit der MA durch ist) + die Frei-Prognose.
-          <Paper variant="outlined" sx={{ mt: 0.75, p: 0.5, borderRadius: 1, maxWidth: 520 }}>
+          // Bündels (wie weit der MA durch ist) + die Frei-Prognose. Schmaler als
+          // die Karte und darin mittig (mx auto wirkt auch im Flex-Fluss).
+          <Paper
+            variant="outlined"
+            sx={{ mt: 0.75, mx: 'auto', p: 0.5, borderRadius: 1, maxWidth: 520, width: '100%' }}
+          >
             <Typography
               sx={{
                 fontSize: '0.56rem',
