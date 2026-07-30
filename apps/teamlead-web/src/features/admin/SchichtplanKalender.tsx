@@ -2,7 +2,7 @@
  * Schichtplan-Kalender (Admin & Regeln → Schichtplan, Umschalter rechts):
  * Monatsansicht mit Mini-Rechteckblöcken je Mitarbeiter und Tag, gefärbt nach
  * Schichtmodell (Früh hellblau · Spät helllila · Frei orange, aggregiert).
- * Rechtsklick auf einen Mitarbeiter-Block: Krankschreibung/Urlaub ab diesem Tag
+ * Klick (links) auf einen Mitarbeiter-Block: Krankschreibung/Urlaub ab diesem Tag
  * „bis wann mindestens" (EmployeeAbsence im Backend); abwesende Diensttage sind
  * durchgestrichen. Die Mitarbeiter-Matrix (Experiment DA.M.B) zeigt dieselben
  * Abwesenheiten ganz unten, ebenfalls durchgestrichen.
@@ -149,7 +149,7 @@ export function SchichtplanKalender({
           <ChevronRightIcon fontSize="small" />
         </IconButton>
         <Typography variant="caption" color="text.secondary">
-          Rechtsklick auf einen Mitarbeiter-Block: Krankschreibung/Urlaub ab diesem Tag.
+          Klick auf einen Mitarbeiter-Block: Krankschreibung/Urlaub ab diesem Tag.
         </Typography>
         {absencesQuery.isError && (
           <Typography variant="caption" color="error">
@@ -206,11 +206,10 @@ export function SchichtplanKalender({
                     key={emp.id}
                     title={`${emp.displayName} · ${model}${
                       absence ? ` · ${ABSENCE_LABEL[absence.kind]} bis ${absence.endDate}` : ''
-                    } — Rechtsklick für Krank/Urlaub`}
+                    } — Klick für Krank/Urlaub`}
                   >
                     <Box
-                      onContextMenu={(e) => {
-                        e.preventDefault();
+                      onClick={(e) => {
                         setMenu({
                           mouseX: e.clientX,
                           mouseY: e.clientY,
@@ -228,7 +227,7 @@ export function SchichtplanKalender({
                         color: 'rgba(0,0,0,0.8)',
                         textDecoration: absence ? 'line-through' : 'none',
                         opacity: absence ? 0.75 : 1,
-                        cursor: 'context-menu',
+                        cursor: 'pointer',
                         whiteSpace: 'nowrap',
                         maxWidth: '100%',
                         overflow: 'hidden',

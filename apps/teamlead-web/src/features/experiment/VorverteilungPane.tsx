@@ -609,9 +609,18 @@ export function VorverteilungPane({
               {slots.map((slot, i) => {
                 const worker = workerById.get(slot.employeeId);
                 return (
-                  <Box
+                  // Je MA-Zeile ein eigener Kasten (Nutzer-Vorgabe).
+                  <Paper
                     key={`ma-${i}`}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 0.25, py: 0.25 }}
+                    variant="outlined"
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      px: 0.5,
+                      py: 0.375,
+                      borderRadius: 1,
+                    }}
                   >
                     <Typography
                       sx={{ fontSize: '0.7rem', fontWeight: 700, width: 150, flexShrink: 0 }}
@@ -655,7 +664,7 @@ export function VorverteilungPane({
                           : `frei in ≈ ${worker.restMinutes} Min`}
                       {worker?.paused === true ? ' · pausiert' : ''}
                     </Typography>
-                  </Box>
+                  </Paper>
                 );
               })}
             </Stack>

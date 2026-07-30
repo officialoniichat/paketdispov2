@@ -84,28 +84,66 @@ export function orderPackCases(cases: readonly BoardCase[]): BoardCase[] {
 
 /**
  * Gruppiert die Bündel-Belege einer Zeile in Packs. Nennen mehrere Events einen
- * Beleg (z. B. nach Wieder-Zuweisung), gewinnt das chronologisch spätere Pack;
- * Belege ohne Pack-Zugehörigkeit (manuell zugewiesen/verschoben) bilden das
- * Schluss-Pack „Manuell" — bzw. „Pack 1", wenn gar keine Pack-Daten vorliegen.
+ * Beleg (z. B. nach Wieder-Zuweisung), gewinnt das chronologisch spätere Pack.
+ * Belege OHNE eigene Pack-Zugehörigkeit (manuell zugewiesen oder einsortiert)
+ * ERBEN das Pack ihres Nachbarn in Abhol-Reihenfolge — nur innerhalb DESSELBEN
+ * Bündels (erst der vorige, sonst der nächste Nachbar): ein aus der Ablage
+ * einsortierter Beleg erscheint damit IM bestehenden Pack an seiner Position
+ * statt in einem eigenen Kasten daneben. Nur Belege fremder Bündel (z. B.
+ * „+ Nächstes Bündel"/Soll bestehen) bilden je Bündel einen eigenen
+ * Schluss-Kasten „Manuell" — bzw. „Pack 1", wenn gar keine Pack-Daten vorliegen.
  */
 export function derivePacks(
   cases: readonly BoardCase[],
   packCaseIds: readonly string[][] | undefined,
+  rowBundleId?: string,
 ): MatrixPack[] {
-  const byCaseId = new Map(cases.map((c) => [c.caseId, c]));
+  const inRow = new Set(cases.map((c) => c.caseId));
   const packIndexByCase = new Map<string, number>();
   (packCaseIds ?? []).forEach((ids, index) => {
     for (const id of ids) {
-      if (byCaseId.has(id)) packIndexByCase.set(id, index); // später überschreibt früher
+      if (inRow.has(id)) packIndexByCase.set(id, index); // später überschreibt früher
     }
   });
 
-  const buckets = new Map<number, BoardCase[]>();
-  const manual: BoardCase[] = [];
+  const bundleKey = (c: BoardCase): string => c.bundleId ?? rowBundleId ?? '';
+
+  // Pack-Vererbung in Abhol-Reihenfolge: vorwärts (voriger Nachbar) …
+  const resolved = new Map<string, number>();
+  const prevPackByBundle = new Map<string, number>();
   for (const c of cases) {
-    const index = packIndexByCase.get(c.caseId);
+    const own = packIndexByCase.get(c.caseId);
+    if (own !== undefined) {
+      resolved.set(c.caseId, own);
+      prevPackByBundle.set(bundleKey(c), own);
+    } else {
+      const geerbt = prevPackByBundle.get(bundleKey(c));
+      if (geerbt !== undefined) resolved.set(c.caseId, geerbt);
+    }
+  }
+  // … dann rückwärts für Belege VOR dem ersten Pack-Mitglied ihres Bündels.
+  const nextPackByBundle = new Map<string, number>();
+  for (let i = cases.length - 1; i >= 0; i -= 1) {
+    const c = cases[i];
+    if (c === undefined) continue;
+    const own = packIndexByCase.get(c.caseId);
+    if (own !== undefined) {
+      nextPackByBundle.set(bundleKey(c), own);
+    } else if (!resolved.has(c.caseId)) {
+      const geerbt = nextPackByBundle.get(bundleKey(c));
+      if (geerbt !== undefined) resolved.set(c.caseId, geerbt);
+    }
+  }
+
+  const buckets = new Map<number, BoardCase[]>();
+  // Rest ohne Pack-Nachbarn im eigenen Bündel: je Bündel ein Manuell-Kasten.
+  const manualBuckets = new Map<string, BoardCase[]>();
+  for (const c of cases) {
+    const index = resolved.get(c.caseId);
     if (index === undefined) {
-      manual.push(c);
+      const list = manualBuckets.get(bundleKey(c)) ?? [];
+      list.push(c);
+      manualBuckets.set(bundleKey(c), list);
     } else {
       const list = buckets.get(index) ?? [];
       list.push(c);
@@ -122,12 +160,12 @@ export function derivePacks(
       teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
     }));
 
-  if (manual.length > 0) {
+  for (const [key, members] of manualBuckets) {
     packs.push({
-      key: 'pack-manuell',
+      key: `pack-manuell-${key === '' ? 'ohne-buendel' : key}`,
       label: packs.length === 0 ? 'Pack 1' : 'Manuell',
-      cases: orderPackCases(manual),
-      teile: manual.reduce((sum, c) => sum + c.totalQuantity, 0),
+      cases: orderPackCases(members),
+      teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
     });
   }
   return packs;

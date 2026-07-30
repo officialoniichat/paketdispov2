@@ -246,7 +246,7 @@ function MatrixRow({
   const absent = row.absence ?? null;
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
-  const packs = derivePacks(row.cases, row.packs);
+  const packs = derivePacks(row.cases, row.packs, row.bundleId);
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
