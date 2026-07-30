@@ -81,6 +81,22 @@ describe('experimentLayout', () => {
     expect(applySegDrag(right, 'v-upper', 8, right)).toEqual({ ...right, leftPct: 20 });
   });
 
+  it('Hochziehen mit Kopfzeilen-Minimum: topPct darf unter 20 % bis minTopPct', () => {
+    // Die ExperimentPage misst die Kopfzeile (z. B. 4.2 % der Workspace-Höhe).
+    expect(applySegDrag(FULL, 'h-left', 3, FULL, 4.2).topPct).toBeCloseTo(4.2);
+    expect(applySegDrag(FULL, 'h-right', 10, FULL, 4.2).topPct).toBe(10);
+    const left: ExperimentSplit = { matrixPos: 'left', topPct: 35, leftPct: 40 };
+    expect(applySegDrag(left, 'h-left', 1, left, 5).topPct).toBe(5);
+    // Umbau-Geste nach unten und seitliche Drags bleiben unberührt (20-%-Klemme).
+    expect(applySegDrag(FULL, 'h-left', 92, FULL, 4.2).matrixPos).toBe('right');
+    expect(applySegDrag(FULL, 'v-upper', 3, FULL, 4.2).leftPct).toBe(20);
+  });
+
+  it('sanitizeSplit erhält einen persistierten Kopfzeilen-Stand (topPct < 20)', () => {
+    expect(sanitizeSplit({ topPct: 4, leftPct: 44 }).topPct).toBe(4);
+    expect(sanitizeSplit({ topPct: -3, leftPct: 44 }).topPct).toBe(2);
+  });
+
   it('splitterSegs: je Anordnung genau die passenden Segmente', () => {
     expect(splitterSegs(FULL).map((s) => s.id).sort()).toEqual(['h-left', 'h-right', 'v-upper']);
     expect(splitterSegs({ ...FULL, matrixPos: 'right' }).map((s) => s.id).sort()).toEqual([

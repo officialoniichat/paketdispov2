@@ -193,6 +193,16 @@ export function ExperimentPage(): JSX.Element {
       if (e.button !== 0 || !e.isPrimary) return;
       e.preventDefault();
       const start = splitRef.current;
+      // Hochziehen bis „nur Kopfzeile": die Untergrenze der oberen Fensterhöhe
+      // ist die echte Kopfleisten-Höhe (+ Rahmen) des Fensters über der Naht —
+      // beim Pointerdown einmal gemessen, sie ändert sich während des Drags nicht.
+      const kopfFenster: PaneId = segId === 'h-right' ? 'ablagen' : 'belege';
+      const kopfPx =
+        axis === 'y'
+          ? (workspaceRef.current
+              ?.querySelector(`[data-fenster="${kopfFenster}"] .pane-kopf`)
+              ?.getBoundingClientRect().height ?? null)
+          : null;
       let last = start;
       const cleanup = (): void => {
         window.removeEventListener('pointermove', onMove);
@@ -208,7 +218,9 @@ export function ExperimentPage(): JSX.Element {
           axis === 'y'
             ? ((ev.clientY - rect.top) / rect.height) * 100
             : ((ev.clientX - rect.left) / rect.width) * 100;
-        const next = applySegDrag(last, segId, raw, start);
+        const minTop =
+          kopfPx !== null && rect.height > 0 ? ((kopfPx + 2) / rect.height) * 100 : undefined;
+        const next = applySegDrag(last, segId, raw, start, minTop);
         const restructured = next.matrixPos !== last.matrixPos;
         last = next;
         setSplit(next);
@@ -495,6 +507,7 @@ function Pane({
       }}
     >
       <Box
+        className="pane-kopf"
         sx={{
           position: 'relative',
           display: 'flex',

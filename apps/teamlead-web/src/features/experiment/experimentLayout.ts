@@ -13,7 +13,9 @@
  * Der Umbau passiert per Drag ÜBER den Anschlag hinaus: die Unterkante von
  * Belege/Ablagen ganz nach unten ziehen → das Fenster nimmt die volle Höhe und
  * die Matrix rückt in die andere Spalte; die Matrix-Seitenkante ganz zur
- * Gegenseite ziehen → Matrix wieder über die volle Breite.
+ * Gegenseite ziehen → Matrix wieder über die volle Breite. Nach OBEN klemmt
+ * die Grenze nicht bei 20 %, sondern an der Kopfzeile des oberen Fensters —
+ * übrig bleibt die bedienbare Titelleiste (`minTopPct`).
  */
 
 export type PaneId = 'belege' | 'ablagen' | 'matrix';
@@ -33,6 +35,14 @@ export const DEFAULT_SPLIT: ExperimentSplit = { matrixPos: 'full', topPct: 50, l
 /** Normale Zieh-Spanne einer Grenze. */
 export const MIN_PCT = 20;
 export const MAX_PCT = 80;
+/**
+ * Absoluter Boden der oberen Fensterhöhe (`topPct`): Hochziehen darf das obere
+ * Fenster bis auf seine Kopfzeile minimieren (Titel + Lupe/Vollbild bleiben
+ * bedienbar). Die px-genaue Grenze misst die ExperimentPage beim Drag-Start
+ * und reicht sie als `minTopPct` herein — dieser Prozent-Boden schützt nur
+ * persistierte Kopfzeilen-Stände vor dem Zurückschnappen auf 20 %.
+ */
+export const TOP_MIN_PCT = 2;
 /** Jenseits davon baut der Drag die Anordnung um, statt weiter zu klemmen. */
 export const RESTRUCTURE_HI = 88;
 export const RESTRUCTURE_LO = 12;
@@ -41,13 +51,18 @@ export function clampPct(value: number): number {
   return Math.min(MAX_PCT, Math.max(MIN_PCT, value));
 }
 
+/** Klemmt die horizontale Grenze; die Untergrenze liefert beim Hochziehen die Kopfzeilen-Messung. */
+function clampTopPct(value: number, minPct: number): number {
+  return Math.min(MAX_PCT, Math.max(minPct, value));
+}
+
 /** Korrupte/alte localStorage-Blobs (auch ohne matrixPos) defensiv normalisieren. */
 export function sanitizeSplit(raw: Partial<ExperimentSplit> | null | undefined): ExperimentSplit {
   return {
     matrixPos: raw?.matrixPos === 'right' || raw?.matrixPos === 'left' ? raw.matrixPos : 'full',
     topPct:
       typeof raw?.topPct === 'number' && Number.isFinite(raw.topPct)
-        ? clampPct(raw.topPct)
+        ? clampTopPct(raw.topPct, TOP_MIN_PCT)
         : DEFAULT_SPLIT.topPct,
     leftPct:
       typeof raw?.leftPct === 'number' && Number.isFinite(raw.leftPct)
@@ -197,23 +212,26 @@ export function splitterSegs(s: ExperimentSplit): SplitterSeg[] {
  * % entlang der Zieh-Achse; `start` der Split beim pointerdown — beim Umbau
  * werden die übrigen Grenzen daraus wiederhergestellt (das expandierende
  * Fenster gewinnt, die anderen behalten ihre vorherige Aufteilung).
+ * `minTopPct` (Kopfzeilen-Höhe in %, s. TOP_MIN_PCT) erlaubt dem Hochziehen,
+ * das obere Fenster bis auf die Titelleiste zu minimieren.
  */
 export function applySegDrag(
   s: ExperimentSplit,
   seg: SplitterSeg['id'],
   raw: number,
   start: ExperimentSplit,
+  minTopPct: number = MIN_PCT,
 ): ExperimentSplit {
   if (s.matrixPos === 'full') {
     if (seg === 'h-left') {
       if (raw >= RESTRUCTURE_HI)
         return { matrixPos: 'right', topPct: start.topPct, leftPct: start.leftPct };
-      return { ...s, topPct: clampPct(raw) };
+      return { ...s, topPct: clampTopPct(raw, minTopPct) };
     }
     if (seg === 'h-right') {
       if (raw >= RESTRUCTURE_HI)
         return { matrixPos: 'left', topPct: start.topPct, leftPct: start.leftPct };
-      return { ...s, topPct: clampPct(raw) };
+      return { ...s, topPct: clampTopPct(raw, minTopPct) };
     }
     return { ...s, leftPct: clampPct(raw) };
   }
@@ -226,5 +244,5 @@ export function applySegDrag(
   }
   if (seg === 'v-upper') return { ...s, leftPct: clampPct(raw) };
   // 'h-left' (matrixPos 'left') bzw. 'h-right' ('right'): Grenze in der Matrix-Spalte.
-  return { ...s, topPct: clampPct(raw) };
+  return { ...s, topPct: clampTopPct(raw, minTopPct) };
 }
