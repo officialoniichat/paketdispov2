@@ -6,7 +6,10 @@
  * (POST /assignments/preview → PreviewResult.bundles) — hier wird NICHTS
  * gepackt, nur angezeigt: für die nächsten N voraussichtlich freien
  * Mitarbeiter (kleinste Rest-Minuten im Board) je das erste geplante Bündel
- * als Container im Grid, darunter symmetrisch die MA-Vorschläge. Eingriffe
+ * als Container im Grid — Optik wie die Packs der Mitarbeiter-Matrix
+ * (Beleg-Striche, matrixPacks.stripStyle) —, darunter EIN Container mit den
+ * MA-Vorschlägen untereinander (1./2./3.) samt Fortschrittsbalken des
+ * aktuellen Bündels je Name. Eingriffe
  * (Beleg raus/rein per Drag oder ✕, Pfeile, MA-Wechsel per Klick) verändern
  * nur den lokalen VORSCHLAG; verbindlich wird ein Bündel erst durch echtes
  * Zuweisen — Container auf eine Zeile der Mitarbeiter-Matrix ziehen (A1/A2).
@@ -19,7 +22,6 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
@@ -38,11 +40,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
-import { ltColors } from '@paket/ui';
+import { alpha } from '@mui/material/styles';
 import { isManualOnlyTier } from '../../components/TierChip.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useCockpitData } from '../../data/store.js';
-import type { PreviewBundle } from '../../data/types.js';
+import type { BoardCase, PreviewBundle } from '../../data/types.js';
 import {
   EXPERIMENT_VORVERTEILUNG_VIEW_KEY,
   loadViewState,
@@ -50,7 +52,7 @@ import {
 } from '../../lib/viewState.js';
 import { useAutomatik } from '../cockpit/automatik.js';
 import type { ExperimentDragPayload } from './experimentDnd.js';
-import { FERTIG_STATUSES } from './matrixPacks.js';
+import { FERTIG_STATUSES, stripStyle } from './matrixPacks.js';
 
 /** Zahnrad-Einstellungen der Vorverteilung (Saved View). */
 interface VorverteilungSettings {
@@ -78,7 +80,7 @@ interface CaseInfo {
   weBelegNo: string;
   teile: number;
   minutes: number;
-  status: string;
+  status: BoardCase['status'];
 }
 
 export interface VorverteilungPaneProps {
@@ -120,16 +122,28 @@ export function VorverteilungPane({
     () =>
       board
         .filter((r) => (r.absence ?? null) === null && !isManualOnlyTier(r.skillTier))
-        .map((r) => ({
-          employeeId: r.employeeId,
-          name: r.displayName,
-          paused: r.paused,
-          restMinutes: Math.round(
+        .map((r) => {
+          const gesamtMinutes = r.cases.reduce((sum, c) => sum + c.estimatedMinutes, 0);
+          const restMinutes = Math.round(
             r.cases
               .filter((c) => !FERTIG_STATUSES.includes(c.status))
               .reduce((sum, c) => sum + c.estimatedMinutes, 0),
-          ),
-        }))
+          );
+          return {
+            employeeId: r.employeeId,
+            name: r.displayName,
+            paused: r.paused,
+            restMinutes,
+            // Bündel-Fortschritt in % (fertige Minuten / Gesamt); ohne Bündel 100.
+            fortschrittPct:
+              gesamtMinutes > 0
+                ? Math.max(
+                    0,
+                    Math.min(100, Math.round(((gesamtMinutes - restMinutes) / gesamtMinutes) * 100)),
+                  )
+                : 100,
+          };
+        })
         .sort(
           (a, b) =>
             Number(a.paused) - Number(b.paused) ||
@@ -404,10 +418,14 @@ export function VorverteilungPane({
                     onDragEnd();
                   }}
                   sx={{
+                    // Pack-Container-Optik der Mitarbeiter-Matrix.
                     minWidth: 0,
-                    borderTop: '3px solid',
-                    borderTopColor: ltColors.brand,
+                    borderRadius: 1,
                     bgcolor: overSlot === i ? 'action.hover' : 'background.paper',
+                    p: 0.5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.375,
                   }}
                 >
                   {/* Kopf = Drag-Griff des GANZEN Bündels (Drop auf Matrix-Zeile = A1/A2). */}
@@ -425,20 +443,24 @@ export function VorverteilungPane({
                       display: 'flex',
                       alignItems: 'center',
                       gap: 0.5,
-                      px: 0.75,
-                      py: 0.5,
+                      px: 0.25,
+                      py: 0,
                       cursor: !locked && slot.caseIds.length > 0 ? 'grab' : 'default',
                     }}
                   >
-                    <Typography sx={{ fontWeight: 800, fontSize: '0.74rem', flexShrink: 0 }}>
+                    {/* Kopfzeile im Wortlaut/Look des Matrix-Packs. */}
+                    <Typography
+                      sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary', flexShrink: 0 }}
+                    >
                       {i + 1}. Bündel
                     </Typography>
                     <Typography
                       variant="caption"
-                      sx={{ color: 'text.secondary', fontSize: '0.62rem' }}
+                      sx={{ color: 'text.secondary', fontSize: '0.6rem', fontWeight: 700 }}
                       noWrap
                     >
-                      {stats.teile} T · ≈ {Math.round(stats.minutes)} Min
+                      · {slot.caseIds.length} {slot.caseIds.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+                      {stats.teile} Teile · ≈ {Math.round(stats.minutes)} Min
                     </Typography>
                     <Tooltip title="MA-Vorschlag wechseln — für wen dieses Bündel vorbereitet wird">
                       <Chip
@@ -450,11 +472,28 @@ export function VorverteilungPane({
                       />
                     </Tooltip>
                   </Box>
-                  <Divider />
+                  {/* Abschnitts-Titel wie im Matrix-Pack — hier ist alles geplant. */}
+                  <Typography
+                    sx={{
+                      fontSize: '0.56rem',
+                      fontWeight: 700,
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                      color: 'text.secondary',
+                      px: 0.25,
+                    }}
+                  >
+                    Geplant ({slot.caseIds.length})
+                  </Typography>
                   {slot.caseIds.length === 0 ? (
                     <Typography
-                      variant="caption"
-                      sx={{ display: 'block', p: 0.75, color: 'text.secondary' }}
+                      sx={{
+                        display: 'block',
+                        px: 0.25,
+                        py: 0.25,
+                        color: 'text.secondary',
+                        fontSize: '0.58rem',
+                      }}
                     >
                       Leer — Belege aus der digitalen Ablage hierher ziehen.
                     </Typography>
@@ -462,6 +501,10 @@ export function VorverteilungPane({
                     slot.caseIds.map((caseId, idx) => {
                       const info = caseById.get(caseId);
                       const weNo = weNoOf(caseId);
+                      // Beleg-Strich wie in der Matrix: Statusfarbe als Kante,
+                      // geplant = neutral (stripStyle liefert dann null).
+                      const style = info !== undefined ? stripStyle(info.status) : null;
+                      const farbe = style?.color;
                       return (
                         <Box
                           key={caseId}
@@ -478,17 +521,21 @@ export function VorverteilungPane({
                             display: 'flex',
                             alignItems: 'center',
                             gap: 0.25,
-                            px: 0.75,
+                            px: 0.5,
                             py: 0.25,
-                            borderTop: idx > 0 ? '1px solid' : 'none',
-                            borderColor: 'divider',
+                            borderRadius: 0.5,
+                            borderLeft: '3px solid',
+                            borderLeftColor: farbe ?? 'divider',
+                            bgcolor: farbe ? alpha(farbe, 0.1) : 'action.hover',
                             cursor: locked ? 'default' : 'grab',
                           }}
                         >
                           <Typography
                             sx={{
-                              fontFamily: 'monospace',
-                              fontSize: '0.68rem',
+                              fontSize: '0.66rem',
+                              fontWeight: 600,
+                              color: style?.color,
+                              textDecoration: style?.strike ? 'line-through' : 'none',
                               flex: 1,
                               minWidth: 0,
                               overflow: 'hidden',
@@ -500,9 +547,9 @@ export function VorverteilungPane({
                           </Typography>
                           <Typography
                             variant="caption"
-                            sx={{ color: 'text.secondary', fontSize: '0.62rem', flexShrink: 0 }}
+                            sx={{ color: 'text.secondary', fontSize: '0.6rem', flexShrink: 0 }}
                           >
-                            {info !== undefined ? `${info.teile} T` : '—'}
+                            {info !== undefined ? `${info.teile} Teile` : '—'}
                           </Typography>
                           <IconButton
                             size="small"
@@ -538,30 +585,81 @@ export function VorverteilungPane({
                 </Paper>
               );
             })}
-            {/* Zeile 2 (symmetrisch): für wen vorbereitet wird — die demnächst freien MAs. */}
-            {slots.map((slot, i) => {
-              const worker = workerById.get(slot.employeeId);
-              return (
-                <Paper
-                  key={`ma-${i}`}
-                  variant="outlined"
-                  sx={{ px: 0.75, py: 0.5, textAlign: 'center', bgcolor: 'action.hover' }}
-                >
-                  <Typography sx={{ fontSize: '0.7rem', fontWeight: 700 }} noWrap>
-                    {i + 1}. {worker?.name ?? slot.employeeId}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.62rem' }}>
-                    {worker === undefined
-                      ? 'nicht im Board'
-                      : worker.restMinutes === 0
-                        ? 'jetzt frei'
-                        : `frei in ≈ ${worker.restMinutes} Min`}
-                    {worker?.paused === true ? ' · pausiert' : ''}
-                  </Typography>
-                </Paper>
-              );
-            })}
           </Box>
+        )}
+        {slots !== null && slots.length > 0 && (
+          // EIN Container (Nutzer-Vorgabe): die MA-Vorschläge untereinander
+          // 1./2./3. — neben jedem Namen der Fortschrittsbalken des aktuellen
+          // Bündels (wie weit der MA durch ist) + die Frei-Prognose.
+          <Paper variant="outlined" sx={{ mt: 0.75, p: 0.5, borderRadius: 1 }}>
+            <Typography
+              sx={{
+                fontSize: '0.56rem',
+                fontWeight: 700,
+                letterSpacing: 0.3,
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+                px: 0.25,
+                mb: 0.25,
+              }}
+            >
+              Demnächst frei — für wen vorbereitet wird
+            </Typography>
+            <Stack spacing={0.25}>
+              {slots.map((slot, i) => {
+                const worker = workerById.get(slot.employeeId);
+                return (
+                  <Box
+                    key={`ma-${i}`}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 0.25, py: 0.25 }}
+                  >
+                    <Typography
+                      sx={{ fontSize: '0.7rem', fontWeight: 700, width: 150, flexShrink: 0 }}
+                      noWrap
+                    >
+                      {i + 1}. {worker?.name ?? slot.employeeId}
+                    </Typography>
+                    <Tooltip title={`Bündel-Fortschritt: ${worker?.fortschrittPct ?? 0} %`}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={worker?.fortschrittPct ?? 0}
+                        data-testid={`ma-fortschritt-${i}`}
+                        sx={{ flex: 1, height: 6, borderRadius: 3 }}
+                      />
+                    </Tooltip>
+                    <Typography
+                      sx={{
+                        fontSize: '0.62rem',
+                        color: 'text.secondary',
+                        width: 34,
+                        textAlign: 'right',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {worker?.fortschrittPct ?? 0} %
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.62rem',
+                        flexShrink: 0,
+                        minWidth: 96,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {worker === undefined
+                        ? 'nicht im Board'
+                        : worker.restMinutes === 0
+                          ? 'jetzt frei'
+                          : `frei in ≈ ${worker.restMinutes} Min`}
+                      {worker?.paused === true ? ' · pausiert' : ''}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Paper>
         )}
       </Box>
 

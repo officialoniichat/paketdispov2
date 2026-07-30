@@ -138,9 +138,12 @@ describe('VorverteilungPane', () => {
     expect(screen.getByTestId('vorschlag-ma-0').textContent).toBe('Omar Nasser');
     const slot1 = within(screen.getByTestId('vorschlag-slot-1'));
     expect(slot1.getByText('1. WE-0003')).toBeTruthy();
-    // MA-Zeile darunter: Rangfolge + Frei-Prognose.
+    // MA-Container darunter: Rangfolge + Frei-Prognose + Bündel-Fortschritt
+    // (Omar ohne Bündel = 100 %, Lena mitten im 25-Min-Bündel = 0 %).
     expect(screen.getByText('jetzt frei')).toBeTruthy();
     expect(screen.getByText('frei in ≈ 25 Min')).toBeTruthy();
+    expect(screen.getByTestId('ma-fortschritt-0').getAttribute('aria-valuenow')).toBe('100');
+    expect(screen.getByTestId('ma-fortschritt-1').getAttribute('aria-valuenow')).toBe('0');
     expect(screen.getByText('3 Belege verplant · 1 im Topf')).toBeTruthy();
   });
 
