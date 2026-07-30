@@ -12,9 +12,12 @@
  * und Vollbild sind reines CSS — ein Remount würde Seitenzahl, Filter-Entwürfe
  * und Scroll-Positionen der eingebetteten Fenster verwerfen. Drag-&-Drop-Gesten
  * aller Fenster münden im hiesigen §8.4-ReasonDialog bzw. ForwardDialog; der
- * Drag-Zustand lebt screen-global (KanbanBoard-Muster).
+ * Drag-Zustand lebt screen-global (KanbanBoard-Muster). Schnellaktionen springen
+ * per Router-State hierher (fokus.ts): Ziel-Fenster in Vollbild, betroffene
+ * Fälle/Zeilen 3 s markiert + ins Bild gescrollt.
  */
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -22,6 +25,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -70,6 +74,11 @@ import {
   type PaneRect,
   type SplitterSeg,
 } from './experimentLayout.js';
+import {
+  FOKUS_DAUER_MS,
+  leseSchnellaktionFokus,
+  type SchnellaktionFokus,
+} from './fokus.js';
 
 export function ExperimentPage(): JSX.Element {
   const { board, forwardCase, withdraw, assignToEmployee, moveCase, reorder } = useCockpitData();
@@ -79,6 +88,60 @@ export function ExperimentPage(): JSX.Element {
   const [focus, setFocus] = useState<PaneId | null>(null);
   // Flip-Karte des Beleg-Fensters: Vorderseite Beleg-Liste, Rückseite Vorverteilung.
   const [vorverteilungOffen, setVorverteilungOffen] = useState(false);
+  // Schnellaktion-Fokus (Router-State): das betroffene Fenster geht in
+  // Vollbild, die betroffenen Fälle/Zeilen werden 3 s markiert + hingescrollt.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [fokus, setFokus] = useState<SchnellaktionFokus | null>(null);
+  const fokusTimer = useRef<number | null>(null);
+  useEffect(() => {
+    const f = leseSchnellaktionFokus(location.state);
+    if (f === null) return;
+    setFocus(f.fenster);
+    setFokus(f);
+    if (fokusTimer.current !== null) window.clearTimeout(fokusTimer.current);
+    fokusTimer.current = window.setTimeout(() => setFokus(null), FOKUS_DAUER_MS);
+    // State sofort verbrauchen — Reload/Zurück soll den Fokus nicht wiederholen.
+    navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+  useEffect(
+    () => () => {
+      if (fokusTimer.current !== null) window.clearTimeout(fokusTimer.current);
+    },
+    [],
+  );
+  // Ziel sichtbar machen: das erste markierte Element ins Bild holen — Daten
+  // können noch laden, darum kurz wiederholen, bis das Element existiert.
+  useEffect(() => {
+    if (fokus === null) return;
+    const erste = fokus.caseIds[0] ?? fokus.employeeNos[0];
+    if (erste === undefined) return;
+    let versuche = 0;
+    let timer: number | null = null;
+    const suchen = (): void => {
+      const el = document.querySelector(
+        `[data-fenster="${fokus.fenster}"] [data-fokus-id="${CSS.escape(erste)}"]`,
+      );
+      if (el !== null) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        return;
+      }
+      if (versuche++ < 20) timer = window.setTimeout(suchen, 100);
+    };
+    suchen();
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [fokus]);
+  const fokusCaseIds = useMemo(
+    () => (fokus !== null && fokus.fenster === 'ablagen' ? new Set(fokus.caseIds) : null),
+    [fokus],
+  );
+  const fokusEmployeeNos = useMemo(
+    () => (fokus !== null && fokus.fenster === 'matrix' ? new Set(fokus.employeeNos) : null),
+    [fokus],
+  );
   const [split, setSplit] = useState<ExperimentSplit>(() =>
     sanitizeSplit(loadViewState<Partial<ExperimentSplit>>(EXPERIMENT_VIEW_KEY, DEFAULT_SPLIT)),
   );
@@ -274,6 +337,7 @@ export function ExperimentPage(): JSX.Element {
         onDragEnd={clearDrag}
         requestReason={setPending}
         onForward={setForwardCard}
+        fokusCaseIds={fokusCaseIds}
       />
     </Pane>
   );
@@ -293,6 +357,7 @@ export function ExperimentPage(): JSX.Element {
         onDragStart={setDragging}
         onDragEnd={clearDrag}
         requestReason={setPending}
+        fokusEmployeeNos={fokusEmployeeNos}
       />
     </Pane>
   );
@@ -302,9 +367,16 @@ export function ExperimentPage(): JSX.Element {
   return (
     <Stack sx={{ flex: 1, minHeight: 0 }}>
       <Box ref={workspaceRef} sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <Box sx={paneSlotSx(focus, 'belege', rects.belege)}>{belegePane}</Box>
-        <Box sx={paneSlotSx(focus, 'ablagen', rects.ablagen)}>{ablagenPane}</Box>
-        <Box sx={paneSlotSx(focus, 'matrix', rects.matrix)}>{matrixPane}</Box>
+        {/* data-fenster: Scroll-Anker des Schnellaktion-Fokus (fokus.ts). */}
+        <Box data-fenster="belege" sx={paneSlotSx(focus, 'belege', rects.belege)}>
+          {belegePane}
+        </Box>
+        <Box data-fenster="ablagen" sx={paneSlotSx(focus, 'ablagen', rects.ablagen)}>
+          {ablagenPane}
+        </Box>
+        <Box data-fenster="matrix" sx={paneSlotSx(focus, 'matrix', rects.matrix)}>
+          {matrixPane}
+        </Box>
         {focus === null &&
           splitterSegs(split).map((seg) => (
             <SplitterBar

@@ -45,6 +45,7 @@ import {
   type ExperimentDragPayload,
 } from './experimentDnd.js';
 import { LaufendEinfassenDialog, NeuesBuendelDialog } from './NeuesBuendelDialog.js';
+import { FOKUS_MARKIERUNG_SX } from './fokus.js';
 import { sendeNachricht } from '../../data/nachrichten.js';
 import {
   FERTIG_STATUSES,
@@ -66,6 +67,8 @@ export interface MatrixBoardProps {
   onDragStart: (payload: ExperimentDragPayload) => void;
   onDragEnd: () => void;
   requestReason: (action: PendingAction) => void;
+  /** Schnellaktion-Fokus: diese Zeilen (employeeNo) 3 s markieren. */
+  fokusEmployeeNos?: ReadonlySet<string> | null;
 }
 
 /** Ablage-Drag (ready) — Quelle für neuen Slot + Einsortieren. */
@@ -78,6 +81,7 @@ export function MatrixBoard({
   onDragStart,
   onDragEnd,
   requestReason,
+  fokusEmployeeNos = null,
 }: MatrixBoardProps): JSX.Element {
   const { assignToEmployee, reorder } = useCockpitData();
   // Drop auf den „+ Nächstes Bündel"-Slot → Frage „soll enthalten / bestehen".
@@ -146,6 +150,7 @@ export function MatrixBoard({
               requestReason={requestReason}
               onNeuesBuendel={(r, drag) => setNeuesBuendel({ row: r, drag })}
               onEinsortieren={einsortieren}
+              fokussiert={fokusEmployeeNos?.has(row.employeeId) ?? false}
             />
           ))}
         {board.length === 0 && (
@@ -219,6 +224,8 @@ interface MatrixRowProps {
   onNeuesBuendel: (row: BoardRow, drag: AblageDrag) => void;
   /** Ablage-Beleg zwischen zwei Belegen einsortieren (Geplant) bzw. Laufend-Frage. */
   onEinsortieren: (row: BoardRow, ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
+  /** 3-s-Fokus-Markierung der Zeile (Schnellaktion-Sprung aus dem Cockpit). */
+  fokussiert: boolean;
 }
 
 function MatrixRow({
@@ -230,6 +237,7 @@ function MatrixRow({
   requestReason,
   onNeuesBuendel,
   onEinsortieren,
+  fokussiert,
 }: MatrixRowProps): JSX.Element {
   const { assignToEmployee, assignBundle, moveCase, pauseResume } = useCockpitData();
   const [over, setOver] = useState(false);
@@ -312,6 +320,7 @@ function MatrixRow({
   return (
     <Box
       data-testid={`matrix-row-${row.employeeId}`}
+      data-fokus-id={row.employeeId}
       onDragOver={(e) => {
         if (action === null) return;
         e.preventDefault();
@@ -327,20 +336,25 @@ function MatrixRow({
         e.preventDefault();
         handleDrop();
       }}
-      sx={{
-        display: 'flex',
-        alignItems: 'stretch',
-        gap: 0.75,
-        px: 0.5,
-        py: 0.5,
-        minWidth: 'max-content',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        outline: action !== null ? '1px dashed' : 'none',
-        outlineColor: 'primary.light',
-        outlineOffset: -2,
-        bgcolor: over && action !== null ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
-      }}
+      sx={[
+        {
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 0.75,
+          px: 0.5,
+          py: 0.5,
+          minWidth: 'max-content',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          outline: action !== null ? '1px dashed' : 'none',
+          outlineColor: 'primary.light',
+          outlineOffset: -2,
+          bgcolor:
+            over && action !== null ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
+        },
+        // Schnellaktion-Fokus: 3-s-Markierung der betroffenen Zeile.
+        fokussiert && FOKUS_MARKIERUNG_SX,
+      ]}
     >
       <Box
         onPointerDown={(e) => {

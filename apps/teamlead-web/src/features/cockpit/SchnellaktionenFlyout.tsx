@@ -119,7 +119,13 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
                 Nichts wartet auf dich — die Automatik hat alles verteilt.
               </Alert>
             ) : (
-              <SchnellaktionenListe decisions={decisions} onAbhaken={abhaken} />
+              <SchnellaktionenListe
+                decisions={decisions}
+                onAbhaken={abhaken}
+                // Sprung ins Experiment: nur das Panel schließen — die Meldung
+                // bleibt offen (abgehakt wird ausschließlich über den Haken).
+                onAktion={() => setOpen(false)}
+              />
             )}
             {heutigeNachrichten.length > 0 && (
               <Box sx={{ mt: 1.5 }}>

@@ -16,7 +16,14 @@
  * Each card's teamlead actions come from the single-source {@link CaseActionMenu}
  * registry (derived from the §7.1 status) — no per-lane button logic here.
  */
-import { useMemo, useState, type DragEvent as ReactDragEvent, type JSX, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type JSX,
+  type ReactNode,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
@@ -64,6 +71,7 @@ import {
   type AblagenFilterState,
   type AblagenGroupBy,
 } from './ablagenFilters.js';
+import { FOKUS_MARKIERUNG_SX } from '../experiment/fokus.js';
 
 type AuditEventDto = components['schemas']['AuditEventDto'];
 
@@ -93,6 +101,8 @@ export interface AblagenBoardProps {
   /** Saved-View-Key; eingebettete Instanzen isolieren sich vom Basis-Tab. */
   viewStateKey?: string;
   dnd?: AblagenDnd;
+  /** Schnellaktion-Fokus (Experiment): diese Belege 3 s markieren + Lane aufklappen. */
+  fokusCaseIds?: ReadonlySet<string> | null;
 }
 
 /** Persisted board view state (C2): Reihenfolge + Einklappen + Filter (+ Filterleiste offen). */
@@ -138,6 +148,7 @@ export function AblagenBoard({
   embedded = false,
   viewStateKey = ABLAGEN_VIEW_KEY,
   dnd,
+  fokusCaseIds = null,
 }: AblagenBoardProps = {}): JSX.Element {
   const {
     lanes,
@@ -194,6 +205,21 @@ export function AblagenBoard({
   };
   const updateFilter = (filter: AblagenFilterState): void => updateView({ ...view, filter });
   const activeCount = activeFilterChips(view.filter).length;
+
+  // Schnellaktion-Fokus: eingeklappte Lanes mit markierten Karten aufklappen —
+  // sonst bliebe die 3-s-Markierung unsichtbar.
+  useEffect(() => {
+    if (fokusCaseIds === null || fokusCaseIds.size === 0) return;
+    const betroffen = lanes
+      .filter(
+        (l) => view.collapsed.includes(l.id) && l.cards.some((c) => fokusCaseIds.has(c.caseId)),
+      )
+      .map((l) => l.id);
+    if (betroffen.length === 0) return;
+    updateView({ ...view, collapsed: view.collapsed.filter((id) => !betroffen.includes(id)) });
+    // view/updateView bewusst keine Deps — der Effekt reagiert nur auf den Fokus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusCaseIds, lanes]);
 
   const orderedLanes = useMemo(() => {
     const order = resolveLaneOrder(view.laneOrder, lanes);
@@ -334,6 +360,7 @@ export function AblagenBoard({
             cardDraggable={cardDraggable}
             onCardDragStart={handleCardDragStart}
             onCardDragEnd={handleCardDragEnd}
+            fokusCaseIds={fokusCaseIds}
           />
         ))}
       </Box>
@@ -419,6 +446,8 @@ interface LaneColumnProps {
   cardDraggable: (card: LaneCard) => boolean;
   onCardDragStart: (info: AblagenCardDragInfo, e: ReactDragEvent) => void;
   onCardDragEnd: () => void;
+  /** Schnellaktion-Fokus: markierte Belege (3 s). */
+  fokusCaseIds: ReadonlySet<string> | null;
 }
 
 function LaneColumn({
@@ -442,6 +471,7 @@ function LaneColumn({
   cardDraggable,
   onCardDragStart,
   onCardDragEnd,
+  fokusCaseIds,
 }: LaneColumnProps): JSX.Element {
   const [over, setOver] = useState(false);
   const isFiltered = filteredCards.length !== lane.cards.length;
@@ -570,6 +600,7 @@ function LaneColumn({
                 draggable={cardDraggable(c)}
                 onCardDragStart={onCardDragStart}
                 onCardDragEnd={onCardDragEnd}
+                fokussiert={fokusCaseIds?.has(c.caseId) ?? false}
               />
             ))}
           </Stack>
@@ -610,6 +641,7 @@ function LaneCardView({
   draggable,
   onCardDragStart,
   onCardDragEnd,
+  fokussiert,
 }: {
   card: LaneCard;
   laneId: LaneId;
@@ -623,6 +655,8 @@ function LaneCardView({
   draggable: boolean;
   onCardDragStart: (info: AblagenCardDragInfo, e: ReactDragEvent) => void;
   onCardDragEnd: () => void;
+  /** 3-s-Fokus-Markierung (Schnellaktion-Sprung aus dem Cockpit). */
+  fokussiert: boolean;
 }): JSX.Element {
   // „Probleme geklärt" is case-scoped (resolves ALL open problems by caseId),
   // so the same ctx works from every surface — incl. the Problemfälle lane card.
@@ -638,6 +672,7 @@ function LaneCardView({
   return (
     <Card
       variant="outlined"
+      data-fokus-id={card.caseId}
       // Die GANZE Karte ist der Drag-Griff — der Browser zieht sie komplett als
       // Geisterbild mit (Nutzer-Vorgabe: nicht nur vier Punkte).
       draggable={draggable}
@@ -646,7 +681,11 @@ function LaneCardView({
         if (draggable) onCardDragStart({ card, laneId }, e);
       }}
       onDragEnd={onCardDragEnd}
-      sx={draggable ? { cursor: 'grab', '&:active': { cursor: 'grabbing' } } : undefined}
+      sx={[
+        draggable && { cursor: 'grab', '&:active': { cursor: 'grabbing' } },
+        // Schnellaktion-Fokus: 3-s-Markierung der betroffenen Karte.
+        fokussiert && FOKUS_MARKIERUNG_SX,
+      ]}
     >
       <CardContent sx={{ p: 1, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">

@@ -5,7 +5,10 @@
  * (Probleme, Überbuchung, Topf, unvollständige Lieferungen, Überlast,
  * Schichtende). Genutzt vom Tagescockpit UND vom Hexagon-Ausklapper der
  * Sidebar (SchnellaktionenFlyout) — die Fachsignale werden nur EINMAL
- * abgeleitet, nie doppelt.
+ * abgeleitet, nie doppelt. Jede Aktion springt ins Experiment DA.M.B: das
+ * betroffene Fenster geht in Vollbild, die betroffenen Fälle/Zeilen werden
+ * 3 s markiert und ins Bild gescrollt (Router-State, s. experiment/fokus.ts).
+ * Abgehakt wird AUSSCHLIESSLICH über den Haken — nie durch den Aktions-Klick.
  */
 import { useMemo, useSyncExternalStore, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +23,8 @@ import CheckIcon from '@mui/icons-material/Check';
 import { ltColors } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes } from '../../lib/format.js';
+import { FERTIG_STATUSES } from '../experiment/matrixPacks.js';
+import type { SchnellaktionFokus } from '../experiment/fokus.js';
 
 /** Auslastungs-Schwelle, ab der ein Kopf als „eng" markiert wird. */
 export const OVERLOAD_PCT = 90;
@@ -107,19 +112,39 @@ export function useSchnellaktionen(): DecisionItem[] {
   const navigate = useNavigate();
   const { capacity, pool } = cockpit;
 
-  const geparktCount = lanes.find((l) => l.id === 'geparkt')?.cards.length ?? 0;
-  const incompleteDeliveries = useMemo(() => {
+  // Sprung einer Schnellaktion: Experiment DA.M.B öffnen, Fenster in Vollbild,
+  // betroffene Fälle/Zeilen 3 s markieren (ExperimentPage verbraucht den State).
+  const oeffneFokus = (fokus: SchnellaktionFokus) => (): void => {
+    void navigate('/experiment', { state: { fokus } });
+  };
+
+  const problemFaelle = lanes.find((l) => l.id === 'probleme')?.cards ?? [];
+  const geparktKarten = lanes.find((l) => l.id === 'geparkt')?.cards ?? [];
+  const lieferungen = useMemo(() => {
     const seen = new Set<string>();
+    const caseIds: string[] = [];
     for (const lane of lanes) {
       for (const card of lane.cards) {
         const dg = card.deliveryGroup;
-        if (dg && dg.missingCount > 0 && !dg.released && !dg.locked) seen.add(dg.id);
+        if (dg && dg.missingCount > 0 && !dg.released && !dg.locked) {
+          seen.add(dg.id);
+          caseIds.push(card.caseId);
+        }
       }
     }
-    return seen.size;
+    return { count: seen.size, caseIds };
   }, [lanes]);
   const overloaded = board.filter((r) => r.utilisationPct >= OVERLOAD_PCT);
   const overbooked = capacity.freeCapacityMinutes <= 0;
+  // Zeilen „offen trotz Schichtende" für die Matrix-Markierung (der Zähler
+  // selbst bleibt die Backend-Wahrheit pool.endOfShiftOpen).
+  const jetzt = Date.now();
+  const nachSchichtende = board.filter(
+    (r) =>
+      r.shiftEnd != null &&
+      Date.parse(r.shiftEnd) <= jetzt &&
+      r.cases.some((c) => !FERTIG_STATUSES.includes(c.status)),
+  );
 
   const decisions: DecisionItem[] = [];
   if (pool.openIssues > 0) {
@@ -129,7 +154,11 @@ export function useSchnellaktionen(): DecisionItem[] {
       severity: 'high',
       title: pool.openIssues === 1 ? 'Problem offen' : 'Probleme offen',
       description: 'Belege mit gemeldetem Problem — brauchen eine Entscheidung.',
-      action: () => navigate('/ablagen'),
+      action: oeffneFokus({
+        fenster: 'ablagen',
+        caseIds: problemFaelle.map((c) => c.caseId),
+        employeeNos: [],
+      }),
       actionLabel: 'Ansehen',
     });
   }
@@ -140,29 +169,33 @@ export function useSchnellaktionen(): DecisionItem[] {
       severity: 'high',
       title: 'Überbucht',
       description: `Verplant übersteigt Netto-Kapazität um ${formatMinutes(-capacity.freeCapacityMinutes)}.`,
-      action: () => navigate('/board'),
-      actionLabel: 'Zum Board',
+      action: oeffneFokus({ fenster: 'matrix', caseIds: [], employeeNos: [] }),
+      actionLabel: 'Zur Matrix',
     });
   }
-  if (geparktCount > 0) {
+  if (geparktKarten.length > 0) {
     decisions.push({
       key: 'topf',
-      count: geparktCount,
+      count: geparktKarten.length,
       severity: 'mid',
       title: 'Topf — aus Automatik ausgeschlossen',
       description: 'Manuell geparkte Belege, warten auf eine Entscheidung.',
-      action: () => navigate('/ablagen'),
+      action: oeffneFokus({
+        fenster: 'ablagen',
+        caseIds: geparktKarten.map((c) => c.caseId),
+        employeeNos: [],
+      }),
       actionLabel: 'Öffnen',
     });
   }
-  if (incompleteDeliveries > 0) {
+  if (lieferungen.count > 0) {
     decisions.push({
       key: 'lieferungen',
-      count: incompleteDeliveries,
+      count: lieferungen.count,
       severity: 'mid',
-      title: incompleteDeliveries === 1 ? 'Unvollständige Lieferung' : 'Unvollständige Lieferungen',
+      title: lieferungen.count === 1 ? 'Unvollständige Lieferung' : 'Unvollständige Lieferungen',
       description: 'Noch nicht alle Belege der Lieferung erfasst.',
-      action: () => navigate('/ablagen'),
+      action: oeffneFokus({ fenster: 'ablagen', caseIds: lieferungen.caseIds, employeeNos: [] }),
       actionLabel: 'Prüfen',
     });
   }
@@ -173,8 +206,12 @@ export function useSchnellaktionen(): DecisionItem[] {
       severity: 'low',
       title: `Ausgelastet ≥ ${OVERLOAD_PCT}%`,
       description: overloaded.map((r) => r.displayName).join(', '),
-      action: () => navigate('/board'),
-      actionLabel: 'Zum Board',
+      action: oeffneFokus({
+        fenster: 'matrix',
+        caseIds: [],
+        employeeNos: overloaded.map((r) => r.employeeId),
+      }),
+      actionLabel: 'Zur Matrix',
     });
   }
   if (pool.endOfShiftOpen > 0) {
@@ -184,7 +221,11 @@ export function useSchnellaktionen(): DecisionItem[] {
       severity: 'high',
       title: 'Offen trotz Schichtende',
       description: 'Zugeteilter Mitarbeiter hat bereits Feierabend — keine offene Ware über Nacht.',
-      action: () => navigate('/board'),
+      action: oeffneFokus({
+        fenster: 'matrix',
+        caseIds: [],
+        employeeNos: nachSchichtende.map((r) => r.employeeId),
+      }),
       actionLabel: 'Klären',
     });
   }
@@ -194,15 +235,19 @@ export function useSchnellaktionen(): DecisionItem[] {
 
 /**
  * Die klickbare Liste — identische Optik im Tagescockpit und im Sidebar-
- * Ausklapper. Links statt der Zahl ein anklickbarer Haken: Abhaken blendet die
- * Meldung aus (der Zähler wandert in den Titel); auch der Aktions-Knopf hakt ab.
+ * Ausklapper. Links statt der Zahl ein anklickbarer Haken: NUR Abhaken blendet
+ * die Meldung aus (der Zähler wandert in den Titel); der Aktions-Knopf springt
+ * lediglich zum Fokus-Ziel und lässt die Meldung offen (Nutzer-Vorgabe).
  */
 export function SchnellaktionenListe({
   decisions,
   onAbhaken,
+  onAktion,
 }: {
   decisions: DecisionItem[];
   onAbhaken: (d: DecisionItem) => void;
+  /** Nach einem Aktions-Sprung (z. B. Panel schließen) — hakt NICHT ab. */
+  onAktion?: (d: DecisionItem) => void;
 }): JSX.Element {
   return (
     <Stack spacing={1}>
@@ -241,9 +286,9 @@ export function SchnellaktionenListe({
           <Button
             size="small"
             onClick={() => {
-              // Aktion angeklickt = Meldung ist adressiert → mit abhaken.
-              onAbhaken(d);
+              // Bewusst OHNE Abhaken: erledigt ist erst, was der TL abhakt.
               d.action();
+              onAktion?.(d);
             }}
             sx={{ flex: 'none' }}
           >

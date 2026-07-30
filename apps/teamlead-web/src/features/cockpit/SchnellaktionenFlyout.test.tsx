@@ -65,4 +65,23 @@ describe('SchnellaktionenFlyout', () => {
     expect(onOpenChange).toHaveBeenLastCalledWith(false);
     expect(screen.queryByRole('button', { name: /Schnellaktionen ausklappen/ })).toBeNull();
   });
+
+  it('Aktions-Klick springt nur (Fokus) und hakt NICHT ab — Knopf bleibt ausgefahren', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <AppProviders queryClient={createQueryClient({ retry: 0 })}>
+        <MemoryRouter>
+          <SchnellaktionenFlyout onOpenChange={onOpenChange} />
+        </MemoryRouter>
+      </AppProviders>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Schnellaktionen ausklappen — 1 Meldung' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ansehen →' }));
+    // Panel schließt (Sprung ins Experiment), aber die Meldung bleibt offen …
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    // … und der Knopf bleibt ausgefahren: weiterhin 1 un-abgehakte Meldung.
+    expect(
+      screen.getByRole('button', { name: 'Schnellaktionen ausklappen — 1 Meldung' }),
+    ).toBeTruthy();
+  });
 });

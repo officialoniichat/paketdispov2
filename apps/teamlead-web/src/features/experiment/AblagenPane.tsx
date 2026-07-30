@@ -47,6 +47,8 @@ export interface AblagenPaneProps {
   requestReason: (action: PendingAction) => void;
   /** Weiterleiten braucht eine Empfängerwahl → ForwardDialog des Parents. */
   onForward: (card: ForwardRef) => void;
+  /** Schnellaktion-Fokus: diese Belege werden im Board 3 s markiert. */
+  fokusCaseIds?: ReadonlySet<string> | null;
 }
 
 export function AblagenPane({
@@ -55,6 +57,7 @@ export function AblagenPane({
   onDragEnd,
   requestReason,
   onForward,
+  fokusCaseIds = null,
 }: AblagenPaneProps): JSX.Element {
   const { lanes, parkCase, releaseCase, prioritiseCase, deprioritiseCase, unforwardCase, withdraw } =
     useCockpitData();
@@ -193,7 +196,14 @@ export function AblagenPane({
     ) : undefined,
   };
 
-  return <AblagenBoard embedded viewStateKey={EXPERIMENT_ABLAGEN_VIEW_KEY} dnd={dnd} />;
+  return (
+    <AblagenBoard
+      embedded
+      viewStateKey={EXPERIMENT_ABLAGEN_VIEW_KEY}
+      dnd={dnd}
+      fokusCaseIds={fokusCaseIds}
+    />
+  );
 }
 
 /**
