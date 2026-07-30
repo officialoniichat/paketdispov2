@@ -21,6 +21,7 @@
 // Run from apps/backend-api so prisma.config.ts loads DATABASE_URL:
 //   pnpm --filter @paket/backend-api exec prisma db seed
 //   SEED_SCENARIO=peak pnpm --filter @paket/backend-api exec prisma db seed
+//   SEED_SCENARIO=masse pnpm --filter @paket/backend-api exec prisma db seed  (650 Belege)
 import { PrismaClient } from '@prisma/client';
 import {
   DEFAULT_SCENARIO_KEY,
