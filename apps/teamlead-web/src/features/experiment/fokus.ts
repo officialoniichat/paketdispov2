@@ -36,16 +36,19 @@ export function leseSchnellaktionFokus(state: unknown): SchnellaktionFokus | nul
 }
 
 /**
- * Die 3-s-Markierung des betroffenen Elements: kräftige Umrandung + auslaufend
- * pulsierender Schein — als sx-Baustein komponieren:
+ * Die 3-s-Markierung des betroffenen Elements: der GANZE Container pulsiert
+ * leicht rot mit geringer Deckkraft („das ist, wonach du gesucht hast"), dazu
+ * eine dezente rote Umrandung. Als sx-Baustein komponieren:
  * `sx={[basis, fokussiert && FOKUS_MARKIERUNG_SX]}`.
  */
 export const FOKUS_MARKIERUNG_SX = {
-  outline: `3px solid ${ltColors.warning}`,
+  outline: `2px solid ${alpha(ltColors.danger, 0.55)}`,
   outlineOffset: '1px',
-  animation: 'fokus-puls 700ms ease-in-out infinite alternate',
+  // Die animation gewinnt in der CSS-Kaskade über statische bgcolor der Basis —
+  // der rote Schleier liegt damit zuverlässig über Karte bzw. Zeile.
+  animation: 'fokus-puls 900ms ease-in-out infinite alternate',
   '@keyframes fokus-puls': {
-    from: { boxShadow: `0 0 0 3px ${alpha(ltColors.warning, 0.45)}` },
-    to: { boxShadow: `0 0 0 9px ${alpha(ltColors.warning, 0)}` },
+    from: { backgroundColor: alpha(ltColors.danger, 0.08) },
+    to: { backgroundColor: alpha(ltColors.danger, 0.22) },
   },
 };
