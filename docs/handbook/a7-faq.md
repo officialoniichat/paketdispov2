@@ -21,7 +21,7 @@ Planung: `'<Anzahl> Beleg / Belege geparkt – kommen ins nächste Bündel.'` (K
 
 ## Mehr Arbeit holen – jederzeit
 
-Sind alle Belege geschlossen, steht `'Bündel fertig 🎉'` und du kannst `'Nächstes Bündel holen'`
+Sind alle Belege geschlossen, steht `'Bündel fertig'` und du kannst `'Nächstes Bündel holen'`
 antippen (während des Ladens: `'Lädt…'`). Du musst aber **nicht** warten: Mit
 `'Weiteres Bündel anfordern'` holst du dir auch bei offenem Bündel zusätzliche Belege — sie
 werden an dein Bündel angehängt. Je nach Lage bekommst du eine Rückmeldung:
