@@ -93,7 +93,7 @@ async function seed(): Promise<{ caseId: string }> {
       shopNo: '21',
       instruction: {
         create: {
-          priceLabelRequired: true,
+          labelPrintVariant: 'etikett_mit_preis',
           priceLabelAttachRequired: true,
           securityRequired: true,
           securityLocation: 'Naht innen',

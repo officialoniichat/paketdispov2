@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { fileRefSchema } from './documents.js';
+import type { LabelPrintVariant } from './enums.js';
+import {
+  LABEL_PRINT_VARIANT_DISPLAY,
+  LABEL_PRINT_VARIANT_ORDER,
+  labelPrintRequired,
+} from './label-print.js';
 
 /**
  * Structural inputs for {@link deriveWorkInstructionPoints}. Deliberately narrow
@@ -8,7 +14,9 @@ import { fileRefSchema } from './documents.js';
  * of the AW projection across layers.
  */
 export interface WorkInstructionPointHeaderInput {
-  priceLabelPrintRequired: boolean;
+  // `priceLabelPrintRequired` steht bewusst NICHT hier: Punkt 1 wird aus den
+  // Positions-Varianten abgeleitet (`labelPrintValue`), der Kopf-Flag ist selbst
+  // nur deren Zusammenfassung — zwei Quellen für dieselbe Zeile gäbe es sonst.
   sortByArticleColorSizeRequired: boolean;
   goodsReceiptCheckMode: string;
   goodsReceiptCheckPercentage?: number | null;
@@ -19,6 +27,8 @@ export interface WorkInstructionPointHeaderInput {
 export interface WorkInstructionPointPositionInput {
   positionNo: number;
   instruction?: {
+    /** Etikett-Druckvariante der Position (treibt Punkt 1, siehe `labelPrintValue`). */
+    labelPrintVariant: LabelPrintVariant;
     priceLabelAttachRequired: boolean;
     securityRequired: boolean;
     onlineHandlingRequired: boolean;
@@ -80,6 +90,32 @@ const forPositions = (nos: readonly number[]): string =>
   `Für die Position(en): ${nos.join(', ')}`;
 
 /**
+ * Punkt 1 „Preisetikettendruck" mit Positionsangabe (Kundenfeedback L&T
+ * 03.08.2026): reine Ja/Nein-Belege lesen sich wie auf dem Papier, sobald aber
+ * digital ausgezeichnete Ware im Spiel ist, MUSS am Druckauftrag stehen, welche
+ * Positionen ohne Preis zu drucken sind — sonst laufen alle Etiketten mit Preis.
+ */
+function labelPrintValue(positions: readonly WorkInstructionPointPositionInput[]): string {
+  const byVariant = new Map<LabelPrintVariant, number[]>();
+  for (const p of positions) {
+    if (!p.instruction) continue;
+    const variant = p.instruction.labelPrintVariant;
+    byVariant.set(variant, [...(byVariant.get(variant) ?? []), p.positionNo]);
+  }
+  const present = LABEL_PRINT_VARIANT_ORDER.filter((v) => byVariant.has(v));
+  // Einheitliche Belege behalten die knappe Papier-Form.
+  if (present.length === 0) return 'Nein';
+  if (present.length === 1 && present[0] === 'etikett_mit_preis') return 'Ja';
+  if (present.length === 1 && present[0] === 'kein_etikett') return 'Nein';
+  return present
+    .map((variant) => {
+      const nos = [...(byVariant.get(variant) ?? [])].sort((a, b) => a - b);
+      return `${LABEL_PRINT_VARIANT_DISPLAY[variant].shortLabel}: Pos. ${nos.join(', ')}`;
+    })
+    .join(' · ');
+}
+
+/**
  * Derive the ordered Arbeitsanweisung points from the stored header + positions.
  * Confirmed points carry their printed `pointNo` (1,4,5,6,8,9,10,11); variant
  * points (red_price, online_handling) are emitted by key without a fabricated
@@ -92,13 +128,21 @@ export function deriveWorkInstructionPoints(
   const points: WorkInstructionPoint[] = [];
   const allNos = listPositions(positions);
 
-  // 1. Preisetikettendruck
+  // 1. Preisetikettendruck — mit Positionsangabe, sobald Varianten gemischt sind
+  // oder digital ausgezeichnet wird (siehe `labelPrintValue`). Der Kopf-Flag
+  // bleibt die abgeleitete Ja/Nein-Zusammenfassung für Aufwand + Beleg-Listen.
+  const printNos = listPositions(
+    positions.filter((p) => p.instruction && labelPrintRequired(p.instruction.labelPrintVariant)),
+  );
+  const printValue = labelPrintValue(positions);
+  const printEnumerated = printValue !== 'Ja' && printValue !== 'Nein';
   points.push({
     pointNo: 1,
     key: 'price_label_print',
     label: 'Preisetikettendruck',
-    value: jaNein(header.priceLabelPrintRequired),
-    scope: 'header',
+    value: printValue,
+    scope: printEnumerated ? 'position' : 'header',
+    ...(printEnumerated ? { positionNos: printNos } : {}),
   });
 
   // 4. Warenbezeichnung is NOT a derived AW line: on the L&T form it is the

@@ -1,3 +1,5 @@
+import type { LabelPrintVariant } from '@paket/domain-types';
+
 /**
  * Fixed seed constants shared between `seed.ts` (writes them to the ephemeral
  * Postgres) and `employee-flow.spec.ts` (asserts on them). Keeping these as
@@ -8,8 +10,10 @@
  * Jeder Mitarbeiter bekommt EIN Bündel, dessen RouteStops sich 1:1 aus `stops`
  * ergeben. Die Kundenforderungen brauchen unterschiedliche Zuschnitte:
  *
- * - `MA_101` — ein Stop, zwei Belege: einer MIT, einer OHNE Etikettendruck
- *   (Forderung 5) sowie der einzige Beleg mit Positionen (Forderungen 6–8).
+ * - `MA_101` — ein Stop, zwei Belege: der erste ist ein MISCH-Beleg (Position 1
+ *   „Etikett mit Preis", Position 2 „DigiTag · Etikett ohne Preis", Kundenfeedback
+ *   03.08.2026) und zugleich der einzige Beleg mit Positionen (Forderungen 6–8);
+ *   der zweite hat gar keine Positionen und damit keine Etiketten-Angabe.
  * - `MA_102` — eigener Stop, eigener Beleg: belegt die Mitarbeiter-Trennung.
  * - `MA_103` — drei Stops: Mehrfachauswahl beim „Ware holen" (Forderung 3).
  * - `MA_104` — drei Stops, EIGENER Mitarbeiter, weil „Rest parken" den
@@ -44,20 +48,25 @@ export interface SeedPositionSpec {
   /** Renders the Sicherungs-Piktogramm `/static/pictograms/<code>.svg`. */
   securityTypeCode?: string;
   securityLocation?: string;
+  /**
+   * Etikett-Druckvariante der Position (Kundenfeedback 03.08.2026). Ohne Angabe
+   * der klassische Fall „Etikett mit Preis"; der Kopf-Flag des Belegs wird
+   * daraus abgeleitet.
+   */
+  labelPrintVariant?: LabelPrintVariant;
   skuLines: SeedSkuLineSpec[];
 }
 
 export interface SeedBelegSpec {
   weBelegNo: string;
   /**
-   * Legt einen `WorkInstructionHeader` an und steuert damit die Etiketten-Art
-   * „🏷️ Etikettendruck" vs. „Digitale Etiketten" (BundleHomeScreen,
-   * `BelegInfoLine`). `undefined` ⇒ gar kein Header; `/api/me/today` liefert
-   * dann `priceLabelPrintRequired: null`. Belege MIT Positionen brauchen
-   * zwingend einen Header — der PROCESS-Screen rendert die Arbeitsanweisung
-   * daraus.
+   * Legt einen `WorkInstructionHeader` an. `undefined` ⇒ gar kein Header.
+   * Belege MIT Positionen brauchen zwingend einen — der PROCESS-Screen rendert
+   * die Arbeitsanweisung daraus. Der Kopf-Flag `priceLabelPrintRequired` wird
+   * NICHT hier gesetzt, sondern aus den Positions-Varianten abgeleitet
+   * (Kundenfeedback 03.08.2026, keine Doppel-Wahrheit).
    */
-  priceLabelPrintRequired?: boolean;
+  withWorkInstruction?: boolean;
   /** Warenart-Chip auf der Beleg-Zeile (Ware holen + Bearbeiten, Prisma `GoodsTypeText`). */
   goodsTypeText?: string;
   /** Beleg-Kopf Shopbereich — Anzeige „Filiale 1 · Shopbereich x" (Kundenfeedback 15.07.2026). */
@@ -152,7 +161,9 @@ const POSITION_1: SeedPositionSpec = {
 };
 
 /** Pos 2: weder online noch gesichert — belegt, dass die Spalten trotzdem stehen bleiben. */
+/** DigiTag-Position: Etikett wird gedruckt, aber OHNE Preis (Misch-Beleg mit POSITION_1). */
 const POSITION_2: SeedPositionSpec = {
+  labelPrintVariant: 'digitag_etikett_ohne_preis',
   positionNo: 2,
   wgr: '312400',
   supplierArticleNo: 'ART-4712',
@@ -187,14 +198,14 @@ export const MA_101: SeedEmployeeSpec = {
       belege: [
         {
           weBelegNo: 'WE-E2E-101-1',
-          priceLabelPrintRequired: true,
+          withWorkInstruction: true,
           goodsTypeText: 'Vororder',
           shopAreaNo: '42',
           positions: [POSITION_1, POSITION_2],
         },
         {
           weBelegNo: 'WE-E2E-101-2',
-          priceLabelPrintRequired: false,
+          withWorkInstruction: true,
           goodsTypeText: 'NOS',
           shopAreaNo: '77',
         },
@@ -220,7 +231,7 @@ export const MA_103: SeedEmployeeSpec = {
     {
       locationCode: 'E2E-R3-A',
       belege: [
-        { weBelegNo: 'WE-E2E-103-1', priceLabelPrintRequired: true, positions: [POSITION_2] },
+        { weBelegNo: 'WE-E2E-103-1', withWorkInstruction: true, positions: [POSITION_2] },
       ],
     },
     { locationCode: 'E2E-R3-B', belege: [{ weBelegNo: 'WE-E2E-103-2' }] },

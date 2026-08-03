@@ -6,6 +6,7 @@ import {
   checkModeSchema,
   goodsTypeTextSchema,
   inspectionLevelCodeSchema,
+  labelPrintVariantSchema,
   locationTypeSchema,
   priorityFlagSchema,
   sectionCodeSchema,
@@ -25,7 +26,13 @@ export type StorageLocation = z.infer<typeof storageLocationSchema>;
 
 /** Positionsbezogene Aktionen (Anhang A PositionInstruction). */
 export const positionInstructionSchema = z.object({
-  priceLabelRequired: z.boolean(),
+  /**
+   * Etikett-Druckvariante dieser Position (Kundenfeedback L&T 03.08.2026):
+   * mit Preis / DigiTag ohne Preis / gar kein Etikett. Löst das frühere boolean
+   * `priceLabelRequired` ab, das nur „Etikett ja/nein" abbilden konnte und den
+   * Druck OHNE Preis unsichtbar ließ.
+   */
+  labelPrintVariant: labelPrintVariantSchema,
   priceLabelAttachRequired: z.boolean(),
   priceLabelAttachLocation: z.string().optional(),
   securityRequired: z.boolean(),
@@ -91,6 +98,13 @@ export type ReceiptPosition = z.infer<typeof receiptPositionSchema>;
 /** Case-wide work instruction header. minimumQuantityCheckAlwaysRequired is true by design. */
 export const workInstructionHeaderSchema = z.object({
   caseId: idSchema,
+  /**
+   * Muss für diesen Beleg überhaupt etikettiert werden? ABGELEITET aus den
+   * Positions-Varianten (`labelPrintVariant !== 'kein_etikett'`, siehe
+   * `labelPrintRequired`) — Digi-Tag-Positionen zählen mit, denn ihr Etikett
+   * läuft ebenfalls über den Drucker (nur ohne Preis). Keine eigene Wahrheit:
+   * die Positionen entscheiden, der Kopf fasst zusammen (Aufwand + Ware-holen-Hinweis).
+   */
   priceLabelPrintRequired: z.boolean(),
   sortByArticleColorSizeRequired: z.boolean(),
   goodsReceiptCheckMode: checkModeSchema,

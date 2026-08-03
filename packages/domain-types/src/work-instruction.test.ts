@@ -21,7 +21,7 @@ const header = (over: Partial<WorkInstructionHeader> = {}): WorkInstructionHeade
   });
 
 const instr = (over: Partial<PositionInstruction> = {}): PositionInstruction => ({
-  priceLabelRequired: true,
+  labelPrintVariant: 'etikett_mit_preis',
   priceLabelAttachRequired: true,
   securityRequired: false,
   onlineHandlingRequired: false,
@@ -124,5 +124,49 @@ describe('deriveWorkInstructionPoints — variants', () => {
   it('emits an Online-Handling point when a position requires it', () => {
     const positions = [pos(1, instr({ onlineHandlingRequired: true }))];
     expect(byKey(deriveWorkInstructionPoints(header(), positions), 'online_handling')).toBeDefined();
+  });
+});
+
+describe('Punkt 1 „Preisetikettendruck" mit Positionsangabe (Kundenfeedback L&T 03.08.2026)', () => {
+  const point1 = (...instructions: PositionInstruction[]) =>
+    deriveWorkInstructionPoints(
+      header(),
+      instructions.map((i, idx) => pos(idx + 1, i)),
+    ).find((p) => p.key === 'price_label_print')!;
+
+  it('bleibt bei durchgängig klassischen Etiketten die knappe Papier-Form „Ja"', () => {
+    const point = point1(instr(), instr());
+    expect(point.value).toBe('Ja');
+    expect(point.scope).toBe('header');
+  });
+
+  it('sagt „Nein", wenn keine Position ein Etikett bekommt', () => {
+    const point = point1(instr({ labelPrintVariant: 'kein_etikett' }));
+    expect(point.value).toBe('Nein');
+    expect(point.scope).toBe('header');
+  });
+
+  it('nennt beim reinen Digi-Tag-Beleg die Positionen — sonst druckt alles mit Preis', () => {
+    const point = point1(
+      instr({ labelPrintVariant: 'digitag_etikett_ohne_preis' }),
+      instr({ labelPrintVariant: 'digitag_etikett_ohne_preis' }),
+    );
+    expect(point.value).toBe('DigiTag · ohne Preis: Pos. 1, 2');
+    expect(point.scope).toBe('position');
+    expect(point.positionNos).toEqual([1, 2]);
+  });
+
+  it('dröselt den Misch-Beleg je Variante mit Positionsnummern auf', () => {
+    const point = point1(
+      instr(),
+      instr({ labelPrintVariant: 'digitag_etikett_ohne_preis' }),
+      instr({ labelPrintVariant: 'kein_etikett' }),
+      instr(),
+    );
+    expect(point.value).toBe(
+      'Etikett mit Preis: Pos. 1, 4 · DigiTag · ohne Preis: Pos. 2 · Kein Etikett: Pos. 3',
+    );
+    // Nur die Positionen, für die tatsächlich gedruckt wird.
+    expect(point.positionNos).toEqual([1, 2, 4]);
   });
 });

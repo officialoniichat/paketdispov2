@@ -13,6 +13,7 @@ import type {
   ForwardRecipient,
   IssueScope,
   IssueStatus,
+  LabelPrintVariant,
   PriorityFlag,
   ProblemKind,
   SectionCode,
@@ -238,7 +239,8 @@ export interface BelegPosition {
   goodsType: string | null;
   expectedQuantity: number;
   confirmedQuantity: number | null;
-  priceLabelRequired: boolean;
+  /** Etikett-Druckvariante der Position (mit Preis / DigiTag ohne Preis / keins). */
+  labelPrintVariant: LabelPrintVariant;
   securityRequired: boolean;
   onlineHandlingRequired: boolean;
   status: string;
@@ -757,7 +759,7 @@ function toBelegPosition(p: PositionDetailDto): BelegPosition {
     goodsType: p.goodsType ?? null,
     expectedQuantity: p.expectedQuantity,
     confirmedQuantity: p.confirmedQuantity ?? null,
-    priceLabelRequired: p.priceLabelRequired,
+    labelPrintVariant: p.labelPrintVariant,
     securityRequired: p.securityRequired,
     onlineHandlingRequired: p.onlineHandlingRequired,
     status: p.status,

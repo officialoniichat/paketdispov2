@@ -50,7 +50,16 @@ import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { DEFAULT_WGR_CATALOG, type CaseStatus, type OnlineSizeMark } from '@paket/domain-types';
+import {
+  DEFAULT_WGR_CATALOG,
+  labelPrintRequired,
+  labelPrintVariantText,
+  printedPriceCheckRequired,
+  summarizeLabelPrintVariants,
+  type CaseStatus,
+  type LabelPrintVariant,
+  type OnlineSizeMark,
+} from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { oskProps } from '../components/OnScreenKeyboard.js';
@@ -254,12 +263,35 @@ function EtikettpreisInput({
   );
 }
 
+/**
+ * Kundenfeedback 03.08.2026: der frühere generische „🏷️ Etikett"-Chip sagte nur
+ * „irgendein Etikett". Er ist durch die konkrete Druckvariante ersetzt
+ * ({@link LabelPrintVariantChip}) — genau daran erkennt der Mitarbeiter, ob er am
+ * Drucker die Preisunterdrückung einstellen muss.
+ */
 const FLAG_CHIPS = [
-  { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' as const },
   { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' as const },
   { key: 'onlineHandlingRequired', label: '🌐 Online', color: 'info' as const },
   { key: 'redPriceRequired', label: '🔴 Rotpreis', color: 'error' as const },
 ] as const;
+
+/** Chip-Farbe je Variante; Wording/Reihenfolge kommen aus domain-types. */
+const VARIANT_CHIP_COLOR: Record<LabelPrintVariant, 'default' | 'secondary'> = {
+  etikett_mit_preis: 'default',
+  digitag_etikett_ohne_preis: 'secondary',
+  kein_etikett: 'default',
+};
+
+function LabelPrintVariantChip({ variant }: { variant: LabelPrintVariant }): JSX.Element {
+  return (
+    <Chip
+      size="small"
+      color={VARIANT_CHIP_COLOR[variant]}
+      variant={variant === 'kein_etikett' ? 'outlined' : 'filled'}
+      label={labelPrintVariantText(variant)}
+    />
+  );
+}
 
 /** Eine Spalte der Positionen-Tabelle; `weight` wird zur Prozentbreite normalisiert. */
 interface PositionColumn {
@@ -272,9 +304,12 @@ interface PositionColumn {
 /**
  * Feste Spalten der Positionen-Tabelle (A1). Die Online-Spalte entfällt, wenn der
  * Beleg keine online-relevante Position hat — innerhalb eines Belegs bleibt die
- * Geometrie damit konstant. „Etikettpreis" steht direkt hinter „VK-Etikett".
+ * Geometrie damit konstant. „Etikettpreis" steht direkt hinter „VK-Etikett" und
+ * entfällt komplett, wenn KEINE Position ein Etikett mit aufgedrucktem Preis
+ * bekommt (Kundenfeedback 03.08.2026): dann gibt es auf dem ganzen Beleg keinen
+ * gedruckten Preis zu prüfen.
  */
-function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
+function positionColumns(hasOnlineMarks: boolean, hasPrintedPrices: boolean): PositionColumn[] {
   const columns: PositionColumn[] = [
     { key: 'pos', label: 'Pos', weight: 7 },
     { key: 'ean', label: 'EAN', weight: 12 },
@@ -285,8 +320,10 @@ function positionColumns(hasOnlineMarks: boolean): PositionColumn[] {
     { key: 'ek', label: 'EK', align: 'right', weight: 9 },
     { key: 'vk', label: 'VK', align: 'right', weight: 9 },
     { key: 'vkLabel', label: 'VK-Etikett', align: 'right', weight: 10 },
-    { key: 'vkCorrected', label: 'Etikettpreis', align: 'right', weight: 13 },
   ];
+  if (hasPrintedPrices) {
+    columns.push({ key: 'vkCorrected', label: 'Etikettpreis', align: 'right', weight: 13 });
+  }
   if (hasOnlineMarks) columns.splice(3, 0, { key: 'online', label: 'Online', weight: 14 });
   return columns;
 }
@@ -407,7 +444,13 @@ export function BelegProcessScreen(): JSX.Element {
   const hasOnlineMarks = aggregate.positions.some((pos) =>
     pos.skuLines.some((s) => aggregate.onlineMarks[s.id]),
   );
-  const columns = positionColumns(hasOnlineMarks);
+  // Etikett-Varianten des Belegs (nur die tatsächlich vorkommenden) — Kopf-Überblick
+  // und Sichtbarkeit der Etikettpreis-Spalte hängen daran.
+  const belegVariants = summarizeLabelPrintVariants(
+    aggregate.positions.map((pos) => pos.instruction.labelPrintVariant),
+  );
+  const hasPrintedPrices = belegVariants.some(printedPriceCheckRequired);
+  const columns = positionColumns(hasOnlineMarks, hasPrintedPrices);
   const totalWeight = columns.reduce((sum, col) => sum + col.weight, 0);
   const widthOf = (col: PositionColumn): string =>
     `${((col.weight / totalWeight) * 100).toFixed(3)}%`;
@@ -465,6 +508,20 @@ export function BelegProcessScreen(): JSX.Element {
             </Typography>
           </Box>
         </Stack>
+
+        {/* Kundenfeedback 03.08.2026: WELCHE Etikett-Varianten stecken in diesem
+            Beleg? Nur die tatsächlich vorkommenden — ein einheitlicher Beleg zeigt
+            genau eine. Dieselbe Zusammenfassung steht unter „1 · Ware holen". */}
+        {belegVariants.length > 0 ? (
+          <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+            <Typography variant="body2" color="text.secondary">
+              Etiketten:
+            </Typography>
+            {belegVariants.map((variant) => (
+              <LabelPrintVariantChip key={variant} variant={variant} />
+            ))}
+          </Stack>
+        ) : null}
 
         {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
         {infoPoints.length > 0 ? (
@@ -577,6 +634,9 @@ export function BelegProcessScreen(): JSX.Element {
                   (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
                 );
                 const i = pos.instruction;
+                // Nur bei „Etikett mit Preis" steht ein Preis auf dem Etikett, der
+                // gegen den VK-Etikett-Preis zu prüfen wäre.
+                const checksPrintedPrice = printedPriceCheckRequired(i.labelPrintVariant);
                 const manualProblems = manualByPosition.get(pos.id) ?? [];
                 // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
                 // Position") markiert die gesamte Position rot — Kopfzeile und
@@ -643,6 +703,9 @@ export function BelegProcessScreen(): JSX.Element {
                                   label={positionWarenart(pos)}
                                 />
                               ) : null}
+                              {/* Etikett-Druckvariante DIESER Position — steht vor den
+                                  übrigen Anweisungs-Chips, weil sie den Druckauftrag steuert. */}
+                              <LabelPrintVariantChip variant={i.labelPrintVariant} />
                               {flags.map((f) => (
                                 <Chip key={f.key} size="small" color={f.color} label={f.label} />
                               ))}
@@ -680,12 +743,17 @@ export function BelegProcessScreen(): JSX.Element {
 
                             {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
                                 anbringen + Sichern, groß und wiedererkennbar. */}
-                            {i.priceLabelRequired || (i.securityRequired && i.securityTypeCode) ? (
+                            {labelPrintRequired(i.labelPrintVariant) ||
+                            (i.securityRequired && i.securityTypeCode) ? (
                               <Stack direction="row" sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
-                                {i.priceLabelRequired ? (
+                                {labelPrintRequired(i.labelPrintVariant) ? (
                                   <WorkStepPictogram
                                     code={ETIKETT_PICTOGRAM_CODE}
-                                    title="Preisetikett anbringen"
+                                    title={
+                                      printedPriceCheckRequired(i.labelPrintVariant)
+                                        ? 'Preisetikett anbringen'
+                                        : 'Etikett ohne Preis anbringen'
+                                    }
                                     subtitle={i.priceLabelAttachLocation ?? undefined}
                                   />
                                 ) : null}
@@ -877,20 +945,28 @@ export function BelegProcessScreen(): JSX.Element {
                           <TableCell align="right" sx={NUMERIC_CELL}>
                             {price(s.vkLabelPrice) ?? '—'}
                           </TableCell>
-                          {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte. */}
-                          <TableCell align="right" sx={readOnly ? NUMERIC_CELL : undefined}>
-                            {readOnly ? (
-                              '—'
-                            ) : (
-                              <EtikettpreisInput
-                                sizeLabel={s.size}
-                                corrected={corrected}
-                                onChange={(value) =>
-                                  flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
-                                }
-                              />
-                            )}
-                          </TableCell>
+                          {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte
+                              — nur dort, wo überhaupt ein Preis aufs Etikett gedruckt wird
+                              (Kundenfeedback 03.08.2026). Bei DigiTag-/Ohne-Etikett-Positionen
+                              gibt es keinen aufgedruckten Preis zu prüfen. */}
+                          {hasPrintedPrices ? (
+                            <TableCell
+                              align="right"
+                              sx={readOnly || !checksPrintedPrice ? NUMERIC_CELL : undefined}
+                            >
+                              {!checksPrintedPrice || readOnly ? (
+                                '—'
+                              ) : (
+                                <EtikettpreisInput
+                                  sizeLabel={s.size}
+                                  corrected={corrected}
+                                  onChange={(value) =>
+                                    flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
+                                  }
+                                />
+                              )}
+                            </TableCell>
+                          ) : null}
                         </TableRow>
                       );
                     })}

@@ -76,6 +76,16 @@ enum CheckMode {
   full_check
 }
 
+// Etikett-Druckvariante EINER Position (Kundenfeedback L&T 03.08.2026).
+// Digital ausgezeichnete Ware bekommt ein Digi Tag am Verkaufsplatz; das Etikett
+// wird trotzdem gedruckt, aber OHNE aufgedruckten Preis. Misch-Belege sind normal,
+// deshalb haengt die Variante an der Position statt am Beleg-Kopf.
+enum LabelPrintVariant {
+  etikett_mit_preis
+  digitag_etikett_ohne_preis
+  kein_etikett
+}
+
 enum AssignmentStatus {
   created
   assigned
@@ -425,6 +435,8 @@ model GoodsReceiptCase {
 
 model WorkInstructionHeader {
   caseId                          String    @id
+  // Abgeleitet aus den Positions-Varianten: mindestens eine Position bekommt ein
+  // Etikett (mit ODER ohne Preis). Keine eigene Wahrheit - Quelle sind die Positionen.
   priceLabelPrintRequired         Boolean   @default(false)
   sortByArticleColorSizeRequired  Boolean   @default(false)
   goodsReceiptCheckMode           CheckMode @default(quantity_only)
@@ -476,7 +488,9 @@ model ReceiptPosition {
 
 model PositionInstruction {
   positionId               String  @id
-  priceLabelRequired       Boolean @default(false)
+  // Etikett mit Preis / DigiTag ohne Preis / kein Etikett. Loest das frueher hier
+  // stehende boolean priceLabelRequired ab (konnte den Druck OHNE Preis nicht abbilden).
+  labelPrintVariant        LabelPrintVariant @default(etikett_mit_preis)
   priceLabelAttachRequired Boolean @default(false)
   priceLabelAttachLocation String?
   securityRequired         Boolean @default(false)

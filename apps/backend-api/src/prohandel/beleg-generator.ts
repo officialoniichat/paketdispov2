@@ -2,6 +2,7 @@ import {
   DEFAULT_WGR_CATALOG,
   SECURITY_PICTOGRAM_CODES,
   type InspectionLevelCode,
+  type LabelPrintVariant,
 } from '@paket/domain-types';
 
 /**
@@ -52,7 +53,7 @@ export interface GeneratedPosition {
   catManDate: string | null;
   onlineRelevant: boolean;
   instruction: {
-    priceLabelRequired: boolean;
+    labelPrintVariant: LabelPrintVariant;
     priceLabelAttachRequired: boolean;
     securityRequired: boolean;
     securityTypeCode: string | null;
@@ -117,6 +118,19 @@ const INSPECTION_LEVELS: InspectionLevelCode[] = ['none', 'p10', 'p20', 'full'];
 
 function pick<T>(rng: () => number, arr: readonly T[]): T {
   return arr[Math.floor(rng() * arr.length)]!;
+}
+
+/**
+ * Etikett-Druckvariante einer Position. Digi Tags werden bei L&T schrittweise je
+ * Bereich/Warengruppe ausgerollt — die Mischung je Position (nicht je Beleg) ist
+ * also der Normalfall, und Misch-Belege entstehen von selbst. Klassisch bleibt
+ * die Mehrheit; „kein Etikett" ist die Ausnahme (z. B. bereits ausgezeichnete Ware).
+ */
+function labelPrintVariantFor(rng: () => number): LabelPrintVariant {
+  const roll = rng();
+  if (roll < 0.25) return 'digitag_etikett_ohne_preis';
+  if (roll < 0.33) return 'kein_etikett';
+  return 'etikett_mit_preis';
 }
 
 function int(rng: () => number, min: number, max: number): number {
@@ -224,7 +238,7 @@ export function generateBelege(options: GenerateOptions): GeneratedBeleg[] {
         catManDate: catMan ? isoDayPlus(options.bookingDate, int(rng, 3, 14)) : null,
         onlineRelevant: rng() < 0.35,
         instruction: {
-          priceLabelRequired: true,
+          labelPrintVariant: labelPrintVariantFor(rng),
           priceLabelAttachRequired: rng() < 0.6,
           securityRequired,
           securityTypeCode: securityRequired ? pick(rng, SECURITY_PICTOGRAM_CODES) : null,

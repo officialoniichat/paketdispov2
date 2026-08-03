@@ -14,9 +14,35 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { FORWARD_RECIPIENTS, type ForwardRecipient } from '@paket/domain-types';
+import {
+  FORWARD_RECIPIENTS,
+  labelPrintVariantSchema,
+  type ForwardRecipient,
+} from '@paket/domain-types';
+
+/** Wire-Vokabular der Etikett-Druckvariante — 1:1 aus dem Zod-Enum (single source). */
+const LABEL_PRINT_VARIANTS = labelPrintVariantSchema.options;
 
 // --- Responses --------------------------------------------------------------
+
+/**
+ * Eine Position eines Belegs, reduziert auf das, was an der Etikettendruck-Station
+ * zählt (Kundenfeedback L&T 03.08.2026): Pos-Nr, kurze Artikelkennung und die
+ * Druckvariante. Hängt an der Beleg-Zusammenfassung, damit „Ware holen" (Karte +
+ * Barcode-Pop-up) OHNE zweiten Request zeigen kann, welche Position ohne Preis
+ * zu drucken ist.
+ */
+export class LabelPrintPositionDto {
+  @ApiProperty() positionNo!: number;
+  @ApiProperty({ description: 'Lieferanten-Artikel-Nr der Position' })
+  supplierArticleNo!: string;
+  @ApiProperty({ description: 'Lieferanten-Farbe der Position' }) supplierColor!: string;
+  @ApiProperty({
+    enum: LABEL_PRINT_VARIANTS,
+    description: 'Etikett-Druckvariante der Position (siehe PositionInstructionDto)',
+  })
+  labelPrintVariant!: string;
+}
 
 export class CaseSummaryDto {
   @ApiProperty() id!: string;
@@ -46,9 +72,16 @@ export class CaseSummaryDto {
   @ApiPropertyOptional({
     type: Boolean,
     nullable: true,
-    description: 'Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen',
+    description:
+      'Es muss etikettiert werden (Arbeitsanweisung, abgeleitet: mind. eine Position ≠ kein_etikett — Digi-Tag-Etiketten zählen mit)',
   })
   priceLabelPrintRequired?: boolean | null;
+  @ApiPropertyOptional({
+    type: [LabelPrintPositionDto],
+    description:
+      'Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg.',
+  })
+  labelPrintPositions?: LabelPrintPositionDto[];
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
   @ApiPropertyOptional({
@@ -295,7 +328,12 @@ export class SkuLineDto {
 
 /** Per-position Arbeitsanweisung instruction flags (Anhang A PositionInstruction, §G.1). */
 export class PositionInstructionDto {
-  @ApiProperty() priceLabelRequired!: boolean;
+  @ApiProperty({
+    enum: LABEL_PRINT_VARIANTS,
+    description:
+      'Etikett-Druckvariante der Position: etikett_mit_preis | digitag_etikett_ohne_preis (Digi Tag am Verkaufsplatz ⇒ Etikett OHNE Preis drucken) | kein_etikett',
+  })
+  labelPrintVariant!: string;
   @ApiProperty() priceLabelAttachRequired!: boolean;
   @ApiPropertyOptional({ type: String, nullable: true }) priceLabelAttachLocation!: string | null;
   @ApiProperty() securityRequired!: boolean;
@@ -703,7 +741,11 @@ export class PositionDetailDto {
     description: 'Σ confirmed over the SKU lines, null if none confirmed yet',
   })
   confirmedQuantity!: number | null;
-  @ApiProperty() priceLabelRequired!: boolean;
+  @ApiProperty({
+    enum: LABEL_PRINT_VARIANTS,
+    description: 'Etikett-Druckvariante der Position (siehe PositionInstructionDto)',
+  })
+  labelPrintVariant!: string;
   @ApiProperty() securityRequired!: boolean;
   @ApiProperty() onlineHandlingRequired!: boolean;
   @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })

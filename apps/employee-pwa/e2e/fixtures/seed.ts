@@ -17,6 +17,7 @@
  * Bündel wäre leer und „Ware holen" hätte nichts zu zeigen. Empirisch geprüft:
  * recalculate meldet danach `bundleCount: 0`, `/api/me/today` liefert `bundle: null`.
  */
+import { labelPrintRequired } from '@paket/domain-types';
 import { PrismaClient } from './prisma-client.js';
 import {
   MA_101,
@@ -67,7 +68,7 @@ async function seedPositions(
     await prisma.positionInstruction.create({
       data: {
         positionId: position.id,
-        priceLabelRequired: true,
+        labelPrintVariant: spec.labelPrintVariant ?? 'etikett_mit_preis',
         priceLabelAttachRequired: spec.priceLabelAttachLocation !== undefined,
         priceLabelAttachLocation: spec.priceLabelAttachLocation,
         securityRequired: spec.securityTypeCode !== undefined,
@@ -88,10 +89,10 @@ async function seedBeleg(
   spec: SeedBelegSpec,
   context: { employeeNo: string; bundleId: string; locationId: string; sequence: number },
 ): Promise<void> {
-  if (spec.positions && spec.priceLabelPrintRequired === undefined) {
+  if (spec.positions && spec.withWorkInstruction === undefined) {
     throw new Error(
       `Seed-Fehler: Beleg ${spec.weBelegNo} hat Positionen, aber keinen WorkInstructionHeader ` +
-        `(priceLabelPrintRequired ist undefined). Der PROCESS-Screen braucht den Kopf.`,
+        `(withWorkInstruction ist undefined). Der PROCESS-Screen braucht den Kopf.`,
     );
   }
 
@@ -125,12 +126,15 @@ async function seedBeleg(
     },
   });
 
-  // Kein Header ⇒ `/api/me/today` liefert `priceLabelPrintRequired: null` ⇒ kein Chip.
-  if (spec.priceLabelPrintRequired !== undefined) {
+  // Kein Header ⇒ `/api/me/today` liefert `priceLabelPrintRequired: null`.
+  if (spec.withWorkInstruction) {
     await prisma.workInstructionHeader.create({
       data: {
         caseId: goodsCase.id,
-        priceLabelPrintRequired: spec.priceLabelPrintRequired,
+        // Abgeleitet aus den Positions-Varianten — wie im echten Intake-Pfad.
+        priceLabelPrintRequired: (spec.positions ?? []).some((p) =>
+          labelPrintRequired(p.labelPrintVariant ?? 'etikett_mit_preis'),
+        ),
         sortByArticleColorSizeRequired: true,
         boxLabelRequired: false,
         zstRequired: true,

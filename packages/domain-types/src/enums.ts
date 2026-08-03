@@ -67,6 +67,29 @@ export const inspectionSourceSchema = z.enum(['prohandel', 'dashboard']);
 export type InspectionSource = z.infer<typeof inspectionSourceSchema>;
 
 /**
+ * Etikett-Druckvariante EINER Position (Kundenfeedback L&T 03.08.2026).
+ *
+ * „Digital ausgezeichnet" heißt: die Ware bekommt am Verkaufsplatz ein Digi Tag
+ * (elektronisches Preisschild). Das physische Etikett wird TROTZDEM gedruckt und
+ * angebracht — nur eben OHNE aufgedruckten Preis (Artikelidentität/Barcode
+ * bleiben drauf, der Preis kommt digital). Im ERP ist das nicht hinterlegt: der
+ * Mitarbeiter muss die Preisunterdrückung an der Etikettendruck-Station manuell
+ * einstellen, sonst druckt er alles mit Preis.
+ *
+ * Die Variante hängt an der POSITION, nicht am Beleg-Kopf: Digi Tags werden pro
+ * Bereich/Warengruppe ausgerollt, ein Beleg kann also gemischt sein.
+ */
+export const labelPrintVariantSchema = z.enum([
+  /** Klassisch: Etikett wird MIT aufgedrucktem Preis gedruckt (bisheriger stiller Standard). */
+  'etikett_mit_preis',
+  /** Digi Tag am Verkaufsplatz ⇒ Etikett drucken, aber OHNE Preis. */
+  'digitag_etikett_ohne_preis',
+  /** Für diese Position wird gar kein Etikett gedruckt/angebracht. */
+  'kein_etikett',
+]);
+export type LabelPrintVariant = z.infer<typeof labelPrintVariantSchema>;
+
+/**
  * Case lifecycle (§7.1) — 10 meaningful statuses. The granular employee work steps
  * (scan → print → confirm → box → ZST) are local PWA progress over real position/box
  * data, not top-level case statuses. A case is created directly from a ProHandel

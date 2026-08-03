@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CaseStatus } from '@paket/domain-types';
+import type { CaseStatus, LabelPrintVariant } from '@paket/domain-types';
 import {
   caseStatusSchema,
   deriveOnlineSizeMarks,
@@ -44,6 +44,7 @@ import {
   distinctShopNos,
   isLabelsRequired,
   mapBoxTarget,
+  mapLabelPrintPositions,
   mapPositionInstruction,
   mapSkuLine,
   mapWorkInstruction,
@@ -136,7 +137,19 @@ export class CasesService {
             storageLocation: true,
             // A1/A3 summary fields: Etiketten (derived) + Mehr-Shop list.
             workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
-            positions: { select: { shopNo: true }, orderBy: { positionNo: 'asc' } },
+            // Etikett-Druckvariante je Position (Kundenfeedback 03.08.2026): die
+            // Beleg-Karte unter „1 · Ware holen" und das Barcode-Pop-up zeigen daraus,
+            // welche Position ohne Preis zu drucken ist.
+            positions: {
+              select: {
+                positionNo: true,
+                supplierArticleNo: true,
+                supplierColor: true,
+                shopNo: true,
+                instruction: { select: { labelPrintVariant: true } },
+              },
+              orderBy: { positionNo: 'asc' },
+            },
             // Die Bündel-Reihenfolge der Engine. Prisma kann nicht über eine
             // To-many-Relation sortieren — deshalb unten in JS.
             assignmentItems: { select: { sequence: true } },
@@ -815,7 +828,13 @@ export class CasesService {
       attentionNote: string | null;
       forwardedTo: string | null;
       workInstruction?: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null;
-      positions?: { shopNo: string }[];
+      positions?: Array<{
+        shopNo: string;
+        positionNo?: number;
+        supplierArticleNo?: string;
+        supplierColor?: string;
+        instruction?: { labelPrintVariant: LabelPrintVariant } | null;
+      }>;
     },
     assignedEmployeeName: string | null,
   ): CaseSummaryDto {
@@ -830,6 +849,7 @@ export class CasesService {
       storageLocationCode: c.storageLocation?.code ?? null,
       storageLocationKind: c.storageLocation?.kind ?? null,
       priceLabelPrintRequired: c.workInstruction?.priceLabelPrintRequired ?? null,
+      labelPrintPositions: mapLabelPrintPositions(c.positions),
       primaryShopNo: c.primaryShopNo ?? null,
       primaryShopAreaNo: c.primaryShopAreaNo ?? null,
       inboundCartonCount: c.inboundCartonCount ?? null,

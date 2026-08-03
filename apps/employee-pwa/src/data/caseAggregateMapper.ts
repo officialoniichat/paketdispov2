@@ -42,7 +42,7 @@ type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'
 type WorkInstructionPointDto = components['schemas']['WorkInstructionPointDto'];
 
 const FALLBACK_INSTRUCTION: PositionInstruction = {
-  priceLabelRequired: false,
+  labelPrintVariant: 'etikett_mit_preis',
   priceLabelAttachRequired: false,
   securityRequired: false,
   onlineHandlingRequired: false,
@@ -77,7 +77,7 @@ function mapWorkInstruction(caseId: string, dto: WorkInstructionHeaderDto | null
 function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
   const instruction: PositionInstruction = dto.instruction
     ? {
-        priceLabelRequired: dto.instruction.priceLabelRequired,
+        labelPrintVariant: dto.instruction.labelPrintVariant,
         priceLabelAttachRequired: dto.instruction.priceLabelAttachRequired,
         priceLabelAttachLocation: dto.instruction.priceLabelAttachLocation ?? undefined,
         securityRequired: dto.instruction.securityRequired,
