@@ -9,8 +9,8 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import { AppHeader } from './components/AppHeader.js';
 import { NachrichtenBanner } from './components/NachrichtenBanner.js';
+import { ProfileMenu } from './components/ProfileMenu.js';
 import { OnScreenKeyboard } from './components/OnScreenKeyboard.js';
 import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
 import { useFocusRefresh } from './data/useFocusRefresh.js';
@@ -32,7 +32,7 @@ export function App(): JSX.Element {
   }, [session]);
 
   // Session-cleared can originate from anywhere: an explicit logout
-  // (AppHeader → data/auth.ts) or a 401 caught by data/apiErrorHandling.ts and
+  // (ProfileMenu → data/auth.ts) or a 401 caught by data/apiErrorHandling.ts and
   // surfaced through the React Query cache (data/queryClient.ts). Either way,
   // fall back to LoginScreen.
   useEffect(() => onSessionCleared(() => setSessionState(null)), []);
@@ -57,9 +57,11 @@ export function App(): JSX.Element {
 
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
-      <AppHeader />
+      {/* Keine Kopfzeile: nur der Profilkreis, fixiert über der rechten oberen Ecke. */}
+      <ProfileMenu />
       {/* Teamlead-Nachricht (z. B. Vorverteilungs-Eingriff): anzeigen + quittieren. */}
       <NachrichtenBanner />
+
       <Routes>
         <Route path="/" element={<BundleHomeScreen />} />
         <Route path="/case/:caseId" element={<BelegProcessScreen />} />
