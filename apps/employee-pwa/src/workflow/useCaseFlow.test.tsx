@@ -52,7 +52,7 @@ function aggregateDto(status: string): CaseAggregateDto {
         branchNo: '1',
         shopNo: '2143',
         instruction: {
-          priceLabelRequired: false,
+          labelPrintVariant: 'kein_etikett',
           priceLabelAttachRequired: false,
           securityRequired: false,
           onlineHandlingRequired: false,

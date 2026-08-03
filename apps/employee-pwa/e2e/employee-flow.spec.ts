@@ -209,7 +209,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     expect(after.weBelegNos).not.toContain(beleg3);
   });
 
-  test('Forderung 5 + Punkt 1 (15.07.2026): jeder Beleg zeigt am Stop seine Kopf-Infos — Etiketten-Art, Filiale/Shopbereich, Warenart', async ({
+  test('Forderung 5 + Punkt 1 (15.07.2026) + Kundenfeedback 03.08.2026: jeder Beleg zeigt am Stop seine Kopf-Infos — Etikett-Druckvarianten, Filiale/Shopbereich, Warenart', async ({
     page,
   }) => {
     await loginAndWaitForHome(page, MA_101.employeeNo);
@@ -221,34 +221,56 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     // RICHTIGEN Beleg.
     const eintragMit = await stopRows(page).nth(0).innerText();
     const eintragOhne = await stopRows(page).nth(1).innerText();
-    expect(eintragMit, 'Beleg MIT Etikettendruck ist der erste Container').toContain(
+    expect(eintragMit, 'Beleg MIT Positionen ist der erste Container').toContain(
       `WE ${mitEtiketten}`,
     );
-    expect(eintragOhne, 'Beleg OHNE Etikettendruck folgt (Engine-Reihenfolge)').toContain(
+    expect(eintragOhne, 'Beleg OHNE Positionen folgt (Engine-Reihenfolge)').toContain(
       `WE ${ohneEtiketten}`,
     );
 
-    // Etiketten-Art wie in „2 · Bearbeiten": Druckpflicht vs. digital bleibt am
-    // Stop unterscheidbar — Dustin sieht weiter, ob er zum Drucker muss (F5).
-    expect(eintragMit).toContain('🏷️ Etikettendruck');
-    expect(eintragMit).not.toContain('Digitale Etiketten');
-    expect(eintragOhne).toContain('Digitale Etiketten');
-    expect(eintragOhne).not.toContain('🏷️');
+    // Kundenfeedback 03.08.2026: die Etiketten-Angabe nennt die tatsächlich
+    // vorkommenden Varianten. Der erste Beleg ist ein Misch-Beleg (Pos. 1 mit
+    // Preis, Pos. 2 DigiTag ohne Preis) — Dustin sieht am Stop, dass er am
+    // Drucker für eine Position die Preisunterdrückung braucht.
+    expect(eintragMit).toContain('🏷️ Etikett mit Preis');
+    expect(eintragMit).toContain('📟 DigiTag · ohne Preis');
+    // Der Beleg ohne Positionen hat nichts zu drucken — und sagt deshalb nichts.
+    expect(eintragOhne).not.toContain('Etikett mit Preis');
+    expect(eintragOhne).not.toContain('DigiTag');
 
     // Filiale · Shopbereich und Warenart je Beleg (Punkt 1).
     // EINE Zeile je Beleg, Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
-    expect(eintragMit).toContain('Filiale 1 · Shopbereich 42 | 🏷️ Etikettendruck');
+    expect(eintragMit).toContain(
+      'Filiale 1 · Shopbereich 42 | 🏷️ Etikett mit Preis | 📟 DigiTag · ohne Preis',
+    );
     expect(eintragMit).toContain('Vororder');
-    expect(eintragOhne).toContain('Filiale 1 · Shopbereich 77 | Digitale Etiketten');
+    expect(eintragOhne).toContain('Filiale 1 · Shopbereich 77');
     expect(eintragOhne).toContain('NOS');
 
     // … und unter „2 · Bearbeiten" stehen dieselben Infos unverändert.
     await expect(belegRow(page, mitEtiketten)).toContainText(
-      'Filiale 1 · Shopbereich 42 | 🏷️ Etikettendruck',
+      'Filiale 1 · Shopbereich 42 | 🏷️ Etikett mit Preis | 📟 DigiTag · ohne Preis',
     );
-    await expect(belegRow(page, ohneEtiketten)).toContainText(
-      'Filiale 1 · Shopbereich 77 | Digitale Etiketten',
-    );
+    await expect(belegRow(page, ohneEtiketten)).toContainText('Filiale 1 · Shopbereich 77');
+  });
+
+  test('Kundenfeedback 03.08.2026: das Barcode-Pop-up dröselt den Etikettendruck je Position auf', async ({
+    page,
+  }) => {
+    await loginAndWaitForHome(page, MA_101.employeeNo);
+    const [mischBeleg] = belegNos(MA_101);
+
+    await stopRows(page).nth(0).getByRole('button', { name: 'Barcode anzeigen' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(`WE ${mischBeleg}`);
+    await expect(dialog).toContainText('Etikettendruck je Position');
+    // Pos-Nr + Variante je Position, in Positionsreihenfolge (oben nach unten).
+    await expect(dialog).toContainText('Pos 1');
+    await expect(dialog).toContainText('🏷️ Etikett mit Preis');
+    await expect(dialog).toContainText('Pos 2');
+    await expect(dialog).toContainText('📟 DigiTag · Etikett ohne Preis');
+    // Kurze Artikelkennung je Zeile, damit an der Station zuzuordnen ist.
+    await expect(dialog).toContainText('ART-4711');
   });
 
   test('Punkt 2 (15.07.2026): „Barcode anzeigen" sitzt beim Ware holen — und ist bei „2 · Bearbeiten" ersatzlos entfernt', async ({

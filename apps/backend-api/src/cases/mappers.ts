@@ -7,9 +7,14 @@
  * projections so the two services don't carry byte-identical private copies.
  */
 import type { DeliveryGroup } from '@paket/assignment-engine';
-import { DEFAULT_INSPECTION_LEVELS, DEFAULT_WGR_CATALOG } from '@paket/domain-types';
+import {
+  DEFAULT_INSPECTION_LEVELS,
+  DEFAULT_WGR_CATALOG,
+  type LabelPrintVariant,
+} from '@paket/domain-types';
 import type {
   DeliveryGroupRefDto,
+  LabelPrintPositionDto,
   PositionInstructionDto,
   SkuLineDto,
   TransportBoxTargetDto,
@@ -67,6 +72,32 @@ export function distinctShopNos(
     if (p.shopNo && !shops.includes(p.shopNo)) shops.push(p.shopNo);
   }
   return shops;
+}
+
+/**
+ * Etikett-Druckvarianten je Position für die Beleg-Zusammenfassung (Kundenfeedback
+ * L&T 03.08.2026). Positionen ohne gespeicherte Anweisung fallen auf den bisherigen
+ * stillen Standard „Etikett mit Preis" zurück — genau das war der Zustand, den der
+ * Kunde bemängelt hat, und er bleibt damit sichtbar statt zu verschwinden.
+ */
+export function mapLabelPrintPositions(
+  positions:
+    | ReadonlyArray<{
+        positionNo?: number;
+        supplierArticleNo?: string;
+        supplierColor?: string;
+        instruction?: { labelPrintVariant: LabelPrintVariant } | null;
+      }>
+    | undefined,
+): LabelPrintPositionDto[] {
+  return (positions ?? [])
+    .filter((p): p is typeof p & { positionNo: number } => typeof p.positionNo === 'number')
+    .map((p) => ({
+      positionNo: p.positionNo,
+      supplierArticleNo: p.supplierArticleNo ?? '',
+      supplierColor: p.supplierColor ?? '',
+      labelPrintVariant: p.instruction?.labelPrintVariant ?? 'etikett_mit_preis',
+    }));
 }
 
 /** Etiketten nötig (A1): derived from the work-instruction header, false without one. */
@@ -182,7 +213,7 @@ export function mapSkuLine(s: SkuLineRow, onlineMark: 'green' | 'red' | null = n
 
 /** Persistence shape of a per-position instruction (Anhang A PositionInstruction). */
 export interface PositionInstructionRow {
-  priceLabelRequired: boolean;
+  labelPrintVariant: LabelPrintVariant;
   priceLabelAttachRequired: boolean;
   priceLabelAttachLocation: string | null;
   securityRequired: boolean;
@@ -197,7 +228,7 @@ export interface PositionInstructionRow {
 /** Project a per-position instruction row onto its response DTO. */
 export function mapPositionInstruction(i: PositionInstructionRow): PositionInstructionDto {
   return {
-    priceLabelRequired: i.priceLabelRequired,
+    labelPrintVariant: i.labelPrintVariant,
     priceLabelAttachRequired: i.priceLabelAttachRequired,
     priceLabelAttachLocation: i.priceLabelAttachLocation,
     securityRequired: i.securityRequired,

@@ -59,6 +59,7 @@ import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
+import { labelPrintVariantText } from '@paket/domain-types';
 
 const TABS = [
   'Beleg',
@@ -479,9 +480,13 @@ function positionMetaText(p: BelegPosition): string {
     .join(' · ');
 }
 
-/** Anweisungs-Chips der Position (PWA-Vorlage: FLAG_CHIPS im BelegProcessScreen). */
+/**
+ * Anweisungs-Chips der Position (PWA-Vorlage: FLAG_CHIPS im BelegProcessScreen).
+ * Der frühere generische „🏷️ Etikett"-Chip ist durch die konkrete
+ * Etikett-Druckvariante ersetzt (Kundenfeedback 03.08.2026) — sie steht als
+ * eigener Chip davor, damit PWA und Cockpit dieselbe Aussage treffen.
+ */
 const POSITION_FLAG_CHIPS = [
-  { key: 'priceLabelRequired', label: '🏷️ Etikett', color: 'default' },
   { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' },
   { key: 'onlineHandlingRequired', label: '🌐 Online', color: 'info' },
 ] as const;
@@ -564,6 +569,17 @@ function PositionsSection({
                           )}
                           {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
                           {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
+                          {/* Etikett-Druckvariante der Position (Kundenfeedback 03.08.2026). */}
+                          <Chip
+                            size="small"
+                            color={
+                              p.labelPrintVariant === 'digitag_etikett_ohne_preis'
+                                ? 'secondary'
+                                : 'default'
+                            }
+                            variant={p.labelPrintVariant === 'kein_etikett' ? 'outlined' : 'filled'}
+                            label={labelPrintVariantText(p.labelPrintVariant)}
+                          />
                           {flags.map((f) => (
                             <Chip key={f.key} size="small" color={f.color} label={f.label} />
                           ))}

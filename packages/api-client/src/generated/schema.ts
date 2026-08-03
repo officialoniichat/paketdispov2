@@ -1179,6 +1179,18 @@ export interface components {
             caseCount: number;
             routeStops: components["schemas"]["RouteStopDto"][];
         };
+        LabelPrintPositionDto: {
+            positionNo: number;
+            /** @description Lieferanten-Artikel-Nr der Position */
+            supplierArticleNo: string;
+            /** @description Lieferanten-Farbe der Position */
+            supplierColor: string;
+            /**
+             * @description Etikett-Druckvariante der Position (siehe PositionInstructionDto)
+             * @enum {string}
+             */
+            labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
+        };
         CaseSummaryDto: {
             id: string;
             weBelegNo: string;
@@ -1193,8 +1205,10 @@ export interface components {
             storageLocationCode?: string | null;
             /** @description Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons */
             storageLocationKind?: string | null;
-            /** @description Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen */
+            /** @description Es muss etikettiert werden (Arbeitsanweisung, abgeleitet: mind. eine Position ≠ kein_etikett — Digi-Tag-Etiketten zählen mit) */
             priceLabelPrintRequired?: boolean | null;
+            /** @description Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg. */
+            labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -1257,7 +1271,11 @@ export interface components {
             zstRequired: boolean;
         };
         PositionInstructionDto: {
-            priceLabelRequired: boolean;
+            /**
+             * @description Etikett-Druckvariante der Position: etikett_mit_preis | digitag_etikett_ohne_preis (Digi Tag am Verkaufsplatz ⇒ Etikett OHNE Preis drucken) | kein_etikett
+             * @enum {string}
+             */
+            labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
             priceLabelAttachRequired: boolean;
             priceLabelAttachLocation?: string | null;
             securityRequired: boolean;
@@ -1550,8 +1568,10 @@ export interface components {
             storageLocationCode?: string | null;
             /** @description Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons */
             storageLocationKind?: string | null;
-            /** @description Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen */
+            /** @description Es muss etikettiert werden (Arbeitsanweisung, abgeleitet: mind. eine Position ≠ kein_etikett — Digi-Tag-Etiketten zählen mit) */
             priceLabelPrintRequired?: boolean | null;
+            /** @description Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg. */
+            labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -1689,7 +1709,11 @@ export interface components {
             expectedQuantity: number;
             /** @description Σ confirmed over the SKU lines, null if none confirmed yet */
             confirmedQuantity?: number | null;
-            priceLabelRequired: boolean;
+            /**
+             * @description Etikett-Druckvariante der Position (siehe PositionInstructionDto)
+             * @enum {string}
+             */
+            labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
             securityRequired: boolean;
             onlineHandlingRequired: boolean;
             /** @description PositionStatus: open|confirmed|issue_open|completed */

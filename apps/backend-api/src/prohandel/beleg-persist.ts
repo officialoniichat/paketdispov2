@@ -1,4 +1,5 @@
 import type { BoxGoodsType, GoodsTypeText, Prisma, PrismaClient } from '@prisma/client';
+import { labelPrintRequired } from '@paket/domain-types';
 import type { GeneratedBeleg } from './beleg-generator.js';
 
 /** Beleg-Kopf-Warenart → Boxzettel-Warenart (eine Box trägt die Warenart ihres Belegs). */
@@ -122,7 +123,11 @@ export async function persistGeneratedBeleg(
 
   const check = checkModeFromInspectionLevel(beleg.inspectionLevelCode);
   const header = {
-    priceLabelPrintRequired: beleg.positions.some((p) => p.instruction.priceLabelRequired),
+    // Kopf-Zusammenfassung (keine eigene Wahrheit): sobald EINE Position ein
+    // Etikett bekommt — mit oder ohne Preis — muss etikettiert werden.
+    priceLabelPrintRequired: beleg.positions.some((p) =>
+      labelPrintRequired(p.instruction.labelPrintVariant),
+    ),
     sortByArticleColorSizeRequired: beleg.positions.length > 1,
     ...check,
     inspectionLevelCode: beleg.inspectionLevelCode,
@@ -160,7 +165,7 @@ export async function persistGeneratedBeleg(
     positionIdByNo.set(p.positionNo, position.id);
 
     const instruction = {
-      priceLabelRequired: p.instruction.priceLabelRequired,
+      labelPrintVariant: p.instruction.labelPrintVariant,
       priceLabelAttachRequired: p.instruction.priceLabelAttachRequired,
       securityRequired: p.instruction.securityRequired,
       securityTypeCode: p.instruction.securityTypeCode,

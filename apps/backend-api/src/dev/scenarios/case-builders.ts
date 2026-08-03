@@ -4,6 +4,11 @@
 // fixtures for the Belege scopes, the mock-ProHandel batch and the Intake-Gate /
 // Lieferungs-Hold fixtures. Deterministic and idempotent by natural keys.
 import type { BoxGoodsType, GoodsTypeText, PriorityFlag } from '@prisma/client';
+import {
+  LABEL_PRINT_VARIANT_ORDER,
+  labelPrintRequired,
+  type LabelPrintVariant,
+} from '@paket/domain-types';
 import { generateBelege } from '../../prohandel/beleg-generator.js';
 import { persistGeneratedBeleg } from '../../prohandel/beleg-persist.js';
 import { LOCATIONS, type GeneratedCase } from './seed-data.js';
@@ -145,13 +150,22 @@ export async function seedCaseDetails(
 
   for (const c of cases) {
     const params = detailParamsFor(specByWeBelegNo.get(c.weBelegNo), c.totalQuantity);
-    // B3: Etikettendruck NICHT auf jedem Beleg — sonst trägt der Chip „🏷️ Etiketten
-    // drucken" am Bündel-Home keine Information mehr. Dustin will genau daran
-    // erkennen, ob er zum Drucker muss. Deterministische Teilmenge (zwei von drei
-    // Belegen), analog zu `onlineDemoCase` weiter unten.
-    const printDemoCase = Number(c.weBelegNo.replace(/\D/g, '').slice(-1)) % 3 !== 0;
+    // Positions carry a destination: Filiale / Shopbereich / Etage. Most Belege ship
+    // to ONE Etage → one Transportbox. A deterministic subset puts a second position
+    // on another Etage to demo the real split (one box per Shopbereich/Shop/Etage).
+    const positionCount = Math.min(params.positionCount, Math.max(1, Math.floor(c.totalQuantity / 4) || 1));
+    // B3 + Kundenfeedback 03.08.2026: die Etikett-Druckvariante hängt an der POSITION
+    // (mit Preis / DigiTag ohne Preis / kein Etikett); der Kopf-Flag ist nur noch ihre
+    // Zusammenfassung. Deterministische Mischung über WE-Nr × Positions-Index, damit im
+    // Seed alle drei Varianten UND echte Misch-Belege vorkommen — sonst trüge die
+    // Etiketten-Anzeige am Bündel-Home keine Information mehr.
+    const caseDigit = Number(c.weBelegNo.replace(/\D/g, '').slice(-1));
+    const variantFor = (positionNo: number): LabelPrintVariant =>
+      LABEL_PRINT_VARIANT_ORDER[(caseDigit + positionNo) % LABEL_PRINT_VARIANT_ORDER.length]!;
     const headerData = {
-      priceLabelPrintRequired: printDemoCase,
+      priceLabelPrintRequired: Array.from({ length: positionCount }, (_, idx) =>
+        variantFor(idx + 1),
+      ).some(labelPrintRequired),
       goodsReceiptCheckMode: params.checkMode,
       goodsReceiptCheckPercentage: params.checkPercentage,
       // A5: Prüfstufe aus dem Katalog, konsistent zum Prüfmodus des Belegs.
@@ -165,10 +179,6 @@ export async function seedCaseDetails(
       create: { caseId: c.id, ...headerData },
     });
 
-    // Positions carry a destination: Filiale / Shopbereich / Etage. Most Belege ship
-    // to ONE Etage → one Transportbox. A deterministic subset puts a second position
-    // on another Etage to demo the real split (one box per Shopbereich/Shop/Etage).
-    const positionCount = Math.min(params.positionCount, Math.max(1, Math.floor(c.totalQuantity / 4) || 1));
     const splitAcrossEtagen = positionCount >= 2 && c.totalQuantity % 2 === 0;
     const secondQty = Math.floor(c.totalQuantity / positionCount);
     // WGRs kommen aus dem gesäten WGR-Katalog (A2), damit Katalog-Beschreibung und
@@ -235,10 +245,12 @@ export async function seedCaseDetails(
 
       positionIdsByFloor.set(p.floor, [...(positionIdsByFloor.get(p.floor) ?? []), position.id]);
 
-      // Positionsanweisung inkl. Sicherungstyp-Piktogramm (A4).
+      // Positionsanweisung inkl. Sicherungstyp-Piktogramm (A4) und Etikett-Druckvariante.
+      const labelPrintVariant = variantFor(p.positionNo);
       const instruction = {
-        priceLabelRequired: true,
-        priceLabelAttachRequired: p.positionNo === 1,
+        labelPrintVariant,
+        // Anbringen setzt ein gedrucktes Etikett voraus — ohne Etikett kein Anbringen.
+        priceLabelAttachRequired: p.positionNo === 1 && labelPrintRequired(labelPrintVariant),
         securityRequired: p.securityTypeCode !== null,
         securityTypeCode: p.securityTypeCode,
         onlineHandlingRequired: false,
@@ -670,6 +682,12 @@ interface Ma108PositionSpec {
   catManOffsetDays?: number;
   onlineRelevant?: boolean;
   securityTypeCode?: string | null;
+  /**
+   * Etikett-Druckvariante der Position (Kundenfeedback 03.08.2026). Ohne Angabe
+   * gilt der klassische Fall „Etikett mit Preis" — genau der stille Standard,
+   * den es vorher überall gab.
+   */
+  labelPrintVariant?: LabelPrintVariant;
   skuLines: Ma108SkuSpec[];
 }
 
@@ -679,7 +697,6 @@ interface Ma108CaseSpec {
   storageCode: string;
   goodsTypeText: GoodsTypeText;
   status: 'assigned' | 'completed' | 'issue_open' | 'problem_resolved';
-  priceLabelPrintRequired: boolean;
   checkMode: 'quantity_only' | 'percentage_check' | 'full_check';
   checkPercentage?: 10 | 20;
   estimatedMinutes: number;
@@ -701,7 +718,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
   // fortlaufende WE-Nummern → beide Erkennungssignale (T2 note + T3 run) feuern.
   {
     weBelegNo: '9.108.021', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
-    goodsTypeText: 'Vororder', status: 'assigned', priceLabelPrintRequired: true,
+    goodsTypeText: 'Vororder', status: 'assigned',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 18,
     positions: [
       {
@@ -723,11 +740,13 @@ const MA108_CASES: Ma108CaseSpec[] = [
   },
   {
     weBelegNo: '9.108.022', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
-    goodsTypeText: 'Vororder', status: 'assigned', priceLabelPrintRequired: false,
+    goodsTypeText: 'Vororder', status: 'assigned',
     checkMode: 'quantity_only', estimatedMinutes: 14,
     positions: [
       {
+        // Ware kommt fertig ausgezeichnet — kein Etikettendruck, kein Gang zum Drucker.
         wgr: '312400', supplierArticleNo: 'ART-2110', supplierColor: 'oliv', season: 'HW 26',
+        labelPrintVariant: 'kein_etikett',
         skuLines: [
           { ean: '4012345910231', size: '30/32', qty: 8, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
           { ean: '4012345910232', size: '31/32', qty: 10, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
@@ -738,7 +757,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
   },
   {
     weBelegNo: '9.108.023', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
-    goodsTypeText: 'Nachorder', status: 'assigned', priceLabelPrintRequired: true,
+    goodsTypeText: 'Nachorder', status: 'assigned',
     checkMode: 'percentage_check', checkPercentage: 10, estimatedMinutes: 12,
     positions: [
       {
@@ -755,7 +774,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
   // Stop 2 · R19 (Regal) — die Sonderzustände: Fertig / Problem gemeldet / Geklärt.
   {
     weBelegNo: '9.108.051', deliveryNoteNo: 'LS-25-9151', storageCode: 'R19',
-    goodsTypeText: 'Vororder', status: 'completed', priceLabelPrintRequired: true,
+    goodsTypeText: 'Vororder', status: 'completed',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 10,
     completedAt: '11:40',
     positions: [
@@ -770,7 +789,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
   },
   {
     weBelegNo: '9.108.052', deliveryNoteNo: 'LS-25-9152', storageCode: 'R19',
-    goodsTypeText: 'Nachorder', status: 'issue_open', priceLabelPrintRequired: false,
+    goodsTypeText: 'Nachorder', status: 'issue_open',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 11,
     issue: {
       reasonId: 'pr_wrong_color',
@@ -779,6 +798,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     positions: [
       {
         wgr: '111130', supplierArticleNo: 'ART-2152', supplierColor: 'bordeaux',
+        labelPrintVariant: 'digitag_etikett_ohne_preis',
         skuLines: [
           { ean: '4012345910261', size: 'M', qty: 6, ek: 13.9, vk: 32.99, vkLabel: 32.99 },
           { ean: '4012345910262', size: 'L', qty: 6, ek: 13.9, vk: 32.99, vkLabel: 32.99 },
@@ -788,7 +808,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
   },
   {
     weBelegNo: '9.108.053', deliveryNoteNo: 'LS-25-9153', storageCode: 'R19',
-    goodsTypeText: 'Extrabestellung', status: 'problem_resolved', priceLabelPrintRequired: true,
+    goodsTypeText: 'Extrabestellung', status: 'problem_resolved',
     checkMode: 'quantity_only', estimatedMinutes: 9,
     issue: {
       reasonId: 'pr_other',
@@ -806,23 +826,28 @@ const MA108_CASES: Ma108CaseSpec[] = [
       },
     ],
   },
-  // Stop 3 · PA-1 (Palette) — NOS-Beleg mit 3 Positionen, online-relevanter
-  // Position (Rot/Grün über die CSV-Präferenzen: WGR 218110 → 38 grün, 40 rot).
+  // Stop 3 · PA-1 (Palette) — MISCH-BELEG (Kundenfeedback 03.08.2026): alle drei
+  // Etikett-Druckvarianten auf EINEM Beleg, weil Digi Tags bereichsweise ausgerollt
+  // werden. Zusätzlich NOS mit online-relevanter Position (Rot/Grün über die
+  // CSV-Präferenzen: WGR 218110 → 38 grün, 40 rot).
   {
     weBelegNo: '9.108.031', deliveryNoteNo: 'LS-25-9131', storageCode: 'PA-1',
-    goodsTypeText: 'NOS', status: 'assigned', priceLabelPrintRequired: true,
+    goodsTypeText: 'NOS', status: 'assigned',
     checkMode: 'full_check', estimatedMinutes: 26,
     positions: [
       {
         wgr: '218110', supplierArticleNo: 'ART-2131', supplierColor: 'schwarz', nosFlag: true,
         onlineRelevant: true, securityTypeCode: 'spider-wrap',
+        labelPrintVariant: 'etikett_mit_preis',
         skuLines: [
           { ean: '4012345910311', size: '38', qty: 10, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
           { ean: '4012345910312', size: '40', qty: 10, ek: 12.5, vk: 29.99, vkLabel: 29.99 },
         ],
       },
       {
+        // Digital ausgezeichnet: Etikett wird gedruckt, aber OHNE Preis.
         wgr: '111130', supplierArticleNo: 'ART-2132', supplierColor: 'blau', nosFlag: true,
+        labelPrintVariant: 'digitag_etikett_ohne_preis',
         skuLines: [
           { ean: '4012345910321', size: 'M', qty: 8, ek: 10.9, vk: 27.99, vkLabel: 27.99 },
           { ean: '4012345910322', size: 'L', qty: 8, ek: 10.9, vk: 27.99, vkLabel: 27.99 },
@@ -830,22 +855,27 @@ const MA108_CASES: Ma108CaseSpec[] = [
         ],
       },
       {
+        // Bereits ausgezeichnet angeliefert — hier wird gar nichts gedruckt.
         wgr: '312400', supplierArticleNo: 'ART-2133', supplierColor: 'khaki',
+        labelPrintVariant: 'kein_etikett',
         skuLines: [
           { ean: '4012345910331', size: '32/34', qty: 9, ek: 21.5, vk: 54.99, vkLabel: 54.99 },
         ],
       },
     ],
   },
-  // Stop 4 · HB-5/234 (Hängebahn) — Hängeware als Extrabestellung, digital etikettiert.
+  // Stop 4 · HB-5/234 (Hängebahn) — REINER DIGI-TAG-BELEG: die Hängeware ist
+  // komplett digital ausgezeichnet, alle Etiketten laufen OHNE Preis über den
+  // Drucker (Kundenfeedback 03.08.2026).
   {
     weBelegNo: '9.108.041', deliveryNoteNo: 'LS-25-9141', storageCode: 'HB-5/234',
-    goodsTypeText: 'Extrabestellung', status: 'assigned', priceLabelPrintRequired: false,
+    goodsTypeText: 'Extrabestellung', status: 'assigned',
     checkMode: 'quantity_only', estimatedMinutes: 16,
     positions: [
       {
         wgr: '415210', supplierArticleNo: 'ART-2141', supplierColor: 'anthrazit', season: 'HW 26',
         securityTypeCode: 'ink-tag',
+        labelPrintVariant: 'digitag_etikett_ohne_preis',
         skuLines: [
           { ean: '4012345910411', size: '48', qty: 6, ek: 39.9, vk: 99.99, vkLabel: 99.99 },
           { ean: '4012345910412', size: '50', qty: 8, ek: 39.9, vk: 99.99, vkLabel: 99.99 },
@@ -867,6 +897,11 @@ function ma108TotalQuantity(spec: Ma108CaseSpec): number {
     (sum, p) => sum + p.skuLines.reduce((s, l) => s + l.qty, 0),
     0,
   );
+}
+
+/** Ohne Angabe gilt der klassische Fall „Etikett mit Preis" (bisheriger stiller Standard). */
+function ma108LabelPrintVariant(position: Ma108PositionSpec): LabelPrintVariant {
+  return position.labelPrintVariant ?? 'etikett_mit_preis';
 }
 
 function ma108InspectionLevel(spec: Ma108CaseSpec): 'none' | 'p10' | 'p20' | 'full' {
@@ -924,7 +959,10 @@ export async function seedMa108DemoBundle(
     caseIdByWeBelegNo.set(spec.weBelegNo, gcase.id);
 
     const headerData = {
-      priceLabelPrintRequired: spec.priceLabelPrintRequired,
+      // Abgeleitet aus den Positions-Varianten — genau wie im echten Intake-Pfad.
+      priceLabelPrintRequired: spec.positions.some((p) =>
+        labelPrintRequired(ma108LabelPrintVariant(p)),
+      ),
       goodsReceiptCheckMode: spec.checkMode,
       goodsReceiptCheckPercentage: spec.checkPercentage ?? null,
       inspectionLevelCode: ma108InspectionLevel(spec),
@@ -966,9 +1004,11 @@ export async function seedMa108DemoBundle(
       });
       positionIds.push(position.id);
 
+      const labelPrintVariant = ma108LabelPrintVariant(p);
       const instruction = {
-        priceLabelRequired: spec.priceLabelPrintRequired,
-        priceLabelAttachRequired: idx === 0,
+        labelPrintVariant,
+        // Anbringen setzt ein gedrucktes Etikett voraus.
+        priceLabelAttachRequired: idx === 0 && labelPrintRequired(labelPrintVariant),
         securityRequired: (p.securityTypeCode ?? null) !== null,
         securityTypeCode: p.securityTypeCode ?? null,
         onlineHandlingRequired: p.onlineRelevant ?? false,

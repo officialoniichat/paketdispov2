@@ -72,7 +72,7 @@ export const exampleAggregate: CaseAggregate = {
       branchNo: '1',
       shopNo: '2143',
       instruction: {
-        priceLabelRequired: true,
+        labelPrintVariant: 'etikett_mit_preis',
         priceLabelAttachRequired: true,
         priceLabelAttachLocation: 'Am Bund / Innenetikett',
         securityRequired: false,
@@ -102,7 +102,7 @@ export const exampleAggregate: CaseAggregate = {
       branchNo: '1',
       shopNo: '2143',
       instruction: {
-        priceLabelRequired: true,
+        labelPrintVariant: 'etikett_mit_preis',
         priceLabelAttachRequired: true,
         securityRequired: false,
         onlineHandlingRequired: false,
@@ -134,7 +134,7 @@ export const exampleAggregate: CaseAggregate = {
       branchNo: '1',
       shopNo: '2143',
       instruction: {
-        priceLabelRequired: true,
+        labelPrintVariant: 'etikett_mit_preis',
         priceLabelAttachRequired: true,
         securityRequired: false,
         onlineHandlingRequired: false,

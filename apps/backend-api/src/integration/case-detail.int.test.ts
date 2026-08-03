@@ -87,7 +87,7 @@ async function seed(): Promise<{ caseId: string }> {
       branchNo: '1',
       shopNo: '21',
       status: 'open',
-      instruction: { create: { priceLabelRequired: true, securityRequired: true } },
+      instruction: { create: { labelPrintVariant: 'etikett_mit_preis', securityRequired: true } },
       skuLines: {
         create: [
           { ean: '4000000000011', size: '38', expectedQuantity: 10, confirmedQuantity: 8 },
@@ -174,7 +174,7 @@ describe('case detail (§10.4 GET /api/teamlead/cases/:caseId)', () => {
     expect(detail.positions).toHaveLength(2);
     const [p1, p2] = detail.positions;
     expect(p1?.positionNo).toBe(1);
-    expect(p1?.priceLabelRequired).toBe(true);
+    expect(p1?.labelPrintVariant).toBe('etikett_mit_preis');
     expect(p1?.securityRequired).toBe(true);
     expect(p1?.onlineHandlingRequired).toBe(false);
     expect(p1?.expectedQuantity).toBe(20);

@@ -34,6 +34,11 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import {
+  LABEL_PRINT_VARIANT_DISPLAY,
+  summarizeLabelPrintVariants,
+  type LabelPrintVariant,
+} from '@paket/domain-types';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
 import { Code128Barcode } from '../components/Code128Barcode.js';
 import type { components } from '@paket/api-client';
@@ -181,20 +186,97 @@ export function greetingForHour(hour: number): string {
 }
 
 /**
+ * Welche Etikett-Druckvarianten stecken in diesem Beleg — nur die tatsächlich
+ * vorkommenden, in der Reihenfolge aus domain-types (Kundenfeedback 03.08.2026).
+ * Die Fachlogik liegt in `summarizeLabelPrintVariants`; hier wird nur gelesen.
+ */
+function belegLabelVariants(beleg: CaseSummaryDto): LabelPrintVariant[] {
+  return summarizeLabelPrintVariants(
+    (beleg.labelPrintPositions ?? []).map((p) => p.labelPrintVariant),
+  );
+}
+
+/**
+ * Aufdröselung PRO POSITION unter dem Code-128 (Kundenfeedback 03.08.2026): an der
+ * Etikettendruck-Station muss auf einen Blick sichtbar sein, WELCHE Position ohne
+ * Preis zu drucken ist — sonst laufen alle Etiketten mit Preis. Reihenfolge =
+ * Positionsreihenfolge, untereinander, klar getrennte Zeilen fürs Handy.
+ */
+const VARIANT_ROW_SX: Record<LabelPrintVariant, { bgcolor: string; borderColor: string }> = {
+  etikett_mit_preis: { bgcolor: 'action.hover', borderColor: 'divider' },
+  digitag_etikett_ohne_preis: {
+    bgcolor: 'rgba(156, 39, 176, 0.10)',
+    borderColor: 'secondary.light',
+  },
+  kein_etikett: { bgcolor: 'transparent', borderColor: 'divider' },
+};
+
+function BarcodeLabelBreakdown({ beleg }: { beleg: CaseSummaryDto }): JSX.Element | null {
+  const positions = beleg.labelPrintPositions ?? [];
+  if (positions.length === 0) return null;
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+        Etikettendruck je Position
+      </Typography>
+      <Stack spacing={0.75}>
+        {positions.map((p) => {
+          const display = LABEL_PRINT_VARIANT_DISPLAY[p.labelPrintVariant];
+          return (
+            <Box
+              key={p.positionNo}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                p: 1,
+                borderRadius: 1,
+                border: '1px solid',
+                ...VARIANT_ROW_SX[p.labelPrintVariant],
+              }}
+            >
+              <Typography sx={{ fontWeight: 800, fontSize: 17, minWidth: 62, flexShrink: 0 }}>
+                Pos {p.positionNo}
+              </Typography>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                  {display.icon} {display.label}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  {p.supplierArticleNo}
+                  {p.supplierColor ? ` · ${p.supplierColor}` : ''}
+                </Typography>
+              </Box>
+            </Box>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
+
+/**
  * Beleg-Kopf-Infos (Filiale · Shopbereich, Etiketten-Art) — identisch unter
  * „1 · Ware holen" und „2 · Bearbeiten" (Kundenfeedback 15.07.2026, Punkt 1:
  * die Zusatz-Infos stehen auch am Ware-holen-Eintrag des Belegs). EINE Zeile,
- * die Blöcke mit „|" getrennt (Nachtrag 17.07.2026). Die Etiketten-Art wird
- * immer benannt — Druckpflicht vs. digital ist genau die Information, mit der
- * Dustin entscheidet, ob er zum Drucker muss.
+ * die Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
+ *
+ * Die Etiketten-Angabe nennt seit dem Kundenfeedback 03.08.2026 die konkreten
+ * Varianten des Belegs statt eines pauschalen „Etikettendruck / Digitale
+ * Etiketten": digital ausgezeichnete Ware wird ebenfalls gedruckt — nur ohne
+ * Preis, und genau das muss der Mitarbeiter am Drucker einstellen.
  */
 function BelegInfoLine({ beleg }: { beleg: CaseSummaryDto }): JSX.Element {
+  const variants = belegLabelVariants(beleg);
   return (
     <Typography variant="body2" color="text.secondary">
       Filiale {beleg.branchNo}
       {beleg.primaryShopAreaNo ? ` · Shopbereich ${beleg.primaryShopAreaNo}` : ''}
-      {' | '}
-      {beleg.priceLabelPrintRequired ? '🏷️ Etikettendruck' : 'Digitale Etiketten'}
+      {variants.length > 0
+        ? ` | ${variants
+            .map((v) => `${LABEL_PRINT_VARIANT_DISPLAY[v].icon} ${LABEL_PRINT_VARIANT_DISPLAY[v].shortLabel}`)
+            .join(' | ')}`
+        : ''}
     </Typography>
   );
 }
@@ -602,6 +684,9 @@ export function BundleHomeScreen(): JSX.Element {
         <DialogTitle>WE {barcodeCase?.weBelegNo}</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           {barcodeCase ? <Code128Barcode value={barcodeCase.weBelegNo} /> : null}
+          {/* Kundenfeedback 03.08.2026: unter dem Code welche Position mit / ohne
+              Preis bzw. gar nicht zu drucken ist — direkt an der Druckstation lesbar. */}
+          {barcodeCase ? <BarcodeLabelBreakdown beleg={barcodeCase} /> : null}
           <Button fullWidth sx={{ mt: 2 }} onClick={() => setBarcodeCaseId(undefined)}>
             Schließen
           </Button>

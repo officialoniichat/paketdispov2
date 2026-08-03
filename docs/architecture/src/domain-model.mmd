@@ -107,7 +107,7 @@ erDiagram
         enum inspectionLevelCode "Katalog A5: none|p10|p20|full"
         enum goodsReceiptCheckMode "quantity_only|percentage|full"
         boolean minimumQuantityCheckAlwaysRequired
-        boolean priceLabelPrintRequired
+        boolean priceLabelPrintRequired "abgeleitet: eine Position != kein_etikett"
         boolean zstRequired
     }
     RECEIPT_POSITION {
@@ -127,7 +127,7 @@ erDiagram
     }
     POSITION_INSTRUCTION {
         string positionId PK "FK→position (1:1)"
-        boolean priceLabelRequired
+        enum labelPrintVariant "etikett_mit_preis|digitag_etikett_ohne_preis|kein_etikett"
         boolean securityRequired
         string securityTypeCode "Piktogramm-Ref: /static/pictograms/(code).svg"
         boolean onlineHandlingRequired

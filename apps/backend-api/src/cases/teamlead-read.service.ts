@@ -6,7 +6,11 @@ import {
   type DeliveryGroup,
   type GroupingConfig,
 } from '@paket/assignment-engine';
-import { bereichFromLocationKind, locationKindSchema } from '@paket/domain-types';
+import {
+  bereichFromLocationKind,
+  locationKindSchema,
+  type LabelPrintVariant,
+} from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type AuditEventDto,
@@ -1023,7 +1027,7 @@ export class TeamleadReadService {
       floor?: string | null;
       status: string;
       instruction: {
-        priceLabelRequired: boolean;
+        labelPrintVariant: LabelPrintVariant;
         securityRequired: boolean;
         onlineHandlingRequired: boolean;
       } | null;
@@ -1084,7 +1088,8 @@ export class TeamleadReadService {
       goodsType: goodsTypeText,
       expectedQuantity,
       confirmedQuantity,
-      priceLabelRequired: p.instruction?.priceLabelRequired ?? false,
+      // Ohne gespeicherte Anweisung gilt der bisherige stille Standard „mit Preis".
+      labelPrintVariant: p.instruction?.labelPrintVariant ?? 'etikett_mit_preis',
       securityRequired: p.instruction?.securityRequired ?? false,
       onlineHandlingRequired: p.instruction?.onlineHandlingRequired ?? false,
       status: p.status,

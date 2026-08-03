@@ -3049,6 +3049,37 @@
           "routeStops"
         ]
       },
+      "LabelPrintPositionDto": {
+        "type": "object",
+        "properties": {
+          "positionNo": {
+            "type": "number"
+          },
+          "supplierArticleNo": {
+            "type": "string",
+            "description": "Lieferanten-Artikel-Nr der Position"
+          },
+          "supplierColor": {
+            "type": "string",
+            "description": "Lieferanten-Farbe der Position"
+          },
+          "labelPrintVariant": {
+            "type": "string",
+            "enum": [
+              "etikett_mit_preis",
+              "digitag_etikett_ohne_preis",
+              "kein_etikett"
+            ],
+            "description": "Etikett-Druckvariante der Position (siehe PositionInstructionDto)"
+          }
+        },
+        "required": [
+          "positionNo",
+          "supplierArticleNo",
+          "supplierColor",
+          "labelPrintVariant"
+        ]
+      },
       "CaseSummaryDto": {
         "type": "object",
         "properties": {
@@ -3092,7 +3123,14 @@
           "priceLabelPrintRequired": {
             "type": "boolean",
             "nullable": true,
-            "description": "Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen"
+            "description": "Es muss etikettiert werden (Arbeitsanweisung, abgeleitet: mind. eine Position ≠ kein_etikett — Digi-Tag-Etiketten zählen mit)"
+          },
+          "labelPrintPositions": {
+            "description": "Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelPrintPositionDto"
+            }
           },
           "primaryShopNo": {
             "type": "string",
@@ -3297,8 +3335,14 @@
       "PositionInstructionDto": {
         "type": "object",
         "properties": {
-          "priceLabelRequired": {
-            "type": "boolean"
+          "labelPrintVariant": {
+            "type": "string",
+            "enum": [
+              "etikett_mit_preis",
+              "digitag_etikett_ohne_preis",
+              "kein_etikett"
+            ],
+            "description": "Etikett-Druckvariante der Position: etikett_mit_preis | digitag_etikett_ohne_preis (Digi Tag am Verkaufsplatz ⇒ Etikett OHNE Preis drucken) | kein_etikett"
           },
           "priceLabelAttachRequired": {
             "type": "boolean"
@@ -3336,7 +3380,7 @@
           }
         },
         "required": [
-          "priceLabelRequired",
+          "labelPrintVariant",
           "priceLabelAttachRequired",
           "securityRequired",
           "onlineHandlingRequired"
@@ -4279,7 +4323,14 @@
           "priceLabelPrintRequired": {
             "type": "boolean",
             "nullable": true,
-            "description": "Preisetiketten müssen gedruckt werden (Arbeitsanweisung) — Hinweis beim Ware holen"
+            "description": "Es muss etikettiert werden (Arbeitsanweisung, abgeleitet: mind. eine Position ≠ kein_etikett — Digi-Tag-Etiketten zählen mit)"
+          },
+          "labelPrintPositions": {
+            "description": "Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelPrintPositionDto"
+            }
           },
           "primaryShopNo": {
             "type": "string",
@@ -4700,8 +4751,14 @@
             "nullable": true,
             "description": "Σ confirmed over the SKU lines, null if none confirmed yet"
           },
-          "priceLabelRequired": {
-            "type": "boolean"
+          "labelPrintVariant": {
+            "type": "string",
+            "enum": [
+              "etikett_mit_preis",
+              "digitag_etikett_ohne_preis",
+              "kein_etikett"
+            ],
+            "description": "Etikett-Druckvariante der Position (siehe PositionInstructionDto)"
           },
           "securityRequired": {
             "type": "boolean"
@@ -4729,7 +4786,7 @@
           "branchNo",
           "shopNo",
           "expectedQuantity",
-          "priceLabelRequired",
+          "labelPrintVariant",
           "securityRequired",
           "onlineHandlingRequired",
           "status",
