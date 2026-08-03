@@ -125,11 +125,19 @@ function pick<T>(rng: () => number, arr: readonly T[]): T {
  * Bereich/Warengruppe ausgerollt — die Mischung je Position (nicht je Beleg) ist
  * also der Normalfall, und Misch-Belege entstehen von selbst. Klassisch bleibt
  * die Mehrheit; „kein Etikett" ist die Ausnahme (z. B. bereits ausgezeichnete Ware).
+ *
+ * BEWUSST OHNE `rng()`: die Variante wird aus Beleg-Nr × Positions-Nr gehasht,
+ * damit der gemeinsame Zufallsstrom des Generators unverändert bleibt. Ein
+ * zusätzlicher `rng()`-Zug hier würde jede nachfolgende Entscheidung (Mengen,
+ * Sicherung, Intake-Gate) verschieben und damit sämtliche Seed-Golden-Daten
+ * umwerfen — deterministisch bleibt es so trotzdem.
  */
-function labelPrintVariantFor(rng: () => number): LabelPrintVariant {
-  const roll = rng();
-  if (roll < 0.25) return 'digitag_etikett_ohne_preis';
-  if (roll < 0.33) return 'kein_etikett';
+function labelPrintVariantFor(belegNo: number, positionNo: number): LabelPrintVariant {
+  // Kleiner, stabiler Streuwert; die Faktoren sind teilerfremd zum Modul, damit
+  // weder Beleg- noch Positionsnummer allein das Ergebnis bestimmt.
+  const bucket = (belegNo * 7 + positionNo * 3) % 12;
+  if (bucket < 3) return 'digitag_etikett_ohne_preis';
+  if (bucket === 3) return 'kein_etikett';
   return 'etikett_mit_preis';
 }
 
@@ -238,7 +246,7 @@ export function generateBelege(options: GenerateOptions): GeneratedBeleg[] {
         catManDate: catMan ? isoDayPlus(options.bookingDate, int(rng, 3, 14)) : null,
         onlineRelevant: rng() < 0.35,
         instruction: {
-          labelPrintVariant: labelPrintVariantFor(rng),
+          labelPrintVariant: labelPrintVariantFor(no, p),
           priceLabelAttachRequired: rng() < 0.6,
           securityRequired,
           securityTypeCode: securityRequired ? pick(rng, SECURITY_PICTOGRAM_CODES) : null,
