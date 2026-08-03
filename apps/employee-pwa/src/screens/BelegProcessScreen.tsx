@@ -55,6 +55,12 @@ import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import type { SvgIconComponent } from '@mui/icons-material';
+import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
+import CheckIcon from '@mui/icons-material/Check';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
+import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
 import {
   DEFAULT_WGR_CATALOG,
   labelPrintRequired,
@@ -259,16 +265,21 @@ function EtikettpreisInput({
 }
 
 /**
- * Kundenfeedback 03.08.2026: der frühere generische „🏷️ Etikett"-Chip sagte nur
+ * Kundenfeedback 03.08.2026: der frühere generische „Etikett"-Chip sagte nur
  * „irgendein Etikett". Er ist durch die konkrete Druckvariante ersetzt
  * ({@link LabelPrintVariantChip}) — genau daran erkennt der Mitarbeiter, ob er am
  * Drucker die Preisunterdrückung einstellen muss.
  */
-const FLAG_CHIPS = [
-  { key: 'securityRequired', label: '🔒 Sicherung', color: 'warning' as const },
-  { key: 'onlineHandlingRequired', label: '🌐 Online', color: 'info' as const },
-  { key: 'redPriceRequired', label: '🔴 Rotpreis', color: 'error' as const },
-] as const;
+const FLAG_CHIPS: ReadonlyArray<{
+  key: string;
+  label: string;
+  Icon: SvgIconComponent;
+  color: 'warning' | 'info' | 'error';
+}> = [
+  { key: 'securityRequired', label: 'Sicherung', Icon: LockOutlinedIcon, color: 'warning' },
+  { key: 'onlineHandlingRequired', label: 'Online', Icon: PublicOutlinedIcon, color: 'info' },
+  { key: 'redPriceRequired', label: 'Rotpreis', Icon: PriceChangeOutlinedIcon, color: 'error' },
+];
 
 /** Chip-Farbe je Variante; Wording/Reihenfolge kommen aus domain-types. */
 const VARIANT_CHIP_COLOR: Record<LabelPrintVariant, 'default' | 'secondary'> = {
@@ -691,7 +702,12 @@ export function BelegProcessScreen(): JSX.Element {
                                 {pos.supplierArticleNo} · {pos.supplierColor}
                               </Typography>
                               {pos.nosFlag ? (
-                                <Chip size="small" color="success" label="♻️ NOS" />
+                                <Chip
+                                  size="small"
+                                  color="success"
+                                  icon={<AutorenewOutlinedIcon />}
+                                  label="NOS"
+                                />
                               ) : null}
                               {!pos.nosFlag && positionWarenart(pos) ? (
                                 <Chip
@@ -705,7 +721,13 @@ export function BelegProcessScreen(): JSX.Element {
                                   übrigen Anweisungs-Chips, weil sie den Druckauftrag steuert. */}
                               <LabelPrintVariantChip variant={i.labelPrintVariant} />
                               {flags.map((f) => (
-                                <Chip key={f.key} size="small" color={f.color} label={f.label} />
+                                <Chip
+                                  key={f.key}
+                                  size="small"
+                                  color={f.color}
+                                  icon={<f.Icon />}
+                                  label={f.label}
+                                />
                               ))}
                             </Stack>
 
@@ -809,7 +831,8 @@ export function BelegProcessScreen(): JSX.Element {
                                 {isChecked ? (
                                   <Chip
                                     color="success"
-                                    label="Position geprüft ✓"
+                                    icon={<CheckIcon />}
+                                    label="Position geprüft"
                                     onClick={() => void flow.togglePositionChecked(pos.id)}
                                     sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
                                   />

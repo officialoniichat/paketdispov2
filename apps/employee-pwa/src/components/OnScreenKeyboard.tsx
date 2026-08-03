@@ -20,9 +20,17 @@
  * ⌫ am Ende gelöscht — das reicht für Preise, Mitarbeiternummer und Notiz und
  * hält die Komponente klein und robust.
  */
-import { useEffect, useRef, useState, type JSX, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
+import CheckIcon from '@mui/icons-material/Check';
 
 /** Layout-Kennung, die ein Feld über `data-osk` anfordert. */
 export type OskLayout = 'numeric' | 'decimal' | 'text';
@@ -182,7 +190,8 @@ function Key({
   grow,
   tone,
 }: {
-  label: string;
+  /** ReactNode statt string: die Fertig-Taste trägt ein Icon plus Text. */
+  label: ReactNode;
   onPress: () => void;
   grow?: boolean;
   tone?: 'default' | 'primary';
@@ -234,7 +243,12 @@ function NumericPad({
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: 96 }}>
         <Key label="⌫" grow onPress={onBackspace} />
-        <Key label="✓ Fertig" grow tone="primary" onPress={onDone} />
+        <Key label={
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <CheckIcon fontSize="small" />
+              Fertig
+            </Box>
+          } grow tone="primary" onPress={onDone} />
       </Box>
     </Box>
   );
@@ -253,7 +267,12 @@ function TextPad({ onKey, onBackspace, onDone }: PadProps): JSX.Element {
       <Box sx={{ display: 'flex', gap: 0.75 }}>
         <Key label="⌫" onPress={onBackspace} />
         <Key label="Leer" grow onPress={() => onKey(' ')} />
-        <Key label="✓ Fertig" tone="primary" onPress={onDone} />
+        <Key label={
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <CheckIcon fontSize="small" />
+              Fertig
+            </Box>
+          } tone="primary" onPress={onDone} />
       </Box>
     </Box>
   );

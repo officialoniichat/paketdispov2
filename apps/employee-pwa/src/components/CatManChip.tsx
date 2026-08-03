@@ -9,6 +9,7 @@
  */
 import type { JSX } from 'react';
 import Chip from '@mui/material/Chip';
+import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
 import { catManDateLabel, isCatManOverdue } from '../domain/catMan.js';
 
 export interface CatManChipProps {
@@ -35,9 +36,10 @@ export function CatManChip({
       // bleibt der bekannte dezente Kontur-Chip aus der Positionszeile.
       variant={overdue ? 'filled' : 'outlined'}
       color={overdue ? 'error' : 'warning'}
+      icon={<EventOutlinedIcon />}
       // „CatMan" steht mit im Label: ein nacktes Datum sagt nicht, WAS für ein
       // Termin das ist — daneben stehen Saison, Buchungs- und Lieferdaten.
-      label={overdue ? `📅 CatMan ${label} · überfällig` : `📅 CatMan ${label}`}
+      label={overdue ? `CatMan ${label} · überfällig` : `CatMan ${label}`}
       aria-label={`CatMan-Termin ${label}${overdue ? ', überfällig' : ''}`}
       sx={{
         fontWeight: overdue ? 700 : 500,

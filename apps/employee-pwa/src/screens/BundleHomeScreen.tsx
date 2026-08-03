@@ -38,6 +38,13 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import type { SvgIconComponent } from '@mui/icons-material';
+import CelebrationOutlinedIcon from '@mui/icons-material/CelebrationOutlined';
+import CheckIcon from '@mui/icons-material/Check';
+import CheckroomOutlinedIcon from '@mui/icons-material/CheckroomOutlined';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import {
   LABEL_PRINT_VARIANT_DISPLAY,
   summarizeLabelPrintVariants,
@@ -167,11 +174,11 @@ export function orderCasesForDisplay(cases: readonly CaseSummaryDto[]): CaseSumm
 }
 
 /** B6: Icon je Lagerplatz-Art (LocationKind-abgeleitet): Regal / Palette / Kleiderbügel. */
-const ICON: Record<GoodsCategory, string> = {
-  regal: '🗄️',
-  palette: '🟧',
-  haengeware: '🧥',
-  mixed: '📦',
+const ICON: Record<GoodsCategory, SvgIconComponent> = {
+  regal: GridViewOutlinedIcon,
+  palette: LayersOutlinedIcon,
+  haengeware: CheckroomOutlinedIcon,
+  mixed: Inventory2OutlinedIcon,
 };
 
 /** Derives the display icon category from the case's storageLocationKind
@@ -530,7 +537,7 @@ export function BundleHomeScreen(): JSX.Element {
                       flexShrink: 0,
                     }}
                   >
-                    {isDone ? '✓' : index + 1}
+                    {isDone ? <CheckIcon fontSize="small" /> : index + 1}
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
@@ -614,6 +621,7 @@ export function BundleHomeScreen(): JSX.Element {
                   : {};
               // Startbar = Ware geholt UND kein geparkter Problemfall.
               const startable = isBelegStartable(b.id) && !parked;
+              const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
               return (
                 <Paper
                   key={b.id}
@@ -629,7 +637,7 @@ export function BundleHomeScreen(): JSX.Element {
                     ...tint,
                   }}
                 >
-                  <Box sx={{ fontSize: 22 }}>{ICON[goodsCategoryFor(b.storageLocationKind)]}</Box>
+                  <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
                     <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
@@ -679,8 +687,12 @@ export function BundleHomeScreen(): JSX.Element {
       >
         <Stack spacing={1}>
           {allDone ? (
-            <Alert severity="success" sx={{ py: 0.5 }}>
-              Bündel fertig 🎉
+            <Alert
+              severity="success"
+              icon={<CelebrationOutlinedIcon fontSize="inherit" />}
+              sx={{ py: 0.5 }}
+            >
+              Bündel fertig
             </Alert>
           ) : null}
           {pullMsg ? (

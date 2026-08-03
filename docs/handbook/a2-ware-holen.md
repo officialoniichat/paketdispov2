@@ -29,11 +29,12 @@ Neben `'1 · Ware holen'` siehst du einen Zähler wie `'<geholt>/<gesamt> Plätz
 1. Arbeite die Liste unter `'1 · Ware holen'` ab. Jede Karte ist ein **Lagerplatz** (Stop), groß
    angezeigt (z. B. `'R3'`, `'HB-3'`, `'P-2'`). Vorne steht die **Stop-Nummer** (1, 2, 3 …).
 2. Pro Stop siehst du die Belege als Kürzel `'WE <Nummer>'`. Muss dort etwas gedruckt werden, steht
-   zusätzlich `'· 🏷️ Etiketten drucken'`.
+   zusätzlich `'· Etiketten drucken'` mit dem Etiketten-Symbol.
 3. **Hole die Ware** und hake den Stop ab – auf zwei Arten:
    - Tippe die Karte an, **oder**
    - scanne den Barcode am Lagerplatz (passt der Scan zum Platz, wird abgehakt).
-4. Ein abgehakter Stop wird **grün**, zeigt ein `'✓'` und den Status `'geholt'` statt `'offen'`.
+4. Ein abgehakter Stop wird **grün**, zeigt einen **Haken** und den Status `'geholt'` statt
+   `'offen'`.
    Tippst du erneut, nimmst du das Häkchen wieder zurück.
 
 Die **Reihenfolge gibt das System vor** (sinnvoller Laufweg). Du kannst die Liste nicht umsortieren,

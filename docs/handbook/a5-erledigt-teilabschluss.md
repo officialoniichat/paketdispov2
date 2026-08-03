@@ -11,7 +11,7 @@ Wenn du mit einem Beleg fertig bist (ganz oder teilweise).
 
 ## Voraussetzungen für „Beleg erledigt"
 
-Der Knopf **`'Beleg erledigt'`** ist nur aktiv, wenn **alle** Positionen als `'Position geprüft ✓'`
+Der Knopf **`'Beleg erledigt'`** ist nur aktiv, wenn **alle** Positionen als `'Position geprüft'`
 markiert sind **und keine Abweichung/kein Problem** vorliegt. Sonst steht oben `'Noch offen: …'`
 (z. B. `'Noch nicht alle Positionen geprüft'`). Liegt ein Problem vor (auch eine automatische
 Mengen- oder Preisabweichung, Kapitel A4), bleibt nur der **`'Teilabschluss (Problem melden)'`**.
@@ -68,7 +68,7 @@ flowchart TD
 - **`'Teilabschluss (Problem melden)'`**: die Probleme sind bei der Teamleitung, der Beleg bleibt rot
   geparkt bei dir, bis geklärt ist.
 - Sind **alle** Belege deines Bündels geschlossen (fertig oder rot geparkt), zeigt der
-  Startbildschirm `'Bündel fertig 🎉'` und den Knopf `'Nächstes Bündel holen'` bzw.
+  Startbildschirm `'Bündel fertig'` und den Knopf `'Nächstes Bündel holen'` bzw.
   `'Weiteres Bündel anfordern'` (siehe Kapitel A2/A7).
 
 ## Häufige Fehler / FAQ

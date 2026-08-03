@@ -35,17 +35,18 @@ Jede Position hat oben einen Kopfblock, der zeigt:
 - rechts die Sollmenge `'Soll gesamt <Menge>'`, den Knopf **`'Position geprüft'`** und den roten
   Knopf **`'Problem'`**.
 
-Zusätzliche Kennzeichen erscheinen nur, wenn sie zutreffen, z. B. `'♻️ NOS'`, den **CatMan-Termin**
-mit Datum **`'📅 CatMan <TT.MM.JJJJ>'`** (rot als **`'📅 CatMan <TT.MM.JJJJ> · überfällig'`**, wenn
-der Termin schon vorbei ist), `'🏷️ Etikett'`, `'🔒 Sicherung'`, `'🌐 Online'`,
-`'🔴 Rotpreis'`. Dazu ggf. Hinweiszeilen wie `'Etikett anbringen: <Ort>'`, `'Sichern: <Ort>'`,
+Zusätzliche Kennzeichen erscheinen nur, wenn sie zutreffen. Jedes trägt ein **Symbol** vor dem
+Text: `'NOS'`, den **CatMan-Termin** mit Datum **`'CatMan <TT.MM.JJJJ>'`** (rot als
+**`'CatMan <TT.MM.JJJJ> · überfällig'`**, wenn der Termin schon vorbei ist), `'Etikett'`,
+`'Sicherung'`, `'Online'`,
+`'Rotpreis'`. Dazu ggf. Hinweiszeilen wie `'Etikett anbringen: <Ort>'`, `'Sichern: <Ort>'`,
 `'Online: <Ort>'`, `'Hinweis: <Text>'`.
 
 ## Preisetikett & Sicherungs-Piktogramm
 
-- **Preisetikett**: Wo `'🏷️ Etikett'` steht, bringst du am angegebenen Ort das Preisetikett an
+- **Preisetikett**: Wo `'Etikett'` steht, bringst du am angegebenen Ort das Preisetikett an
   (`'Etikett anbringen: <Ort>'`).
-- **Sicherung**: Wo `'🔒 Sicherung'` steht, siehst du – wenn hinterlegt – ein **Piktogramm** des
+- **Sicherung**: Wo `'Sicherung'` steht, siehst du – wenn hinterlegt – ein **Piktogramm** des
   Sicherungstyps und den Text `'Sicherungstyp: <Typ>'`. Mögliche Typen: `'Hartetikett'`,
   `'Farbetikett'`, `'Spinnensicherung'`, `'Safer-Box'`, `'Kabelschloss'`. Sichere die Ware genau so.
 
@@ -86,14 +87,14 @@ Spalte **`'VK korrigiert'`** ein (Feld `'Preis'`). Auch das markiert die Zeile *
 ## „Position geprüft" setzen und zurücknehmen
 
 - Hast du eine Position fertig geprüft, tippe **`'Position geprüft'`**.
-- Sie wird dann als grüner Haken `'Position geprüft ✓'` angezeigt. Tippst du erneut, nimmst du die
+- Sie wird dann als grüner Haken `'Position geprüft'` angezeigt. Tippst du erneut, nimmst du die
   Prüfung wieder zurück (Umschalter).
 - Stimmt an einer Position etwas nicht (falscher Artikel, Farbe, Größe, Schaden …), tippe den roten
   Knopf **`'Problem'`** an der Position → weiter mit Kapitel A6.
 
 ## Was passiert danach
 
-- Erst wenn **alle** Positionen als `'Position geprüft ✓'` markiert sind und **kein offenes
+- Erst wenn **alle** Positionen als `'Position geprüft'` markiert sind und **kein offenes
   Problem** besteht, lässt sich der Beleg abschließen (Kapitel A5).
 
 ## Häufige Fehler / FAQ
