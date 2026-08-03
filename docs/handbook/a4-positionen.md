@@ -36,8 +36,8 @@ Jede Position hat oben einen Kopfblock, der zeigt:
   Knopf **`'Problem'`**.
 
 Zusätzliche Kennzeichen erscheinen nur, wenn sie zutreffen, z. B. `'♻️ NOS'`, den **CatMan-Termin**
-mit Datum **`'📅 <TT.MM.JJJJ>'`** (rot als **`'📅 <TT.MM.JJJJ> · überfällig'`**, wenn der Termin
-schon vorbei ist), `'🏷️ Etikett'`, `'🔒 Sicherung'`, `'🌐 Online'`,
+mit Datum **`'📅 CatMan <TT.MM.JJJJ>'`** (rot als **`'📅 CatMan <TT.MM.JJJJ> · überfällig'`**, wenn
+der Termin schon vorbei ist), `'🏷️ Etikett'`, `'🔒 Sicherung'`, `'🌐 Online'`,
 `'🔴 Rotpreis'`. Dazu ggf. Hinweiszeilen wie `'Etikett anbringen: <Ort>'`, `'Sichern: <Ort>'`,
 `'Online: <Ort>'`, `'Hinweis: <Text>'`.
 

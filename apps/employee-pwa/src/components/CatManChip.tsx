@@ -35,7 +35,9 @@ export function CatManChip({
       // bleibt der bekannte dezente Kontur-Chip aus der Positionszeile.
       variant={overdue ? 'filled' : 'outlined'}
       color={overdue ? 'error' : 'warning'}
-      label={overdue ? `📅 ${label} · überfällig` : `📅 ${label}`}
+      // „CatMan" steht mit im Label: ein nacktes Datum sagt nicht, WAS für ein
+      // Termin das ist — daneben stehen Saison, Buchungs- und Lieferdaten.
+      label={overdue ? `📅 CatMan ${label} · überfällig` : `📅 CatMan ${label}`}
       aria-label={`CatMan-Termin ${label}${overdue ? ', überfällig' : ''}`}
       sx={{
         fontWeight: overdue ? 700 : 500,
