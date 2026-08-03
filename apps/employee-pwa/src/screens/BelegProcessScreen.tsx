@@ -2,7 +2,12 @@
  * PROCESS phase — the single per-Beleg work screen.
  *
  * The WE Beleg-Nr. is the hero (C1); the Kopf shows Kartons (C2) and the
- * Warenart wording instead of Abschnitt numbers (C3). The Arbeitsanweisung is
+ * Warenart wording instead of Abschnitt numbers (C3), plus the Beleg's
+ * aggregated CatMan-Termin (frühester Termin über Kopf + Positionen, vom Backend
+ * berechnet) — man muss ihn nicht mehr in den Positionszeilen suchen; die
+ * Positions-Chips bleiben die Detail-Quelle. Ein überschrittener Termin ist rot
+ * als „überfällig" markiert: reine Kontrollinformation, kein Prioritätstreiber.
+ * The Arbeitsanweisung is
  * ordered Prüfung Wareneingang → Rotpreis → Boxzettel (C4); the Prüfstufe is
  * explained in a tooltip on an info icon (C5). Positions carry the Preisetikett
  * placement with the Sicherungsetikett pictogram (C6).
@@ -61,11 +66,13 @@ import {
   type OnlineSizeMark,
 } from '@paket/domain-types';
 import { CaseCardSkeleton, touchTarget } from '@paket/ui';
+import { CatManChip } from '../components/CatManChip.js';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { oskProps } from '../components/OnScreenKeyboard.js';
 import { ProblemDialog } from '../components/ProblemDialog.js';
 import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
+import { useReferenceDay } from '../data/useMeToday.js';
 import type { PositionView } from '../domain/types.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
@@ -104,22 +111,10 @@ const PICTOGRAM_LABEL: Record<string, string> = {
 const WGR_DESCRIPTION = new Map(DEFAULT_WGR_CATALOG.map((e) => [e.wgr, e.description]));
 
 const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
-const CATMAN_DATE = new Intl.DateTimeFormat('de-DE', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-});
 
 /** Format a price, or empty when the mock ERP did not deliver one. */
 function price(value: number | undefined): string | null {
   return typeof value === 'number' ? EUR.format(value) : null;
-}
-
-/** Format an ISO day as a German date, or null when absent. */
-function catManDateLabel(iso: string | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : CATMAN_DATE.format(d);
 }
 
 /**
@@ -384,6 +379,8 @@ export function BelegProcessScreen(): JSX.Element {
   const { caseId = '' } = useParams();
   const navigate = useNavigate();
   const flow = useCaseFlow(caseId);
+  // Bezugstag der Überfälligkeits-Anzeige — derselbe Server-Tag wie im Bündel-Home.
+  const referenceDay = useReferenceDay();
   const [partialOpen, setPartialOpen] = useState(false);
   const [problemTarget, setProblemTarget] = useState<PositionView | null>(null);
 
@@ -488,8 +485,12 @@ export function BelegProcessScreen(): JSX.Element {
         {readOnlyNotice ? (
           <Alert severity={readOnlyNotice.severity}>{readOnlyNotice.text}</Alert>
         ) : null}
-        {/* Kompakte Fakten-Leiste: Warenart · Menge — scanbar, ohne Fließtext
-            (Nachtrag 15.07.2026). */}
+        {/* Kompakte Fakten-Leiste: Warenart · Menge · CatMan-Termin — scanbar,
+            ohne Fließtext (Nachtrag 15.07.2026). Der CatMan-Termin ist der vom
+            Backend aggregierte früheste Termin des Belegs: er steht hier im Kopf,
+            damit man ihn nicht erst in den Positionszeilen suchen muss. Die
+            Positions-Chips unten bleiben die Detail-Quelle (welche Position
+            wann fällig ist). */}
         <Stack
           direction="row"
           spacing={2.5}
@@ -507,6 +508,7 @@ export function BelegProcessScreen(): JSX.Element {
               Teile
             </Typography>
           </Box>
+          <CatManChip date={c.catManDate} referenceDay={referenceDay} size="medium" />
         </Stack>
 
         {/* Kundenfeedback 03.08.2026: WELCHE Etikett-Varianten stecken in diesem
@@ -642,7 +644,6 @@ export function BelegProcessScreen(): JSX.Element {
                 // Position") markiert die gesamte Position rot — Kopfzeile und
                 // alle Größenzeilen.
                 const positionWideProblem = manualProblems.some((x) => x.skuLineId === undefined);
-                const catManLabel = catManDateLabel(pos.catManDate);
                 // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
                 // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
                 const metaText = [
@@ -654,9 +655,6 @@ export function BelegProcessScreen(): JSX.Element {
                 ]
                   .filter((part): part is string => part !== null)
                   .join(' · ');
-                // CatMan-Chip nur mit echtem Termin-Datum — ein bloßes Kennzeichen
-                // ohne Datum wäre nur Rauschen (Nachtrag 15.07.2026).
-                const catManChipLabel = catManLabel;
                 // Preisetikett + Sicherung stehen als Piktogramm-Karten (unten);
                 // hier bleiben nur die textlichen Zusatz-Hinweise.
                 const instructionLines = [
@@ -730,15 +728,10 @@ export function BelegProcessScreen(): JSX.Element {
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {metaText}
                               </Typography>
-                              {catManChipLabel ? (
-                                <Chip
-                                  size="small"
-                                  variant="outlined"
-                                  color="warning"
-                                  label={`📅 ${catManChipLabel}`}
-                                  sx={{ height: 22, '& .MuiChip-label': { px: 0.75 } }}
-                                />
-                              ) : null}
+                              {/* CatMan-Chip nur mit echtem Termin-Datum — ein bloßes
+                                  Kennzeichen ohne Datum wäre nur Rauschen (Nachtrag
+                                  15.07.2026). Überschritten ⇒ rot „überfällig". */}
+                              <CatManChip date={pos.catManDate} referenceDay={referenceDay} />
                             </Stack>
 
                             {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett

@@ -42,6 +42,7 @@ import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle
 import {
   wgrDescription,
   distinctShopNos,
+  earliestCatManDate,
   isLabelsRequired,
   mapBoxTarget,
   mapLabelPrintPositions,
@@ -139,13 +140,15 @@ export class CasesService {
             workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
             // Etikett-Druckvariante je Position (Kundenfeedback 03.08.2026): die
             // Beleg-Karte unter „1 · Ware holen" und das Barcode-Pop-up zeigen daraus,
-            // welche Position ohne Preis zu drucken ist.
+            // welche Position ohne Preis zu drucken ist. shopNo → A3 Mehr-Shop-Liste;
+            // catManDate → frühester CatMan-Termin des Belegs.
             positions: {
               select: {
                 positionNo: true,
                 supplierArticleNo: true,
                 supplierColor: true,
                 shopNo: true,
+                catManDate: true,
                 instruction: { select: { labelPrintVariant: true } },
               },
               orderBy: { positionNo: 'asc' },
@@ -828,8 +831,10 @@ export class CasesService {
       attentionNote: string | null;
       forwardedTo: string | null;
       workInstruction?: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null;
+      catManDate: Date | null;
       positions?: Array<{
         shopNo: string;
+        catManDate: Date | null;
         positionNo?: number;
         supplierArticleNo?: string;
         supplierColor?: string;
@@ -855,6 +860,9 @@ export class CasesService {
       inboundCartonCount: c.inboundCartonCount ?? null,
       missingFields: c.missingFields ?? [],
       bookingDate: isoDay(c.bookingDate),
+      // Frühester CatMan-Termin (Kopf + Positionen) — der Beleg-Kopf allein
+      // trägt ihn nur im Seed-/Manuell-Pfad, aus ProHandel kommt er je Position.
+      catManDate: earliestCatManDate(c.catManDate, c.positions ?? []),
       goodsType: c.goodsTypeText,
       assignedEmployeeName,
       branchNo: c.branchNo,

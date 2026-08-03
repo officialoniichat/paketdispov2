@@ -97,6 +97,13 @@ export class CaseSummaryDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
+    description:
+      'Frühester CatMan-Termin des Belegs (ISO YYYY-MM-DD, Kopf + Positionen aggregiert): bis dahin muss die Ware auf der Verkaufsfläche stehen. Reine Kontrollinformation — KEIN Prioritätstreiber',
+  })
+  catManDate?: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description: 'GoodsTypeText (Warenart), null if unknown',
   })
   goodsType!: string | null;

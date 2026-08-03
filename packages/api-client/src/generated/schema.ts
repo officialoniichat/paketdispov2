@@ -1219,6 +1219,8 @@ export interface components {
             missingFields: string[];
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
+            /** @description Frühester CatMan-Termin des Belegs (ISO YYYY-MM-DD, Kopf + Positionen aggregiert): bis dahin muss die Ware auf der Verkaufsfläche stehen. Reine Kontrollinformation — KEIN Prioritätstreiber */
+            catManDate?: string | null;
             /** @description GoodsTypeText (Warenart), null if unknown */
             goodsType?: string | null;
             /** @description Display name of the assigned employee */
@@ -1582,6 +1584,8 @@ export interface components {
             missingFields: string[];
             /** @description ISO date YYYY-MM-DD */
             bookingDate: string;
+            /** @description Frühester CatMan-Termin des Belegs (ISO YYYY-MM-DD, Kopf + Positionen aggregiert): bis dahin muss die Ware auf der Verkaufsfläche stehen. Reine Kontrollinformation — KEIN Prioritätstreiber */
+            catManDate?: string | null;
             /** @description GoodsTypeText (Warenart), null if unknown */
             goodsType?: string | null;
             /** @description Display name of the assigned employee */

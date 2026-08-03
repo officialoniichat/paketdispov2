@@ -678,7 +678,11 @@ interface Ma108PositionSpec {
   supplierColor: string;
   nosFlag?: boolean;
   season?: string;
-  /** CatMan-Termin: Tage NACH baseDate (deterministisch). */
+  /**
+   * CatMan-Termin: Tage relativ zu baseDate (deterministisch). Negativ = der
+   * Termin liegt VOR dem Seed-Tag, der Beleg ist also überfällig — die PWA
+   * markiert ihn rot („überfällig").
+   */
   catManOffsetDays?: number;
   onlineRelevant?: boolean;
   securityTypeCode?: string | null;
@@ -716,13 +720,19 @@ interface Ma108CaseSpec {
 const MA108_CASES: Ma108CaseSpec[] = [
   // Stop 1 · R7 (Regal) — Liefergruppe ×3: gleicher Lieferschein LS-25-9108 +
   // fortlaufende WE-Nummern → beide Erkennungssignale (T2 note + T3 run) feuern.
+  // Zugleich die drei CatMan-Zustände nebeneinander am selben Stop, direkt im
+  // ersten (noch nicht geholten) Container der PWA sichtbar: überfällig (−3) ·
+  // knapp (+1) · normal (+7).
   {
     weBelegNo: '9.108.021', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
     goodsTypeText: 'Vororder', status: 'assigned',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 18,
     positions: [
       {
+        // CatMan-Fall „überfällig": Termin liegt VOR dem Seed-Tag → rote
+        // Kennzeichnung samt „überfällig" in „Ware holen" und im Beleg-Kopf.
         wgr: '111130', supplierArticleNo: 'ART-2101', supplierColor: 'marine', season: 'HW 26',
+        catManOffsetDays: -3,
         securityTypeCode: 'hard-tag',
         skuLines: [
           { ean: '4012345910211', size: 'S', qty: 6, ek: 11.9, vk: 29.99, vkLabel: 29.99 },
@@ -745,8 +755,11 @@ const MA108_CASES: Ma108CaseSpec[] = [
     positions: [
       {
         // Ware kommt fertig ausgezeichnet — kein Etikettendruck, kein Gang zum Drucker.
+        // CatMan-Fall „knapp": Termin schon morgen — Datum steht da, die
+        // Bewertung „knapp" trifft der Mitarbeiter (keine Ampel-Logik in der UI).
         wgr: '312400', supplierArticleNo: 'ART-2110', supplierColor: 'oliv', season: 'HW 26',
         labelPrintVariant: 'kein_etikett',
+        catManOffsetDays: 1,
         skuLines: [
           { ean: '4012345910231', size: '30/32', qty: 8, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
           { ean: '4012345910232', size: '31/32', qty: 10, ek: 19.9, vk: 49.99, vkLabel: 49.99 },
@@ -761,7 +774,8 @@ const MA108_CASES: Ma108CaseSpec[] = [
     checkMode: 'percentage_check', checkPercentage: 10, estimatedMinutes: 12,
     positions: [
       {
-        // CatMan-Fall: echter Termin wenige Tage nach dem Seed-Tag → 📅-Chip in der PWA.
+        // CatMan-Fall „normal": Termin eine Woche nach dem Seed-Tag → 📅-Chip
+        // ohne Warnung. Folgepositionen ohne Termin bleiben bewusst leer (A4).
         wgr: '415210', supplierArticleNo: 'ART-2120', supplierColor: 'schwarz',
         catManOffsetDays: 7,
         skuLines: [

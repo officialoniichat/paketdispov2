@@ -100,6 +100,27 @@ export function mapLabelPrintPositions(
     }));
 }
 
+/**
+ * Frühester CatMan-Termin des Belegs (ISO-Tag) — der Termin, bis zu dem die Ware
+ * auf der Verkaufsfläche stehen muss. Der Beleg-Kopf trägt ihn nur dort, wo die
+ * Quelle ihn belegweit liefert (Seeds/manuell); aus ProHandel kommt er
+ * positionsgenau. Diese Aggregation ist die EINE Wahrheit hinter der Anzeige am
+ * Beleg (Ware holen + Beleg-Kopf) — die PWA aggregiert nicht selbst.
+ *
+ * Bewusst reine Kontrollinformation, KEIN Prioritätstreiber (siehe
+ * `receiptPositionSchema.catMan` in domain-types): weder Reihenfolge noch
+ * Zuteilung hängen daran.
+ */
+export function earliestCatManDate(
+  head: Date | null | undefined,
+  positions: ReadonlyArray<{ catManDate: Date | null }> = [],
+): string | null {
+  const days = [head, ...positions.map((p) => p.catManDate)]
+    .filter((d): d is Date => d != null)
+    .map((d) => d.toISOString().slice(0, 10));
+  return days.length > 0 ? days.reduce((min, day) => (day < min ? day : min)) : null;
+}
+
 /** Etiketten nötig (A1): derived from the work-instruction header, false without one. */
 export function isLabelsRequired(
   wi: { priceLabelPrintRequired: boolean; boxLabelRequired: boolean } | null | undefined,

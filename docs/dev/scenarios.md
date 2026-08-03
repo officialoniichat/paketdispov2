@@ -82,8 +82,10 @@ drei Bereiche (R7/R19 Regal · PA-1 Palette · HB-5/234 Hängebahn) — alle vie
 Warenarten (Vororder/Nachorder/NOS/Extrabestellung), Etikettendruck- UND
 Digital-Etiketten-Fälle, eine Liefergruppe ×3 (LS-25-9108, fortlaufende
 WE-Nummern), mehrere Positionen mit mehreren Größen-Zeilen (EAN · Größe · Soll ·
-EK/VK/VK-Etikett), eine online-relevante Position (38 grün / 40 rot), ein
-CatMan-Termin sowie die Sonderzustände Fertig (completed + ZST, Nur-Ansicht),
+EK/VK/VK-Etikett), eine online-relevante Position (38 grün / 40 rot), die drei
+CatMan-Termin-Zustände nebeneinander am Stop R7 — überfällig (3 Tage vor dem
+Seed-Tag, in der PWA rot als „überfällig"), knapp (morgen) und normal (in einer
+Woche) — sowie die Sonderzustände Fertig (completed + ZST, Nur-Ansicht),
 Problem gemeldet (issue_open) und Geklärt (problem_resolved). Der Stop R19 ist
 bereits als geholt markiert, damit die bearbeiteten Fälle sofort antippbar sind.
 
