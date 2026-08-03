@@ -3396,6 +3396,11 @@
             "type": "string",
             "description": "ISO date YYYY-MM-DD"
           },
+          "catManDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Frühester CatMan-Termin des Belegs (ISO YYYY-MM-DD, Kopf + Positionen aggregiert): bis dahin muss die Ware auf der Verkaufsfläche stehen. Reine Kontrollinformation — KEIN Prioritätstreiber"
+          },
           "goodsType": {
             "type": "string",
             "nullable": true,
@@ -4645,6 +4650,11 @@
           "bookingDate": {
             "type": "string",
             "description": "ISO date YYYY-MM-DD"
+          },
+          "catManDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Frühester CatMan-Termin des Belegs (ISO YYYY-MM-DD, Kopf + Positionen aggregiert): bis dahin muss die Ware auf der Verkaufsfläche stehen. Reine Kontrollinformation — KEIN Prioritätstreiber"
           },
           "goodsType": {
             "type": "string",

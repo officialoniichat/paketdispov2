@@ -25,6 +25,10 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
 - **`'Filiale <Nummer>'`** und **`'Shopbereich <Nummer>'`** — so kannst du Zusammengehörendes
   nacheinander abarbeiten;
 - **`'🏷️ Etikettendruck'`** oder **`'Digitale Etiketten'`**;
+- den **CatMan-Termin** als **`'📅 <TT.MM.JJJJ>'`**, falls der Beleg einen hat — bis dahin muss die
+  Ware auf der Verkaufsfläche stehen. Ist der Termin schon vorbei, steht der Chip **rot** als
+  **`'📅 <TT.MM.JJJJ> · überfällig'`**. Der Termin ist **nur zur Kontrolle**: er ändert weder die
+  Reihenfolge deiner Belege noch sperrt er etwas;
 - optional eine Warenart wie `'Vororder'`, `'Nachorder'`, `'NOS'`, `'Extrabestellung'`;
 - einen Status: `'Offen'`, `'In Arbeit'`, `'Fertig'`, `'Problem gemeldet'` (rot) oder `'Geklärt'`
   (grün). Ein rot geparkter Beleg (`'Problem gemeldet'`) lässt sich nicht öffnen – er wartet auf die
@@ -46,6 +50,11 @@ mehrere Kartons gehören, die du **alle** brauchst.
 
 Im Kopf siehst du die **Warenart** (z. B. `'Vororder'`) und die Gesamtmenge `'<Anzahl> Teile'`.
 Statt technischer Abschnitts-Nummern zeigt die App bewusst die Warenart-Bezeichnung.
+
+Trägt der Beleg einen **CatMan-Termin**, steht er daneben als `'📅 <TT.MM.JJJJ>'` – bzw. rot als
+`'📅 <TT.MM.JJJJ> · überfällig'`, wenn er schon vorbei ist. Angezeigt wird der **früheste** Termin
+des Belegs, damit du ihn nicht in den Positionszeilen suchen musst; welche Position genau wann fällig
+ist, steht weiterhin an der Position selbst (Kapitel A4).
 
 ## Die Arbeitsanweisung Schritt für Schritt
 

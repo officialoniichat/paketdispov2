@@ -8,7 +8,7 @@
  * - `CaseAggregateDto.case` is the shallower `CaseSummaryDto`, not the full
  *   `GoodsReceiptCase` — the handful of `GoodsReceiptCase` fields neither
  *   screen ever reads (source/externalRef/deliveryNoteNo/
- *   primaryFloor/catManDate/loadPlanDate/effortPoints/version/
+ *   primaryFloor/loadPlanDate/effortPoints/version/
  *   assignedBundleId/deliveryGroupReleased) are filled with inert placeholders
  *   below (TODO(task-13+): drop the placeholders if a screen ever needs the
  *   real values — the backend would need to add them to `CaseSummaryDto` first).
@@ -174,7 +174,9 @@ export function mapCaseAggregate(caseId: string, dto: CaseAggregateDto): CaseAgg
       section: (c.section ?? null) as SectionCode | null,
       goodsTypeText: (c.goodsType ?? undefined) as GoodsTypeText | undefined,
       priorityFlags: c.priorityFlags as PriorityFlag[],
-      catManDate: undefined,
+      // Frühester CatMan-Termin des Belegs, vom Backend aus Kopf + Positionen
+      // aggregiert — die Fakten-Leiste des Beleg-Kopfs zeigt ihn.
+      catManDate: c.catManDate ?? undefined,
       loadPlanDate: undefined,
       totalQuantity: c.totalQuantity,
       status: c.status as CaseStatus,

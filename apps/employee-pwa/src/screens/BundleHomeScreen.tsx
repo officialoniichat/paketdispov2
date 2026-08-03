@@ -5,9 +5,13 @@
  * Section „1 · Ware holen" lists the route-ordered pick stops inline; checking
  * off (Paket geholt) happens right here — no extra window. Each stop lists its
  * Belege with the same Beleg-Kopf infos as „2 · Bearbeiten" (Filiale,
- * Shopbereich, Etikettendruck/Digitale Etiketten, Warenart) plus „Barcode
- * anzeigen" — the WE-Nr as Code-128 pop-up to request Etiketten per Scanner
- * right while fetching (Kundenfeedback 15.07.2026, Punkte 1+2). Section
+ * Shopbereich, Etikettendruck/Digitale Etiketten, Warenart, CatMan-Termin) plus
+ * „Barcode anzeigen" — the WE-Nr as Code-128 pop-up to request Etiketten per
+ * Scanner right while fetching (Kundenfeedback 15.07.2026, Punkte 1+2). Der
+ * CatMan-Termin ist der Tag, bis zu dem die Ware auf der Verkaufsfläche stehen
+ * muss; ein überschrittener Termin wird rot als „überfällig" markiert. Reine
+ * Kontrollinformation — die Bündel-Reihenfolge der assignment-engine bleibt
+ * unangetastet, hier wird nichts umsortiert. Section
  * „2 · Bearbeiten" lists the Belege directly below. The worker picks the order
  * themselves — every fetched Beleg is directly startable, there is no forced
  * „Start Bearbeitung WE x" sequence anymore. Only per-Beleg fetching gates: a
@@ -40,11 +44,12 @@ import {
   type LabelPrintVariant,
 } from '@paket/domain-types';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { CatManChip } from '../components/CatManChip.js';
 import { Code128Barcode } from '../components/Code128Barcode.js';
 import type { components } from '@paket/api-client';
 import { SessionExpiredError } from '../data/apiErrorHandling.js';
 import { getSession } from '../data/session.js';
-import { useMeToday } from '../data/useMeToday.js';
+import { useMeToday, useReferenceDay } from '../data/useMeToday.js';
 import { useRequestNextBundle } from '../data/useNextBundle.js';
 import { useParkRemaining } from '../data/useParkRemaining.js';
 import { useScanner } from '../scanner/useScanner.js';
@@ -256,28 +261,45 @@ function BarcodeLabelBreakdown({ beleg }: { beleg: CaseSummaryDto }): JSX.Elemen
 }
 
 /**
- * Beleg-Kopf-Infos (Filiale · Shopbereich, Etiketten-Art) — identisch unter
- * „1 · Ware holen" und „2 · Bearbeiten" (Kundenfeedback 15.07.2026, Punkt 1:
- * die Zusatz-Infos stehen auch am Ware-holen-Eintrag des Belegs). EINE Zeile,
- * die Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
+ * Beleg-Kopf-Infos (Filiale · Shopbereich, Etiketten-Art, CatMan-Termin) —
+ * identisch unter „1 · Ware holen" und „2 · Bearbeiten" (Kundenfeedback
+ * 15.07.2026, Punkt 1: die Zusatz-Infos stehen auch am Ware-holen-Eintrag des
+ * Belegs). EINE Zeile, die Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
  *
  * Die Etiketten-Angabe nennt seit dem Kundenfeedback 03.08.2026 die konkreten
  * Varianten des Belegs statt eines pauschalen „Etikettendruck / Digitale
  * Etiketten": digital ausgezeichnete Ware wird ebenfalls gedruckt — nur ohne
  * Preis, und genau das muss der Mitarbeiter am Drucker einstellen.
+ *
+ * Der CatMan-Termin (Kundenfeedback: „Das Datum vom CatMan-Termin muss angezeigt
+ * werden") steht als Chip daneben, sobald der Beleg einen trägt — ein
+ * überschrittener Termin rot als „überfällig". Reine Kontrollinformation: die
+ * Reihenfolge der Belege bleibt die der assignment-engine.
  */
-function BelegInfoLine({ beleg }: { beleg: CaseSummaryDto }): JSX.Element {
+function BelegInfoLine({
+  beleg,
+  referenceDay,
+}: {
+  beleg: CaseSummaryDto;
+  referenceDay: string;
+}): JSX.Element {
   const variants = belegLabelVariants(beleg);
   return (
-    <Typography variant="body2" color="text.secondary">
-      Filiale {beleg.branchNo}
-      {beleg.primaryShopAreaNo ? ` · Shopbereich ${beleg.primaryShopAreaNo}` : ''}
-      {variants.length > 0
-        ? ` | ${variants
-            .map((v) => `${LABEL_PRINT_VARIANT_DISPLAY[v].icon} ${LABEL_PRINT_VARIANT_DISPLAY[v].shortLabel}`)
-            .join(' | ')}`
-        : ''}
-    </Typography>
+    <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+      <Typography variant="body2" color="text.secondary">
+        Filiale {beleg.branchNo}
+        {beleg.primaryShopAreaNo ? ` · Shopbereich ${beleg.primaryShopAreaNo}` : ''}
+        {variants.length > 0
+          ? ` | ${variants
+              .map(
+                (v) =>
+                  `${LABEL_PRINT_VARIANT_DISPLAY[v].icon} ${LABEL_PRINT_VARIANT_DISPLAY[v].shortLabel}`,
+              )
+              .join(' | ')}`
+          : ''}
+      </Typography>
+      <CatManChip date={beleg.catManDate} referenceDay={referenceDay} />
+    </Stack>
   );
 }
 
@@ -287,6 +309,8 @@ export function BundleHomeScreen(): JSX.Element {
   const requestNextBundle = useRequestNextBundle();
   const parkRemaining = useParkRemaining();
   const session = getSession();
+  // Bezugstag der Überfälligkeits-Anzeige: der Server-Tag dieses Bündels.
+  const referenceDay = useReferenceDay();
 
   // TODO(task-13+): there is no backend mutation yet to persist a "Ware holen"
   // check-off (RouteStopDto has no scan-submit endpoint). Until one exists
@@ -526,7 +550,7 @@ export function BundleHomeScreen(): JSX.Element {
                               <Chip size="small" variant="outlined" label={b.goodsType} />
                             ) : null}
                           </Stack>
-                          <BelegInfoLine beleg={b} />
+                          <BelegInfoLine beleg={b} referenceDay={referenceDay} />
                           <Button
                             size="small"
                             onClick={(event) => {
@@ -609,7 +633,7 @@ export function BundleHomeScreen(): JSX.Element {
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
                     <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                    <BelegInfoLine beleg={b} />
+                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
                     {parked ? (
                       <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
                         Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.
