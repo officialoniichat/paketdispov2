@@ -83,6 +83,12 @@ export class CaseSummaryDto {
       'Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg.',
   })
   labelPrintPositions?: LabelPrintPositionDto[];
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt.',
+  })
+  collected?: boolean;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
   @ApiPropertyOptional({
@@ -278,6 +284,23 @@ export class ParkRemainingResultDto {
   @ApiProperty({ type: [String], description: 'Verbleibende Belege des Bündels (in Reihenfolge)' })
   remainingCaseIds!: string[];
   @ApiProperty() plannedEffortMinutes!: number;
+}
+
+/**
+ * Ware-holen-Haken (B2): der MA hakt einen Beleg-Container seines Bündels als
+ * „geholt" ab (Tipp oder Lagerplatz-Scan) — oder wieder ab (Toggle). Persistiert
+ * am Case, damit der Zustand Reload/Gerätewechsel überlebt.
+ */
+export class SetCollectedDto {
+  @ApiProperty({ description: 'true = geholt, false = Haken wieder entfernt' })
+  @IsBoolean()
+  collected!: boolean;
+}
+
+export class SetCollectedResultDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty({ description: 'Persistierter Ware-holen-Zustand nach dem Toggle' })
+  collected!: boolean;
 }
 
 // --- Employee case aggregate (PWA CaseAggregate, §9 work screens) -----------

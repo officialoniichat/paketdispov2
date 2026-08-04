@@ -183,6 +183,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cases/{caseId}/collected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ware-holen-Haken (B2): Beleg als „geholt" bzw. wieder „offen" markieren (case.collected). Tipp und Lagerplatz-Scan persistieren über diesen einen Weg. */
+        post: operations["CasesController_setCollected"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{caseId}/complete": {
         parameters: {
             query?: never;
@@ -1361,6 +1378,8 @@ export interface components {
             priceLabelPrintRequired?: boolean | null;
             /** @description Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg. */
             labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
+            /** @description Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
+            collected?: boolean;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -1563,6 +1582,15 @@ export interface components {
             remainingCaseIds: string[];
             plannedEffortMinutes: number;
         };
+        SetCollectedDto: {
+            /** @description true = geholt, false = Haken wieder entfernt */
+            collected: boolean;
+        };
+        SetCollectedResultDto: {
+            caseId: string;
+            /** @description Persistierter Ware-holen-Zustand nach dem Toggle */
+            collected: boolean;
+        };
         SkuQuantityDto: {
             skuLineId: string;
             /** @description Gezählte Ist-Menge der Größenzeile */
@@ -1743,6 +1771,8 @@ export interface components {
             priceLabelPrintRequired?: boolean | null;
             /** @description Etikett-Druckvarianten je Position (Positionsreihenfolge). Vom Mitarbeiter-Tagesbündel immer geliefert; Teamlead-Listen lassen es weg. */
             labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
+            /** @description Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
+            collected?: boolean;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -2806,6 +2836,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_setCollected: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCollectedDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetCollectedResultDto"];
                 };
             };
         };

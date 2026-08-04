@@ -102,6 +102,7 @@ erDiagram
         enum status "blocked|ready|assigned|in_progress|issue_open|problem_resolved|completed|zst_done|..."
         float effortPoints
         string assignedBundleId FK
+        datetime collectedAt "Ware-holen-Haken B2: geholt-Zeitpunkt (nullable, Toggle)"
         string_array missingFields "blocked: fehlende Pflichtfelder"
         boolean deliveryGroupReleased "TL-Freigabe trotz unvollständiger Gruppe"
         string docuWareUrl "Archiv: DocuWare-Deeplink (nullable)"

@@ -214,6 +214,9 @@ export const workflowEventTypeSchema = z.enum([
   'bundle.completed',
   'pickup.location_scanned',
   'case.started',
+  // Ware-holen-Haken (B2): MA hat die Ware des Belegs am Lagerplatz geholt
+  // (bzw. den Haken wieder entfernt — payload.collected sagt welche Richtung).
+  'case.collected',
   'position.confirmed',
   'sku.quantity_confirmed',
   'issue.created',

@@ -2,7 +2,13 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { CasesService } from './cases.service.js';
-import { CompleteDto, PartialCompleteDto, TransitionResultDto } from './cases.dto.js';
+import {
+  CompleteDto,
+  PartialCompleteDto,
+  SetCollectedDto,
+  SetCollectedResultDto,
+  TransitionResultDto,
+} from './cases.dto.js';
 
 /**
  * Employee package-handling lifecycle (§14.2 Mitarbeiter-App). Every handler is
@@ -27,6 +33,20 @@ export class CasesController {
     @Param('caseId') caseId: string,
   ): Promise<TransitionResultDto> {
     return this.cases.startPreparation(principal, caseId);
+  }
+
+  @Post('cases/:caseId/collected')
+  @ApiOperation({
+    summary:
+      'Ware-holen-Haken (B2): Beleg als „geholt" bzw. wieder „offen" markieren (case.collected). Tipp und Lagerplatz-Scan persistieren über diesen einen Weg.',
+  })
+  @ApiOkResponse({ type: SetCollectedResultDto })
+  setCollected(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: SetCollectedDto,
+  ): Promise<SetCollectedResultDto> {
+    return this.cases.setCollected(principal, caseId, dto);
   }
 
   @Post('cases/:caseId/complete')

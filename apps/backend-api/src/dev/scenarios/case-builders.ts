@@ -1276,7 +1276,15 @@ export async function seedMa108DemoBundle(
     });
     await prisma.goodsReceiptCase.update({
       where: { id: caseId },
-      data: { assignedBundleId: bundle.id },
+      data: {
+        assignedBundleId: bundle.id,
+        // Ware-holen-Haken (B2) konsistent zum Stop-Seeding unten: am bereits
+        // gescannten Stop geholt; begonnene/fertige Belege waren es zwangsläufig.
+        collectedAt:
+          MA108_SCANNED_STOPS.has(spec.storageCode) || spec.status !== 'assigned'
+            ? asTime(baseDate, '09:20')
+            : null,
+      },
     });
   }
   for (const [index, code] of MA108_STOP_ORDER.entries()) {

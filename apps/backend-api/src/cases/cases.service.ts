@@ -37,6 +37,8 @@ import {
   type ReceiptPositionDto,
   type ReopenIssueDto,
   type ReportedProblemDto,
+  type SetCollectedDto,
+  type SetCollectedResultDto,
   type SkuQuantityDto,
   type TodayResponseDto,
   type TransitionResultDto,
@@ -304,7 +306,14 @@ export class CasesService {
         await tx.assignmentItem.delete({ where: { id: item.id } });
         await tx.goodsReceiptCase.update({
           where: { id: caseId },
-          data: { status: 'ready', assignedBundleId: null, version: { increment: 1 } },
+          // Zurück in den Pool ⇒ nicht mehr auf einem Karren: der Ware-holen-
+          // Haken (collectedAt) wird mit gelöscht.
+          data: {
+            status: 'ready',
+            assignedBundleId: null,
+            collectedAt: null,
+            version: { increment: 1 },
+          },
         });
         await this.events.append(
           {
@@ -335,6 +344,40 @@ export class CasesService {
         plannedEffortMinutes,
       };
     });
+  }
+
+  /**
+   * Ware-holen-Haken (B2): persistiert je Beleg, ob der MA die Ware am
+   * Lagerplatz geholt hat. Tipp in der Liste UND Scanner-Auto-Abhaken
+   * (Lagerplatz-Scan) laufen beide über diesen einen Weg, damit der Zustand
+   * Reload und Gerätewechsel überlebt. Toggle: `collected=false` entfernt den
+   * Haken wieder. Bewusst KEIN Status-Übergang und KEIN Versions-Inkrement —
+   * der Haken ist orthogonaler Arbeitszustand, keine Lifecycle-Transition.
+   */
+  async setCollected(
+    principal: Principal,
+    caseId: string,
+    dto: SetCollectedDto,
+  ): Promise<SetCollectedResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.goodsReceiptCase.update({
+        where: { id: owned.id },
+        data: { collectedAt: dto.collected ? new Date() : null },
+      });
+      await this.events.append(
+        {
+          eventType: 'case.collected',
+          entityType: 'GoodsReceiptCase',
+          entityId: owned.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: { collected: dto.collected },
+        },
+        tx,
+      );
+    });
+    return { caseId: owned.id, collected: dto.collected };
   }
 
   async getCurrentBundle(principal: Principal): Promise<CurrentBundleDto | null> {
@@ -963,6 +1006,7 @@ export class CasesService {
       inboundCartonCount?: number | null;
       missingFields?: string[];
       branchNo: string;
+      collectedAt: Date | null;
       docuWareUrl: string | null;
       completedAt: Date | null;
       attentionFlag: boolean;
@@ -994,6 +1038,7 @@ export class CasesService {
       storageLocationKind: c.storageLocation?.kind ?? null,
       priceLabelPrintRequired: c.workInstruction?.priceLabelPrintRequired ?? null,
       labelPrintPositions: mapLabelPrintPositions(c.positions),
+      collected: c.collectedAt != null,
       primaryShopNo: c.primaryShopNo ?? null,
       primaryShopAreaNo: c.primaryShopAreaNo ?? null,
       inboundCartonCount: c.inboundCartonCount ?? null,

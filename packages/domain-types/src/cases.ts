@@ -171,6 +171,11 @@ export const goodsReceiptCaseSchema = z.object({
   effortPoints: z.number().nonnegative(),
   estimatedMinutes: z.number().nonnegative(),
   assignedBundleId: idSchema.optional(),
+  /**
+   * Ware-holen-Haken (B2): wann der MA die Ware des Belegs am Lagerplatz geholt
+   * hat (Tipp oder Lagerplatz-Scan); absent = noch nicht geholt bzw. wieder abgehakt.
+   */
+  collectedAt: isoDateTimeSchema.optional(),
   /** Archiv (A6): Link ins DocuWare-Langzeitarchiv (mock, gesetzt bei Abschluss). */
   docuWareUrl: z.string().optional(),
   /** TL-Topf (A7): „Besondere Aufmerksamkeit" — Bucherinnen-Inlet (mock). */

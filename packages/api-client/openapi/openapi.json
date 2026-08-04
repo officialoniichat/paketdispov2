@@ -352,6 +352,52 @@
         ]
       }
     },
+    "/api/cases/{caseId}/collected": {
+      "post": {
+        "operationId": "CasesController_setCollected",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCollectedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetCollectedResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ware-holen-Haken (B2): Beleg als „geholt\" bzw. wieder „offen\" markieren (case.collected). Tipp und Lagerplatz-Scan persistieren über diesen einen Weg.",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
     "/api/cases/{caseId}/complete": {
       "post": {
         "operationId": "CasesController_complete",
@@ -3571,6 +3617,10 @@
               "$ref": "#/components/schemas/LabelPrintPositionDto"
             }
           },
+          "collected": {
+            "type": "boolean",
+            "description": "Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
+          },
           "primaryShopNo": {
             "type": "string",
             "nullable": true,
@@ -4251,6 +4301,34 @@
           "plannedEffortMinutes"
         ]
       },
+      "SetCollectedDto": {
+        "type": "object",
+        "properties": {
+          "collected": {
+            "type": "boolean",
+            "description": "true = geholt, false = Haken wieder entfernt"
+          }
+        },
+        "required": [
+          "collected"
+        ]
+      },
+      "SetCollectedResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "collected": {
+            "type": "boolean",
+            "description": "Persistierter Ware-holen-Zustand nach dem Toggle"
+          }
+        },
+        "required": [
+          "caseId",
+          "collected"
+        ]
+      },
       "SkuQuantityDto": {
         "type": "object",
         "properties": {
@@ -4830,6 +4908,10 @@
             "items": {
               "$ref": "#/components/schemas/LabelPrintPositionDto"
             }
+          },
+          "collected": {
+            "type": "boolean",
+            "description": "Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
           },
           "primaryShopNo": {
             "type": "string",
