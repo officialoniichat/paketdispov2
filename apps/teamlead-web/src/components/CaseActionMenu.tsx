@@ -150,7 +150,14 @@ export function CaseActionMenu({
 
   return (
     <>
-      <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+      {/* compact (Karten/Zeilen): Primäraktion + Kebab bleiben nebeneinander in
+          EINER Zeile (Ablagen-Vorgabe: „… rechts daneben die drei Punkte"). */}
+      <Stack
+        direction="row"
+        spacing={0.5}
+        alignItems="center"
+        flexWrap={density === 'compact' ? 'nowrap' : 'wrap'}
+      >
         {primary.map((a) => (
           <Tooltip key={a.id} title={a.label}>
             <Button

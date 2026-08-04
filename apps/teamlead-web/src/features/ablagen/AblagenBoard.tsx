@@ -814,13 +814,19 @@ function LaneCardView({
           {card.assignedTo ? ` · ${card.assignedTo}` : ''}
         </Typography>
       </CardContent>
-      <CardActions sx={{ flexWrap: 'wrap', gap: 0.25, px: 1, py: 0.5 }}>
+      {/* Eine Zeile, drei Slots (Nutzer-Vorgabe 04.08.2026): links „Details",
+          in der Mitte die Primäraktion (z. B. „Instruktionen senden"), rechts
+          daneben das Kebab-Menü. space-between schiebt Aktion+Kebab nach
+          rechts; wrap bleibt nur als Notfall-Fallback (Browser-Zoom). */}
+      <CardActions
+        sx={{ flexWrap: 'wrap', gap: 0.25, px: 1, py: 0.5, justifyContent: 'space-between' }}
+      >
         {/* Quiet by design: pure navigation, not an action — should read as
             lower-priority than the case's actual primary action next to it. */}
         <Button
           size="small"
           variant="text"
-          sx={{ color: 'text.secondary', fontWeight: 400 }}
+          sx={{ color: 'text.secondary', fontWeight: 400, flexShrink: 0 }}
           onClick={() => onOpen(card.caseId)}
         >
           Details
