@@ -51,6 +51,7 @@ import {
   type LabelPrintVariant,
 } from '@paket/domain-types';
 import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { IssueBadge } from '../components/IssueBadge.js';
 import { CatManChip } from '../components/CatManChip.js';
 import { Code128Barcode } from '../components/Code128Barcode.js';
 import type { components } from '@paket/api-client';
@@ -637,7 +638,13 @@ export function BundleHomeScreen(): JSX.Element {
                     ...tint,
                   }}
                 >
-                  <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  {(b.issues?.length ?? 0) > 0 ? (
+                    /* Zähler-Badge statt Symbol (04.08.2026): „nx" = Anzahl der
+                       Meldungen; Tap/Hover öffnet das Meldungs-Popover. */
+                    <IssueBadge issues={b.issues ?? []} />
+                  ) : (
+                    <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  )}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
                     <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>

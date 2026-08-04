@@ -34,7 +34,7 @@ import type {
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
-import type { CaseAggregate, PositionView } from '../domain/types.js';
+import type { CaseAggregate, CaseIssueView, PositionView } from '../domain/types.js';
 
 type CaseAggregateDto = components['schemas']['CaseAggregateDto'];
 type ReceiptPositionDto = components['schemas']['ReceiptPositionDto'];
@@ -198,5 +198,29 @@ export function mapCaseAggregate(caseId: string, dto: CaseAggregateDto): CaseAgg
     onlineMarks: collectOnlineMarks(dto.positions),
     inspectionLevelLabel: dto.workInstruction?.inspectionLevelLabel ?? undefined,
     inspectionDescription: dto.workInstruction?.inspectionDescription ?? undefined,
+    issues: dto.issues.map(mapIssue),
+  };
+}
+
+/** Meldung inkl. Verlauf (Instruktions-Loop 04.08.2026) — 1:1 Anzeige-Projektion. */
+function mapIssue(dto: CaseAggregateDto['issues'][number]): CaseIssueView {
+  return {
+    id: dto.id,
+    kind: dto.kind as CaseIssueView['kind'],
+    reasonLabel: dto.reasonLabel ?? undefined,
+    description: dto.description ?? undefined,
+    positionId: dto.positionId ?? undefined,
+    positionNo: dto.positionNo ?? undefined,
+    status: dto.status as CaseIssueView['status'],
+    instruction: dto.instruction ?? undefined,
+    reportedAt: dto.reportedAt,
+    messages: dto.messages.map((m) => ({
+      id: m.id,
+      kind: m.kind as CaseIssueView['messages'][number]['kind'],
+      authorRole: m.authorRole as CaseIssueView['messages'][number]['authorRole'],
+      authorName: m.authorName,
+      createdAt: m.createdAt,
+      text: m.text,
+    })),
   };
 }

@@ -7,8 +7,9 @@
  *
  * The stream is server-scoped to the caller's own `employeeNo` (§16.1), so
  * any event received here is safe to treat as "something about my day
- * changed" — we just invalidate `['me', 'today']` and let `useMeToday()`
- * refetch.
+ * changed" — we invalidate `['me', 'today']` AND every offene Beleg-Ansicht
+ * (`['me', 'case']`-Präfix), damit z. B. eine frisch gesendete TL-Instruktion
+ * sofort an der Position erscheint (Instruktions-Loop 04.08.2026).
  */
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -25,6 +26,7 @@ export function useLiveUpdates(): void {
     const source = new EventSource(`${apiBaseUrl}/api/me/stream?token=${encodeURIComponent(token)}`);
     source.onmessage = () => {
       void queryClient.invalidateQueries({ queryKey: ['me', 'today'] });
+      void queryClient.invalidateQueries({ queryKey: ['me', 'case'] });
     };
     return () => source.close();
     // Re-open the connection whenever the session token changes (fresh login

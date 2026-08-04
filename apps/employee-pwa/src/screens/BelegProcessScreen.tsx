@@ -79,6 +79,8 @@ import { ProblemDialog } from '../components/ProblemDialog.js';
 import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
 import { useReferenceDay } from '../data/useMeToday.js';
+import { useReopenIssue } from '../data/useReopenIssue.js';
+import { PositionIssueBlock } from '../components/PositionIssueBlock.js';
 import type { PositionView } from '../domain/types.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
@@ -392,6 +394,8 @@ export function BelegProcessScreen(): JSX.Element {
   const flow = useCaseFlow(caseId);
   // Bezugstag der Überfälligkeits-Anzeige — derselbe Server-Tag wie im Bündel-Home.
   const referenceDay = useReferenceDay();
+  // Rückmeldung auf eine TL-Instruktion (Instruktions-Loop 04.08.2026).
+  const reopenIssue = useReopenIssue(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
   const [problemTarget, setProblemTarget] = useState<PositionView | null>(null);
 
@@ -446,6 +450,17 @@ export function BelegProcessScreen(): JSX.Element {
     manualByPosition.set(problem.positionId, [
       ...(manualByPosition.get(problem.positionId) ?? []),
       problem,
+    ]);
+  }
+  // Gemeldete Server-Meldungen je Position (Instruktions-Loop 04.08.2026): der
+  // TL-Hinweis-Block steht an GENAU der betroffenen Position; Meldungen ohne
+  // Positions-Anker (scope=case) erscheinen am Beleg-Kopf-Banner.
+  const issuesByPosition = new Map<string, typeof aggregate.issues>();
+  for (const issue of aggregate.issues) {
+    if (!issue.positionId) continue;
+    issuesByPosition.set(issue.positionId, [
+      ...(issuesByPosition.get(issue.positionId) ?? []),
+      issue,
     ]);
   }
 
@@ -814,6 +829,14 @@ export function BelegProcessScreen(): JSX.Element {
                                 ))}
                               </Stack>
                             ) : null}
+
+                            {/* TL-Hinweis-Block (04.08.2026): Instruktion der
+                                Teamleitung zu GENAU dieser Position + Rückfrage. */}
+                            <PositionIssueBlock
+                              issues={issuesByPosition.get(pos.id) ?? []}
+                              onReopen={(issueId, text) => reopenIssue.mutate({ issueId, text })}
+                              reopenPending={reopenIssue.isPending}
+                            />
                           </Box>
 
                           <Stack
