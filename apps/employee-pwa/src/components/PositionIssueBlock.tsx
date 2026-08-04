@@ -1,11 +1,12 @@
 /**
  * TL-Hinweis-Block an der BETROFFENEN Position (Kundenfeedback 04.08.2026):
- * zeigt unterhalb der Positions-Infos die Instruktion der Teamleitung zu genau
- * dieser Meldung — deutlich sichtbar (grüner Rahmen). Offene Meldungen
- * erscheinen rot („wartet auf die Teamleitung"). Am instruierten Problem kann
- * der MA mit Pflichttext reagieren („Erneut melden / Rückfrage"): die Meldung
- * geht zurück auf offen, der Beleg zurück in den Problem-Status — kein freies
- * Chatten, immer am konkreten Problem verankert. Statuslogik: nur Backend.
+ * zeigt unterhalb der Positions-Infos den kompletten Nachrichten-Verlauf der
+ * Meldung — wer hat wann was geschrieben (MA-Meldung rot, TL-Instruktion grün,
+ * MA-Rückmeldung orange). Offene Meldungen rahmen rot („wartet auf die
+ * Teamleitung"), instruierte grün. Am instruierten Problem kann der MA mit
+ * Pflichttext reagieren („Erneut melden / Rückfrage"): die Meldung geht zurück
+ * auf offen, der Beleg zurück in den Problem-Status — kein freies Chatten,
+ * immer am konkreten Problem verankert. Statuslogik: nur Backend.
  */
 import { useState, type JSX } from 'react';
 import Box from '@mui/material/Box';
@@ -20,11 +21,26 @@ import Typography from '@mui/material/Typography';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import { problemKindLabels } from '@paket/ui';
-import type { CaseIssueView } from '../domain/types.js';
+import type { CaseIssueView, IssueMessageView } from '../domain/types.js';
 
 function labelFor(issue: CaseIssueView): string {
   return issue.reasonLabel ?? problemKindLabels[issue.kind] ?? issue.kind;
 }
+
+const MESSAGE_KIND_LABEL: Record<IssueMessageView['kind'], string> = {
+  meldung: 'Meldung',
+  instruktion: 'Instruktion',
+  rueckmeldung: 'Rückmeldung',
+};
+
+/** Verlaufs-Farbe je Eintragsart: MA-Meldung rot, TL-Instruktion grün, Rückmeldung orange. */
+const MESSAGE_KIND_COLOR: Record<IssueMessageView['kind'], string> = {
+  meldung: 'error.main',
+  instruktion: 'success.main',
+  rueckmeldung: 'warning.main',
+};
+
+const MESSAGE_TIME = new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' });
 
 export interface PositionIssueBlockProps {
   issues: CaseIssueView[];
@@ -81,30 +97,52 @@ export function PositionIssueBlock({
                 {offen ? 'Offen — wartet auf die Teamleitung' : 'Hinweis der Teamleitung'}
               </Typography>
             </Stack>
-            {issue.description ? (
+            {/* Kompletter Nachrichten-Verlauf: wer hat wann was geschrieben.
+                Das Backend liefert chronologisch (Erst-Meldung zuerst). */}
+            {issue.messages.length > 0 ? (
+              <Stack spacing={0.75} sx={{ mt: 0.75, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
+                {issue.messages.map((m) => (
+                  <Box key={m.id}>
+                    <Typography variant="caption" color="text.secondary">
+                      {MESSAGE_TIME.format(new Date(m.createdAt))} ·{' '}
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        sx={{ fontWeight: 700 }}
+                        color={MESSAGE_KIND_COLOR[m.kind]}
+                      >
+                        {MESSAGE_KIND_LABEL[m.kind]}
+                      </Typography>{' '}
+                      · {m.authorName} ({m.authorRole === 'teamlead' ? 'TL' : 'MA'})
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={m.kind === 'instruktion' ? { fontWeight: 600 } : undefined}
+                    >
+                      „{m.text}"
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            ) : issue.description ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                 Deine Meldung: „{issue.description}"
               </Typography>
             ) : null}
-            {!offen && issue.instruction ? (
-              <>
-                <Typography variant="body1" sx={{ mt: 0.5, fontWeight: 600 }}>
-                  „{issue.instruction}"
-                </Typography>
-                <Button
-                  size="small"
-                  color="warning"
-                  startIcon={<ReplyOutlinedIcon />}
-                  disabled={reopenPending}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setReopenTarget(issue);
-                  }}
-                  sx={{ mt: 0.5, fontWeight: 700 }}
-                >
-                  Erneut melden / Rückfrage
-                </Button>
-              </>
+            {!offen ? (
+              <Button
+                size="small"
+                color="warning"
+                startIcon={<ReplyOutlinedIcon />}
+                disabled={reopenPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReopenTarget(issue);
+                }}
+                sx={{ mt: 0.5, fontWeight: 700 }}
+              >
+                Erneut melden / Rückfrage
+              </Button>
             ) : null}
           </Box>
         );

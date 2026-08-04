@@ -26,7 +26,9 @@
  * Probleme werden pro Position/Größe im Dialog erfasst (Punkt 5), lokal
  * gesammelt und farblich markiert (Punkt 9): ein Problem mit Größe färbt seine
  * Größenzeile rot, ein Problem ohne Größe („Ganze Position") die komplette
- * Position samt Kopfzeile; der beleg-weite Problem-Einstieg
+ * Position samt Kopfzeile. Auch bereits GEMELDETE Meldungen färben ihre
+ * Position komplett rot, solange sie offen sind (Instruktions-Loop
+ * 04.08.2026); der beleg-weite Problem-Einstieg
  * ist entfallen (Punkt 8). Eine Mehr-/Minderlieferung oder Preisabweichung ist
  * automatisch ein Problem (Punkt 7): „Beleg erledigt" ist dann gesperrt, nur der
  * Teilabschluss (mit gesammelten Problemen, Punkt 10) bleibt.
@@ -668,8 +670,14 @@ export function BelegProcessScreen(): JSX.Element {
                 const manualProblems = manualByPosition.get(pos.id) ?? [];
                 // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
                 // Position") markiert die gesamte Position rot — Kopfzeile und
-                // alle Größenzeilen.
-                const positionWideProblem = manualProblems.some((x) => x.skuLineId === undefined);
+                // alle Größenzeilen. Gemeldete Server-Meldungen zählen mit,
+                // solange sie OFFEN sind; instruierte zeigen stattdessen den
+                // grünen TL-Hinweis-Block.
+                const openIssueAtPosition = (issuesByPosition.get(pos.id) ?? []).some(
+                  (x) => x.status === 'open',
+                );
+                const positionWideProblem =
+                  openIssueAtPosition || manualProblems.some((x) => x.skuLineId === undefined);
                 // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
                 // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
                 const metaText = [
