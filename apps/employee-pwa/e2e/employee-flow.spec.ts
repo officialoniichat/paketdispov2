@@ -232,8 +232,10 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     // vorkommenden Varianten. Der erste Beleg ist ein Misch-Beleg (Pos. 1 mit
     // Preis, Pos. 2 DigiTag ohne Preis) — Dustin sieht am Stop, dass er am
     // Drucker für eine Position die Preisunterdrückung braucht.
-    expect(eintragMit).toContain('🏷️ Etikett mit Preis');
-    expect(eintragMit).toContain('📟 DigiTag · ohne Preis');
+    // Das Symbol je Variante ist ein MUI-Icon (kein Emoji, Kundenwunsch
+    // 04.08.2026) — es trägt keinen Text, geprüft wird die Beschriftung.
+    expect(eintragMit).toContain('Etikett mit Preis');
+    expect(eintragMit).toContain('DigiTag · ohne Preis');
     // Der Beleg ohne Positionen hat nichts zu drucken — und sagt deshalb nichts.
     expect(eintragOhne).not.toContain('Etikett mit Preis');
     expect(eintragOhne).not.toContain('DigiTag');
@@ -241,7 +243,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     // Filiale · Shopbereich und Warenart je Beleg (Punkt 1).
     // EINE Zeile je Beleg, Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
     expect(eintragMit).toContain(
-      'Filiale 1 · Shopbereich 42 | 🏷️ Etikett mit Preis | 📟 DigiTag · ohne Preis',
+      'Filiale 1 · Shopbereich 42 | Etikett mit Preis | DigiTag · ohne Preis',
     );
     expect(eintragMit).toContain('Vororder');
     expect(eintragOhne).toContain('Filiale 1 · Shopbereich 77');
@@ -249,7 +251,7 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
 
     // … und unter „2 · Bearbeiten" stehen dieselben Infos unverändert.
     await expect(belegRow(page, mitEtiketten)).toContainText(
-      'Filiale 1 · Shopbereich 42 | 🏷️ Etikett mit Preis | 📟 DigiTag · ohne Preis',
+      'Filiale 1 · Shopbereich 42 | Etikett mit Preis | DigiTag · ohne Preis',
     );
     await expect(belegRow(page, ohneEtiketten)).toContainText('Filiale 1 · Shopbereich 77');
   });
@@ -266,9 +268,9 @@ test.describe('Forderungen 2–5 — Ware holen', () => {
     await expect(dialog).toContainText('Etikettendruck je Position');
     // Pos-Nr + Variante je Position, in Positionsreihenfolge (oben nach unten).
     await expect(dialog).toContainText('Pos 1');
-    await expect(dialog).toContainText('🏷️ Etikett mit Preis');
+    await expect(dialog).toContainText('Etikett mit Preis');
     await expect(dialog).toContainText('Pos 2');
-    await expect(dialog).toContainText('📟 DigiTag · Etikett ohne Preis');
+    await expect(dialog).toContainText('DigiTag · Etikett ohne Preis');
     // Kurze Artikelkennung je Zeile, damit an der Station zuzuordnen ist.
     await expect(dialog).toContainText('ART-4711');
   });
@@ -565,7 +567,11 @@ test.describe('Forderungen 6–8 — Beleg-Detail (22–24" Touchdisplay)', () =
     const check = page.getByRole('button', { name: 'Position geprüft', exact: true }).first();
     expect((await check.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
     await check.click();
-    const checked = page.getByRole('button', { name: 'Position geprüft ✓' });
+    // Der geprüfte Zustand trägt sein Häkchen als Icon, nicht als Textzeichen —
+    // erkennbar am Chip (Button-Rolle bleibt, damit man wieder abwählen kann).
+    const checked = page
+      .getByRole('button', { name: 'Position geprüft', exact: true })
+      .and(page.locator('.MuiChip-root'));
     await expect(checked).toBeVisible();
     expect(
       (await checked.boundingBox())!.height,

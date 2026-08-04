@@ -33,7 +33,7 @@
  * backend's single source of truth. There is no more local Dexie cache: the
  * former `useBundle()`/`db.*` live-queries are gone (see `data/useMeToday.ts`).
  */
-import { useState, type JSX } from 'react';
+import { Fragment, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import Alert from '@mui/material/Alert';
@@ -58,7 +58,7 @@ import {
   summarizeLabelPrintVariants,
   type LabelPrintVariant,
 } from '@paket/domain-types';
-import { CaseCardSkeleton, TouchButton } from '@paket/ui';
+import { CaseCardSkeleton, LabelPrintVariantIcon, TouchButton } from '@paket/ui';
 import { IssueBadge } from '../components/IssueBadge.js';
 import { CatManChip } from '../components/CatManChip.js';
 import { Code128Barcode } from '../components/Code128Barcode.js';
@@ -275,9 +275,12 @@ function BarcodeLabelBreakdown({ beleg }: { beleg: CaseSummaryDto }): JSX.Elemen
                 Pos {p.positionNo}
               </Typography>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700, lineHeight: 1.25 }}>
-                  {display.icon} {display.label}
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={0.75}>
+                  <LabelPrintVariantIcon variant={p.labelPrintVariant} fontSize="small" />
+                  <Typography sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                    {display.label}
+                  </Typography>
+                </Stack>
                 <Typography variant="body2" color="text.secondary" noWrap>
                   {p.supplierArticleNo}
                   {p.supplierColor ? ` · ${p.supplierColor}` : ''}
@@ -317,17 +320,24 @@ function BelegInfoLine({
   const variants = belegLabelVariants(beleg);
   return (
     <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+      {/* EINE fließende Zeile, Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
+          Das Symbol sitzt als Inline-Icon IM Textfluss (kein eigener Flex-Block):
+          nur so bricht die Zeile in schmalen Karten weiter wie normaler Text —
+          ein Flex-Block würde auf Wortbreite schrumpfen und „Etikett mit Preis"
+          Wort für Wort untereinander stapeln. */}
       <Typography variant="body2" color="text.secondary">
         Filiale {beleg.branchNo}
         {beleg.primaryShopAreaNo ? ` · Shopbereich ${beleg.primaryShopAreaNo}` : ''}
-        {variants.length > 0
-          ? ` | ${variants
-              .map(
-                (v) =>
-                  `${LABEL_PRINT_VARIANT_DISPLAY[v].icon} ${LABEL_PRINT_VARIANT_DISPLAY[v].shortLabel}`,
-              )
-              .join(' | ')}`
-          : ''}
+        {variants.map((v) => (
+          <Fragment key={v}>
+            {' | '}
+            <LabelPrintVariantIcon
+              variant={v}
+              sx={{ fontSize: 16, verticalAlign: 'text-bottom', mr: 0.25 }}
+            />
+            {LABEL_PRINT_VARIANT_DISPLAY[v].shortLabel}
+          </Fragment>
+        ))}
       </Typography>
       <CatManChip date={beleg.catManDate} referenceDay={referenceDay} />
     </Stack>

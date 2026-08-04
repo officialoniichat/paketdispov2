@@ -50,6 +50,14 @@ export {
   type ChipSize,
 } from './components/chips.js';
 
+// Etikett-Druckvariante: Symbol als MUI-Icon (kein Emoji), Text kommt aus
+// domain-types (LABEL_PRINT_VARIANT_DISPLAY).
+export {
+  LabelPrintVariantIcon,
+  LABEL_PRINT_VARIANT_ICON,
+  type LabelPrintVariantIconProps,
+} from './components/label-print-icon.js';
+
 // Touch primitives & skeletons
 export {
   TouchButton,

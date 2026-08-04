@@ -14,10 +14,13 @@ import { labelPrintVariantSchema, type LabelPrintVariant } from './enums.js';
 export const LABEL_PRINT_VARIANT_ORDER: readonly LabelPrintVariant[] =
   labelPrintVariantSchema.options;
 
-/** Anzeige-Vokabular je Variante — identisch in PWA und Teamlead-Cockpit. */
+/**
+ * Anzeige-Vokabular je Variante — identisch in PWA und Teamlead-Cockpit.
+ * Nur Sprache, kein Piktogramm: das Symbol liefert `LabelPrintVariantIcon` in
+ * `@paket/ui` als MUI-Icon (kein Emoji), genau wie bei den Status-Chips. Dieses
+ * Package bleibt frei von React/MUI.
+ */
 export interface LabelPrintVariantDisplay {
-  /** Piktogramm-Emoji, das die Variante auf einen Blick unterscheidbar macht. */
-  icon: string;
   /** Volle Beschriftung, z. B. „DigiTag · Etikett ohne Preis". */
   label: string;
   /** Kurzform für enge Zusammenfassungen, z. B. „DigiTag · ohne Preis". */
@@ -26,27 +29,18 @@ export interface LabelPrintVariantDisplay {
 
 export const LABEL_PRINT_VARIANT_DISPLAY: Record<LabelPrintVariant, LabelPrintVariantDisplay> = {
   etikett_mit_preis: {
-    icon: '🏷️',
     label: 'Etikett mit Preis',
     shortLabel: 'Etikett mit Preis',
   },
   digitag_etikett_ohne_preis: {
-    icon: '📟',
     label: 'DigiTag · Etikett ohne Preis',
     shortLabel: 'DigiTag · ohne Preis',
   },
   kein_etikett: {
-    icon: '🚫',
     label: 'Kein Etikett',
     shortLabel: 'Kein Etikett',
   },
 };
-
-/** Beschriftung inkl. Piktogramm, z. B. „📟 DigiTag · Etikett ohne Preis". */
-export function labelPrintVariantText(variant: LabelPrintVariant): string {
-  const display = LABEL_PRINT_VARIANT_DISPLAY[variant];
-  return `${display.icon} ${display.label}`;
-}
 
 /**
  * Wird für diese Position überhaupt ein physisches Etikett gedruckt/angebracht?

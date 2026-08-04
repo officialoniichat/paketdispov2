@@ -63,7 +63,8 @@ import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
 import { toActorType } from '../../data/narrow.js';
-import { labelPrintVariantText } from '@paket/domain-types';
+import { LABEL_PRINT_VARIANT_DISPLAY } from '@paket/domain-types';
+import { LabelPrintVariantIcon } from '@paket/ui';
 
 const TABS = [
   'Beleg',
@@ -517,7 +518,7 @@ function positionMetaText(p: BelegPosition): string {
 
 /**
  * Anweisungs-Chips der Position (PWA-Vorlage: FLAG_CHIPS im BelegProcessScreen).
- * Der frühere generische „🏷️ Etikett"-Chip ist durch die konkrete
+ * Der frühere generische „Etikett"-Chip ist durch die konkrete
  * Etikett-Druckvariante ersetzt (Kundenfeedback 03.08.2026) — sie steht als
  * eigener Chip davor, damit PWA und Cockpit dieselbe Aussage treffen.
  */
@@ -613,7 +614,13 @@ function PositionsSection({
                                 : 'default'
                             }
                             variant={p.labelPrintVariant === 'kein_etikett' ? 'outlined' : 'filled'}
-                            label={labelPrintVariantText(p.labelPrintVariant)}
+                            icon={
+                              <LabelPrintVariantIcon
+                                variant={p.labelPrintVariant}
+                                fontSize="small"
+                              />
+                            }
+                            label={LABEL_PRINT_VARIANT_DISPLAY[p.labelPrintVariant].label}
                           />
                           {flags.map((f) => (
                             <Chip key={f.key} size="small" color={f.color} label={f.label} />

@@ -65,15 +65,15 @@ import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
 import {
   DEFAULT_WGR_CATALOG,
+  LABEL_PRINT_VARIANT_DISPLAY,
   labelPrintRequired,
-  labelPrintVariantText,
   printedPriceCheckRequired,
   summarizeLabelPrintVariants,
   type CaseStatus,
   type LabelPrintVariant,
   type OnlineSizeMark,
 } from '@paket/domain-types';
-import { CaseCardSkeleton, touchTarget } from '@paket/ui';
+import { CaseCardSkeleton, LabelPrintVariantIcon, touchTarget } from '@paket/ui';
 import { CatManChip } from '../components/CatManChip.js';
 import { StepScaffold } from '../components/StepScaffold.js';
 import { oskProps } from '../components/OnScreenKeyboard.js';
@@ -298,7 +298,8 @@ function LabelPrintVariantChip({ variant }: { variant: LabelPrintVariant }): JSX
       size="small"
       color={VARIANT_CHIP_COLOR[variant]}
       variant={variant === 'kein_etikett' ? 'outlined' : 'filled'}
-      label={labelPrintVariantText(variant)}
+      icon={<LabelPrintVariantIcon variant={variant} fontSize="small" />}
+      label={LABEL_PRINT_VARIANT_DISPLAY[variant].label}
     />
   );
 }
