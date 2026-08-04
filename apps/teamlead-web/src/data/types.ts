@@ -9,10 +9,45 @@
 import type {
   AssignmentStatus,
   GoodsReceiptCase,
+  IssueAuthorRole,
+  IssueMessageKind,
+  IssueStatus,
   ProblemKind,
   SkillTier,
   WorkIssue,
 } from '@paket/domain-types';
+
+/** Ein Eintrag im Instruktions-Verlauf einer Meldung (Kundenfeedback 04.08.2026). */
+export interface CardIssueMessage {
+  id: string;
+  kind: IssueMessageKind;
+  authorRole: IssueAuthorRole;
+  authorName: string;
+  createdAt: string;
+  text: string;
+}
+
+/**
+ * Eine Einzel-Meldung eines Belegs, wie die Karten/Detail-Ansichten sie zeigen:
+ * Art + Positions-Anker + Einzel-Status + Instruktions-Verlauf.
+ */
+export interface CardIssue {
+  id: string;
+  kind: ProblemKind;
+  reasonLabel: string | null;
+  description: string | null;
+  positionNo: number | null;
+  orderNo: string | null;
+  status: IssueStatus;
+  /** Text der jüngsten TL-Instruktion; null solange die Meldung offen ist. */
+  instruction: string | null;
+  /** Standardanweisung der Problemart (Katalog-Vorlage); null ohne Vorlage. */
+  defaultInstruction: string | null;
+  /** true = Vorlage im Instruktions-Dialog automatisch vorausfüllen. */
+  defaultInstructionAuto: boolean;
+  reportedAt: string;
+  messages: CardIssueMessage[];
+}
 
 // ---------------------------------------------------------------------------
 // §10.1 Tagescockpit
@@ -85,11 +120,11 @@ export interface LaneCard {
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];
   /**
-   * C4: latest OPEN problem preview; null without an open issue. Display label
-   * = `reasonLabel ?? problemKindLabels[kind]` (manual problems snapshot their
-   * ProblemReason-Katalog label).
+   * Instruktions-Loop (04.08.2026): ALLE Meldungen des Belegs mit Einzel-Status.
+   * Display label = `reasonLabel ?? problemKindLabels[kind]` (manuelle Probleme
+   * snapshoten ihr ProblemReason-Katalog-Label). Leer ohne Meldungen.
    */
-  openIssue: { kind: ProblemKind; reasonLabel: string | null; note: string | null } | null;
+  issues: CardIssue[];
   /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
   /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */
@@ -132,6 +167,12 @@ export interface DeliveryGroupRef {
 export interface BoardCase {
   caseId: string;
   weBelegNo: string;
+  /**
+   * Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg
+   * verschieden (row.bundleId trägt nur das erste Bündel der Zeile). Optional,
+   * damit Test-Fixtures und optimistische Platzhalter schlank bleiben.
+   */
+  bundleId?: string;
   status: GoodsReceiptCase['status'];
   /** Teile of the Beleg — the primary size display (B3). */
   totalQuantity: number;
@@ -163,8 +204,19 @@ export interface BoardRow {
   paused: boolean;
   /** Fixed Bereiche/skills of the employee (shown on idle rows too). */
   bereiche: string[];
+  /** Geplanter Schichtbeginn/-ende (ISO): Früh/Spät-Farbe + „ab HH:MM" in der Matrix. */
+  shiftStart?: string | null;
+  shiftEnd?: string | null;
+  /** Heutige Abwesenheit (Schichtplan-Kalender): Zeile ganz unten, durchgestrichen. */
+  absence?: 'krank' | 'urlaub' | null;
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
+  /**
+   * Engine-Packs (Starter- + Folge-Packs) als caseId-Listen in chronologischer
+   * Reihenfolge (aus `bundle.created`/`bundle.extended`); manuell zugewiesene
+   * Belege gehören keinem Pack an. Optional, damit Test-Fixtures schlank bleiben.
+   */
+  packs?: string[][];
 }
 
 /** A free (ready, unassigned) case available to assign to an employee (§10.3). */
@@ -194,6 +246,26 @@ export interface PreviewEmployeeLoad {
  * Produced by `/assignments/preview`; persists nothing until committed via
  * `/assignments/recalculate`.
  */
+/** Anzeige-Metadaten eines geplanten Belegs (kommen aus dem Engine-Lauf mit). */
+export interface PreviewBundleCase {
+  caseId: string;
+  weBelegNo: string;
+  teile: number;
+  minutes: number;
+}
+
+/** Ein vom Engine-Lauf geplantes Bündel (Preview: reine Vorschau, nichts persistiert). */
+export interface PreviewBundle {
+  bundleId: string;
+  employeeId: string;
+  /** Belege in Abhol-Reihenfolge. */
+  caseIds: string[];
+  /** Selbe Reihenfolge wie caseIds. */
+  cases: PreviewBundleCase[];
+  plannedEffortMinutes: number;
+  effortPoints: number;
+}
+
 export interface PreviewResult {
   date: string;
   bundleCount: number;
@@ -201,5 +273,7 @@ export interface PreviewResult {
   unassignedCaseCount: number;
   durationMs: number;
   loads: PreviewEmployeeLoad[];
+  /** Geplante Bündel in Engine-Reihenfolge — Datenquelle der Vorverteilungs-Vorschau. */
+  bundles: PreviewBundle[];
 }
 

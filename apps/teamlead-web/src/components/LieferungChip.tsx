@@ -46,6 +46,36 @@ export function buildGroupColorMap(
   return colors;
 }
 
+/**
+ * Der Zugehörigkeits-Satz eines Gruppen-Belegs — exakt der Chip-Wortlaut, damit
+ * Board, Beleg-Liste und die Matrix-Striche (Experiment DA.M.B) identisch sprechen.
+ */
+export function lieferungSatz(group: DeliveryGroupRef): string {
+  const meta = CONFIDENCE_META[group.confidence];
+  const completeness =
+    group.expectedSize && group.expectedSize > group.presentSize
+      ? ` · ${group.presentSize} von ${group.expectedSize}`
+      : '';
+  const missing = group.missingCount > 0 ? ` · ${group.missingCount} fehlt` : '';
+  return `${meta.dot} Lieferung ×${group.presentSize}${completeness}${missing} · ${group.label}`;
+}
+
+/** Tooltip-Satz zur Vertrauensstufe — Wortlaut des LieferungChip-Tooltips. */
+export function lieferungHinweis(group: DeliveryGroupRef): string {
+  return `Zusammengehörige Lieferung ${group.label} — ${CONFIDENCE_META[group.confidence].text}`;
+}
+
+/**
+ * Warn-Satz des Mitarbeiterboards für auf mehrere Mitarbeiter verteilte
+ * Lieferungen; `null` wenn nichts verteilt ist. Single Source für Board + Matrix.
+ */
+export function splitLieferungWarnung(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1
+    ? '1 zusammengehörige Lieferung ist auf mehrere Mitarbeiter verteilt — bitte zusammen einem Mitarbeiter zuweisen.'
+    : `${count} zusammengehörige Lieferungen sind auf mehrere Mitarbeiter verteilt — bitte jeweils einem Mitarbeiter zuweisen.`;
+}
+
 interface LieferungChipProps {
   group: DeliveryGroupRef | null | undefined;
   size?: 'small' | 'medium';
@@ -61,14 +91,9 @@ interface LieferungChipProps {
 export function LieferungChip({ group, size = 'small', identityColor }: LieferungChipProps) {
   if (!group || group.presentSize < 2) return null;
   const meta = CONFIDENCE_META[group.confidence];
-  const completeness =
-    group.expectedSize && group.expectedSize > group.presentSize
-      ? ` · ${group.presentSize} von ${group.expectedSize}`
-      : '';
-  const missing = group.missingCount > 0 ? ` · ${group.missingCount} fehlt` : '';
-  const label = `${meta.dot} Lieferung ×${group.presentSize}${completeness}${missing} · ${group.label}`;
+  const label = lieferungSatz(group);
   return (
-    <Tooltip title={`Zusammengehörige Lieferung ${group.label} — ${meta.text}`}>
+    <Tooltip title={lieferungHinweis(group)}>
       <Chip
         size={size}
         color={meta.color}

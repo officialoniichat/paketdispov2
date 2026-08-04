@@ -16,11 +16,45 @@
  */
 import type {
   GoodsReceiptCase,
+  IssueAuthorRole,
+  IssueMessageKind,
+  IssueStatus,
   OnlineSizeMark,
+  ProblemKind,
   ReceiptPosition,
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
+
+/** Ein Eintrag im Instruktions-Verlauf einer Meldung (Kundenfeedback 04.08.2026). */
+export interface IssueMessageView {
+  id: string;
+  kind: IssueMessageKind;
+  authorRole: IssueAuthorRole;
+  authorName: string;
+  createdAt: string;
+  text: string;
+}
+
+/**
+ * Eine Einzel-Meldung dieses Belegs, wie die PWA sie anzeigt: Positions-Anker
+ * (positionId) für den TL-Hinweis-Block, Einzel-Status und die jüngste
+ * Instruktion der Teamleitung. Der MA kann am instruierten Problem mit einer
+ * Rückmeldung reagieren („Erneut melden / Rückfrage") — kein freies Chatten.
+ */
+export interface CaseIssueView {
+  id: string;
+  kind: ProblemKind;
+  reasonLabel?: string;
+  description?: string;
+  positionId?: string;
+  positionNo?: number;
+  status: IssueStatus;
+  /** Text der jüngsten TL-Instruktion; fehlt solange die Meldung offen ist. */
+  instruction?: string;
+  reportedAt: string;
+  messages: IssueMessageView[];
+}
 
 /** Storage/goods category — derived from the Lagerplatz-Art (LocationKind), drives icons. */
 export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
@@ -52,6 +86,8 @@ export interface CaseAggregate {
   /** Prüfstufen-Label ("Nein"/"10 %"/"Ja") + Aufgabentext — erklärt, was die Stufe bedeutet. */
   inspectionLevelLabel?: string;
   inspectionDescription?: string;
+  /** Meldungen des Belegs (Instruktions-Loop 04.08.2026), Anker: positionId. */
+  issues: CaseIssueView[];
 }
 
 /** Per-Beleg workflow step — a single PROCESS phase then DONE. */

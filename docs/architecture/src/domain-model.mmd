@@ -11,6 +11,7 @@ erDiagram
     USER ||--o{ ASSIGNMENT_BUNDLE : "besitzt"
     USER ||--o{ ISSUE : "meldet"
     USER ||--o{ ZST_RECORD : "schließt ab"
+    USER ||--o{ EMPLOYEE_ABSENCE : "abwesend (krank/urlaub)"
 
     LOCATION ||--o{ WORKSTATION : "beherbergt"
     WORKSTATION ||--o{ SHIFT : "besetzt an"
@@ -25,6 +26,7 @@ erDiagram
 
     GOODS_RECEIPT_CASE ||--o{ ISSUE : "löst aus"
     PROBLEM_REASON ||--o{ ISSUE : "kategorisiert (manuell)"
+    ISSUE ||--o{ ISSUE_MESSAGE : "Instruktions-Verlauf (Meldung/Instruktion/Rückmeldung)"
     GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "verpackt in"
     GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "abgeschlossen durch"
 
@@ -62,6 +64,13 @@ erDiagram
         datetime plannedEnd
         float netCapacityMinutes
         enum source "seak|pattern|teamlead"
+    }
+    EMPLOYEE_ABSENCE {
+        string id PK
+        string employeeId FK
+        enum kind "krank | urlaub"
+        date startDate "inklusive"
+        date endDate "inklusive (bis wann mindestens)"
     }
     WORKSTATION { string id PK
         string code UK
@@ -171,6 +180,8 @@ erDiagram
         string label "admin-verwalteter Katalog (frei definierbar)"
         boolean active
         int sortOrder
+        string defaultInstruction "nullable — Standardanweisung (Vorlage Instruktions-Dialog)"
+        boolean autoInsert "true = Vorlage automatisch vorausfuellen"
     }
     ISSUE {
         string id PK
@@ -183,7 +194,17 @@ erDiagram
         int deviationQty "Ist−Soll (Mehr-/Minderlieferung)"
         float expectedVkPrice "VK-Etikett-Preis"
         float correctedVkPrice "korrigierter VK (Preisabweichung)"
-        enum status "open|in_review|resolved|rejected"
+        enum status "open|instruction_sent (Einzel-Status je Meldung)"
+    }
+    ISSUE_MESSAGE {
+        string id PK
+        string issueId FK
+        string authorId "OIDC-sub bzw. User-Id (Snapshot)"
+        string authorName "Anzeigename (Snapshot)"
+        enum authorRole "employee|teamlead"
+        enum kind "meldung|instruktion|rueckmeldung"
+        string text
+        datetime createdAt
     }
     TRANSPORT_BOX {
         string id PK
@@ -250,3 +271,15 @@ erDiagram
         string preferredSize
         string alternativeSize "optional"
     }
+
+    %% Teamlead → Mitarbeiter-App (Vorverteilungs-Eingriffe): Nachricht + Gelesen-Quittung.
+    TEAMLEAD_MESSAGE {
+        string id PK
+        string employeeId FK
+        string caseId "optional (Beleg-Bezug)"
+        string text
+        string createdBy
+        datetime createdAt
+        datetime readAt "null = ungelesen"
+    }
+    USER ||--o{ TEAMLEAD_MESSAGE : "erhaelt"

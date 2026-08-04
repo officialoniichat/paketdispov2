@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -215,5 +216,26 @@ export class EmployeeCreateDto {
   @ValidateNested()
   @Type(() => WeeklyPatternDto)
   weeklyPattern?: WeeklyPatternDto | null;
+}
+
+// --- Abwesenheiten (Schichtplan-Kalender) -----------------------------------
+
+/** Krank-/Urlaubs-Spanne eines Mitarbeiters — tagesgenau, beide Grenzen inklusiv. */
+export class AbsenceDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() employeeId!: string;
+  @ApiProperty({ enum: ['krank', 'urlaub'] }) kind!: 'krank' | 'urlaub';
+  @ApiProperty({ description: 'ISO YYYY-MM-DD (inklusive)' }) startDate!: string;
+  @ApiProperty({ description: 'ISO YYYY-MM-DD (inklusive — „bis wann mindestens")' })
+  endDate!: string;
+}
+
+export class AbsenceCreateDto {
+  @ApiProperty() @IsString() employeeId!: string;
+  @ApiProperty({ enum: ['krank', 'urlaub'] }) @IsIn(['krank', 'urlaub']) kind!:
+    | 'krank'
+    | 'urlaub';
+  @ApiProperty({ description: 'ISO YYYY-MM-DD' }) @IsString() startDate!: string;
+  @ApiProperty({ description: 'ISO YYYY-MM-DD' }) @IsString() endDate!: string;
 }
 

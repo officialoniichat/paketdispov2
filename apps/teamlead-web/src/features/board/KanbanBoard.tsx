@@ -12,7 +12,7 @@
  * (§8.4) — hier entsteht keine neue Fachlogik, nur eine andere Bedienoberfläche
  * für dieselben Endpoints.
  */
-import { useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type JSX, type ReactElement, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { alpha } from '@mui/material/styles';
@@ -647,8 +647,9 @@ function CaseCard({
             onDragStart({
               caseId: c.caseId,
               weBelegNo: c.weBelegNo,
-              // draggable garantiert bundleId — Belege existieren nur im Bündel.
-              bundleId: row.bundleId ?? '',
+              // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen
+              // (Recalc bei laufendem Alt-Bündel) sind die beiden verschieden.
+              bundleId: c.bundleId ?? row.bundleId ?? '',
               employeeId: row.employeeId,
               employeeName: row.displayName,
               phase,
@@ -689,18 +690,31 @@ function CaseCard({
   );
 }
 
+/** Optik der Schnellinfo (helle Karte statt dunkler Blase) — Board und Matrix teilen sie. */
+const QUICK_INFO_SLOT_PROPS = {
+  tooltip: {
+    sx: {
+      bgcolor: 'background.paper',
+      color: 'text.primary',
+      border: '1px solid',
+      borderColor: 'divider',
+      boxShadow: 4,
+      maxWidth: 320,
+      p: 1.25,
+    },
+  },
+  arrow: { sx: { color: 'background.paper' } },
+};
+
 /**
- * Schnellinfo („!" im Kreis, oben rechts am Beleg-Container): Mini-Tooltip, der
- * aus der Karte herausklappt und die wichtigsten Detail-Infos zeigt — bewusst
- * KEIN Dialog. Die Kopf-Daten werden erst beim Öffnen nachgeladen (react-query,
- * gecacht); Klick auf die Karte selbst führt weiterhin zur Detailseite.
+ * Inhalt der Schnellinfo: Kopf-Daten des Belegs (Filiale, Lieferschein, Warenart,
+ * Buchung, Positionen, Zugewiesen …). Mountet erst mit offenem Tooltip — die
+ * Detail-Daten laden also weiterhin lazy (react-query, gecacht).
  */
-function CaseQuickInfo({ c }: { c: BoardCase }): JSX.Element {
-  const [open, setOpen] = useState(false);
+export function CaseQuickInfoContent({ c }: { c: BoardCase }): JSX.Element {
   const detail = useQuery({
     queryKey: ['board-case-quickinfo', c.caseId],
     queryFn: () => fetchBelegDetail(c.caseId),
-    enabled: open,
     staleTime: 30_000,
   });
   const d = detail.data;
@@ -713,84 +727,107 @@ function CaseQuickInfo({ c }: { c: BoardCase }): JSX.Element {
   );
 
   return (
+    <Stack spacing={0.75} sx={{ minWidth: 210 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center">
+        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+          {c.weBelegNo}
+        </Typography>
+        <CaseStatusChip status={c.status} size="small" />
+      </Stack>
+      <Typography variant="caption" color="text.secondary">
+        {c.totalQuantity} Teile · {formatMinutes(c.estimatedMinutes)}
+        {c.storageCode ? ` · ${c.storageCode}` : ''}
+      </Typography>
+      {detail.isPending && (
+        <Typography variant="caption" color="text.secondary">
+          Details laden…
+        </Typography>
+      )}
+      {detail.isError && (
+        <Typography variant="caption" color="error">
+          Details konnten nicht geladen werden.
+        </Typography>
+      )}
+      {d && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            columnGap: 1,
+            rowGap: 0.25,
+            '& .MuiTypography-root': { fontSize: '0.7rem' },
+          }}
+        >
+          {row('Filiale', d.branchNo)}
+          {row('Lieferschein', d.deliveryNoteNo ?? '—')}
+          {row('Warenart', d.goodsType ?? '—')}
+          {row('Buchung', d.bookingDate.slice(0, 10))}
+          {row('Positionen', String(d.positions.length))}
+          {row('Zugewiesen', d.assignedEmployeeName ?? '—')}
+          {d.hasOpenIssue && (
+            <>
+              <Typography sx={{ color: 'error.main' }}>Problem</Typography>
+              <Typography sx={{ color: 'error.main', fontWeight: 700 }}>offen</Typography>
+            </>
+          )}
+          {d.attentionFlag && (
+            <>
+              <Typography sx={{ color: 'warning.main' }}>Aufmerksamkeit</Typography>
+              <Typography sx={{ color: 'warning.main', fontWeight: 700 }}>
+                {d.attentionNote ?? 'markiert'}
+              </Typography>
+            </>
+          )}
+        </Box>
+      )}
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
+        Klick auf die Karte öffnet die vollständigen Details.
+      </Typography>
+    </Stack>
+  );
+}
+
+/**
+ * Hover-Schnellinfo um ein beliebiges Element (z. B. die Beleg-Striche der
+ * Experiment-Matrix): öffnet nach kurzer Verzögerung dieselbe Karte wie das
+ * „!" des Mitarbeiterboards.
+ */
+export function CaseQuickInfoTooltip({
+  c,
+  children,
+}: {
+  c: BoardCase;
+  children: ReactElement;
+}): JSX.Element {
+  return (
+    <Tooltip
+      arrow
+      placement="right-start"
+      enterDelay={300}
+      enterNextDelay={300}
+      slotProps={QUICK_INFO_SLOT_PROPS}
+      title={<CaseQuickInfoContent c={c} />}
+    >
+      {children}
+    </Tooltip>
+  );
+}
+
+/**
+ * Schnellinfo („!" im Kreis, oben rechts am Beleg-Container): Mini-Tooltip, der
+ * aus der Karte herausklappt und die wichtigsten Detail-Infos zeigt — bewusst
+ * KEIN Dialog; Klick auf die Karte selbst führt weiterhin zur Detailseite.
+ */
+function CaseQuickInfo({ c }: { c: BoardCase }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
     <Tooltip
       arrow
       placement="right-start"
       open={open}
       onClose={() => setOpen(false)}
-      slotProps={{
-        tooltip: {
-          sx: {
-            bgcolor: 'background.paper',
-            color: 'text.primary',
-            border: '1px solid',
-            borderColor: 'divider',
-            boxShadow: 4,
-            maxWidth: 320,
-            p: 1.25,
-          },
-        },
-        arrow: { sx: { color: 'background.paper' } },
-      }}
-      title={
-        <Stack spacing={0.75} sx={{ minWidth: 210 }}>
-          <Stack direction="row" spacing={0.75} alignItems="center">
-            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-              {c.weBelegNo}
-            </Typography>
-            <CaseStatusChip status={c.status} size="small" />
-          </Stack>
-          <Typography variant="caption" color="text.secondary">
-            {c.totalQuantity} Teile · {formatMinutes(c.estimatedMinutes)}
-            {c.storageCode ? ` · ${c.storageCode}` : ''}
-          </Typography>
-          {detail.isPending && open && (
-            <Typography variant="caption" color="text.secondary">
-              Details laden…
-            </Typography>
-          )}
-          {detail.isError && (
-            <Typography variant="caption" color="error">
-              Details konnten nicht geladen werden.
-            </Typography>
-          )}
-          {d && (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'auto 1fr',
-                columnGap: 1,
-                rowGap: 0.25,
-                '& .MuiTypography-root': { fontSize: '0.7rem' },
-              }}
-            >
-              {row('Filiale', d.branchNo)}
-              {row('Lieferschein', d.deliveryNoteNo ?? '—')}
-              {row('Warenart', d.goodsType ?? '—')}
-              {row('Buchung', d.bookingDate.slice(0, 10))}
-              {row('Positionen', String(d.positions.length))}
-              {row('Zugewiesen', d.assignedEmployeeName ?? '—')}
-              {d.hasOpenIssue && (
-                <>
-                  <Typography sx={{ color: 'error.main' }}>Problem</Typography>
-                  <Typography sx={{ color: 'error.main', fontWeight: 700 }}>offen</Typography>
-                </>
-              )}
-              {d.attentionFlag && (
-                <>
-                  <Typography sx={{ color: 'warning.main' }}>Aufmerksamkeit</Typography>
-                  <Typography sx={{ color: 'warning.main', fontWeight: 700 }}>
-                    {d.attentionNote ?? 'markiert'}
-                  </Typography>
-                </>
-              )}
-            </Box>
-          )}
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem' }}>
-            Klick auf die Karte öffnet die vollständigen Details.
-          </Typography>
-        </Stack>
-      }
+      slotProps={QUICK_INFO_SLOT_PROPS}
+      title={<CaseQuickInfoContent c={c} />}
     >
       <IconButton
         size="small"
@@ -813,7 +850,7 @@ function CaseQuickInfo({ c }: { c: BoardCase }): JSX.Element {
 }
 
 /** 2×2-Punkte-Quadrat (2 Punkte oben, 2 darunter) als Drag-Griff eines Belegs. */
-function DragDots(): JSX.Element {
+export function DragDots(): JSX.Element {
   return (
     <Box
       aria-hidden

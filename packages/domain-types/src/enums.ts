@@ -156,14 +156,22 @@ export const assignmentStatusSchema = z.enum([
 ]);
 export type AssignmentStatus = z.infer<typeof assignmentStatusSchema>;
 
-export const issueStatusSchema = z.enum([
-  'open',
-  'in_review',
-  'waiting_external',
-  'resolved',
-  'rejected',
-]);
+/**
+ * Einzel-Status je Meldung (Kundenfeedback 04.08.2026): `open` = gemeldet bzw.
+ * vom MA per Rückmeldung erneut geöffnet, `instruction_sent` = der Teamlead hat
+ * für genau diese Meldung eine Instruktion geschickt. Der Beleg gilt erst als
+ * geklärt (problem_resolved), wenn keine Meldung mehr `open` ist.
+ */
+export const issueStatusSchema = z.enum(['open', 'instruction_sent']);
 export type IssueStatus = z.infer<typeof issueStatusSchema>;
+
+/** Art eines Verlaufs-Eintrags am Problem: MA-Meldung, TL-Instruktion, MA-Rückmeldung. */
+export const issueMessageKindSchema = z.enum(['meldung', 'instruktion', 'rueckmeldung']);
+export type IssueMessageKind = z.infer<typeof issueMessageKindSchema>;
+
+/** Rolle des Verlaufs-Autors (Snapshot — Teamleads existieren nicht zwingend als User-Zeile). */
+export const issueAuthorRoleSchema = z.enum(['employee', 'teamlead']);
+export type IssueAuthorRole = z.infer<typeof issueAuthorRoleSchema>;
 
 export const issueScopeSchema = z.enum(['case', 'position', 'sku_line', 'transport_box']);
 export type IssueScope = z.infer<typeof issueScopeSchema>;
@@ -209,11 +217,17 @@ export const workflowEventTypeSchema = z.enum([
   'position.confirmed',
   'sku.quantity_confirmed',
   'issue.created',
-  'issue.resolved',
+  // Instruktions-Loop je Einzel-Meldung (Kundenfeedback 04.08.2026): der Teamlead
+  // instruiert jede Meldung einzeln; der MA kann mit einer Rückmeldung wieder öffnen.
+  'issue.instruction_sent',
+  'issue.reopened',
   // Problem-Loop (Kundenfeedback 14.07.2026): Teilabschluss meldet die gesammelten
-  // Probleme, der Teamlead klärt sie, der SELBE MA setzt fort.
+  // Probleme; erst wenn ALLE Meldungen instruiert sind, ist der Beleg geklärt und
+  // der SELBE MA setzt fort. Eine Rückmeldung reißt den Beleg zurück in den
+  // Problem-Status (case.problem_reopened).
   'case.problems_reported',
   'case.problems_resolved',
+  'case.problem_reopened',
   'case.resumed',
   'box.label_printed',
   'box.sealed',

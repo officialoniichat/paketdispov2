@@ -11,6 +11,7 @@ import { ProblemReasonsModule } from './problem-reasons/problem-reasons.module.j
 import { EmployeesModule } from './employees/employees.module.js';
 import { ProhandelModule } from './prohandel/prohandel.module.js';
 import { HealthModule } from './health/health.module.js';
+import { MessagesModule } from './messages/messages.module.js';
 import { DevModule } from './dev/dev.module.js';
 
 /**
@@ -31,6 +32,7 @@ import { DevModule } from './dev/dev.module.js';
     EmployeesModule,
     ProhandelModule,
     HealthModule,
+    MessagesModule,
     DevModule,
   ],
 })

@@ -49,17 +49,21 @@ flowchart TD
     B -- Ja --> C["'Beleg erledigt'<br/>Status: Fertig"]
     B -- Nein, Problem/Abweichung --> D["'Teilabschluss (Problem melden)'<br/>→ 'An Teamleitung senden'"]
     D --> E[ROT geparkt: 'Problem gemeldet'<br/>nicht bearbeitbar]
-    E --> F[Teamleitung klärt<br/>'Probleme geklärt']
+    E --> F[Teamleitung beantwortet<br/>JEDE Meldung einzeln<br/>mit einer Instruktion]
     F --> G[GRÜN zurück: 'Geklärt'<br/>freigegeben]
     G --> H[Du arbeitest fertig<br/>→ 'Beleg erledigt']
 ```
 
 ## Wenn der Beleg grün zurückkommt
 
-1. Nach der Klärung liegt der Beleg **grün** als **`'Geklärt'`** in deiner Liste, mit dem Zusatz
-   `'Geklärt – zur Weiterbearbeitung freigegeben.'`
-2. Öffne ihn, arbeite den Rest ab und schließe ihn mit **`'Beleg erledigt'`** ab. Es ist derselbe
-   Beleg beim selben Mitarbeiter – nichts wandert an fremde Kollegen.
+1. Der Beleg wird erst **grün** (`'Geklärt'`), wenn **jede** deiner Meldungen ihre Instruktion hat —
+   solange nur ein Teil beantwortet ist, bleibt er rot und das Badge zeigt zweigeteilt grün/rot.
+2. Öffne ihn: an **jeder betroffenen Position** steht der Hinweis-Block der Teamleitung mit der
+   Instruktion, was genau zu tun ist. Arbeite den Rest ab und schließe mit **`'Beleg erledigt'`** ab.
+   Es ist derselbe Beleg beim selben Mitarbeiter – nichts wandert an fremde Kollegen.
+3. Passt eine Instruktion nicht (Problem besteht weiter)? **`'Erneut melden / Rückfrage'`** direkt am
+   Hinweis-Block (Pflichttext): die Meldung gilt wieder als offen, der Beleg geht zurück an die
+   Teamleitung — der ganze Verlauf bleibt am Problem sichtbar.
 
 ## Was passiert danach
 

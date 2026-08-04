@@ -3,9 +3,10 @@
 // "Digitale Ablagen" board and the assignment engine can be exercised at true
 // scale. Provenance of the volume numbers: docs/data/belege-history-per-day.csv
 // (derived from the customer Excel: 363 days, 61 849 Belege; per-day min 2,
-// median 171, p90 249, max 315). Two scenarios:
+// median 171, p90 249, max 315). Three scenarios:
 //   - 'typical' → 171 Belege  (the median working day)
 //   - 'peak'    → 315 Belege  (the busiest observed day, Feb/Aug peaks)
+//   - 'masse'   → 650 Belege  (Demo-/Stress-Paket: ~2 Peak-Tage übereinander)
 //
 // EVERYTHING here is a pure function of a fixed PRNG seed + the scenario, so a
 // reseed is fully reproducible (no Date.now / Math.random). SEED_DATE only labels
@@ -21,17 +22,25 @@ import type {
 
 // --- Scenario -------------------------------------------------------------
 
-export type SeedScenario = 'typical' | 'peak';
+export type SeedScenario = 'typical' | 'peak' | 'masse';
 
 /** Resolve the scenario from SEED_SCENARIO (default 'typical'). */
 export function resolveScenario(raw: string | undefined): SeedScenario {
-  return raw?.trim().toLowerCase() === 'peak' ? 'peak' : 'typical';
+  const v = raw?.trim().toLowerCase();
+  if (v === 'peak') return 'peak';
+  if (v === 'masse') return 'masse';
+  return 'typical';
 }
 
-/** Target ready-pool size per scenario — the real median / max daily volume. */
+/**
+ * Target ready-pool size per scenario — the real median / max daily volume;
+ * 'masse' stapelt bewusst ~2 Peak-Tage übereinander (Demo-/Stress-Datenpaket
+ * für Deployments, auf denen viel herumgetestet werden soll).
+ */
 export const SCENARIO_TARGET: Record<SeedScenario, number> = {
   typical: 171,
   peak: 315,
+  masse: 650,
 };
 
 // --- Deterministic PRNG (mulberry32) --------------------------------------
@@ -237,7 +246,8 @@ function runSizeWeights(scenario: SeedScenario): readonly (readonly [readonly [n
     [[1, 1], 48], [[2, 2], 14], [[3, 3], 9], [[4, 4], 8],
     [[5, 8], 11], [[9, 14], 6], [[15, 22], 3],
   ];
-  if (scenario === 'peak') base.push([[23, 40], 2]);
+  // Peak/Masse-Tage enthalten zusätzlich einzelne Groß-Lieferungen (23–40er-Runs).
+  if (scenario !== 'typical') base.push([[23, 40], 2]);
   return base;
 }
 

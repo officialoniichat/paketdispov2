@@ -14,6 +14,8 @@ import {
 } from '@paket/domain-types';
 import type {
   DeliveryGroupRefDto,
+  IssueMessageDto,
+  IssueSummaryDto,
   LabelPrintPositionDto,
   PositionInstructionDto,
   SkuLineDto,
@@ -259,5 +261,111 @@ export function mapPositionInstruction(i: PositionInstructionRow): PositionInstr
     onlineHandlingLocation: i.onlineHandlingLocation,
     redPriceRequired: i.redPriceRequired,
     notes: i.notes,
+  };
+}
+
+/** Persistence shape of one Verlaufs-Eintrag (IssueMessage). */
+export interface IssueMessageRow {
+  id: string;
+  kind: string;
+  authorRole: string;
+  authorName: string;
+  text: string;
+  createdAt: Date;
+}
+
+/** Persistence shape of an Issue row incl. its Verlauf. */
+export interface IssueRow {
+  id: string;
+  scope: string;
+  scopeId: string | null;
+  kind: string;
+  reasonLabel: string | null;
+  deviationQty: number | null;
+  expectedVkPrice: number | null;
+  correctedVkPrice: number | null;
+  status: string;
+  description: string | null;
+  reportedAt: Date;
+  messages: IssueMessageRow[];
+  /** Katalog-Referenz (nur kind=manual) — liefert die Standardanweisung der Problemart. */
+  reason?: { defaultInstruction: string | null; autoInsert: boolean } | null;
+}
+
+/** Minimal position context to anchor an issue (id/Nr/Order-Nr + Größenzeilen). */
+export interface IssuePositionRef {
+  id: string;
+  positionNo: number;
+  orderNo?: string | null;
+  skuLines: ReadonlyArray<{ id: string; ean: string; size: string }>;
+}
+
+/**
+ * Projects an Issue row + Verlauf for the Klärungs-UX (Kundenfeedback
+ * 04.08.2026): Position/Größenzeile werden aus `scopeId` aufgelöst (Anker für
+ * die TL-Hinweis-Blöcke der PWA), der Verlauf chronologisch sortiert und der
+ * Text der jüngsten Instruktion als Komfortfeld gespiegelt — aber nur solange
+ * die Meldung instruiert ist (eine Rückmeldung setzt sie zurück auf offen).
+ */
+export function mapIssueSummary(
+  issue: IssueRow,
+  positions: readonly IssuePositionRef[],
+): IssueSummaryDto {
+  let positionId: string | null = null;
+  let positionNo: number | null = null;
+  let ean: string | null = null;
+  let size: string | null = null;
+  let orderNo: string | null = null;
+  for (const p of positions) {
+    if (issue.scope === 'position' && p.id === issue.scopeId) {
+      positionId = p.id;
+      positionNo = p.positionNo;
+      orderNo = p.orderNo ?? null;
+      break;
+    }
+    const sku = p.skuLines.find((s) => s.id === issue.scopeId);
+    if (issue.scope === 'sku_line' && sku) {
+      positionId = p.id;
+      positionNo = p.positionNo;
+      orderNo = p.orderNo ?? null;
+      ean = sku.ean;
+      size = sku.size;
+      break;
+    }
+  }
+  const messages: IssueMessageDto[] = [...issue.messages]
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      authorRole: m.authorRole,
+      authorName: m.authorName,
+      createdAt: m.createdAt.toISOString(),
+      text: m.text,
+    }));
+  const latestInstruction = [...messages].reverse().find((m) => m.kind === 'instruktion') ?? null;
+  return {
+    id: issue.id,
+    scope: issue.scope,
+    kind: issue.kind,
+    reasonLabel: issue.reasonLabel,
+    deviationQty: issue.deviationQty,
+    expectedVkPrice: issue.expectedVkPrice,
+    correctedVkPrice: issue.correctedVkPrice,
+    positionId,
+    positionNo,
+    ean,
+    size,
+    orderNo,
+    status: issue.status,
+    description: issue.description,
+    instruction: issue.status === 'instruction_sent' ? (latestInstruction?.text ?? null) : null,
+    // Standardanweisung der Problemart (04.08.2026): Vorlage für den
+    // Instruktions-Dialog; Auto-Vorbefüllen nur mit gepflegtem Vorlagentext.
+    defaultInstruction: issue.reason?.defaultInstruction ?? null,
+    defaultInstructionAuto:
+      issue.reason?.defaultInstruction != null && (issue.reason?.autoInsert ?? false),
+    reportedAt: issue.reportedAt.toISOString(),
+    messages,
   };
 }

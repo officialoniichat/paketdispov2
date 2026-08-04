@@ -134,6 +134,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/cases/{caseId}/issues/{issueId}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_reopenIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/park": {
         parameters: {
             query?: never;
@@ -605,7 +621,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teamlead/cases/{caseId}/resolve-problems": {
+    "/api/teamlead/cases/{caseId}/issues/{issueId}/instruction": {
         parameters: {
             query?: never;
             header?: never;
@@ -614,8 +630,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA */
-        post: operations["TeamleadController_resolveProblems"];
+        /** Instruktion senden: beantwortet GENAU EINE Meldung mit einer Handlungsanweisung (Pflichttext). Erst wenn alle Meldungen instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA) */
+        post: operations["TeamleadController_sendInstruction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -983,6 +999,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/employees/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Krank-/Urlaubs-Spannen im Zeitraum (Schichtplan-Kalender). */
+        get: operations["EmployeesController_listAbsences"];
+        put?: never;
+        /** Krankschreibung/Urlaub eintragen (Rechtsklick im Kalender). */
+        post: operations["EmployeesController_createAbsence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/employees/absences/{absenceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Abwesenheit löschen (Kalender-Kontextmenü). */
+        delete: operations["EmployeesController_deleteAbsence"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/employees/{id}": {
         parameters: {
             query?: never;
@@ -1061,6 +1112,57 @@ export interface paths {
         get: operations["HealthController_ready"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gesendete Nachrichten (neueste zuerst) inkl. Gelesen-Quittung. */
+        get: operations["TeamleadMessagesController_list"];
+        put?: never;
+        /** Nachricht an die Mitarbeiter-App eines Mitarbeiters senden. */
+        post: operations["TeamleadMessagesController_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeMessagesController_unread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/messages/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Nachricht als gelesen quittieren (nur die eigene). */
+        post: operations["MeMessagesController_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1191,6 +1293,56 @@ export interface components {
              */
             labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
         };
+        IssueMessageDto: {
+            id: string;
+            /** @description IssueMessageKind: meldung|instruktion|rueckmeldung */
+            kind: string;
+            /** @description IssueAuthorRole: employee|teamlead */
+            authorRole: string;
+            /** @description Anzeigename des Autors (Snapshot) */
+            authorName: string;
+            /** @description ISO-8601 timestamp */
+            createdAt: string;
+            text: string;
+        };
+        IssueSummaryDto: {
+            id: string;
+            /** @description IssueScope: position|sku_line */
+            scope: string;
+            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
+            kind: string;
+            /** @description Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual) */
+            reasonLabel?: string | null;
+            /** @description Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery) */
+            deviationQty?: number | null;
+            /** @description VK-Etikett-Preis laut Beleg */
+            expectedVkPrice?: number | null;
+            /** @description Vom MA korrigierter VK (kind=price_deviation) */
+            correctedVkPrice?: number | null;
+            /** @description Id der betroffenen ReceiptPosition (aufgelöst aus scopeId) — Anker für den TL-Hinweis-Block in der PWA */
+            positionId?: string | null;
+            /** @description Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId) */
+            positionNo?: number | null;
+            /** @description EAN der betroffenen Größenzeile */
+            ean?: string | null;
+            /** @description Größe der betroffenen Größenzeile */
+            size?: string | null;
+            /** @description Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung) */
+            orderNo?: string | null;
+            /** @description IssueStatus: open|instruction_sent — Einzel-Status je Meldung */
+            status: string;
+            description?: string | null;
+            /** @description Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen */
+            instruction?: string | null;
+            /** @description Standardanweisung der Problemart (Katalog-Vorlage für den Instruktions-Dialog, 04.08.2026); null ohne Vorlage */
+            defaultInstruction?: string | null;
+            /** @description true = Standardanweisung im Instruktions-Dialog automatisch vorausfüllen */
+            defaultInstructionAuto: boolean;
+            /** @description ISO-8601 timestamp */
+            reportedAt: string;
+            /** @description Instruktions-Verlauf chronologisch (Erst-Meldung zuerst) */
+            messages: components["schemas"]["IssueMessageDto"][];
+        };
         CaseSummaryDto: {
             id: string;
             weBelegNo: string;
@@ -1241,6 +1393,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
+            issues?: components["schemas"]["IssueSummaryDto"][];
         };
         MeWorkstationDto: {
             id: string;
@@ -1371,6 +1525,8 @@ export interface components {
             boxTargets: components["schemas"]["TransportBoxTargetDto"][];
             /** @description Ordered Arbeitsanweisung points (derived from header + positions) */
             instructionPoints: components["schemas"]["WorkInstructionPointDto"][];
+            /** @description Meldungen des Belegs inkl. Einzel-Status + Verlauf — Anker für die TL-Hinweis-Blöcke je Position (positionId) */
+            issues: components["schemas"]["IssueSummaryDto"][];
         };
         NextBundleResultDto: {
             assigned: boolean;
@@ -1385,6 +1541,17 @@ export interface components {
             /** @description Workstation-Code (Tisch-Nr. oder gescannter Barcode) */
             code: string;
         };
+        ReopenIssueDto: {
+            /** @description Rückmeldung des MA zu genau dieser Instruktion */
+            text: string;
+        };
+        TransitionResultDto: {
+            caseId: string;
+            status: string;
+            version: number;
+            /** @description Audit event id, if a milestone was recorded */
+            eventId?: Record<string, never> | null;
+        };
         ParkRemainingDto: {
             /** @description Zu parkende Belege (müssen assigned + im eigenen Bündel sein) */
             caseIds: string[];
@@ -1395,13 +1562,6 @@ export interface components {
             /** @description Verbleibende Belege des Bündels (in Reihenfolge) */
             remainingCaseIds: string[];
             plannedEffortMinutes: number;
-        };
-        TransitionResultDto: {
-            caseId: string;
-            status: string;
-            version: number;
-            /** @description Audit event id, if a milestone was recorded */
-            eventId?: Record<string, never> | null;
         };
         SkuQuantityDto: {
             skuLineId: string;
@@ -1463,6 +1623,8 @@ export interface components {
         BoardCaseDto: {
             id: string;
             weBelegNo: string;
+            /** @description Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg verschieden (row.bundleId trägt nur das ERSTE Bündel der Zeile). */
+            bundleId: string;
             status: string;
             totalQuantity: number;
             estimatedMinutes: number;
@@ -1476,6 +1638,10 @@ export interface components {
             locationCode: string;
             scanRequired: boolean;
             scanned: boolean;
+        };
+        BoardPackDto: {
+            /** @description Case ids des Packs in Bündel-Reihenfolge */
+            caseIds: string[];
         };
         BoardRowDto: {
             employeeNo: string;
@@ -1492,8 +1658,19 @@ export interface components {
             capacityMinutes: number;
             /** @description Fixed Bereiche/skills of the employee (shown on idle rows too). */
             bereiche: string[];
+            /** @description Geplanter Schichtbeginn (ISO) — die Matrix färbt Früh/Spät und zeigt „ab HH:MM" vor Schichtstart; null ohne Schicht heute. */
+            shiftStart: string | null;
+            /** @description Geplantes Schichtende (ISO). */
+            shiftEnd: string | null;
+            /**
+             * @description Heutige Abwesenheit (Schichtplan-Kalender): Zeile wird ganz unten, durchgestrichen dargestellt.
+             * @enum {string|null}
+             */
+            absence: "krank" | "urlaub" | null;
             cases: components["schemas"]["BoardCaseDto"][];
             routeStops: components["schemas"]["BoardRouteStopDto"][];
+            /** @description Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an. */
+            packs: components["schemas"]["BoardPackDto"][];
         };
         BoardDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -1548,14 +1725,6 @@ export interface components {
             /** @description true = das Bündel hat bereits einen Beleg in Arbeit */
             started: boolean;
         };
-        OpenIssueRefDto: {
-            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
-            kind: string;
-            /** @description Label-Snapshot des Problemarten-Katalogs (nur kind=manual) */
-            reasonLabel?: string | null;
-            /** @description Issue description/note */
-            note?: string | null;
-        };
         PoolItemDto: {
             id: string;
             weBelegNo: string;
@@ -1606,6 +1775,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
+            issues?: components["schemas"]["IssueSummaryDto"][];
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
@@ -1614,8 +1785,6 @@ export interface components {
             bereich?: string | null;
             /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
             bundleQueue?: components["schemas"]["BundleQueueRefDto"] | null;
-            /** @description C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem */
-            openIssue?: components["schemas"]["OpenIssueRefDto"] | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1723,35 +1892,6 @@ export interface components {
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
             skuLines: components["schemas"]["SkuLineDto"][];
-        };
-        IssueSummaryDto: {
-            id: string;
-            /** @description IssueScope: position|sku_line */
-            scope: string;
-            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
-            kind: string;
-            /** @description Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual) */
-            reasonLabel?: string | null;
-            /** @description Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery) */
-            deviationQty?: number | null;
-            /** @description VK-Etikett-Preis laut Beleg */
-            expectedVkPrice?: number | null;
-            /** @description Vom MA korrigierter VK (kind=price_deviation) */
-            correctedVkPrice?: number | null;
-            /** @description Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId) */
-            positionNo?: number | null;
-            /** @description EAN der betroffenen Größenzeile */
-            ean?: string | null;
-            /** @description Größe der betroffenen Größenzeile */
-            size?: string | null;
-            /** @description Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung) */
-            orderNo?: string | null;
-            /** @description IssueStatus: open|in_review|waiting_external|resolved|rejected */
-            status: string;
-            description?: string | null;
-            resolution?: string | null;
-            /** @description ISO-8601 timestamp */
-            reportedAt: string;
         };
         ZstSummaryDto: {
             id: string;
@@ -1877,9 +2017,9 @@ export interface components {
             /** @description Reason logged in the case.cancelled audit event */
             reason?: string;
         };
-        ResolveProblemsDto: {
-            /** @description Anmerkung zur Klärung (auf allen Issues vermerkt) */
-            resolution?: string;
+        SendInstructionDto: {
+            /** @description Handlungsanweisung für den MA zu genau dieser Meldung */
+            text: string;
         };
         RecalculateDto: {
             /**
@@ -1895,6 +2035,22 @@ export interface components {
             assignedPoints: number;
             bundleCount: number;
         };
+        PlannedBundleCaseDto: {
+            caseId: string;
+            weBelegNo: string;
+            teile: number;
+            minutes: number;
+        };
+        PlannedBundleDto: {
+            bundleId: string;
+            employeeId: string;
+            /** @description Belege in Abhol-Reihenfolge. */
+            caseIds: string[];
+            /** @description Selbe Reihenfolge wie caseIds. */
+            cases: components["schemas"]["PlannedBundleCaseDto"][];
+            plannedEffortMinutes: number;
+            effortPoints: number;
+        };
         RecalculateResultDto: {
             date: string;
             bundleCount: number;
@@ -1903,6 +2059,8 @@ export interface components {
             /** @description Wall-clock of the engine run (Anhang E.5 budget < 5000ms). */
             durationMs: number;
             loads: components["schemas"]["EmployeeLoadDto"][];
+            /** @description Geplante Bündel des Laufs (§8.3). */
+            bundles: components["schemas"]["PlannedBundleDto"][];
         };
         ZstExportResultDto: {
             /** @description ISO date YYYY-MM-DD the export ran */
@@ -1945,6 +2103,8 @@ export interface components {
             caseId: string;
             /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
             reason?: string;
+            /** @description true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen") statt an das Tages-Bündel anzuhängen. */
+            newBundle?: boolean;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
             date?: string;
         };
@@ -2123,6 +2283,10 @@ export interface components {
             active: boolean;
             /** @description Anzeige-Reihenfolge im Auswahlmenü */
             sortOrder: number;
+            /** @description Standardanweisung der Teamleitung zu dieser Problemart — Vorlage für den Instruktions-Dialog (04.08.2026) */
+            defaultInstruction?: string | null;
+            /** @description true = Vorlage im Instruktions-Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar */
+            autoInsert: boolean;
         };
         ProblemReasonUpsertDto: {
             /** @description Vorhandene id = Update; ohne id = Neuanlage */
@@ -2133,6 +2297,13 @@ export interface components {
             active: boolean;
             /** @description Anzeige-Reihenfolge */
             sortOrder: number;
+            /** @description Standardanweisung (Vorlage für den Instruktions-Dialog); leer/fehlend = keine Vorlage */
+            defaultInstruction?: string;
+            /**
+             * @description Vorlage im Instruktions-Dialog automatisch vorausfüllen
+             * @default false
+             */
+            autoInsert: boolean;
         };
         TodayShiftDto: {
             /** @description ISO date YYYY-MM-DD */
@@ -2252,6 +2423,25 @@ export interface components {
             name: string;
             active: boolean;
         };
+        AbsenceDto: {
+            id: string;
+            employeeId: string;
+            /** @enum {string} */
+            kind: "krank" | "urlaub";
+            /** @description ISO YYYY-MM-DD (inklusive) */
+            startDate: string;
+            /** @description ISO YYYY-MM-DD (inklusive — „bis wann mindestens") */
+            endDate: string;
+        };
+        AbsenceCreateDto: {
+            employeeId: string;
+            /** @enum {string} */
+            kind: "krank" | "urlaub";
+            /** @description ISO YYYY-MM-DD */
+            startDate: string;
+            /** @description ISO YYYY-MM-DD */
+            endDate: string;
+        };
         EmployeeProfileUpdateDto: {
             active?: boolean;
             /** @description false = temporäre Kraft (ohne Leistungsmessung) */
@@ -2279,6 +2469,43 @@ export interface components {
             weBelegNos: string[];
             /** @description Buchungstag der Charge (ISO) */
             date: string;
+        };
+        SendMessageDto: {
+            /** @description employeeNo des Empfängers (Mitarbeiter-App) */
+            employeeNo: string;
+            /** @description Kurznachricht (max. 500 Zeichen) */
+            text: string;
+            /** @description Optionaler Beleg-Bezug (GoodsReceiptCase-Id) */
+            caseId?: string;
+        };
+        TeamleadMessageDto: {
+            id: string;
+            employeeNo: string;
+            employeeName: string;
+            caseId: string | null;
+            /** @description WE-Nr des Bezugs-Belegs */
+            weBelegNo: string | null;
+            text: string;
+            createdAt: string;
+            /** @description „Gelesen"-Quittung aus der PWA */
+            readAt: string | null;
+        };
+        TeamleadMessageListDto: {
+            messages: components["schemas"]["TeamleadMessageDto"][];
+        };
+        MyMessageDto: {
+            id: string;
+            text: string;
+            caseId: string | null;
+            weBelegNo: string | null;
+            createdAt: string;
+        };
+        MyMessageListDto: {
+            messages: components["schemas"]["MyMessageDto"][];
+        };
+        MessageReadDto: {
+            id: string;
+            readAt: string;
         };
         ScenarioInfoDto: {
             /** @description Stable catalog key, e.g. 'standard' */
@@ -2507,6 +2734,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeWorkstationDto"];
+                };
+            };
+        };
+    };
+    MeController_reopenIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+                /** @description Meldung (Issue) mit gesendeter Instruktion */
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
                 };
             };
         };
@@ -3192,18 +3447,19 @@ export interface operations {
             };
         };
     };
-    TeamleadController_resolveProblems: {
+    TeamleadController_sendInstruction: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 caseId: string;
+                issueId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveProblemsDto"];
+                "application/json": components["schemas"]["SendInstructionDto"];
             };
         };
         responses: {
@@ -3772,6 +4028,72 @@ export interface operations {
             };
         };
     };
+    EmployeesController_listAbsences: {
+        parameters: {
+            query: {
+                /** @description ISO date YYYY-MM-DD */
+                from: string;
+                /** @description ISO date YYYY-MM-DD */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceDto"][];
+                };
+            };
+        };
+    };
+    EmployeesController_createAbsence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceCreateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_deleteAbsence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                absenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     EmployeesController_get: {
         parameters: {
             query?: {
@@ -3896,6 +4218,89 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    TeamleadMessagesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamleadMessageListDto"];
+                };
+            };
+        };
+    };
+    TeamleadMessagesController_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamleadMessageDto"];
+                };
+            };
+        };
+    };
+    MeMessagesController_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMessageListDto"];
+                };
+            };
+        };
+    };
+    MeMessagesController_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Nachricht-Id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageReadDto"];
+                };
             };
         };
     };

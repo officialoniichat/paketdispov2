@@ -15,7 +15,9 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
@@ -26,8 +28,13 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { ColumnDef, SortingState } from '@tanstack/react-table';
+import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import SearchIcon from '@mui/icons-material/Search';
 import type { CaseStatus } from '@paket/domain-types';
 import { caseStatusMeta, CaseStatusChip, PriorityChip } from '@paket/ui';
 import {
@@ -49,6 +56,7 @@ import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewSta
 import { DataTable } from '../../components/DataTable.js';
 import { LieferungChip, buildGroupColorMap } from '../../components/LieferungChip.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { InstructionsDialog } from '../../components/InstructionsDialog.js';
 import { ForwardDialog } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
@@ -113,26 +121,51 @@ interface BelegeSavedView {
   scope: BelegeScope;
   sorting: SortingState;
   filters: BelegeFilters;
+  /** UI-Zustand des einklappbaren Filterblocks (ab „Status" abwärts). */
+  filtersOpen?: boolean;
 }
 
 const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
 
-export function BelegListPage(): JSX.Element {
+export interface BelegListPageProps {
+  /**
+   * localStorage-Key der Saved View. Default ist der Basis-Tab-Key; eingebettete
+   * Instanzen (Experiment DA.M.B) übergeben einen eigenen Key, damit sie den
+   * Basis-Tab /belege nicht umkonfigurieren.
+   */
+  viewStateKey?: string;
+  /** Experiment DA.M.B: Tabelle füllt die verfügbare Höhe (Pane/Vollbild) bis ganz unten. */
+  fill?: boolean;
+}
+
+export function BelegListPage({
+  viewStateKey = BELEGE_VIEW_KEY,
+  fill = false,
+}: BelegListPageProps = {}): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Saved view (C2): scope/sorting/filters survive reloads via localStorage.
   const [savedView] = useState<BelegeSavedView>(() =>
-    loadViewState<BelegeSavedView>(BELEGE_VIEW_KEY, DEFAULT_SAVED_VIEW),
+    loadViewState<BelegeSavedView>(viewStateKey, DEFAULT_SAVED_VIEW),
   );
   const [scope, setScope] = useState<BelegeScope>(savedView.scope);
   const [page, setPage] = useState(1);
   const [sorting, setSorting] = useState<SortingState>(savedView.sorting);
   const [filters, setFilters] = useState<BelegeFilters>(savedView.filters);
+  // Platzsparende Filterleiste: Volltextsuche als Lupe neben den Scopes,
+  // Spaltenfilter (ab „Status" abwärts) einklappbar.
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(savedView.filtersOpen === true);
+  const [searchOpen, setSearchOpen] = useState<boolean>(() => Boolean(savedView.filters.q));
   const debouncedFilters = useDebounced(filters);
 
   useEffect(() => {
-    saveViewState<BelegeSavedView>(BELEGE_VIEW_KEY, { scope, sorting, filters: debouncedFilters });
-  }, [scope, sorting, debouncedFilters]);
+    saveViewState<BelegeSavedView>(viewStateKey, {
+      scope,
+      sorting,
+      filters: debouncedFilters,
+      filtersOpen,
+    });
+  }, [viewStateKey, scope, sorting, debouncedFilters, filtersOpen]);
 
   /** Every filter change restarts on page 1 — a filtered page 4 makes no sense. */
   const updateFilters = (patch: Partial<BelegeFilters>): void => {
@@ -195,7 +228,7 @@ export function BelegListPage(): JSX.Element {
     releaseCase,
     approveCase,
     cancelCase,
-    resolveProblems,
+    sendInstruction,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -209,7 +242,7 @@ export function BelegListPage(): JSX.Element {
       releaseCase,
       approveCase,
       cancelCase,
-      resolveProblems,
+      sendInstruction,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -222,7 +255,7 @@ export function BelegListPage(): JSX.Element {
       releaseCase,
       approveCase,
       cancelCase,
-      resolveProblems,
+      sendInstruction,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -235,6 +268,8 @@ export function BelegListPage(): JSX.Element {
   const assignBeleg = rows.find((r) => r.id === assignBelegId) ?? null;
 
   // --- Weiterleiten + Besondere Aufmerksamkeit (shared CaseActionMenu custom actions) ---
+  const [instructionsCaseId, setInstructionsCaseId] = useState<string | null>(null);
+  const instructionsBeleg = rows.find((r) => r.id === instructionsCaseId) ?? null;
   const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
   const forwardBeleg = rows.find((r) => r.id === forwardCaseId) ?? null;
   const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
@@ -298,6 +333,18 @@ export function BelegListPage(): JSX.Element {
     };
   };
 
+  // Anzahl aktiver Spaltenfilter (ohne Volltextsuche) — Zähler auf dem Filter-Button.
+  const advancedCount = [
+    filters.status,
+    filters.shopNo,
+    filters.branchNo,
+    filters.section,
+    filters.labels,
+    filters.assigned,
+    filters.bookingFrom,
+    filters.bookingTo,
+  ].filter((v) => v !== undefined && v !== '').length;
+
   const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
     const defs: ColumnDef<BelegRow>[] = [
       { accessorKey: 'weBelegNo', header: 'WE-Beleg', id: 'weBelegNo' },
@@ -354,7 +401,7 @@ export function BelegListPage(): JSX.Element {
           </Stack>
         ),
       },
-      { accessorKey: 'quantity', header: 'Menge (Teile)', id: 'totalQuantity' },
+      { accessorKey: 'quantity', header: 'Teile', id: 'totalQuantity' },
       { accessorKey: 'effortPoints', header: 'Punkte', id: 'effortPoints' },
       {
         id: 'labels',
@@ -369,7 +416,7 @@ export function BelegListPage(): JSX.Element {
       },
       {
         id: 'bookingDate',
-        header: 'Buchungsdatum',
+        header: 'Buchung',
         accessorFn: (r) => r.bookingDate,
         cell: (ctx) => formatDate(ctx.row.original.bookingDate),
       },
@@ -517,6 +564,7 @@ export function BelegListPage(): JSX.Element {
               onAssign={(caseId) => setAssignBelegId(caseId)}
               onForward={(caseId) => setForwardCaseId(caseId)}
               onAttention={(caseId) => setAttentionCaseId(caseId)}
+              onInstructions={(caseId) => setInstructionsCaseId(caseId)}
             />
           </Box>
         );
@@ -539,10 +587,98 @@ export function BelegListPage(): JSX.Element {
   }, [rows, splitCaseId]);
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h5" sx={{ fontWeight: 800 }}>
-        Belege ({total})
-      </Typography>
+    <Stack spacing={2} sx={fill ? { height: '100%', minHeight: 0 } : undefined}>
+      {/* Kopfzeile: Titel, Scopes, Lupe (Volltextsuche) und Filter-Umschalter in
+          EINER Zeile — die frühere zweite Zeile entfällt (Platz für die Tabelle). */}
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap alignItems="center">
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          Belege ({total})
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={scope}
+          onChange={(_e, next) => {
+            if (next !== null) {
+              setScope(next as BelegeScope);
+              setPage(1);
+            }
+          }}
+          aria-label="Lebenszyklus-Scope"
+        >
+          {SCOPES.map((s) => (
+            <ToggleButton key={s} value={s}>
+              {SCOPE_LABEL[s]}
+              {s === 'topf' && topfCountQuery.data !== undefined
+                ? ` (${topfCountQuery.data})`
+                : ''}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        {searchOpen || (filters.q ?? '') !== '' ? (
+          <TextField
+            size="small"
+            autoFocus={searchOpen && !filters.q}
+            placeholder="WE-Nr / Lagerplatz / Lieferschein"
+            value={filters.q ?? ''}
+            onChange={(e) => updateFilters({ q: e.target.value || undefined })}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      aria-label="Suche leeren und schließen"
+                      onClick={() => {
+                        updateFilters({ q: undefined });
+                        setSearchOpen(false);
+                      }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ width: 250 }}
+          />
+        ) : (
+          <Tooltip title="Suchen: WE-Nr / Lagerplatz / Lieferschein">
+            <IconButton
+              size="small"
+              aria-label="Suche öffnen (WE-Nr / Lagerplatz / Lieferschein)"
+              onClick={() => setSearchOpen(true)}
+            >
+              <SearchIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        <Button
+          size="small"
+          color={advancedCount > 0 ? 'primary' : 'inherit'}
+          startIcon={<FilterListIcon />}
+          endIcon={filtersOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          Filter{advancedCount > 0 ? ` (${advancedCount})` : ''}
+        </Button>
+        {scope === 'abgeschlossen' && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<DownloadIcon />}
+            disabled={exportZst.isPending || total === 0}
+            onClick={() => void handleExport()}
+          >
+            {exportZst.isPending ? 'Export läuft …' : 'Tagesabschluss / ZST-Export'}
+          </Button>
+        )}
+      </Stack>
 
       {splitDone && (
         <Alert
@@ -571,40 +707,6 @@ export function BelegListPage(): JSX.Element {
         </Alert>
       )}
 
-      <Stack direction="row" spacing={2} flexWrap="wrap" alignItems="center">
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={scope}
-          onChange={(_e, next) => {
-            if (next !== null) {
-              setScope(next as BelegeScope);
-              setPage(1);
-            }
-          }}
-          aria-label="Lebenszyklus-Scope"
-        >
-          {SCOPES.map((s) => (
-            <ToggleButton key={s} value={s}>
-              {SCOPE_LABEL[s]}
-              {s === 'topf' && topfCountQuery.data !== undefined
-                ? ` (${topfCountQuery.data})`
-                : ''}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        {scope === 'abgeschlossen' && (
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            disabled={exportZst.isPending || total === 0}
-            onClick={() => void handleExport()}
-          >
-            {exportZst.isPending ? 'Export läuft …' : 'Tagesabschluss / ZST-Export'}
-          </Button>
-        )}
-      </Stack>
-
       {scope === 'archiv' && (
         <Alert severity="info" variant="outlined">
           Belege bleiben im System erhalten; DocuWare ist das Langzeitarchiv.
@@ -617,15 +719,10 @@ export function BelegListPage(): JSX.Element {
         </Alert>
       )}
 
-      {/* Compact per-column filter row — every field sets a SERVER query param (A2). */}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
-        <TextField
-          size="small"
-          label="WE-Nr / Lagerplatz / Lieferschein"
-          value={filters.q ?? ''}
-          onChange={(e) => updateFilters({ q: e.target.value || undefined })}
-          sx={{ minWidth: 220 }}
-        />
+      {/* Einklappbare Spaltenfilter (ab „Status" abwärts); jedes Feld setzt einen
+          SERVER-Query-Param (A2). Die Volltextsuche sitzt oben als Lupe neben den Scopes. */}
+      <Collapse in={filtersOpen} timeout={150}>
+        <Stack direction="row" spacing={1} rowGap={1} flexWrap="wrap" useFlexGap alignItems="center">
         <TextField
           size="small"
           select
@@ -722,20 +819,31 @@ export function BelegListPage(): JSX.Element {
           slotProps={{ inputLabel: { shrink: true } }}
           sx={{ width: 160 }}
         />
-      </Stack>
+        </Stack>
+      </Collapse>
 
       {query.isLoading ? (
         <Stack spacing={1}>
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} variant="rounded" height={44} />
+            <Skeleton key={i} variant="rounded" height={32} />
           ))}
         </Stack>
       ) : (
-        <>
+        // Füll-Modus (Experiment): Tabelle nimmt die Resthöhe bis ganz unten ein,
+        // die Paginierung bleibt darunter sichtbar.
+        <Box
+          sx={
+            fill
+              ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
+              : undefined
+          }
+        >
           <DataTable
             data={rows}
             columns={columns}
             serverMode
+            dense
+            rowHeight={30}
             getRowSx={groupRowSx}
             sorting={sorting}
             onSortingChange={(next) => {
@@ -744,7 +852,8 @@ export function BelegListPage(): JSX.Element {
             }}
             getRowId={(r) => r.id}
             onRowClick={(r) => navigate(`/belege/${r.id}`)}
-            maxHeight={560}
+            maxHeight={fill ? undefined : 560}
+            fillHeight={fill}
             emptyText="Keine Belege in diesem Scope."
           />
           <TablePagination
@@ -755,8 +864,9 @@ export function BelegListPage(): JSX.Element {
             rowsPerPage={BELEGE_PAGE_LIMIT}
             rowsPerPageOptions={[BELEGE_PAGE_LIMIT]}
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} von ${count}`}
+            sx={fill ? { flexShrink: 0 } : undefined}
           />
-        </>
+        </Box>
       )}
 
       <AssignFromListDialog
@@ -781,6 +891,17 @@ export function BelegListPage(): JSX.Element {
           if (attentionBeleg) flagAttention(attentionBeleg.id, note);
         }}
         onClose={() => setAttentionCaseId(null)}
+      />
+
+      {/* Instruktions-Loop (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */}
+      <InstructionsDialog
+        open={instructionsBeleg !== null}
+        weBelegNo={instructionsBeleg?.weBelegNo ?? ''}
+        issues={instructionsBeleg?.issues ?? []}
+        onSend={(issueId, text) => {
+          if (instructionsBeleg) sendInstruction(instructionsBeleg.id, issueId, text);
+        }}
+        onClose={() => setInstructionsCaseId(null)}
       />
 
       <SplitDialog

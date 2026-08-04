@@ -32,7 +32,7 @@ import {
   PoolQueryDto,
   PrioritizeDto,
   ReorderBundleDto,
-  ResolveProblemsDto,
+  SendInstructionDto,
   TransitionResultDto,
   WithdrawDto,
   ZstExportResultDto,
@@ -299,18 +299,20 @@ export class TeamleadController {
     return this.teamlead.cancel(principal, caseId, dto);
   }
 
-  @Post('cases/:caseId/resolve-problems')
+  @Post('cases/:caseId/issues/:issueId/instruction')
   @ApiOperation({
     summary:
-      'Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA',
+      'Instruktion senden: beantwortet GENAU EINE Meldung mit einer Handlungsanweisung (Pflichttext). ' +
+      'Erst wenn alle Meldungen instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA)',
   })
   @ApiOkResponse({ type: TransitionResultDto })
-  resolveProblems(
+  sendInstruction(
     @CurrentUser() principal: Principal,
     @Param('caseId') caseId: string,
-    @Body() dto: ResolveProblemsDto,
+    @Param('issueId') issueId: string,
+    @Body() dto: SendInstructionDto,
   ): Promise<TransitionResultDto> {
-    return this.teamlead.resolveProblems(principal, caseId, dto);
+    return this.teamlead.sendInstruction(principal, caseId, issueId, dto);
   }
 
   // --- Assignment engine (§8.3) ---------------------------------------------

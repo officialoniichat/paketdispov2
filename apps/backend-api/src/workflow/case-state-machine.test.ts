@@ -25,7 +25,9 @@ describe('case state machine (§7.1)', () => {
       assigned: ['in_progress', 'ready', 'cancelled'],
       in_progress: ['issue_open', 'completed', 'cancelled'],
       issue_open: ['problem_resolved', 'cancelled'],
-      problem_resolved: ['in_progress', 'cancelled'],
+      // Instruktions-Loop (04.08.2026): eine MA-Rückmeldung reißt den Beleg
+      // aus „Geklärt" zurück in den Problem-Status.
+      problem_resolved: ['in_progress', 'issue_open', 'cancelled'],
       completed: ['zst_done'],
       zst_done: [],
       cancelled: [],

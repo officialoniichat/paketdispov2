@@ -12,7 +12,9 @@ import {
   MeWorkstationDto,
   ParkRemainingDto,
   ParkRemainingResultDto,
+  ReopenIssueDto,
   TodayResponseDto,
+  TransitionResultDto,
 } from './cases.dto.js';
 
 /** Employee self-service (§14.2). Always scoped to the caller's own data (§16.1). */
@@ -68,6 +70,23 @@ export class MeController {
     @Body() dto: ClaimWorkstationDto,
   ): Promise<MeWorkstationDto> {
     return this.cases.claimWorkstation(principal, dto);
+  }
+
+  /**
+   * Instruktions-Loop (04.08.2026): Rückmeldung des MA auf eine TL-Instruktion —
+   * die Meldung geht zurück auf offen, der Beleg zurück in den Problem-Status.
+   */
+  @Post('cases/:caseId/issues/:issueId/reopen')
+  @ApiParam({ name: 'caseId', description: 'Goods-receipt case id' })
+  @ApiParam({ name: 'issueId', description: 'Meldung (Issue) mit gesendeter Instruktion' })
+  @ApiOkResponse({ type: TransitionResultDto })
+  reopenIssue(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Param('issueId') issueId: string,
+    @Body() dto: ReopenIssueDto,
+  ): Promise<TransitionResultDto> {
+    return this.cases.reopenIssue(principal, caseId, issueId, dto);
   }
 
   /**

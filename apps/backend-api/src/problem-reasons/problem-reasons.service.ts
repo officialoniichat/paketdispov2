@@ -53,7 +53,16 @@ export class ProblemReasonsService {
         await tx.problemReason.deleteMany({ where: { id: { in: deleteIds } } });
       }
       for (const row of rows) {
-        const data = { label: row.label, active: row.active ?? true, sortOrder: row.sortOrder };
+        // Vorlage normalisieren: Leertext = keine Vorlage; Auto-Vorbefüllen ist
+        // ohne Vorlagentext bedeutungslos und wird mit abgeräumt.
+        const defaultInstruction = row.defaultInstruction?.trim() || null;
+        const data = {
+          label: row.label,
+          active: row.active ?? true,
+          sortOrder: row.sortOrder,
+          defaultInstruction,
+          autoInsert: defaultInstruction !== null && (row.autoInsert ?? false),
+        };
         if (row.id) {
           await tx.problemReason.update({ where: { id: row.id }, data });
         } else {
@@ -70,6 +79,15 @@ function toDto(row: {
   label: string;
   active: boolean;
   sortOrder: number;
+  defaultInstruction: string | null;
+  autoInsert: boolean;
 }): ProblemReasonDto {
-  return { id: row.id, label: row.label, active: row.active, sortOrder: row.sortOrder };
+  return {
+    id: row.id,
+    label: row.label,
+    active: row.active,
+    sortOrder: row.sortOrder,
+    defaultInstruction: row.defaultInstruction,
+    autoInsert: row.autoInsert,
+  };
 }

@@ -44,9 +44,16 @@ If the seed *does* run (`SEED_ON_DEPLOY=1`), this is what happens:
 "Deterministic and idempotent" (the seed's own wording) describes the *result*, not
 preservation: the same inputs always produce the same data, by wiping first.
 
-**Loading a demo data state.** Set `SEED_ON_DEPLOY=1`, redeploy, then **remove the variable
-again**. Alternatively use the admin-only Szenario-Panel (`/api/dev/*`, needs `DEV_PANEL`),
+**Loading a demo data state.** Set `SEED_ON_DEPLOY=1` (optionally `SEED_SCENARIO=masse`
+for the big 650-Belege test dataset), redeploy, then **remove `SEED_ON_DEPLOY` again**.
+Alternatively use the admin-only Szenario-Panel (`/api/dev/*`, needs `DEV_PANEL`),
 which drives the same scenario framework without a deploy.
+
+**Seeded shifts cover a two-week window.** The seed materializes shifts from the weekly
+patterns for **yesterday through +13 days (Mo–Fr)**, anchored on the seed run date. A
+production deployment (no dev panel, real clock) therefore shows a populated board and
+cockpit for ~two weeks after a seed. When the window runs out — symptom: "Keine
+Mitarbeiter für heute eingeplant", empty Vorverteilung — simply reseed the same way.
 
 > **Answer to open question E6 (customer).** Eva and Dustin may maintain Stammdaten (Shops,
 > Verladeplan, Lagerplätze) and enter Belege from now on — a deploy leaves them alone. The only

@@ -71,9 +71,13 @@ const DECISION_STATUSES: ReadonlySet<CaseStatus> = new Set(['blocked', 'issue_op
 /** Priority flags read as "actually urgent" (excludes catman_due/manual_teamlead_priority). */
 const URGENT_PRIORITY_FLAGS: ReadonlySet<PriorityFlag> = new Set(['prio', 'overdue', 'same_day_required']);
 
-/** A card "braucht Entscheidung": open problem, Zurück-an-Bucher, or Besondere Aufmerksamkeit. */
+/** A card "braucht Entscheidung": offene Meldung, Zurück-an-Bucher, or Besondere Aufmerksamkeit. */
 export function cardNeedsDecision(card: LaneCard): boolean {
-  return DECISION_STATUSES.has(card.status) || card.openIssue !== null || card.attentionFlag;
+  return (
+    DECISION_STATUSES.has(card.status) ||
+    card.issues.some((i) => i.status === 'open') ||
+    card.attentionFlag
+  );
 }
 
 export function cardIsPrio(card: LaneCard): boolean {

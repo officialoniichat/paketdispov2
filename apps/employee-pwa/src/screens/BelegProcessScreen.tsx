@@ -26,7 +26,9 @@
  * Probleme werden pro Position/Größe im Dialog erfasst (Punkt 5), lokal
  * gesammelt und farblich markiert (Punkt 9): ein Problem mit Größe färbt seine
  * Größenzeile rot, ein Problem ohne Größe („Ganze Position") die komplette
- * Position samt Kopfzeile; der beleg-weite Problem-Einstieg
+ * Position samt Kopfzeile. Auch bereits GEMELDETE Meldungen färben ihre
+ * Position komplett rot, solange sie offen sind (Instruktions-Loop
+ * 04.08.2026); der beleg-weite Problem-Einstieg
  * ist entfallen (Punkt 8). Eine Mehr-/Minderlieferung oder Preisabweichung ist
  * automatisch ein Problem (Punkt 7): „Beleg erledigt" ist dann gesperrt, nur der
  * Teilabschluss (mit gesammelten Problemen, Punkt 10) bleibt.
@@ -79,6 +81,8 @@ import { ProblemDialog } from '../components/ProblemDialog.js';
 import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
 import { useReferenceDay } from '../data/useMeToday.js';
+import { useReopenIssue } from '../data/useReopenIssue.js';
+import { PositionIssueBlock } from '../components/PositionIssueBlock.js';
 import type { PositionView } from '../domain/types.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
 import { canCompleteCase } from '../workflow/workflowModel.js';
@@ -392,6 +396,8 @@ export function BelegProcessScreen(): JSX.Element {
   const flow = useCaseFlow(caseId);
   // Bezugstag der Überfälligkeits-Anzeige — derselbe Server-Tag wie im Bündel-Home.
   const referenceDay = useReferenceDay();
+  // Rückmeldung auf eine TL-Instruktion (Instruktions-Loop 04.08.2026).
+  const reopenIssue = useReopenIssue(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
   const [problemTarget, setProblemTarget] = useState<PositionView | null>(null);
 
@@ -446,6 +452,17 @@ export function BelegProcessScreen(): JSX.Element {
     manualByPosition.set(problem.positionId, [
       ...(manualByPosition.get(problem.positionId) ?? []),
       problem,
+    ]);
+  }
+  // Gemeldete Server-Meldungen je Position (Instruktions-Loop 04.08.2026): der
+  // TL-Hinweis-Block steht an GENAU der betroffenen Position; Meldungen ohne
+  // Positions-Anker (scope=case) erscheinen am Beleg-Kopf-Banner.
+  const issuesByPosition = new Map<string, typeof aggregate.issues>();
+  for (const issue of aggregate.issues) {
+    if (!issue.positionId) continue;
+    issuesByPosition.set(issue.positionId, [
+      ...(issuesByPosition.get(issue.positionId) ?? []),
+      issue,
     ]);
   }
 
@@ -653,8 +670,13 @@ export function BelegProcessScreen(): JSX.Element {
                 const manualProblems = manualByPosition.get(pos.id) ?? [];
                 // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
                 // Position") markiert die gesamte Position rot — Kopfzeile und
-                // alle Größenzeilen.
-                const positionWideProblem = manualProblems.some((x) => x.skuLineId === undefined);
+                // alle Größenzeilen. Gemeldete Server-Meldungen zählen mit,
+                // solange sie OFFEN sind; instruierte zeigen stattdessen den
+                // grünen TL-Hinweis-Block.
+                const positionIssues = issuesByPosition.get(pos.id) ?? [];
+                const openIssueAtPosition = positionIssues.some((x) => x.status === 'open');
+                const positionWideProblem =
+                  openIssueAtPosition || manualProblems.some((x) => x.skuLineId === undefined);
                 // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
                 // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
                 const metaText = [
@@ -757,10 +779,18 @@ export function BelegProcessScreen(): JSX.Element {
                             </Stack>
 
                             {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
-                                anbringen + Sichern, groß und wiedererkennbar. */}
+                                anbringen + Sichern, groß und wiedererkennbar. Der
+                                Meldungs-Container (PositionIssueBlock) steht in DERSELBEN
+                                Zeile NEBEN den Piktogrammen, nicht darunter
+                                (Nutzer-Vorgabe 04.08.2026). */}
                             {labelPrintRequired(i.labelPrintVariant) ||
-                            (i.securityRequired && i.securityTypeCode) ? (
-                              <Stack direction="row" sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
+                            (i.securityRequired && i.securityTypeCode) ||
+                            positionIssues.length > 0 ? (
+                              <Stack
+                                direction="row"
+                                alignItems="flex-start"
+                                sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}
+                              >
                                 {labelPrintRequired(i.labelPrintVariant) ? (
                                   <WorkStepPictogram
                                     code={ETIKETT_PICTOGRAM_CODE}
@@ -779,6 +809,11 @@ export function BelegProcessScreen(): JSX.Element {
                                     subtitle={i.securityLocation ?? undefined}
                                   />
                                 ) : null}
+                                <PositionIssueBlock
+                                  issues={positionIssues}
+                                  onReopen={(issueId, text) => reopenIssue.mutate({ issueId, text })}
+                                  reopenPending={reopenIssue.isPending}
+                                />
                               </Stack>
                             ) : null}
 
@@ -814,6 +849,7 @@ export function BelegProcessScreen(): JSX.Element {
                                 ))}
                               </Stack>
                             ) : null}
+
                           </Box>
 
                           <Stack

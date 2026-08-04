@@ -44,6 +44,12 @@ export interface DataTableProps<T> {
   emptyText?: string;
   /** When set, the body scrolls within this height and rows are virtualized. */
   maxHeight?: number;
+  /**
+   * Füll-Modus (Experiment-Pane/Vollbild): der Container nimmt die verfügbare
+   * Höhe des Flex-Elters ein (flex:1, bis ganz unten) statt einer festen
+   * maxHeight — Zeilen sind ebenfalls virtualisiert.
+   */
+  fillHeight?: boolean;
   rowHeight?: number;
   /**
    * Server mode: sorting/filtering/pagination happen on the backend — the table
@@ -58,6 +64,11 @@ export interface DataTableProps<T> {
    * identisch mit der `data`-Reihenfolge.
    */
   getRowSx?: (row: T, index: number) => RowSx | undefined;
+  /**
+   * Kompakte Dichte (Beleg-Liste): engere Zellen, kleinere Schrift, 20px-Chips —
+   * damit alle Spalten ohne Horizontal-Scroll auf den Screen passen.
+   */
+  dense?: boolean;
 }
 
 export function DataTable<T>({
@@ -71,9 +82,11 @@ export function DataTable<T>({
   getRowId,
   emptyText = 'Keine Einträge.',
   maxHeight,
+  fillHeight = false,
   rowHeight = 44,
   serverMode = false,
   getRowSx,
+  dense = false,
 }: DataTableProps<T>): JSX.Element {
   const table = useReactTable({
     data,
@@ -100,34 +113,47 @@ export function DataTable<T>({
 
   const rows = table.getRowModel().rows;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Scroll-/Virtualisierungs-Modus: feste maxHeight ODER Füll-Modus (flex:1).
+  const scrolls = maxHeight != null || fillHeight;
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
     overscan: 12,
-    enabled: maxHeight != null,
+    enabled: scrolls,
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  const paddingTop = maxHeight && virtualRows.length ? virtualRows[0]!.start : 0;
+  const paddingTop = scrolls && virtualRows.length ? virtualRows[0]!.start : 0;
   const paddingBottom =
-    maxHeight && virtualRows.length
+    scrolls && virtualRows.length
       ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1]!.end
       : 0;
-  const bodyRows = maxHeight ? virtualRows.map((v) => rows[v.index]!) : rows;
+  const bodyRows = scrolls ? virtualRows.map((v) => rows[v.index]!) : rows;
 
   return (
     <Box
       ref={scrollRef}
-      sx={{
-        maxHeight,
-        overflow: maxHeight ? 'auto' : 'visible',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-      }}
+      sx={[
+        {
+          ...(fillHeight ? { flex: 1, minHeight: 0 } : { maxHeight }),
+          overflow: scrolls ? 'auto' : 'visible',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+        },
+        dense && {
+          '& .MuiTableCell-root': { px: 0.75, py: 0.25, fontSize: '0.74rem' },
+          '& .MuiTableCell-head': { py: 0.5, fontSize: '0.72rem' },
+          '& .MuiChip-root': { height: 20, fontSize: '0.68rem' },
+          '& .MuiChip-label': { px: 0.75 },
+          // Aktionen-Zelle: Kebab/Buttons dürfen die Zeile nicht aufblähen.
+          '& .MuiIconButton-root': { p: 0.25 },
+          '& .MuiButton-root': { py: 0, minHeight: 24, fontSize: '0.68rem' },
+        },
+      ]}
     >
-      <Table size="small" stickyHeader={maxHeight != null}>
+      <Table size="small" stickyHeader={scrolls}>
         <TableHead>
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id}>

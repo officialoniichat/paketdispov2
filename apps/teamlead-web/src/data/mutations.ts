@@ -91,6 +91,8 @@ export interface AssignToEmployeeArgs {
   reason?: string;
   /** Operational day of the board (YYYY-MM-DD); the Bündel is bound to this day. */
   date: string;
+  /** true = eigenständiges NEUES Bündel anlegen (Vorverteilung „soll bestehen"). */
+  newBundle?: boolean;
 }
 
 /**
@@ -101,9 +103,14 @@ export interface AssignToEmployeeArgs {
  */
 export async function assignToEmployee(
   api: PaketApiClient,
-  { employeeNo, caseId, reason, date }: AssignToEmployeeArgs,
+  { employeeNo, caseId, reason, date, newBundle }: AssignToEmployeeArgs,
 ): Promise<BundleMutationResultDto> {
-  const body: AssignToEmployeeDto = { caseId, date, ...(reason ? { reason } : {}) };
+  const body: AssignToEmployeeDto = {
+    caseId,
+    date,
+    ...(reason ? { reason } : {}),
+    ...(newBundle === true ? { newBundle: true } : {}),
+  };
   return ensure(
     'Beleg zuweisen',
     await api.POST('/api/teamlead/employees/{employeeNo}/assign', {
@@ -241,6 +248,19 @@ function toPreviewResult(dto: RecalculateResultDto): PreviewResult {
       assignedMinutes: load.assignedMinutes,
       assignedPoints: load.assignedPoints,
       bundleCount: load.bundleCount,
+    })),
+    bundles: dto.bundles.map((bundle) => ({
+      bundleId: bundle.bundleId,
+      employeeId: bundle.employeeId,
+      caseIds: [...bundle.caseIds],
+      cases: bundle.cases.map((c) => ({
+        caseId: c.caseId,
+        weBelegNo: c.weBelegNo,
+        teile: c.teile,
+        minutes: c.minutes,
+      })),
+      plannedEffortMinutes: bundle.plannedEffortMinutes,
+      effortPoints: bundle.effortPoints,
     })),
   };
 }

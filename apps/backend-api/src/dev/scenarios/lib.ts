@@ -154,7 +154,7 @@ export async function seedUsers(
   return idByEmployeeNo;
 }
 
-// --- Shifts (materialized from each employee's weekly pattern on the base day) ---
+// --- Shifts (materialized from the weekly patterns AROUND the base day) --------
 
 function minutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
@@ -165,33 +165,45 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Schicht-Fenster um den Basistag: gestern bis +13 Tage (Mo–Fr laut Wochenmuster).
+ * Ein Deployment OHNE Dev-Panel (Railway, echte Uhr) hat damit ab dem Seed zwei
+ * Wochen lang ein gefülltes Board/Cockpit — nicht nur am Seed-Tag selbst.
+ */
+export const SHIFT_WINDOW = { before: 1, after: 13 } as const;
+
 export async function seedShifts(
   prisma: ScenarioPrisma,
   baseDate: string,
   userIds: Record<string, string>,
 ): Promise<void> {
-  const date = asDate(baseDate);
-  for (const u of USERS) {
-    if (!u.pattern) continue;
-    const employeeId = requireId(userIds, u.employeeNo, 'user');
-    const prod = u.productivityFactor ?? 1;
-    const windowMin = minutes(u.pattern.end) - minutes(u.pattern.start);
-    const net = Math.round((windowMin - u.pattern.breakMinutes) * prod);
-    const shiftData = {
-      plannedStart: asTime(baseDate, u.pattern.start),
-      plannedEnd: asTime(baseDate, u.pattern.end),
-      breakMinutes: u.pattern.breakMinutes,
-      plannedHours: round2(windowMin / 60),
-      netCapacityMinutes: net,
-      active: true,
-      source: 'pattern' as const,
-      productivityFactor: prod,
-    };
-    await prisma.shift.upsert({
-      where: { shift_employee_date: { employeeId, date } },
-      update: shiftData,
-      create: { employeeId, date, ...shiftData },
-    });
+  for (let off = -SHIFT_WINDOW.before; off <= SHIFT_WINDOW.after; off += 1) {
+    const date = offsetDate(baseDate, off);
+    const weekday = date.getUTCDay();
+    if (weekday === 0 || weekday === 6) continue; // Wochenmuster Mo–Fr: Sa/So frei
+    const day = date.toISOString().slice(0, 10);
+    for (const u of USERS) {
+      if (!u.pattern) continue;
+      const employeeId = requireId(userIds, u.employeeNo, 'user');
+      const prod = u.productivityFactor ?? 1;
+      const windowMin = minutes(u.pattern.end) - minutes(u.pattern.start);
+      const net = Math.round((windowMin - u.pattern.breakMinutes) * prod);
+      const shiftData = {
+        plannedStart: asTime(day, u.pattern.start),
+        plannedEnd: asTime(day, u.pattern.end),
+        breakMinutes: u.pattern.breakMinutes,
+        plannedHours: round2(windowMin / 60),
+        netCapacityMinutes: net,
+        active: true,
+        source: 'pattern' as const,
+        productivityFactor: prod,
+      };
+      await prisma.shift.upsert({
+        where: { shift_employee_date: { employeeId, date } },
+        update: shiftData,
+        create: { employeeId, date, ...shiftData },
+      });
+    }
   }
 }
 

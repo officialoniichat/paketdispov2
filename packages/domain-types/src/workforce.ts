@@ -146,3 +146,11 @@ export const employeeProfileSchema = z.object({
   weeklyPattern: weeklyPatternSchema.nullish(),
 });
 export type EmployeeProfile = z.infer<typeof employeeProfileSchema>;
+
+/**
+ * Krank/Urlaub im Schichtplan-Kalender (Admin): feste Vokabel der
+ * Abwesenheitsarten — angezeigt im Kalender (Diensttag durchgestrichen) und in
+ * der Mitarbeiter-Matrix (Zeile ganz unten, durchgestrichen).
+ */
+export const absenceKindSchema = z.enum(['krank', 'urlaub']);
+export type AbsenceKind = z.infer<typeof absenceKindSchema>;

@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './primitives.js';
-import { issueScopeSchema, issueStatusSchema, problemKindSchema } from './enums.js';
+import {
+  issueAuthorRoleSchema,
+  issueMessageKindSchema,
+  issueScopeSchema,
+  issueStatusSchema,
+  problemKindSchema,
+} from './enums.js';
 import { fileRefSchema } from './documents.js';
 
 /**
@@ -13,6 +19,10 @@ export const problemReasonSchema = z.object({
   label: z.string().min(1),
   active: z.boolean(),
   sortOrder: z.number().int(),
+  /** Standardanweisung der TL zu dieser Problemart (Vorlage für den Instruktions-Dialog). */
+  defaultInstruction: z.string().min(1).nullable(),
+  /** true = Vorlage im Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar. */
+  autoInsert: z.boolean(),
 });
 export type ProblemReason = z.infer<typeof problemReasonSchema>;
 
@@ -38,8 +48,23 @@ export const workIssueSchema = z.object({
   photoRefs: z.array(fileRefSchema).optional(),
   reportedAt: isoDateTimeSchema,
   status: issueStatusSchema,
-  resolution: z.string().optional(),
-  releasedBy: idSchema.optional(),
-  releasedAt: isoDateTimeSchema.optional(),
 });
 export type WorkIssue = z.infer<typeof workIssueSchema>;
+
+/**
+ * Verlaufs-Eintrag je Einzel-Meldung (Kundenfeedback 04.08.2026): die Erst-
+ * Meldung des MA ist der erste Eintrag, danach wachsen TL-Instruktionen und
+ * MA-Rückmeldungen chronologisch — immer am konkreten Problem verankert.
+ * Autor als Snapshot (OIDC-sub + Anzeigename).
+ */
+export const issueMessageSchema = z.object({
+  id: idSchema,
+  issueId: idSchema,
+  authorId: z.string().min(1),
+  authorName: z.string().min(1),
+  authorRole: issueAuthorRoleSchema,
+  kind: issueMessageKindSchema,
+  text: z.string().min(1),
+  createdAt: isoDateTimeSchema,
+});
+export type IssueMessage = z.infer<typeof issueMessageSchema>;

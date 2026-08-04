@@ -115,6 +115,8 @@ export interface AssignVars {
   caseId: string;
   /** Optional §8.4 audit reason (B2). */
   reason?: string;
+  /** true = eigenständiges NEUES Bündel anlegen (Vorverteilung „soll bestehen"). */
+  newBundle?: boolean;
 }
 export interface AssignBundleVars {
   /** employeeNo of the target (the only employee id the board exposes). */
@@ -172,11 +174,11 @@ export interface CockpitApi {
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
   /**
-   * „Probleme geklärt" (Kundenfeedback 14.07.2026): löst ALLE offenen Probleme
-   * des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben
-   * MA. Die Anmerkung ist optional (courtesy note für den MA).
+   * „Instruktionen senden" (Kundenfeedback 04.08.2026): beantwortet GENAU EINE
+   * Meldung mit einer Handlungsanweisung (Pflichttext). Erst wenn alle Meldungen
+   * instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA).
    */
-  resolveProblems(caseId: string, resolution?: string): void;
+  sendInstruction(caseId: string, issueId: string, text: string): void;
   /** C5 „Weiterleiten an …" — status-neutral, no §7.1 transition. */
   forwardCase(caseId: string, recipient: ForwardRecipient, reason?: string): void;
   /** C5 „Zurückholen" — clears the forward flag. */
@@ -348,17 +350,20 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const resolveProblemsMutation = useMutation<
+  const sendInstructionMutation = useMutation<
     unknown,
     Error,
-    { caseId: string; resolution?: string }
+    { caseId: string; issueId: string; text: string }
   >({
-    mutationFn: async ({ caseId, resolution }) => {
-      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-problems', {
-        params: { path: { caseId } },
-        body: { resolution },
-      });
-      if (error) throw new MutationError('Probleme klären', error);
+    mutationFn: async ({ caseId, issueId, text }) => {
+      const { data, error } = await api.POST(
+        '/api/teamlead/cases/{caseId}/issues/{issueId}/instruction',
+        {
+          params: { path: { caseId, issueId } },
+          body: { text },
+        },
+      );
+      if (error) throw new MutationError('Instruktion senden', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -402,7 +407,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
           }),
         ),
       onError: (_e, _v, context) => rollback(context),
-      onSettled: invalidateCockpit,
+      // Bündel-Interventionen ändern Case-Status/Zuteilung, die auch Beleg-Liste
+      // und Belegdetails anzeigen — deshalb beide Query-Familien invalidieren.
+      onSettled: invalidateCockpitAndBelege,
     },
   );
 
@@ -430,16 +437,16 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         return { ...withRow, pool: withRow.pool.filter((p) => p.caseId !== caseId) };
       }),
     onError: (_e, _v, context) => rollback(context),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // Manual assign (§8.4). No optimistic patch: a free employee has no bundleId to
   // target with patchBoardRow, and the backend find-or-create decides the target —
   // a plain invalidate-on-settle is the correct, safe choice for both branches.
   const assignToEmployee = useMutation<unknown, Error, AssignVars>({
-    mutationFn: ({ employeeNo, caseId, reason }) =>
-      assignToEmployeeRequest(api, { employeeNo, caseId, reason, date }),
-    onSettled: invalidateCockpit,
+    mutationFn: ({ employeeNo, caseId, reason, newBundle }) =>
+      assignToEmployeeRequest(api, { employeeNo, caseId, reason, date, newBundle }),
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // A1/A2 manual multi-Beleg Bündel creation. Same reasoning as assignToEmployee:
@@ -448,7 +455,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const assignBundle = useMutation<unknown, Error, AssignBundleVars>({
     mutationFn: ({ employeeNo, caseIds, reason }) =>
       assignBundleToEmployeeRequest(api, { employeeNo, caseIds, reason, date }),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   // B2 move a Beleg between two employees' Bündel. Touches two board rows at once,
@@ -457,7 +464,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
   const moveCase = useMutation<unknown, Error, MoveCaseVars>({
     mutationFn: ({ bundleId, caseId, targetEmployeeNo, reason }) =>
       moveCaseRequest(api, { bundleId, caseId, targetEmployeeNo, reason, date }),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const reorder = useMutation<unknown, Error, ReorderVars, { previous: CockpitSnapshot | undefined }>({
@@ -474,7 +481,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
         }),
       ),
     onError: (_e, _v, context) => rollback(context),
-    onSettled: invalidateCockpit,
+    onSettled: invalidateCockpitAndBelege,
   });
 
   const pauseResume = useMutation<unknown, Error, PauseVars, { previous: CockpitSnapshot | undefined }>(
@@ -512,7 +519,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
-      resolveProblems: (caseId, resolution) => resolveProblemsMutation.mutate({ caseId, resolution }),
+      sendInstruction: (caseId, issueId, text) =>
+        sendInstructionMutation.mutate({ caseId, issueId, text }),
       forwardCase: (caseId, recipient, reason) =>
         forwardMutation.mutate({ caseId, recipient, reason }),
       unforwardCase: (caseId) => unforwardMutation.mutate({ caseId }),
@@ -538,7 +546,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       parkMutation,
       unparkMutation,
       cancelMutation,
-      resolveProblemsMutation,
+      sendInstructionMutation,
       forwardMutation,
       unforwardMutation,
       flagAttentionMutation,

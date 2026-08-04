@@ -526,18 +526,34 @@ export async function seedLifecycleIssues(
     const reason = c.issue.reasonId
       ? await prisma.problemReason.findUnique({ where: { id: c.issue.reasonId } })
       : null;
-    await prisma.issue.create({
+    const reporterId = requireId(userIds, c.employeeNo, 'user');
+    const issue = await prisma.issue.create({
       data: {
         caseId: gcase.id,
         scope: 'position',
         scopeId: firstPosition?.id,
-        employeeId: requireId(userIds, c.employeeNo, 'user'),
+        employeeId: reporterId,
         kind: c.issue.kind ?? 'manual',
         reasonId: reason?.id,
         reasonLabel: reason?.label,
         deviationQty: c.issue.deviationQty,
         description: c.issue.description,
         status: 'open',
+      },
+    });
+    // Erst-Meldung als erster Verlaufs-Eintrag (Instruktions-Loop 04.08.2026).
+    const reporter = await prisma.user.findUnique({
+      where: { id: reporterId },
+      select: { displayName: true },
+    });
+    await prisma.issueMessage.create({
+      data: {
+        issueId: issue.id,
+        authorId: reporterId,
+        authorName: reporter?.displayName ?? 'Mitarbeiter',
+        authorRole: 'employee',
+        kind: 'meldung',
+        text: c.issue.description,
       },
     });
   }
@@ -695,6 +711,32 @@ interface Ma108PositionSpec {
   skuLines: Ma108SkuSpec[];
 }
 
+/**
+ * Eine Einzel-Meldung des Demo-Bündels (Instruktions-Loop, Kundenfeedback
+ * 04.08.2026): an einer konkreten Position verankert, mit optionalem Verlauf
+ * Meldung → Instruktion → Rückmeldung → zweite Instruktion. Der Einzel-Status
+ * ergibt sich aus dem Verlauf: letzte Instruktion unbeantwortet ⇒
+ * instruction_sent, sonst open.
+ */
+interface Ma108IssueSpec {
+  reasonId:
+    | 'pr_wrong_article'
+    | 'pr_wrong_color'
+    | 'pr_damaged_goods'
+    | 'pr_label_problem'
+    | 'pr_other';
+  /** 0-basierter Index der betroffenen Position des Belegs. */
+  positionIndex: number;
+  /** Erst-Meldung des MA (erster Verlaufs-Eintrag). */
+  description: string;
+  /** Instruktion der Teamleitung zu GENAU dieser Meldung. */
+  instruction?: string;
+  /** Rückmeldung des MA auf die Instruktion (öffnet die Meldung erneut). */
+  rueckmeldung?: string;
+  /** Zweite Instruktion der Teamleitung nach der Rückmeldung. */
+  zweiteInstruktion?: string;
+}
+
 interface Ma108CaseSpec {
   weBelegNo: string;
   deliveryNoteNo: string;
@@ -707,13 +749,8 @@ interface Ma108CaseSpec {
   positions: Ma108PositionSpec[];
   /** HH:mm — nur für completed (ZST-Record + Abschlusszeit). */
   completedAt?: string;
-  issue?: {
-    reasonId: 'pr_wrong_color' | 'pr_damaged_goods' | 'pr_other';
-    description: string;
-    /** true = bereits durch die Teamleitung geklärt (status resolved). */
-    resolved?: boolean;
-    resolution?: string;
-  };
+  /** Meldungen des Belegs (issue_open/problem_resolved-Demos). */
+  issues?: Ma108IssueSpec[];
 }
 
 /** Die Bündel-Belege in Abhol-Reihenfolge (Stops nach Location-sequenceIndex). */
@@ -802,13 +839,22 @@ const MA108_CASES: Ma108CaseSpec[] = [
     ],
   },
   {
+    // Instruktions-Loop-Demo 1: ZWEI verschiedene OFFENE Meldungen an zwei
+    // Positionen — „falscher Artikel" (Pos 1) + „Etikettenproblem" (Pos 2).
+    // Badge in der PWA: „2x" komplett rot; Probleme-Lane zeigt beide einzeln.
     weBelegNo: '9.108.052', deliveryNoteNo: 'LS-25-9152', storageCode: 'R19',
     goodsTypeText: 'Nachorder', status: 'issue_open',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 11,
-    issue: {
-      reasonId: 'pr_wrong_color',
-      description: 'Gelieferte Farbe weicht von der Arbeitsanweisung ab (bordeaux statt marine).',
-    },
+    issues: [
+      {
+        reasonId: 'pr_wrong_article', positionIndex: 0,
+        description: 'Gelieferter Artikel passt nicht zur Position — Karton enthält ART-2199 statt ART-2152.',
+      },
+      {
+        reasonId: 'pr_label_problem', positionIndex: 1,
+        description: 'Etiketten lassen sich nicht drucken — Vorlage meldet einen Preisfehler.',
+      },
+    ],
     positions: [
       {
         wgr: '111130', supplierArticleNo: 'ART-2152', supplierColor: 'bordeaux',
@@ -818,18 +864,63 @@ const MA108_CASES: Ma108CaseSpec[] = [
           { ean: '4012345910262', size: 'L', qty: 6, ek: 13.9, vk: 32.99, vkLabel: 32.99 },
         ],
       },
+      {
+        wgr: '214520', supplierArticleNo: 'ART-2154', supplierColor: 'sand',
+        skuLines: [
+          { ean: '4012345910263', size: 'S', qty: 4, ek: 8.9, vk: 22.99, vkLabel: 22.99 },
+          { ean: '4012345910264', size: 'M', qty: 4, ek: 8.9, vk: 22.99, vkLabel: 22.99 },
+        ],
+      },
     ],
   },
   {
+    // Instruktions-Loop-Demo 2: TEILZUSTAND — eine Meldung instruiert (grün),
+    // eine noch offen (rot). Beleg bleibt issue_open; Badge „2x" zweigeteilt.
+    weBelegNo: '9.108.054', deliveryNoteNo: 'LS-25-9154', storageCode: 'R19',
+    goodsTypeText: 'Nachorder', status: 'issue_open',
+    checkMode: 'quantity_only', estimatedMinutes: 10,
+    issues: [
+      {
+        reasonId: 'pr_wrong_color', positionIndex: 0,
+        description: 'Farbe weicht ab: geliefert bordeaux, Arbeitsanweisung sagt marine.',
+        instruction: 'Bordeaux ist die korrigierte Ware — bitte normal auszeichnen und weiterbearbeiten.',
+      },
+      {
+        reasonId: 'pr_damaged_goods', positionIndex: 1,
+        description: 'Zwei Teile mit Transportschaden (Nähte offen) — aussortieren?',
+      },
+    ],
+    positions: [
+      {
+        wgr: '312400', supplierArticleNo: 'ART-2156', supplierColor: 'bordeaux',
+        skuLines: [
+          { ean: '4012345910281', size: 'M', qty: 5, ek: 11.5, vk: 27.99, vkLabel: 27.99 },
+          { ean: '4012345910282', size: 'L', qty: 5, ek: 11.5, vk: 27.99, vkLabel: 27.99 },
+        ],
+      },
+      {
+        wgr: '218110', supplierArticleNo: 'ART-2157', supplierColor: 'ecru',
+        skuLines: [
+          { ean: '4012345910283', size: '38', qty: 6, ek: 10.5, vk: 25.99, vkLabel: 25.99 },
+        ],
+      },
+    ],
+  },
+  {
+    // Instruktions-Loop-Demo 3: KOMPLETT instruiert („Geklärt", grün) — mit
+    // mehrstufigem Verlauf: Meldung → Instruktion → Rückmeldung → 2. Instruktion.
     weBelegNo: '9.108.053', deliveryNoteNo: 'LS-25-9153', storageCode: 'R19',
     goodsTypeText: 'Extrabestellung', status: 'problem_resolved',
     checkMode: 'quantity_only', estimatedMinutes: 9,
-    issue: {
-      reasonId: 'pr_other',
-      description: 'Karton beschädigt angeliefert — Ware geprüft, alles unbeschädigt.',
-      resolved: true,
-      resolution: 'Teamleitung: Ware in Ordnung, normal weiterbearbeiten.',
-    },
+    issues: [
+      {
+        reasonId: 'pr_other', positionIndex: 0,
+        description: 'Karton beschädigt angeliefert — Ware noch nicht geprüft.',
+        instruction: 'Bitte Ware vollständig auspacken und auf Schäden prüfen.',
+        rueckmeldung: 'Geprüft: Ware unbeschädigt, nur der Umkarton ist hinüber. Weiter normal?',
+        zweiteInstruktion: 'Ja — Ware in Ordnung, normal weiterbearbeiten. Umkarton entsorgen.',
+      },
+    ],
     positions: [
       {
         wgr: '214520', supplierArticleNo: 'ART-2153', supplierColor: 'beige',
@@ -932,6 +1023,13 @@ export async function seedMa108DemoBundle(
 ): Promise<void> {
   const employeeId = requireId(userIds, 'ma-108', 'user');
   const teamleadId = requireId(userIds, 'tl-001', 'user');
+  // Autoren-Snapshots für die Verlaufs-Einträge der Demo-Meldungen.
+  const [maUser, tlUser] = await Promise.all([
+    prisma.user.findUnique({ where: { id: employeeId }, select: { displayName: true } }),
+    prisma.user.findUnique({ where: { id: teamleadId }, select: { displayName: true } }),
+  ]);
+  const maName = maUser?.displayName ?? 'Mitarbeiter';
+  const tlName = tlUser?.displayName ?? 'Teamleitung';
 
   // 1) Belege + explizite Detail-Aggregate (Positionen, Größen-Zeilen, Boxen).
   const caseIdByWeBelegNo = new Map<string, string>();
@@ -1097,29 +1195,61 @@ export async function seedMa108DemoBundle(
       });
     }
 
-    // Offenes bzw. geklärtes Problem — hängt an Position 1 (Kundenfeedback 14.07.2026).
-    if (spec.issue) {
+    // Instruktions-Loop-Demo (Kundenfeedback 04.08.2026): Meldungen je Position
+    // inkl. Verlauf Meldung → Instruktion → Rückmeldung → zweite Instruktion.
+    if (spec.issues?.length) {
       const existing = await prisma.issue.findFirst({ where: { caseId: gcase.id } });
       if (!existing) {
-        const reason = await prisma.problemReason.findUnique({
-          where: { id: spec.issue.reasonId },
-        });
-        await prisma.issue.create({
-          data: {
-            caseId: gcase.id,
-            scope: 'position',
-            scopeId: positionIds[0],
-            employeeId,
-            kind: 'manual',
-            reasonId: reason?.id,
-            reasonLabel: reason?.label,
-            description: spec.issue.description,
-            status: spec.issue.resolved ? 'resolved' : 'open',
-            resolution: spec.issue.resolved ? (spec.issue.resolution ?? null) : null,
-            releasedBy: spec.issue.resolved ? teamleadId : null,
-            releasedAt: spec.issue.resolved ? asTime(baseDate, '12:15') : null,
-          },
-        });
+        for (const [index, issueSpec] of spec.issues.entries()) {
+          const reason = await prisma.problemReason.findUnique({
+            where: { id: issueSpec.reasonId },
+          });
+          // Einzel-Status aus dem Verlauf: letzte Instruktion unbeantwortet ⇒
+          // instruction_sent, sonst (keine/beantwortete Instruktion) open.
+          const status =
+            issueSpec.zweiteInstruktion != null ||
+            (issueSpec.instruction != null && issueSpec.rueckmeldung == null)
+              ? 'instruction_sent'
+              : 'open';
+          const minute = (step: number) => asTime(baseDate, `1${step}:${38 + index * 2}`);
+          const issue = await prisma.issue.create({
+            data: {
+              caseId: gcase.id,
+              scope: 'position',
+              scopeId: positionIds[issueSpec.positionIndex] ?? positionIds[0],
+              employeeId,
+              kind: 'manual',
+              reasonId: reason?.id,
+              reasonLabel: reason?.label,
+              description: issueSpec.description,
+              status,
+              reportedAt: minute(1),
+            },
+          });
+          const verlauf = [
+            { kind: 'meldung' as const, role: 'employee' as const, name: maName, text: issueSpec.description, at: minute(1) },
+            ...(issueSpec.instruction
+              ? [{ kind: 'instruktion' as const, role: 'teamlead' as const, name: tlName, text: issueSpec.instruction, at: minute(2) }]
+              : []),
+            ...(issueSpec.rueckmeldung
+              ? [{ kind: 'rueckmeldung' as const, role: 'employee' as const, name: maName, text: issueSpec.rueckmeldung, at: minute(3) }]
+              : []),
+            ...(issueSpec.zweiteInstruktion
+              ? [{ kind: 'instruktion' as const, role: 'teamlead' as const, name: tlName, text: issueSpec.zweiteInstruktion, at: minute(4) }]
+              : []),
+          ];
+          await prisma.issueMessage.createMany({
+            data: verlauf.map((m) => ({
+              issueId: issue.id,
+              authorId: m.role === 'employee' ? employeeId : teamleadId,
+              authorName: m.name,
+              authorRole: m.role,
+              kind: m.kind,
+              text: m.text,
+              createdAt: m.at,
+            })),
+          });
+        }
       }
     }
   }

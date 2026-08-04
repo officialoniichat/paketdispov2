@@ -119,7 +119,7 @@ export class AssignmentService {
     // the engine, and persisting the new plan all commit (or roll back) together so
     // a failure leaves the previous plan intact (§8.3 "Neu berechnen" must be re-runnable).
     // The callback returns the engine plan + metrics so we never need a post-tx cast.
-    const { plan, durationMs, assignedCaseCount } = await this.prisma.$transaction(async (tx) => {
+    const { plan, durationMs, assignedCaseCount, planCases } = await this.prisma.$transaction(async (tx) => {
       // 1. Clear the prior plan for this date so the re-insert is clean and idempotent.
       //    Only revert cases that a PRIOR recalc left in `assigned` — cases an employee
       //    has already started/completed (in_progress/.../completed) are left alone.
@@ -183,10 +183,16 @@ export class AssignmentService {
         );
       }
 
-      return { plan: computedPlan, durationMs: elapsedMs, assignedCaseCount: persistedCount };
+      return {
+        plan: computedPlan,
+        durationMs: elapsedMs,
+        assignedCaseCount: persistedCount,
+        // Anzeige-Metadaten für die Bündel-Details des DTO (Pool der tx-Lesung).
+        planCases: input.cases,
+      };
     });
 
-    return this.toResultDto(day, plan, assignedCaseCount, durationMs);
+    return this.toResultDto(day, plan, assignedCaseCount, durationMs, planCases);
   }
 
   /**
@@ -482,7 +488,7 @@ export class AssignmentService {
 
     // Proposed assignment count = cases the engine placed into bundles (no DB write).
     const assignedCaseCount = plan.bundles.reduce((sum, b) => sum + b.caseIds.length, 0);
-    return this.toResultDto(day, plan, assignedCaseCount, durationMs);
+    return this.toResultDto(day, plan, assignedCaseCount, durationMs, normalizedCases);
   }
 
   /** Shape an engine plan into the RecalculateResultDto returned by recalculate/preview. */
@@ -491,7 +497,14 @@ export class AssignmentService {
     plan: ReturnType<typeof assignWork>,
     assignedCaseCount: number,
     durationMs: number,
+    cases: ReadonlyArray<{
+      id: string;
+      weBelegNo: string;
+      totalQuantity: number;
+      estimatedMinutes: number;
+    }>,
   ): RecalculateResultDto {
+    const caseMeta = new Map(cases.map((c) => [c.id, c]));
     return {
       date: day,
       bundleCount: plan.bundles.length,
@@ -504,6 +517,25 @@ export class AssignmentService {
         assignedMinutes: l.assignedMinutes,
         assignedPoints: l.assignedPoints,
         bundleCount: l.bundleCount,
+      })),
+      // Bündel-Inhalte des Engine-Laufs (Single-Source): die Vorverteilungs-
+      // Vorschau im Teamlead-Web zeigt exakt diese Packung an, statt sie im
+      // Frontend nachzubauen.
+      bundles: plan.bundles.map((b) => ({
+        bundleId: b.id,
+        employeeId: b.employeeId,
+        caseIds: [...b.caseIds],
+        cases: b.caseIds.map((id) => {
+          const c = caseMeta.get(id);
+          return {
+            caseId: id,
+            weBelegNo: c?.weBelegNo ?? id,
+            teile: c?.totalQuantity ?? 0,
+            minutes: c?.estimatedMinutes ?? 0,
+          };
+        }),
+        plannedEffortMinutes: b.plannedEffortMinutes,
+        effortPoints: b.effortPoints,
       })),
     };
   }
@@ -570,6 +602,31 @@ export class AssignmentService {
     sequence: BundlePickupSequence | undefined,
     principal: Principal,
   ): Promise<number> {
+    // Ein-offenes-Bündel-Invariante (Instruktions-Loop 04.08.2026): hat der
+    // Mitarbeiter für den Tag noch ein offenes Bündel (z. B. mit in_progress-/
+    // issue_open-/problem_resolved-Belegen), wird auch im Recalculate-Pfad
+    // ANGEHÄNGT statt ein paralleles Bündel zu erzeugen. Sonst verschattet das
+    // neue Bündel die alten Belege: me/today zeigt genau EIN Bündel, und der
+    // MA verlöre seine Problem-Belege samt TL-Instruktionen aus dem Blick.
+    const dayStart = new Date(bundle.date);
+    const dayEnd = new Date(`${bundle.date}T23:59:59.999Z`);
+    const openBundle = await tx.assignmentBundle.findFirst({
+      where: {
+        employeeId: bundle.employeeId,
+        date: { gte: dayStart, lte: dayEnd },
+        status: { notIn: ['completed', 'cancelled'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { select: { caseId: true } },
+        routeStops: { select: { locationCode: true, sequence: true } },
+      },
+    });
+    if (openBundle) {
+      await this.extendBundle(tx, openBundle, bundle, sequence, principal);
+      return bundle.caseIds.length;
+    }
+
     const created = await tx.assignmentBundle.create({
       data: {
         employeeId: bundle.employeeId,

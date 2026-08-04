@@ -69,3 +69,31 @@ export async function resetEmployeePin(id: string, pin: string): Promise<void> {
     throw new Error(`Zurücksetzen der PIN fehlgeschlagen (${describeCause(result.error)})`);
   }
 }
+
+// --- Abwesenheiten (Schichtplan-Kalender) -----------------------------------
+
+export type Absence = components['schemas']['AbsenceDto'];
+export type AbsenceCreate = components['schemas']['AbsenceCreateDto'];
+
+/** Krank-/Urlaubs-Spannen, die [from, to] überlappen (sichtbarer Kalender-Monat). */
+export async function fetchAbsences(from: string, to: string): Promise<Absence[]> {
+  const result = await api.GET('/api/admin/employees/absences', {
+    params: { query: { from, to } },
+  });
+  return unwrap<Absence[]>(result, 'Laden der Abwesenheiten');
+}
+
+/** Rechtsklick im Kalender: Krankschreibung/Urlaub ab Tag X „bis wann mindestens". */
+export async function createAbsence(body: AbsenceCreate): Promise<Absence> {
+  const result = await api.POST('/api/admin/employees/absences', { body });
+  return unwrap<Absence>(result, 'Eintragen der Abwesenheit');
+}
+
+export async function deleteAbsence(id: string): Promise<void> {
+  const result = await api.DELETE('/api/admin/employees/absences/{absenceId}', {
+    params: { path: { absenceId: id } },
+  });
+  if (hasFetchError(result)) {
+    throw new Error(`Löschen der Abwesenheit fehlgeschlagen (${describeCause(result.error)})`);
+  }
+}

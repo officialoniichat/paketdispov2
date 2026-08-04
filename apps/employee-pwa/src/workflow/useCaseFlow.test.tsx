@@ -71,6 +71,7 @@ function aggregateDto(status: string): CaseAggregateDto {
     ],
     boxTargets: [],
     instructionPoints: [],
+    issues: [],
   } as unknown as CaseAggregateDto;
 }
 

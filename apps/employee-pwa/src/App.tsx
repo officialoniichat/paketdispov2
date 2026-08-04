@@ -9,6 +9,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import { NachrichtenBanner } from './components/NachrichtenBanner.js';
 import { ProfileMenu } from './components/ProfileMenu.js';
 import { OnScreenKeyboard } from './components/OnScreenKeyboard.js';
 import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
@@ -58,6 +59,9 @@ export function App(): JSX.Element {
     <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
       {/* Keine Kopfzeile: nur der Profilkreis, fixiert über der rechten oberen Ecke. */}
       <ProfileMenu />
+      {/* Teamlead-Nachricht (z. B. Vorverteilungs-Eingriff): anzeigen + quittieren. */}
+      <NachrichtenBanner />
+
       <Routes>
         <Route path="/" element={<BundleHomeScreen />} />
         <Route path="/case/:caseId" element={<BelegProcessScreen />} />

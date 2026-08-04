@@ -101,12 +101,27 @@ enum AssignmentCreatedBy {
   teamlead
 }
 
+// Einzel-Status je Meldung (Kundenfeedback 04.08.2026): jede Meldung durchläuft
+// ihren eigenen Instruktions-Loop. `open` = gemeldet bzw. vom MA erneut geöffnet,
+// `instruction_sent` = der Teamlead hat für GENAU diese Meldung eine Instruktion
+// geschickt. Der Beleg kippt erst auf problem_resolved, wenn KEINE Meldung mehr
+// offen ist.
 enum IssueStatus {
   open
-  in_review
-  waiting_external
-  resolved
-  rejected
+  instruction_sent
+}
+
+// Art eines Verlaufs-Eintrags am Problem: Erst-/Wieder-Meldung des MA,
+// Instruktion des TL, Rückmeldung des MA auf eine Instruktion.
+enum IssueMessageKind {
+  meldung
+  instruktion
+  rueckmeldung
+}
+
+enum IssueAuthorRole {
+  employee
+  teamlead
 }
 
 enum IssueScope {
@@ -233,6 +248,8 @@ model User {
   bundles         AssignmentBundle[]
   issuesReported  Issue[]            @relation("IssueReporter")
   zstRecords      ZstRecord[]
+  absences        EmployeeAbsence[]
+  teamleadMessages TeamleadMessage[]
 
   @@map("users")
 }
@@ -300,6 +317,29 @@ model Shift {
   @@unique([employeeId, date], name: "shift_employee_date")
   @@index([date])
   @@map("shifts")
+}
+
+// Krank/Urlaub aus dem Schichtplan-Kalender (Admin, Rechtsklick auf einen Tag):
+// tagesgenaue Spanne je Mitarbeiter. Anzeige-Vertrag (Kalender + Mitarbeiter-Matrix
+// „ganz unten, durchgestrichen") — die Kapazitätswirkung (materializeShift) folgt
+// bewusst in einem späteren Schritt.
+enum AbsenceKind {
+  krank
+  urlaub
+}
+
+model EmployeeAbsence {
+  id         String      @id @default(cuid())
+  employeeId String
+  kind       AbsenceKind
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  createdAt  DateTime    @default(now())
+
+  employee User @relation(fields: [employeeId], references: [id])
+
+  @@index([startDate, endDate])
+  @@map("employee_absences")
 }
 
 model Workstation {
@@ -659,6 +699,12 @@ model ProblemReason {
   label     String
   active    Boolean  @default(true)
   sortOrder Int      @default(0)
+  /// Standardanweisung der Teamleitung zu dieser Problemart — Vorlagentext für den
+  /// Instruktions-Dialog (Kundenfeedback 04.08.2026); null = keine Vorlage gepflegt.
+  defaultInstruction String?
+  /// true = Vorlage im Instruktions-Dialog automatisch vorausfüllen,
+  /// false = Vorlage nur per Knopf („Standard einfügen") einfügbar.
+  autoInsert Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -685,17 +731,36 @@ model Issue {
   photoKeys   String[]    @default([])
   reportedAt  DateTime    @default(now())
   status      IssueStatus @default(open)
-  resolution  String?
-  releasedBy  String?
-  releasedAt  DateTime?
 
   case     GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   employee User             @relation("IssueReporter", fields: [employeeId], references: [id])
   reason   ProblemReason?   @relation(fields: [reasonId], references: [id])
+  messages IssueMessage[]
 
   @@index([caseId])
   @@index([status])
   @@map("issues")
+}
+
+// Instruktions-/Nachrichten-Verlauf je Einzel-Meldung (Kundenfeedback 04.08.2026):
+// die Erst-Meldung des MA ist der erste Eintrag, danach wachsen TL-Instruktionen
+// und MA-Rückmeldungen chronologisch — immer am konkreten Problem verankert, kein
+// freies Chatten. Autor als Snapshot (OIDC-sub + Anzeigename), weil Teamleads
+// nicht zwingend als users-Zeile existieren.
+model IssueMessage {
+  id         String           @id @default(cuid())
+  issueId    String
+  authorId   String
+  authorName String
+  authorRole IssueAuthorRole
+  kind       IssueMessageKind
+  text       String
+  createdAt  DateTime         @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@map("issue_messages")
 }
 
 model TransportBox {
@@ -767,4 +832,22 @@ model WorkflowEvent {
   @@index([eventType])
   @@index([correlationId])
   @@map("workflow_events")
+}
+
+// Teamlead → Mitarbeiter-App: kurze Nachricht zu einem Eingriff (z. B.
+// Vorverteilung / Einsortieren). readAt = „Gelesen"-Quittung aus der PWA;
+// der Sidebar-Ausklapper des Teamleads zeigt den Lesestatus.
+model TeamleadMessage {
+  id         String    @id @default(cuid())
+  employeeId String
+  caseId     String?
+  text       String
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
+
+  employee User @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, readAt])
+  @@map("teamlead_messages")
 }

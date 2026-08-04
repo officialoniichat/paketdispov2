@@ -27,8 +27,10 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import SendIcon from '@mui/icons-material/Send';
 import {
   CaseStatusChip,
   issueScopeLabels,
@@ -52,6 +54,8 @@ import { EFFORT_COMPONENT_LABEL, EFFORT_COMPONENT_ORDER } from '../../lib/effort
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
+import { InstructionsDialog } from '../../components/InstructionsDialog.js';
+import { IssueMessageList } from '../../components/IssueMessageList.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useSplits } from '../split/SplitProvider.js';
@@ -63,6 +67,7 @@ import { labelPrintVariantText } from '@paket/domain-types';
 
 const TABS = [
   'Beleg',
+  'Verlauf',
   'Aufwand',
   'Abschluss',
   'Historie',
@@ -78,7 +83,7 @@ export function BelegDetailPage(): JSX.Element {
     releaseCase,
     approveCase,
     cancelCase,
-    resolveProblems,
+    sendInstruction,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -86,8 +91,10 @@ export function BelegDetailPage(): JSX.Element {
   } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
-  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen/Instruktionen:
+  // shared CaseActionMenu custom actions.
   const [assignOpen, setAssignOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
@@ -153,8 +160,8 @@ export function BelegDetailPage(): JSX.Element {
 
   // Narrowed once so the per-driver breakdown stays type-safe inside the tab callbacks.
   const effortComponents = c.effortComponents;
-  // C4: latest unresolved problem for the banner (issues arrive newest first).
-  const openIssue = c.issues.find((i) => i.status !== 'resolved' && i.status !== 'rejected') ?? null;
+  // Instruktions-Loop (04.08.2026): offene Meldungen treiben Banner + Aktion.
+  const openIssues = c.issues.filter((i) => i.status === 'open');
 
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
@@ -165,7 +172,7 @@ export function BelegDetailPage(): JSX.Element {
       releaseCase,
       approveCase,
       cancelCase,
-      resolveProblems,
+      sendInstruction,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -221,6 +228,7 @@ export function BelegDetailPage(): JSX.Element {
             onForward={() => setForwardOpen(true)}
             onAttention={() => setAttentionOpen(true)}
             onSplit={() => setSplitOpen(true)}
+            onInstructions={() => setInstructionsOpen(true)}
           />
         </Stack>
       </Stack>
@@ -239,18 +247,30 @@ export function BelegDetailPage(): JSX.Element {
         </Alert>
       )}
 
-      {/* C4: an open problem is surfaced on EVERY tab; Probleme leben in der Beleg-Ansicht. */}
-      {c.hasOpenIssue && openIssue && (
+      {/* C4: offene Meldungen erscheinen auf JEDEM Tab; Probleme leben in der Beleg-Ansicht. */}
+      {c.hasOpenIssue && openIssues.length > 0 && (
         <Alert
           severity="error"
           action={
-            <Button color="inherit" size="small" onClick={() => setTab(0)}>
-              Zum Problem
+            <Button color="inherit" size="small" onClick={() => setInstructionsOpen(true)}>
+              Instruktionen senden
             </Button>
           }
         >
-          Offenes Problem: <strong>{openIssue.reasonLabel ?? problemKindLabels[openIssue.kind]}</strong>
-          {openIssue.description ? ` — „${openIssue.description}"` : ''}
+          {openIssues.length === 1 ? (
+            <>
+              Offene Meldung:{' '}
+              <strong>
+                {openIssues[0]!.reasonLabel ?? problemKindLabels[openIssues[0]!.kind]}
+              </strong>
+              {openIssues[0]!.description ? ` — „${openIssues[0]!.description}"` : ''}
+            </>
+          ) : (
+            <>
+              <strong>{openIssues.length} offene Meldungen</strong> — jede braucht ihre eigene
+              Instruktion, erst dann gilt der Beleg als geklärt.
+            </>
+          )}
         </Alert>
       )}
 
@@ -271,6 +291,12 @@ export function BelegDetailPage(): JSX.Element {
       <Paper variant="outlined" sx={{ p: 2 }}>
         {tab === 0 && <BelegTab c={c} />}
         {tab === 1 && (
+          <VerlaufTab
+            issues={c.issues}
+            onReply={(issueId, text) => sendInstruction(c.id, issueId, text)}
+          />
+        )}
+        {tab === 2 && (
           <Stack spacing={1.5}>
             <FieldGrid
               rows={[
@@ -306,9 +332,9 @@ export function BelegDetailPage(): JSX.Element {
             )}
           </Stack>
         )}
-        {tab === 2 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
-        {tab === 3 && <HistoryTab history={c.history} />}
-        {tab === 4 && (
+        {tab === 3 && <AbschlussTab zstRecords={c.zstRecords} totalQuantity={c.totalQuantity} />}
+        {tab === 4 && <HistoryTab history={c.history} />}
+        {tab === 5 && (
           <FieldGrid
             rows={[
               ['Abschnitt', c.section === null ? '– (Prio ist kein Abschnitt)' : String(c.section)],
@@ -348,6 +374,15 @@ export function BelegDetailPage(): JSX.Element {
         weBelegNo={c.weBelegNo}
         onConfirm={(note) => flagAttention(c.id, note)}
         onClose={() => setAttentionOpen(false)}
+      />
+
+      {/* Instruktions-Loop (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */}
+      <InstructionsDialog
+        open={instructionsOpen}
+        weBelegNo={c.weBelegNo}
+        issues={c.issues}
+        onSend={(issueId, text) => sendInstruction(c.id, issueId, text)}
+        onClose={() => setInstructionsOpen(false)}
       />
 
       <SplitDialog
@@ -507,7 +542,7 @@ function PositionsSection({
   issues: BelegIssue[];
 }): JSX.Element {
   if (positions.length === 0) return <Empty text="Keine Positionen erfasst." />;
-  const openIssues = issues.filter((i) => i.status !== 'resolved' && i.status !== 'rejected');
+  const openIssues = issues.filter((i) => i.status === 'open');
   return (
     <Paper variant="outlined">
       <TableContainer sx={{ overflowX: 'auto', maxHeight: 560 }}>
@@ -761,11 +796,12 @@ function issueScopeLine(i: BelegIssue): string | null {
 }
 
 /**
- * Problem tab — die Klärungs-UX für den Teamlead (Kundenfeedback 14.07.2026).
- * Zeigt ALLE gesammelten Probleme des Belegs mit Grund/Art, Position + EAN/Größe,
- * Mengen-Delta und Preis-Korrektur. Die Aktion „Probleme geklärt" (issue_open →
- * problem_resolved) liegt in der Header-{@link CaseActions}-Leiste; danach geht
- * der Beleg grün an den SELBEN Mitarbeiter zurück.
+ * Probleme-Abschnitt — die Klärungs-UX für den Teamlead (Kundenfeedback
+ * 04.08.2026). Zeigt ALLE Meldungen des Belegs mit Grund/Art, Position +
+ * EAN/Größe, Mengen-Delta, Preis-Korrektur — und je Meldung den EINZEL-Status
+ * (Offen / Instruktion gesendet) samt Instruktionstext. Die Aktion
+ * „Instruktionen senden" (je Meldung ein Pflichttext) liegt in der Header-
+ * Aktionsleiste; erst wenn alle Meldungen instruiert sind, wird der Beleg grün.
  */
 function IssuesTab({
   issues,
@@ -794,8 +830,8 @@ function IssuesTab({
         </Stack>
       </Alert>
       <Typography variant="body2" color="text.secondary">
-        Nach „Probleme geklärt" geht der Beleg grün markiert zurück an den Mitarbeiter zur
-        Weiterbearbeitung.
+        Jede Meldung braucht ihre eigene Instruktion („Instruktionen senden"). Erst wenn keine
+        Meldung mehr offen ist, geht der Beleg grün markiert zurück an den Mitarbeiter.
       </Typography>
       {issues.map((i) => {
         const scopeLine = issueScopeLine(i);
@@ -833,14 +869,118 @@ function IssuesTab({
                 „{i.description}"
               </Typography>
             )}
-            {i.resolution && (
-              <Typography variant="body2" color="text.secondary">
-                Klärung: {i.resolution}
+            {i.instruction && (
+              <Typography variant="body2" color="success.main">
+                Instruktion: „{i.instruction}"
               </Typography>
             )}
           </Box>
         );
       })}
+    </Stack>
+  );
+}
+
+/**
+ * Reiter „Verlauf" (Kundenfeedback 04.08.2026): kompletter Nachrichten-Verlauf
+ * je Position — wer hat wann was gesagt (MA-Meldung, TL-Instruktion,
+ * MA-Rückmeldung), mit Zeitstempel und Namen (gemeinsame Darstellung:
+ * IssueMessageList). Sind mehrere Positionen betroffen, bekommt JEDE Position
+ * ihren eigenen Tab; Meldungen ohne Positions-Anker gruppieren unter
+ * „Beleg allgemein". Auf OFFENE Meldungen (Erst-Meldung wie MA-Rückmeldung)
+ * antwortet die Teamleitung direkt hier — dieselbe Instruktions-Aktion wie im
+ * Dialog „Instruktionen senden"; die Statuslogik bleibt im Backend.
+ */
+function VerlaufTab({
+  issues,
+  onReply,
+}: {
+  issues: BelegIssue[];
+  onReply: (issueId: string, text: string) => void;
+}): JSX.Element {
+  const [tabIdx, setTabIdx] = useState(0);
+  // Antwort-Entwürfe je Meldung — bleiben beim Senden anderer Meldungen erhalten.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  if (issues.length === 0) return <Empty text="Keine Meldungen — kein Verlauf." />;
+  // Gruppierung je Position (Meldungen ohne Anker unter „Beleg allgemein").
+  const groups = new Map<string, { tabLabel: string; title: string; issues: BelegIssue[] }>();
+  for (const issue of issues) {
+    const key = issue.positionNo === null ? 'beleg' : `pos-${issue.positionNo}`;
+    const tabLabel = issue.positionNo === null ? 'Beleg allgemein' : `Position ${issue.positionNo}`;
+    const title =
+      issue.positionNo === null
+        ? 'Beleg allgemein'
+        : `Position ${issue.positionNo}${issue.orderNo ? ` · Order ${issue.orderNo}` : ''}`;
+    const group = groups.get(key) ?? { tabLabel, title, issues: [] };
+    group.issues.push(issue);
+    groups.set(key, group);
+  }
+  const list = [...groups.values()];
+  const activeIdx = Math.min(tabIdx, list.length - 1);
+  const active = list[activeIdx];
+  if (!active) return <Empty text="Keine Meldungen — kein Verlauf." />;
+  const send = (issueId: string): void => {
+    const text = (drafts[issueId] ?? '').trim();
+    if (text === '') return;
+    onReply(issueId, text);
+    setDrafts((d) => ({ ...d, [issueId]: '' }));
+  };
+  return (
+    <Stack spacing={1.5}>
+      {list.length > 1 ? (
+        <Tabs
+          value={activeIdx}
+          onChange={(_, v: number) => setTabIdx(v)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+        >
+          {list.map((group) => (
+            <Tab key={group.tabLabel} label={group.tabLabel} />
+          ))}
+        </Tabs>
+      ) : null}
+      <Box>
+        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+          {active.title}
+        </Typography>
+        <Stack spacing={2.5} sx={{ mt: 0.5 }}>
+          {active.issues.map((issue) => (
+            <Box key={issue.id}>
+              <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.75 }}>
+                <Typography sx={{ fontWeight: 700 }}>{issueLabel(issue)}</Typography>
+                <ProblemChip status={issue.status} size="small" />
+              </Stack>
+              <IssueMessageList messages={issue.messages} />
+              {/* Offene Meldung (Erst-Meldung wie MA-Rückmeldung): die TL
+                  antwortet direkt im Verlauf — gleiche Aktion wie im Dialog. */}
+              {issue.status === 'open' ? (
+                <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
+                  <TextField
+                    fullWidth
+                    required
+                    multiline
+                    minRows={2}
+                    size="small"
+                    label="Antwort / Instruktion an den Mitarbeiter (Pflichtfeld)"
+                    value={drafts[issue.id] ?? ''}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [issue.id]: e.target.value }))}
+                  />
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<SendIcon />}
+                    disabled={(drafts[issue.id] ?? '').trim() === ''}
+                    onClick={() => send(issue.id)}
+                    sx={{ whiteSpace: 'nowrap', mt: 0.25 }}
+                  >
+                    Senden
+                  </Button>
+                </Stack>
+              ) : null}
+            </Box>
+          ))}
+        </Stack>
+      </Box>
     </Stack>
   );
 }

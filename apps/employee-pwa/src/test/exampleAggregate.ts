@@ -172,4 +172,5 @@ export const exampleAggregate: CaseAggregate = {
   onlineMarks: {},
   inspectionLevelLabel: undefined,
   inspectionDescription: undefined,
+  issues: [],
 };

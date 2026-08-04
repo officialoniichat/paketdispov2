@@ -3,8 +3,11 @@
 **Status:** Konzept (kein Code). **Stand:** 2026-06-23.
 **Baut auf:** `employee-pwa-ux-redesign.md` (Zwei-Phasen-Flow COLLECT → PROCESS → DONE),
 `automatik-dispo-konzept.md`, `dispo-engine-ux-concept.md`, `beleg-lifecycle-completion-concept.md`.
-**Entscheidung (mit Kunde):** **Pull-on-idle** — der Mitarbeiter holt das nächste Bündel selbst,
-die Engine gibt das aktuell beste freie Karren-Bündel aus.
+**Entscheidung (Projekt-Design, kein dokumentierter Kundenwunsch):** **Pull-on-idle** — der
+Mitarbeiter holt das nächste Bündel selbst, die Engine gibt das aktuell beste freie Karren-Bündel
+aus. Der Kunden-Fragenkatalog (28.07.2026) fragt umgekehrt nach Vorbereitung („Wie lange im Voraus
+werden die weiteren Bündel erstellt?") — die On-Demand-Regel ist unsere Design-Entscheidung, keine
+Kundenaussage.
 
 ---
 

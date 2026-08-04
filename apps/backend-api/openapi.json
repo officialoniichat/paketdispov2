@@ -225,6 +225,61 @@
         ]
       }
     },
+    "/api/me/cases/{caseId}/issues/{issueId}/reopen": {
+      "post": {
+        "operationId": "MeController_reopenIssue",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issueId",
+            "required": true,
+            "in": "path",
+            "description": "Meldung (Issue) mit gesendeter Instruktion",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReopenIssueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitionResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/me/park": {
       "post": {
         "operationId": "MeController_parkRemaining",
@@ -1564,12 +1619,20 @@
         ]
       }
     },
-    "/api/teamlead/cases/{caseId}/resolve-problems": {
+    "/api/teamlead/cases/{caseId}/issues/{issueId}/instruction": {
       "post": {
-        "operationId": "TeamleadController_resolveProblems",
+        "operationId": "TeamleadController_sendInstruction",
         "parameters": [
           {
             "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issueId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1582,7 +1645,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ResolveProblemsDto"
+                "$ref": "#/components/schemas/SendInstructionDto"
               }
             }
           }
@@ -1604,7 +1667,7 @@
             "bearer": []
           }
         ],
-        "summary": "Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA",
+        "summary": "Instruktion senden: beantwortet GENAU EINE Meldung mit einer Handlungsanweisung (Pflichttext). Erst wenn alle Meldungen instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA)",
         "tags": [
           "teamlead"
         ]
@@ -2550,6 +2613,119 @@
         ]
       }
     },
+    "/api/admin/employees/absences": {
+      "get": {
+        "operationId": "EmployeesController_listAbsences",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "ISO date YYYY-MM-DD",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Krank-/Urlaubs-Spannen im Zeitraum (Schichtplan-Kalender).",
+        "tags": [
+          "employees"
+        ]
+      },
+      "post": {
+        "operationId": "EmployeesController_createAbsence",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Krankschreibung/Urlaub eintragen (Rechtsklick im Kalender).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
+    "/api/admin/employees/absences/{absenceId}": {
+      "delete": {
+        "operationId": "EmployeesController_deleteAbsence",
+        "parameters": [
+          {
+            "name": "absenceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abwesenheit löschen (Kalender-Kontextmenü).",
+        "tags": [
+          "employees"
+        ]
+      }
+    },
     "/api/admin/employees/{id}": {
       "get": {
         "operationId": "EmployeesController_get",
@@ -2730,6 +2906,131 @@
         },
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/teamlead/messages": {
+      "post": {
+        "operationId": "TeamleadMessagesController_send",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamleadMessageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nachricht an die Mitarbeiter-App eines Mitarbeiters senden.",
+        "tags": [
+          "teamlead"
+        ]
+      },
+      "get": {
+        "operationId": "TeamleadMessagesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamleadMessageListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gesendete Nachrichten (neueste zuerst) inkl. Gelesen-Quittung.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/me/messages": {
+      "get": {
+        "operationId": "MeMessagesController_unread",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyMessageListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/messages/{id}/read": {
+      "post": {
+        "operationId": "MeMessagesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Nachricht-Id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageReadDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nachricht als gelesen quittieren (nur die eigene).",
+        "tags": [
+          "me"
         ]
       }
     },
@@ -3080,6 +3381,144 @@
           "labelPrintVariant"
         ]
       },
+      "IssueMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "IssueMessageKind: meldung|instruktion|rueckmeldung"
+          },
+          "authorRole": {
+            "type": "string",
+            "description": "IssueAuthorRole: employee|teamlead"
+          },
+          "authorName": {
+            "type": "string",
+            "description": "Anzeigename des Autors (Snapshot)"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 timestamp"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "authorRole",
+          "authorName",
+          "createdAt",
+          "text"
+        ]
+      },
+      "IssueSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "description": "IssueScope: position|sku_line"
+          },
+          "kind": {
+            "type": "string",
+            "description": "ProblemKind: manual|over_delivery|under_delivery|price_deviation"
+          },
+          "reasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual)"
+          },
+          "deviationQty": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery)"
+          },
+          "expectedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "VK-Etikett-Preis laut Beleg"
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "Vom MA korrigierter VK (kind=price_deviation)"
+          },
+          "positionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Id der betroffenen ReceiptPosition (aufgelöst aus scopeId) — Anker für den TL-Hinweis-Block in der PWA"
+          },
+          "positionNo": {
+            "type": "number",
+            "nullable": true,
+            "description": "Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)"
+          },
+          "ean": {
+            "type": "string",
+            "nullable": true,
+            "description": "EAN der betroffenen Größenzeile"
+          },
+          "size": {
+            "type": "string",
+            "nullable": true,
+            "description": "Größe der betroffenen Größenzeile"
+          },
+          "orderNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung)"
+          },
+          "status": {
+            "type": "string",
+            "description": "IssueStatus: open|instruction_sent — Einzel-Status je Meldung"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "instruction": {
+            "type": "string",
+            "nullable": true,
+            "description": "Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen"
+          },
+          "defaultInstruction": {
+            "type": "string",
+            "nullable": true,
+            "description": "Standardanweisung der Problemart (Katalog-Vorlage für den Instruktions-Dialog, 04.08.2026); null ohne Vorlage"
+          },
+          "defaultInstructionAuto": {
+            "type": "boolean",
+            "description": "true = Standardanweisung im Instruktions-Dialog automatisch vorausfüllen"
+          },
+          "reportedAt": {
+            "type": "string",
+            "description": "ISO-8601 timestamp"
+          },
+          "messages": {
+            "description": "Instruktions-Verlauf chronologisch (Erst-Meldung zuerst)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueMessageDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "kind",
+          "status",
+          "defaultInstructionAuto",
+          "reportedAt",
+          "messages"
+        ]
+      },
       "CaseSummaryDto": {
         "type": "object",
         "properties": {
@@ -3211,6 +3650,13 @@
             "type": "string",
             "nullable": true,
             "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
+          },
+          "issues": {
+            "description": "ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummaryDto"
+            }
           }
         },
         "required": [
@@ -3671,13 +4117,21 @@
             "items": {
               "$ref": "#/components/schemas/WorkInstructionPointDto"
             }
+          },
+          "issues": {
+            "description": "Meldungen des Belegs inkl. Einzel-Status + Verlauf — Anker für die TL-Hinweis-Blöcke je Position (positionId)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummaryDto"
+            }
           }
         },
         "required": [
           "case",
           "positions",
           "boxTargets",
-          "instructionPoints"
+          "instructionPoints",
+          "issues"
         ]
       },
       "NextBundleResultDto": {
@@ -3714,6 +4168,42 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "ReopenIssueDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Rückmeldung des MA zu genau dieser Instruktion"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "TransitionResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "eventId": {
+            "type": "object",
+            "nullable": true,
+            "description": "Audit event id, if a milestone was recorded"
+          }
+        },
+        "required": [
+          "caseId",
+          "status",
+          "version"
         ]
       },
       "ParkRemainingDto": {
@@ -3759,30 +4249,6 @@
           "parkedCaseIds",
           "remainingCaseIds",
           "plannedEffortMinutes"
-        ]
-      },
-      "TransitionResultDto": {
-        "type": "object",
-        "properties": {
-          "caseId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "version": {
-            "type": "number"
-          },
-          "eventId": {
-            "type": "object",
-            "nullable": true,
-            "description": "Audit event id, if a milestone was recorded"
-          }
-        },
-        "required": [
-          "caseId",
-          "status",
-          "version"
         ]
       },
       "SkuQuantityDto": {
@@ -3967,6 +4433,10 @@
           "weBelegNo": {
             "type": "string"
           },
+          "bundleId": {
+            "type": "string",
+            "description": "Bündel, in dem dieses Item wirklich liegt — bei Multi-Bündel-Zeilen je Beleg verschieden (row.bundleId trägt nur das ERSTE Bündel der Zeile)."
+          },
           "status": {
             "type": "string"
           },
@@ -3993,6 +4463,7 @@
         "required": [
           "id",
           "weBelegNo",
+          "bundleId",
           "status",
           "totalQuantity",
           "estimatedMinutes",
@@ -4024,6 +4495,21 @@
           "locationCode",
           "scanRequired",
           "scanned"
+        ]
+      },
+      "BoardPackDto": {
+        "type": "object",
+        "properties": {
+          "caseIds": {
+            "description": "Case ids des Packs in Bündel-Reihenfolge",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "caseIds"
         ]
       },
       "BoardRowDto": {
@@ -4065,6 +4551,25 @@
               "type": "string"
             }
           },
+          "shiftStart": {
+            "type": "string",
+            "nullable": true,
+            "description": "Geplanter Schichtbeginn (ISO) — die Matrix färbt Früh/Spät und zeigt „ab HH:MM\" vor Schichtstart; null ohne Schicht heute."
+          },
+          "shiftEnd": {
+            "type": "string",
+            "nullable": true,
+            "description": "Geplantes Schichtende (ISO)."
+          },
+          "absence": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "krank",
+              "urlaub"
+            ],
+            "description": "Heutige Abwesenheit (Schichtplan-Kalender): Zeile wird ganz unten, durchgestrichen dargestellt."
+          },
           "cases": {
             "type": "array",
             "items": {
@@ -4075,6 +4580,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BoardRouteStopDto"
+            }
+          },
+          "packs": {
+            "description": "Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardPackDto"
             }
           }
         },
@@ -4087,8 +4599,12 @@
           "plannedTeile",
           "capacityMinutes",
           "bereiche",
+          "shiftStart",
+          "shiftEnd",
+          "absence",
           "cases",
-          "routeStops"
+          "routeStops",
+          "packs"
         ]
       },
       "BoardDto": {
@@ -4263,28 +4779,6 @@
           "started"
         ]
       },
-      "OpenIssueRefDto": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "description": "ProblemKind: manual|over_delivery|under_delivery|price_deviation"
-          },
-          "reasonLabel": {
-            "type": "string",
-            "nullable": true,
-            "description": "Label-Snapshot des Problemarten-Katalogs (nur kind=manual)"
-          },
-          "note": {
-            "type": "string",
-            "nullable": true,
-            "description": "Issue description/note"
-          }
-        },
-        "required": [
-          "kind"
-        ]
-      },
       "PoolItemDto": {
         "type": "object",
         "properties": {
@@ -4417,6 +4911,13 @@
             "nullable": true,
             "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
           },
+          "issues": {
+            "description": "ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummaryDto"
+            }
+          },
           "assignedEmployeeNo": {
             "type": "object",
             "nullable": true
@@ -4446,16 +4947,6 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/BundleQueueRefDto"
-              }
-            ]
-          },
-          "openIssue": {
-            "nullable": true,
-            "description": "C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem",
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OpenIssueRefDto"
               }
             ]
           }
@@ -4801,85 +5292,6 @@
           "onlineHandlingRequired",
           "status",
           "skuLines"
-        ]
-      },
-      "IssueSummaryDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string",
-            "description": "IssueScope: position|sku_line"
-          },
-          "kind": {
-            "type": "string",
-            "description": "ProblemKind: manual|over_delivery|under_delivery|price_deviation"
-          },
-          "reasonLabel": {
-            "type": "string",
-            "nullable": true,
-            "description": "Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual)"
-          },
-          "deviationQty": {
-            "type": "number",
-            "nullable": true,
-            "description": "Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery)"
-          },
-          "expectedVkPrice": {
-            "type": "number",
-            "nullable": true,
-            "description": "VK-Etikett-Preis laut Beleg"
-          },
-          "correctedVkPrice": {
-            "type": "number",
-            "nullable": true,
-            "description": "Vom MA korrigierter VK (kind=price_deviation)"
-          },
-          "positionNo": {
-            "type": "number",
-            "nullable": true,
-            "description": "Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)"
-          },
-          "ean": {
-            "type": "string",
-            "nullable": true,
-            "description": "EAN der betroffenen Größenzeile"
-          },
-          "size": {
-            "type": "string",
-            "nullable": true,
-            "description": "Größe der betroffenen Größenzeile"
-          },
-          "orderNo": {
-            "type": "string",
-            "nullable": true,
-            "description": "Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung)"
-          },
-          "status": {
-            "type": "string",
-            "description": "IssueStatus: open|in_review|waiting_external|resolved|rejected"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "resolution": {
-            "type": "string",
-            "nullable": true
-          },
-          "reportedAt": {
-            "type": "string",
-            "description": "ISO-8601 timestamp"
-          }
-        },
-        "required": [
-          "id",
-          "scope",
-          "kind",
-          "status",
-          "reportedAt"
         ]
       },
       "ZstSummaryDto": {
@@ -5272,14 +5684,17 @@
           }
         }
       },
-      "ResolveProblemsDto": {
+      "SendInstructionDto": {
         "type": "object",
         "properties": {
-          "resolution": {
+          "text": {
             "type": "string",
-            "description": "Anmerkung zur Klärung (auf allen Issues vermerkt)"
+            "description": "Handlungsanweisung für den MA zu genau dieser Meldung"
           }
-        }
+        },
+        "required": [
+          "text"
+        ]
       },
       "RecalculateDto": {
         "type": "object",
@@ -5318,6 +5733,68 @@
           "bundleCount"
         ]
       },
+      "PlannedBundleCaseDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string"
+          },
+          "teile": {
+            "type": "number"
+          },
+          "minutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "caseId",
+          "weBelegNo",
+          "teile",
+          "minutes"
+        ]
+      },
+      "PlannedBundleDto": {
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "caseIds": {
+            "description": "Belege in Abhol-Reihenfolge.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cases": {
+            "description": "Selbe Reihenfolge wie caseIds.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedBundleCaseDto"
+            }
+          },
+          "plannedEffortMinutes": {
+            "type": "number"
+          },
+          "effortPoints": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bundleId",
+          "employeeId",
+          "caseIds",
+          "cases",
+          "plannedEffortMinutes",
+          "effortPoints"
+        ]
+      },
       "RecalculateResultDto": {
         "type": "object",
         "properties": {
@@ -5342,6 +5819,13 @@
             "items": {
               "$ref": "#/components/schemas/EmployeeLoadDto"
             }
+          },
+          "bundles": {
+            "description": "Geplante Bündel des Laufs (§8.3).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedBundleDto"
+            }
           }
         },
         "required": [
@@ -5350,7 +5834,8 @@
           "assignedCaseCount",
           "unassignedCaseCount",
           "durationMs",
-          "loads"
+          "loads",
+          "bundles"
         ]
       },
       "ZstExportResultDto": {
@@ -5464,6 +5949,10 @@
           "reason": {
             "type": "string",
             "description": "Optional reason logged in the §8.4 audit event (assignment.overridden)"
+          },
+          "newBundle": {
+            "type": "boolean",
+            "description": "true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen\") statt an das Tages-Bündel anzuhängen."
           },
           "date": {
             "type": "string",
@@ -6029,13 +6518,23 @@
           "sortOrder": {
             "type": "number",
             "description": "Anzeige-Reihenfolge im Auswahlmenü"
+          },
+          "defaultInstruction": {
+            "type": "string",
+            "nullable": true,
+            "description": "Standardanweisung der Teamleitung zu dieser Problemart — Vorlage für den Instruktions-Dialog (04.08.2026)"
+          },
+          "autoInsert": {
+            "type": "boolean",
+            "description": "true = Vorlage im Instruktions-Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar"
           }
         },
         "required": [
           "id",
           "label",
           "active",
-          "sortOrder"
+          "sortOrder",
+          "autoInsert"
         ]
       },
       "ProblemReasonUpsertDto": {
@@ -6056,6 +6555,15 @@
           "sortOrder": {
             "type": "number",
             "description": "Anzeige-Reihenfolge"
+          },
+          "defaultInstruction": {
+            "type": "string",
+            "description": "Standardanweisung (Vorlage für den Instruktions-Dialog); leer/fehlend = keine Vorlage"
+          },
+          "autoInsert": {
+            "type": "boolean",
+            "default": false,
+            "description": "Vorlage im Instruktions-Dialog automatisch vorausfüllen"
           }
         },
         "required": [
@@ -6486,6 +6994,68 @@
           "active"
         ]
       },
+      "AbsenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "krank",
+              "urlaub"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD (inklusive)"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD (inklusive — „bis wann mindestens\")"
+          }
+        },
+        "required": [
+          "id",
+          "employeeId",
+          "kind",
+          "startDate",
+          "endDate"
+        ]
+      },
+      "AbsenceCreateDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "krank",
+              "urlaub"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "ISO YYYY-MM-DD"
+          }
+        },
+        "required": [
+          "employeeId",
+          "kind",
+          "startDate",
+          "endDate"
+        ]
+      },
       "EmployeeProfileUpdateDto": {
         "type": "object",
         "properties": {
@@ -6569,6 +7139,143 @@
           "blockedCases",
           "weBelegNos",
           "date"
+        ]
+      },
+      "SendMessageDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string",
+            "description": "employeeNo des Empfängers (Mitarbeiter-App)"
+          },
+          "text": {
+            "type": "string",
+            "description": "Kurznachricht (max. 500 Zeichen)"
+          },
+          "caseId": {
+            "type": "string",
+            "description": "Optionaler Beleg-Bezug (GoodsReceiptCase-Id)"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "text"
+        ]
+      },
+      "TeamleadMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "employeeName": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "WE-Nr des Bezugs-Belegs"
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "readAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "„Gelesen\"-Quittung aus der PWA"
+          }
+        },
+        "required": [
+          "id",
+          "employeeNo",
+          "employeeName",
+          "caseId",
+          "weBelegNo",
+          "text",
+          "createdAt",
+          "readAt"
+        ]
+      },
+      "TeamleadMessageListDto": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamleadMessageDto"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "MyMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "caseId",
+          "weBelegNo",
+          "createdAt"
+        ]
+      },
+      "MyMessageListDto": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyMessageDto"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "MessageReadDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "readAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "readAt"
         ]
       },
       "ScenarioInfoDto": {

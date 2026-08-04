@@ -22,6 +22,7 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -67,6 +68,21 @@ export function ProblemReasonsTab(): JSX.Element {
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, label } : r)));
   const setActive = (idx: number, active: boolean): void =>
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, active } : r)));
+  const setDefaultInstruction = (idx: number, text: string): void =>
+    setRows((rs) =>
+      rs.map((r, i) =>
+        i === idx
+          ? {
+              ...r,
+              defaultInstruction: text,
+              // Ohne Vorlagentext ist Auto-Vorbefüllen bedeutungslos.
+              autoInsert: text.trim() === '' ? false : r.autoInsert,
+            }
+          : r,
+      ),
+    );
+  const setAutoInsert = (idx: number, autoInsert: boolean): void =>
+    setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, autoInsert } : r)));
   const remove = (idx: number): void =>
     setRows((rs) => resequence(rs.filter((_, i) => i !== idx)));
   const move = (idx: number, dir: -1 | 1): void =>
@@ -79,7 +95,12 @@ export function ProblemReasonsTab(): JSX.Element {
       return resequence(next);
     });
   const add = (): void =>
-    setRows((rs) => resequence([...rs, { label: '', active: true, sortOrder: 0 }]));
+    setRows((rs) =>
+      resequence([
+        ...rs,
+        { label: '', active: true, sortOrder: 0, defaultInstruction: null, autoInsert: false },
+      ]),
+    );
 
   const canSave = rows.every((r) => r.label.trim().length > 0);
 
@@ -91,7 +112,9 @@ export function ProblemReasonsTab(): JSX.Element {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Frei definierbare Gründe, die der Mitarbeiter beim Melden eines Positions-Problems auswählen
         kann. Inaktive Gründe sind in der App nicht wählbar. Bereits gemeldete Probleme behalten
-        ihren Grund-Text, auch wenn er später geändert wird.
+        ihren Grund-Text, auch wenn er später geändert wird. Die Standardanweisung ist die Vorlage
+        für „Instruktionen senden": mit „Auto" wird sie dort automatisch vorausgefüllt, ohne „Auto"
+        per Knopf „Standard einfügen" übernommen.
       </Typography>
 
       {query.isLoading && (
@@ -123,6 +146,16 @@ export function ProblemReasonsTab(): JSX.Element {
           <TableRow>
             <TableCell>Reihenfolge</TableCell>
             <TableCell>Bezeichnung</TableCell>
+            <TableCell sx={{ minWidth: 260 }}>Standardanweisung</TableCell>
+            <TableCell>
+              <Tooltip
+                title={
+                  'Standardanweisung beim „Instruktionen senden“ automatisch vorausfüllen (sonst per Knopf einfügbar)'
+                }
+              >
+                <span>Auto-Vorbefüllen</span>
+              </Tooltip>
+            </TableCell>
             <TableCell>Aktiv</TableCell>
             <TableCell align="right">Aktion</TableCell>
           </TableRow>
@@ -154,6 +187,24 @@ export function ProblemReasonsTab(): JSX.Element {
                 />
               </TableCell>
               <TableCell>
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  minRows={1}
+                  value={r.defaultInstruction ?? ''}
+                  placeholder={'z. B. „Ware zur Seite legen, kommt ins TL-Büro“'}
+                  onChange={(e) => setDefaultInstruction(idx, e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Switch
+                  checked={r.autoInsert}
+                  disabled={(r.defaultInstruction ?? '').trim() === ''}
+                  onChange={(e) => setAutoInsert(idx, e.target.checked)}
+                />
+              </TableCell>
+              <TableCell>
                 <Switch checked={r.active} onChange={(e) => setActive(idx, e.target.checked)} />
               </TableCell>
               <TableCell align="right">
@@ -165,7 +216,7 @@ export function ProblemReasonsTab(): JSX.Element {
           ))}
           {rows.length === 0 && !query.isLoading && (
             <TableRow>
-              <TableCell colSpan={4}>
+              <TableCell colSpan={6}>
                 <Typography variant="body2" color="text.secondary">
                   Noch keine Problemarten. „Neue Problemart" anlegen.
                 </Typography>

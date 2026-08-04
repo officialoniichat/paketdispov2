@@ -29,6 +29,8 @@ import { unwrap } from './http.js';
 import {
   toCaseStatus,
   toEventType,
+  toIssueAuthorRole,
+  toIssueMessageKind,
   toIssueScope,
   toIssueStatus,
   toPriorityFlags,
@@ -37,6 +39,7 @@ import {
   toSkuLineStatus,
   toZstSource,
 } from './narrow.js';
+import type { CardIssueMessage } from './types.js';
 
 type PoolItemDto = components['schemas']['PoolItemDto'];
 type DeliveryGroupRefDto = components['schemas']['DeliveryGroupRefDto'];
@@ -146,6 +149,8 @@ export interface BelegRow {
   bundleQueue: BundleQueueRef | null;
   /** C5 Digitale Ablage: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
+  /** Instruktions-Loop (04.08.2026): alle Meldungen inkl. Einzel-Status + Verlauf. */
+  issues: BelegIssue[];
 }
 
 /** One server page of the Beleg list plus the total for the pagination. */
@@ -275,8 +280,15 @@ export interface BelegIssue {
   orderNo: string | null;
   status: IssueStatus;
   description: string | null;
-  resolution: string | null;
+  /** Text der jüngsten TL-Instruktion; null solange die Meldung offen ist. */
+  instruction: string | null;
+  /** Standardanweisung der Problemart (Katalog-Vorlage); null ohne Vorlage. */
+  defaultInstruction: string | null;
+  /** true = Vorlage im Instruktions-Dialog automatisch vorausfüllen. */
+  defaultInstructionAuto: boolean;
   reportedAt: string;
+  /** Instruktions-Verlauf chronologisch (Erst-Meldung zuerst). */
+  messages: CardIssueMessage[];
 }
 
 export interface BelegZst {
@@ -643,6 +655,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     missingFields: item.missingFields,
     bereich: item.bereich ?? null,
     forwardedTo: item.forwardedTo ?? null,
+    issues: (item.issues ?? []).map(toBelegIssue),
     deliveryGroup: item.deliveryGroup ? toDeliveryGroupRef(item.deliveryGroup) : null,
     bundleQueue: item.bundleQueue
       ? {
@@ -796,8 +809,18 @@ function toBelegIssue(i: IssueSummaryDto): BelegIssue {
     orderNo: i.orderNo ?? null,
     status: toIssueStatus(i.status),
     description: i.description ?? null,
-    resolution: i.resolution ?? null,
+    instruction: i.instruction ?? null,
+    defaultInstruction: i.defaultInstruction ?? null,
+    defaultInstructionAuto: i.defaultInstructionAuto ?? false,
     reportedAt: i.reportedAt,
+    messages: i.messages.map((m) => ({
+      id: m.id,
+      kind: toIssueMessageKind(m.kind),
+      authorRole: toIssueAuthorRole(m.authorRole),
+      authorName: m.authorName,
+      createdAt: m.createdAt,
+      text: m.text,
+    })),
   };
 }
 

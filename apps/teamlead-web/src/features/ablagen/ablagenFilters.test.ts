@@ -29,7 +29,7 @@ function makeCard(overrides: Partial<LaneCard> = {}): LaneCard {
     storageCode: 'R-1-1',
     assignedTo: undefined,
     issueStatus: undefined,
-    openIssue: null,
+    issues: [],
     forwardedTo: null,
     bereich: 'Regal',
     attentionFlag: false,
@@ -44,10 +44,54 @@ describe('cardNeedsDecision', () => {
     expect(cardNeedsDecision(makeCard({ status: 'blocked' }))).toBe(true);
   });
 
-  it('is true for an open problem', () => {
+  it('is true for an open Meldung', () => {
     expect(
-      cardNeedsDecision(makeCard({ openIssue: { kind: 'manual', reasonLabel: 'beschädigt', note: null } })),
+      cardNeedsDecision(
+        makeCard({
+          issues: [
+            {
+              id: 'issue-1',
+              kind: 'manual',
+              reasonLabel: 'beschädigt',
+              description: null,
+              positionNo: 1,
+              orderNo: null,
+              status: 'open',
+              instruction: null,
+              defaultInstruction: null,
+              defaultInstructionAuto: false,
+              reportedAt: '2026-08-04T11:38:00.000Z',
+              messages: [],
+            },
+          ],
+        }),
+      ),
     ).toBe(true);
+  });
+
+  it('is false when every Meldung already has its instruction', () => {
+    expect(
+      cardNeedsDecision(
+        makeCard({
+          issues: [
+            {
+              id: 'issue-1',
+              kind: 'manual',
+              reasonLabel: 'beschädigt',
+              description: null,
+              positionNo: 1,
+              orderNo: null,
+              status: 'instruction_sent',
+              instruction: 'Ware prüfen und normal weiterbearbeiten.',
+              defaultInstruction: null,
+              defaultInstructionAuto: false,
+              reportedAt: '2026-08-04T11:38:00.000Z',
+              messages: [],
+            },
+          ],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('is true for besondere Aufmerksamkeit', () => {

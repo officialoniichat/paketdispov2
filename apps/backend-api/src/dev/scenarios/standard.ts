@@ -15,8 +15,9 @@ import type { ScenarioDefinition } from './types.js';
 /**
  * B1 'standard' — the realistic default day (formerly the whole prisma/seed.ts):
  * the generated ready pool from the customer's real volume profile (ctx.volume:
- * 'typical' 171 / 'peak' 315), full case details, lifecycle fixtures for every
- * Belege scope, a mock-ProHandel batch and the Intake-Gate/Lieferungs-Hold demos.
+ * 'typical' 171 / 'peak' 315 / 'masse' 650), full case details, lifecycle fixtures
+ * for every Belege scope, a mock-ProHandel batch and the Intake-Gate/Lieferungs-
+ * Hold demos.
  */
 export const standardScenario: ScenarioDefinition = {
   key: 'standard',

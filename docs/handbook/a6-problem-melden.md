@@ -56,7 +56,9 @@ flowchart TD
 - Die erfassten Probleme werden **lokal gesammelt** und **nicht sofort** gesendet.
 - Beim **`'Teilabschluss (Problem melden)'`** gehen alle gesammelten Probleme gebündelt an die
   Teamleitung (Kapitel A5). Der Beleg liegt danach **rot** als `'Problem gemeldet'` bei dir und ist
-  gesperrt, bis die Teamleitung `'Probleme geklärt'` hat.
+  gesperrt, bis die Teamleitung **jede einzelne Meldung** mit einer Instruktion beantwortet hat.
+  Auf der Beleg-Karte zeigt ein Zähler-Badge (`1x`, `2x`, …) deine Meldungen; Tippen/Hover öffnet
+  die Liste mit dem Stand jeder Meldung (rot = offen, grün = Instruktion da).
 - Solange ein Problem vorliegt, ist **`'Beleg erledigt'`** gesperrt – nur der Teilabschluss bleibt.
 
 ## Was du hier **nicht** kannst

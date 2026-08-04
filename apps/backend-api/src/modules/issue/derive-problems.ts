@@ -55,6 +55,22 @@ export function deriveImplicitProblems(skus: readonly ReportedSkuState[]): Impli
 }
 
 /**
+ * Klartext der Erst-Meldung eines impliziten Problems — der erste Eintrag im
+ * Instruktions-Verlauf (Kundenfeedback 04.08.2026). Einzige Quelle dieser Texte;
+ * die UIs zeigen sie nur an.
+ */
+export function describeImplicitProblem(problem: ImplicitProblem): string {
+  switch (problem.kind) {
+    case 'over_delivery':
+      return `Mehrlieferung: +${problem.deviationQty ?? 0} Stück`;
+    case 'under_delivery':
+      return `Minderlieferung: ${problem.deviationQty ?? 0} Stück`;
+    case 'price_deviation':
+      return `Preisabweichung: Etikett ${problem.expectedVkPrice ?? '?'} € → korrigiert ${problem.correctedVkPrice ?? '?'} €`;
+  }
+}
+
+/**
  * „Beleg erledigt" (voll) ist nur erlaubt, wenn weder implizite noch manuelle
  * Probleme vorliegen — sonst ist der Teilabschluss Pflicht (Punkt 7).
  */

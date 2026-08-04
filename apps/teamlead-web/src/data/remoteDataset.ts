@@ -17,6 +17,9 @@ import {
   toAssignmentStatus,
   toCaseStatus,
   toEventType,
+  toIssueAuthorRole,
+  toIssueMessageKind,
+  toIssueStatus,
   toPriorityFlags,
   toProblemKind,
   toSectionCode,
@@ -184,7 +187,11 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
         : undefined,
     paused: row.bundleStatus === 'paused',
     bereiche: row.bereiche,
+    shiftStart: row.shiftStart,
+    shiftEnd: row.shiftEnd,
+    absence: row.absence,
     cases: row.cases.map(toBoardCase),
+    packs: row.packs.map((p) => p.caseIds),
   };
 }
 
@@ -192,6 +199,7 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
   return {
     caseId: c.id,
     weBelegNo: c.weBelegNo,
+    bundleId: c.bundleId,
     status: toCaseStatus(c.status),
     totalQuantity: c.totalQuantity,
     estimatedMinutes: c.estimatedMinutes,
@@ -313,13 +321,27 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     estimatedMinutes: item.estimatedMinutes,
     storageCode: item.storageLocationCode ?? '–',
     assignedTo: typeof item.assignedEmployeeNo === 'string' ? item.assignedEmployeeNo : undefined,
-    openIssue: item.openIssue
-      ? {
-          kind: toProblemKind(item.openIssue.kind),
-          reasonLabel: item.openIssue.reasonLabel ?? null,
-          note: item.openIssue.note ?? null,
-        }
-      : null,
+    issues: (item.issues ?? []).map((i) => ({
+      id: i.id,
+      kind: toProblemKind(i.kind),
+      reasonLabel: i.reasonLabel ?? null,
+      description: i.description ?? null,
+      positionNo: i.positionNo ?? null,
+      orderNo: i.orderNo ?? null,
+      status: toIssueStatus(i.status),
+      instruction: i.instruction ?? null,
+      defaultInstruction: i.defaultInstruction ?? null,
+      defaultInstructionAuto: i.defaultInstructionAuto ?? false,
+      reportedAt: i.reportedAt,
+      messages: i.messages.map((m) => ({
+        id: m.id,
+        kind: toIssueMessageKind(m.kind),
+        authorRole: toIssueAuthorRole(m.authorRole),
+        authorName: m.authorName,
+        createdAt: m.createdAt,
+        text: m.text,
+      })),
+    })),
     forwardedTo: item.forwardedTo ?? null,
     bereich: item.bereich ?? null,
     attentionFlag: item.attentionFlag,
