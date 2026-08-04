@@ -32,7 +32,7 @@ flowchart TB
             apiClient["api.ts → @paket/api-client<br/><i>createApiClient · CURRENT_TEAMLEAD_ID</i>"]:::logic
         end
         actions["actions/caseActions.ts<br/><i>getAvailableActions(): zentrale Registry (Status + assign/forward/attention-Flags)<br/>→ ReasonDialog (mit Pflicht-Grund) · custom (assign/forward/attention/split) · sofort (Zurückholen, Aufmerksamkeit entfernen)</i>"]:::logic
-        shared["components/<br/><i>CaseActionMenu (Dichte compact/detail, EIN gemeinsames Kebab-Menü für alle Oberflächen) · AssignDialog (Live-Such-Combobox + „Durchsuchen“-Drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (Server-Modus · Füll-Modus flex:1) · ReasonDialog</i>"]:::logic
+        shared["components/<br/><i>CaseActionMenu (Dichte compact/detail, EIN gemeinsames Kebab-Menü für alle Oberflächen) · AssignDialog (Live-Such-Combobox + „Durchsuchen“-Drawer, A1/A2/B1) · BelegSearchResultRow · AssignBrowseDrawer ·<br/>ForwardDialog · AttentionDialog · MoveCaseDialog (B2) · TierChip · DataTable (Server-Modus · Füll-Modus flex:1) · ReasonDialog ·<br/>IssueMessageList (chronologischer Nachrichten-Verlauf einer Meldung — geteilt von InstructionsDialog + VerlaufTab)</i>"]:::logic
         viewState["lib/viewState.ts<br/><i>persistierte Ansichten (localStorage paket.view.belege / .ablagen / .board / .nav /<br/>.experiment / .experiment.belege / .experiment.ablagen / .experiment.zoom)</i>"]:::logic
     end
 

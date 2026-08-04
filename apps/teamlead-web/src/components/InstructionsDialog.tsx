@@ -1,8 +1,9 @@
 /**
  * „Instruktionen senden" (Kundenfeedback 04.08.2026): der Dialog listet ALLE
- * Meldungen eines Belegs einzeln — je OFFENER Meldung ein Pflicht-Textfeld mit
- * eigenem Senden-Knopf, bereits instruierte Meldungen erscheinen grün mit dem
- * gesendeten Instruktionstext. Es gibt bewusst keinen Sammel-Knopf: erst wenn
+ * Meldungen eines Belegs einzeln — je Meldung der komplette Nachrichten-Verlauf
+ * (MA-Meldung, TL-Instruktion, MA-Rückmeldung — wer hat wann was geschrieben),
+ * je OFFENER Meldung ein Pflicht-Textfeld mit eigenem Senden-Knopf.
+ * Es gibt bewusst keinen Sammel-Knopf: erst wenn
  * jede Meldung ihre Instruktion hat, kippt der Beleg im Backend auf „Geklärt"
  * (problem_resolved) — die Ableitung trifft ausschließlich das Backend.
  *
@@ -24,6 +25,7 @@ import Typography from '@mui/material/Typography';
 import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
 import SendIcon from '@mui/icons-material/Send';
 import { ProblemChip, problemKindLabels } from '@paket/ui';
+import { IssueMessageList } from './IssueMessageList.js';
 import type { CardIssue } from '../data/types.js';
 
 export interface InstructionsDialogProps {
@@ -88,10 +90,6 @@ export function InstructionsDialog({
         <Stack spacing={1.5}>
           {issues.map((issue) => {
             const offen = issue.status === 'open';
-            // Jüngste MA-Nachricht (Meldung/Rückmeldung) = das, worauf der TL antwortet.
-            const letzteMeldung = [...issue.messages]
-              .reverse()
-              .find((m) => m.kind === 'meldung' || m.kind === 'rueckmeldung');
             return (
               <Box
                 key={issue.id}
@@ -111,12 +109,11 @@ export function InstructionsDialog({
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                   {issueAnchor(issue)}
                 </Typography>
-                {letzteMeldung && (
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {letzteMeldung.kind === 'rueckmeldung' ? 'Rückmeldung' : 'Meldung'} von{' '}
-                    {letzteMeldung.authorName}: „{letzteMeldung.text}"
-                  </Typography>
-                )}
+                {/* Kompletter Nachrichten-Verlauf dieser Meldung — inklusive
+                    Rückmeldungen des MA, auf die der TL hier antwortet. */}
+                <Box sx={{ mt: 0.75 }}>
+                  <IssueMessageList messages={issue.messages} />
+                </Box>
                 {offen ? (
                   <Stack spacing={0.5} sx={{ mt: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -154,13 +151,7 @@ export function InstructionsDialog({
                       </Button>
                     ) : null}
                   </Stack>
-                ) : (
-                  issue.instruction && (
-                    <Typography variant="body2" color="success.main" sx={{ mt: 0.5 }}>
-                      Instruktion: „{issue.instruction}"
-                    </Typography>
-                  )
-                )}
+                ) : null}
               </Box>
             );
           })}

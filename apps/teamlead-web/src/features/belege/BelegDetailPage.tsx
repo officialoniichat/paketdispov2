@@ -53,6 +53,7 @@ import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { InstructionsDialog } from '../../components/InstructionsDialog.js';
+import { IssueMessageList } from '../../components/IssueMessageList.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
 import { useSplits } from '../split/SplitProvider.js';
@@ -873,19 +874,12 @@ function IssuesTab({
   );
 }
 
-/** Verlaufs-Icon+Label je Eintragsart (Meldung/Rückmeldung rot-orange, Instruktion grün). */
-const VERLAUF_KIND_LABEL: Record<string, string> = {
-  meldung: 'Meldung',
-  instruktion: 'Instruktion',
-  rueckmeldung: 'Rückmeldung',
-};
-
 /**
  * Reiter „Verlauf" (Kundenfeedback 04.08.2026): chronologische Historie je
  * Position — wer hat wann was gesagt (MA-Meldung, TL-Instruktion,
- * MA-Rückmeldung), mit Zeitstempel und Namen. Positionen ohne Probleme
- * erscheinen nicht; Meldungen ohne Positions-Anker gruppieren unter
- * „Beleg allgemein".
+ * MA-Rückmeldung), mit Zeitstempel und Namen (gemeinsame Darstellung:
+ * IssueMessageList). Positionen ohne Probleme erscheinen nicht; Meldungen
+ * ohne Positions-Anker gruppieren unter „Beleg allgemein".
  */
 function VerlaufTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
   if (issues.length === 0) return <Empty text="Keine Meldungen — kein Verlauf." />;
@@ -915,25 +909,7 @@ function VerlaufTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
                   <Typography sx={{ fontWeight: 700 }}>{issueLabel(issue)}</Typography>
                   <ProblemChip status={issue.status} size="small" />
                 </Stack>
-                <Stack spacing={1} sx={{ pl: 1, borderLeft: 2, borderColor: 'divider' }}>
-                  {issue.messages.map((m) => (
-                    <Box key={m.id}>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDateTime(m.createdAt)} ·{' '}
-                        <Typography
-                          component="span"
-                          variant="caption"
-                          sx={{ fontWeight: 700 }}
-                          color={m.kind === 'instruktion' ? 'success.main' : 'error.main'}
-                        >
-                          {VERLAUF_KIND_LABEL[m.kind] ?? m.kind}
-                        </Typography>{' '}
-                        · {m.authorName} ({m.authorRole === 'teamlead' ? 'TL' : 'MA'})
-                      </Typography>
-                      <Typography variant="body2">„{m.text}"</Typography>
-                    </Box>
-                  ))}
-                </Stack>
+                <IssueMessageList messages={issue.messages} />
               </Box>
             ))}
           </Stack>
