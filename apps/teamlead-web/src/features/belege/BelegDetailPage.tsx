@@ -27,8 +27,10 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import SendIcon from '@mui/icons-material/Send';
 import {
   CaseStatusChip,
   issueScopeLabels,
@@ -288,7 +290,12 @@ export function BelegDetailPage(): JSX.Element {
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         {tab === 0 && <BelegTab c={c} />}
-        {tab === 1 && <VerlaufTab issues={c.issues} />}
+        {tab === 1 && (
+          <VerlaufTab
+            issues={c.issues}
+            onReply={(issueId, text) => sendInstruction(c.id, issueId, text)}
+          />
+        )}
         {tab === 2 && (
           <Stack spacing={1.5}>
             <FieldGrid
@@ -875,46 +882,105 @@ function IssuesTab({
 }
 
 /**
- * Reiter „Verlauf" (Kundenfeedback 04.08.2026): chronologische Historie je
- * Position — wer hat wann was gesagt (MA-Meldung, TL-Instruktion,
+ * Reiter „Verlauf" (Kundenfeedback 04.08.2026): kompletter Nachrichten-Verlauf
+ * je Position — wer hat wann was gesagt (MA-Meldung, TL-Instruktion,
  * MA-Rückmeldung), mit Zeitstempel und Namen (gemeinsame Darstellung:
- * IssueMessageList). Positionen ohne Probleme erscheinen nicht; Meldungen
- * ohne Positions-Anker gruppieren unter „Beleg allgemein".
+ * IssueMessageList). Sind mehrere Positionen betroffen, bekommt JEDE Position
+ * ihren eigenen Tab; Meldungen ohne Positions-Anker gruppieren unter
+ * „Beleg allgemein". Auf OFFENE Meldungen (Erst-Meldung wie MA-Rückmeldung)
+ * antwortet die Teamleitung direkt hier — dieselbe Instruktions-Aktion wie im
+ * Dialog „Instruktionen senden"; die Statuslogik bleibt im Backend.
  */
-function VerlaufTab({ issues }: { issues: BelegIssue[] }): JSX.Element {
+function VerlaufTab({
+  issues,
+  onReply,
+}: {
+  issues: BelegIssue[];
+  onReply: (issueId: string, text: string) => void;
+}): JSX.Element {
+  const [tabIdx, setTabIdx] = useState(0);
+  // Antwort-Entwürfe je Meldung — bleiben beim Senden anderer Meldungen erhalten.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   if (issues.length === 0) return <Empty text="Keine Meldungen — kein Verlauf." />;
   // Gruppierung je Position (Meldungen ohne Anker unter „Beleg allgemein").
-  const groups = new Map<string, { title: string; issues: BelegIssue[] }>();
+  const groups = new Map<string, { tabLabel: string; title: string; issues: BelegIssue[] }>();
   for (const issue of issues) {
     const key = issue.positionNo === null ? 'beleg' : `pos-${issue.positionNo}`;
+    const tabLabel = issue.positionNo === null ? 'Beleg allgemein' : `Position ${issue.positionNo}`;
     const title =
       issue.positionNo === null
         ? 'Beleg allgemein'
         : `Position ${issue.positionNo}${issue.orderNo ? ` · Order ${issue.orderNo}` : ''}`;
-    const group = groups.get(key) ?? { title, issues: [] };
+    const group = groups.get(key) ?? { tabLabel, title, issues: [] };
     group.issues.push(issue);
     groups.set(key, group);
   }
+  const list = [...groups.values()];
+  const activeIdx = Math.min(tabIdx, list.length - 1);
+  const active = list[activeIdx];
+  if (!active) return <Empty text="Keine Meldungen — kein Verlauf." />;
+  const send = (issueId: string): void => {
+    const text = (drafts[issueId] ?? '').trim();
+    if (text === '') return;
+    onReply(issueId, text);
+    setDrafts((d) => ({ ...d, [issueId]: '' }));
+  };
   return (
-    <Stack spacing={2.5}>
-      {[...groups.values()].map((group) => (
-        <Box key={group.title}>
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
-            {group.title}
-          </Typography>
-          <Stack spacing={2} sx={{ mt: 0.5 }}>
-            {group.issues.map((issue) => (
-              <Box key={issue.id}>
-                <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.75 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{issueLabel(issue)}</Typography>
-                  <ProblemChip status={issue.status} size="small" />
+    <Stack spacing={1.5}>
+      {list.length > 1 ? (
+        <Tabs
+          value={activeIdx}
+          onChange={(_, v: number) => setTabIdx(v)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+        >
+          {list.map((group) => (
+            <Tab key={group.tabLabel} label={group.tabLabel} />
+          ))}
+        </Tabs>
+      ) : null}
+      <Box>
+        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+          {active.title}
+        </Typography>
+        <Stack spacing={2.5} sx={{ mt: 0.5 }}>
+          {active.issues.map((issue) => (
+            <Box key={issue.id}>
+              <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.75 }}>
+                <Typography sx={{ fontWeight: 700 }}>{issueLabel(issue)}</Typography>
+                <ProblemChip status={issue.status} size="small" />
+              </Stack>
+              <IssueMessageList messages={issue.messages} />
+              {/* Offene Meldung (Erst-Meldung wie MA-Rückmeldung): die TL
+                  antwortet direkt im Verlauf — gleiche Aktion wie im Dialog. */}
+              {issue.status === 'open' ? (
+                <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
+                  <TextField
+                    fullWidth
+                    required
+                    multiline
+                    minRows={2}
+                    size="small"
+                    label="Antwort / Instruktion an den Mitarbeiter (Pflichtfeld)"
+                    value={drafts[issue.id] ?? ''}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [issue.id]: e.target.value }))}
+                  />
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<SendIcon />}
+                    disabled={(drafts[issue.id] ?? '').trim() === ''}
+                    onClick={() => send(issue.id)}
+                    sx={{ whiteSpace: 'nowrap', mt: 0.25 }}
+                  >
+                    Senden
+                  </Button>
                 </Stack>
-                <IssueMessageList messages={issue.messages} />
-              </Box>
-            ))}
-          </Stack>
-        </Box>
-      ))}
+              ) : null}
+            </Box>
+          ))}
+        </Stack>
+      </Box>
     </Stack>
   );
 }
