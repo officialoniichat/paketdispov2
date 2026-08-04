@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
     effortPoints: 5,
     estimatedMinutes: 6,
     storageCode: 'R13-04',
-    openIssue: null,
+    issues: [],
     issueStatus: null,
     forwardedTo: null,
     assignedTo: null,

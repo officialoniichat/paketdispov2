@@ -174,11 +174,11 @@ export interface CockpitApi {
   /** Storno — cancel a case (→ cancelled, case.cancelled). Reasoned + audited. */
   cancelCase(caseId: string, reason: string): void;
   /**
-   * „Probleme geklärt" (Kundenfeedback 14.07.2026): löst ALLE offenen Probleme
-   * des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben
-   * MA. Die Anmerkung ist optional (courtesy note für den MA).
+   * „Instruktionen senden" (Kundenfeedback 04.08.2026): beantwortet GENAU EINE
+   * Meldung mit einer Handlungsanweisung (Pflichttext). Erst wenn alle Meldungen
+   * instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA).
    */
-  resolveProblems(caseId: string, resolution?: string): void;
+  sendInstruction(caseId: string, issueId: string, text: string): void;
   /** C5 „Weiterleiten an …" — status-neutral, no §7.1 transition. */
   forwardCase(caseId: string, recipient: ForwardRecipient, reason?: string): void;
   /** C5 „Zurückholen" — clears the forward flag. */
@@ -350,17 +350,20 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const resolveProblemsMutation = useMutation<
+  const sendInstructionMutation = useMutation<
     unknown,
     Error,
-    { caseId: string; resolution?: string }
+    { caseId: string; issueId: string; text: string }
   >({
-    mutationFn: async ({ caseId, resolution }) => {
-      const { data, error } = await api.POST('/api/teamlead/cases/{caseId}/resolve-problems', {
-        params: { path: { caseId } },
-        body: { resolution },
-      });
-      if (error) throw new MutationError('Probleme klären', error);
+    mutationFn: async ({ caseId, issueId, text }) => {
+      const { data, error } = await api.POST(
+        '/api/teamlead/cases/{caseId}/issues/{issueId}/instruction',
+        {
+          params: { path: { caseId, issueId } },
+          body: { text },
+        },
+      );
+      if (error) throw new MutationError('Instruktion senden', error);
       return data;
     },
     onSettled: invalidateCockpitAndBelege,
@@ -516,7 +519,8 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       parkCase: (caseId, reason) => parkMutation.mutate({ caseId, reason }),
       releaseCase: (caseId) => unparkMutation.mutate({ caseId }),
       cancelCase: (caseId, reason) => cancelMutation.mutate({ caseId, reason }),
-      resolveProblems: (caseId, resolution) => resolveProblemsMutation.mutate({ caseId, resolution }),
+      sendInstruction: (caseId, issueId, text) =>
+        sendInstructionMutation.mutate({ caseId, issueId, text }),
       forwardCase: (caseId, recipient, reason) =>
         forwardMutation.mutate({ caseId, recipient, reason }),
       unforwardCase: (caseId) => unforwardMutation.mutate({ caseId }),
@@ -542,7 +546,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       parkMutation,
       unparkMutation,
       cancelMutation,
-      resolveProblemsMutation,
+      sendInstructionMutation,
       forwardMutation,
       unforwardMutation,
       flagAttentionMutation,

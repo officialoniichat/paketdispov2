@@ -15,8 +15,9 @@
  * fixes the space problem, not just the availability-consistency problem.
  *
  * Non-custom actions run through the mandatory-reason {@link ReasonDialog}.
- * `custom` actions (split/assign/forward/attention) delegate to the matching
- * `onSplit`/`onAssign`/`onForward`/`onAttention` handler the surface supplies
+ * `custom` actions (split/assign/forward/attention/instructions) delegate to the
+ * matching `onSplit`/`onAssign`/`onForward`/`onAttention`/`onInstructions`
+ * handler the surface supplies
  * and are hidden if that handler is absent. `instant` actions (Zurückholen,
  * Aufmerksamkeit entfernen) run immediately with no dialog at all, mirroring
  * the one-click UX of the action they reverse.
@@ -43,6 +44,7 @@ import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import ReplayIcon from '@mui/icons-material/Replay';
+import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import {
   getAvailableActions,
   type ActionTone,
@@ -60,7 +62,7 @@ const PRIMARY_BUDGET: Record<Density, number> = { compact: 1, detail: 2 };
 
 const ACTION_ICON: Record<CaseActionId, JSX.Element> = {
   approve: <ApproveIcon fontSize="small" />,
-  resolve_problems: <ApproveIcon fontSize="small" />,
+  send_instructions: <ForumOutlinedIcon fontSize="small" />,
   assign: <PersonAddAlt1Icon fontSize="small" />,
   park: <PauseCircleOutlineIcon fontSize="small" />,
   unpark: <PlayCircleOutlineIcon fontSize="small" />,
@@ -85,6 +87,8 @@ export interface CaseActionMenuProps {
   onAssign?: (caseId: string) => void;
   onForward?: (caseId: string) => void;
   onAttention?: (caseId: string) => void;
+  /** Instruktions-Dialog (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */
+  onInstructions?: (caseId: string) => void;
 }
 
 /** Map a descriptor tone onto an MUI button/menu color. */
@@ -101,6 +105,7 @@ export function CaseActionMenu({
   onAssign,
   onForward,
   onAttention,
+  onInstructions,
 }: CaseActionMenuProps): JSX.Element | null {
   const [pending, setPending] = useState<CaseActionDescriptor | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -110,6 +115,7 @@ export function CaseActionMenu({
     assign: onAssign,
     forward: onForward,
     attention: onAttention,
+    instructions: onInstructions,
   };
 
   // Custom actions only render where a handler is wired; hide them otherwise.
@@ -195,7 +201,6 @@ export function CaseActionMenu({
         title={pending ? `${pending.label} · Beleg ${weBelegNo}` : ''}
         confirmLabel={pending?.label}
         suggestions={pending?.reasonSuggestions}
-        optional={pending?.optionalReason === true}
         onConfirm={(reason) => pending?.run(ctx, reason)}
         onClose={() => setPending(null)}
       />

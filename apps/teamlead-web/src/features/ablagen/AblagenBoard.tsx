@@ -54,6 +54,7 @@ import { useCockpitData } from '../../data/store.js';
 import { formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { InstructionsDialog, issueLabel } from '../../components/InstructionsDialog.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
@@ -158,7 +159,7 @@ export function AblagenBoard({
     deprioritiseCase,
     approveCase,
     cancelCase,
-    resolveProblems,
+    sendInstruction,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -166,8 +167,10 @@ export function AblagenBoard({
   } = useCockpitData();
   const navigate = useNavigate();
 
-  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen: shared CaseActionMenu custom actions.
+  // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen/Instruktionen:
+  // shared CaseActionMenu custom actions.
   const [assignCaseId, setAssignCaseId] = useState<string | null>(null);
+  const [instructionsCaseId, setInstructionsCaseId] = useState<string | null>(null);
   const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
   const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
   const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
@@ -264,7 +267,7 @@ export function AblagenBoard({
     releaseCase,
     approveCase,
     cancelCase,
-    resolveProblems,
+    sendInstruction,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -285,6 +288,7 @@ export function AblagenBoard({
   const forwardCard = allCards.find((c) => c.caseId === forwardCaseId) ?? null;
   const attentionCard = allCards.find((c) => c.caseId === attentionCaseId) ?? null;
   const splitCard = allCards.find((c) => c.caseId === splitCaseId) ?? null;
+  const instructionsCard = allCards.find((c) => c.caseId === instructionsCaseId) ?? null;
 
   return (
     <Stack
@@ -355,6 +359,7 @@ export function AblagenBoard({
             onForward={setForwardCaseId}
             onAttention={setAttentionCaseId}
             onSplit={setSplitCaseId}
+            onInstructions={setInstructionsCaseId}
             droppable={dnd ? dnd.laneDroppable(lane.id) : false}
             onLaneDrop={() => dnd?.onLaneDrop(lane.id)}
             cardDraggable={cardDraggable}
@@ -418,6 +423,17 @@ export function AblagenBoard({
         }}
         onClose={() => setSplitCaseId(null)}
       />
+
+      {/* Instruktions-Loop (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */}
+      <InstructionsDialog
+        open={instructionsCard !== null}
+        weBelegNo={instructionsCard?.weBelegNo ?? ''}
+        issues={instructionsCard?.issues ?? []}
+        onSend={(issueId, text) => {
+          if (instructionsCard) sendInstruction(instructionsCard.caseId, issueId, text);
+        }}
+        onClose={() => setInstructionsCaseId(null)}
+      />
     </Stack>
   );
 }
@@ -440,6 +456,7 @@ interface LaneColumnProps {
   onForward: (caseId: string) => void;
   onAttention: (caseId: string) => void;
   onSplit: (caseId: string) => void;
+  onInstructions: (caseId: string) => void;
   /** true = legales Ziel für den AKTUELLEN Drag (gestrichelt markiert). */
   droppable: boolean;
   onLaneDrop: () => void;
@@ -466,6 +483,7 @@ function LaneColumn({
   onForward,
   onAttention,
   onSplit,
+  onInstructions,
   droppable,
   onLaneDrop,
   cardDraggable,
@@ -597,6 +615,7 @@ function LaneColumn({
                 onForward={onForward}
                 onAttention={onAttention}
                 onSplit={onSplit}
+                onInstructions={onInstructions}
                 draggable={cardDraggable(c)}
                 onCardDragStart={onCardDragStart}
                 onCardDragEnd={onCardDragEnd}
@@ -607,6 +626,74 @@ function LaneColumn({
         ))}
       </Stack>
     </Paper>
+  );
+}
+
+/**
+ * Meldungs-Zusammenfassung einer Karte (Kundenfeedback 04.08.2026): Anzahl +
+ * Offen-Zähler immer sichtbar, ein Klick klappt ALLE Meldungen auf — je Meldung
+ * Art, Position, Meldezeit und Einzel-Status (offen rot, instruiert grün).
+ */
+function CardIssuesSummary({ issues }: { issues: LaneCard['issues'] }): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const offen = issues.filter((i) => i.status === 'open').length;
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        alignItems="center"
+        gap={0.25}
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded((v) => !v);
+        }}
+        sx={{ cursor: 'pointer' }}
+        aria-label={expanded ? 'Meldungen einklappen' : 'Alle Meldungen anzeigen'}
+      >
+        <Typography
+          variant="caption"
+          sx={{ fontWeight: 700 }}
+          color={offen > 0 ? 'error.main' : 'success.main'}
+        >
+          {issues.length} {issues.length === 1 ? 'Meldung' : 'Meldungen'}
+          {offen > 0 ? ` · ${offen} offen` : ' · alle instruiert'}
+        </Typography>
+        {expanded ? (
+          <ExpandLessIcon sx={{ fontSize: 14 }} />
+        ) : (
+          <ExpandMoreIcon sx={{ fontSize: 14 }} />
+        )}
+      </Stack>
+      <Collapse in={expanded} timeout={120}>
+        <Stack spacing={0.5} sx={{ mt: 0.25, mb: 0.25 }}>
+          {issues.map((issue) => (
+            <Box
+              key={issue.id}
+              sx={{
+                pl: 0.5,
+                borderLeft: 2,
+                borderColor: issue.status === 'open' ? 'error.main' : 'success.main',
+              }}
+            >
+              <Stack direction="row" alignItems="center" gap={0.5} flexWrap="wrap">
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                  {issueLabel(issue)}
+                </Typography>
+                <ProblemChip status={issue.status} size="small" />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                {issue.positionNo !== null ? `Pos. ${issue.positionNo} · ` : ''}
+                {issue.orderNo ? `Order ${issue.orderNo} · ` : ''}
+                {new Date(issue.reportedAt).toLocaleTimeString('de-DE', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
+      </Collapse>
+    </Box>
   );
 }
 
@@ -638,6 +725,7 @@ function LaneCardView({
   onForward,
   onAttention,
   onSplit,
+  onInstructions,
   draggable,
   onCardDragStart,
   onCardDragEnd,
@@ -652,14 +740,15 @@ function LaneCardView({
   onForward: (caseId: string) => void;
   onAttention: (caseId: string) => void;
   onSplit: (caseId: string) => void;
+  onInstructions: (caseId: string) => void;
   draggable: boolean;
   onCardDragStart: (info: AblagenCardDragInfo, e: ReactDragEvent) => void;
   onCardDragEnd: () => void;
   /** 3-s-Fokus-Markierung (Schnellaktion-Sprung aus dem Cockpit). */
   fokussiert: boolean;
 }): JSX.Element {
-  // „Probleme geklärt" is case-scoped (resolves ALL open problems by caseId),
-  // so the same ctx works from every surface — incl. the Problemfälle lane card.
+  // „Instruktionen senden" öffnet den per-Meldung-Dialog (custom action) —
+  // derselbe ctx funktioniert von jeder Oberfläche aus, incl. Problemfälle-Lane.
   const ctx: CaseActionCtx = { caseId: card.caseId, store };
   // C3: parked context tooltip (who/when/why) on Geparkt cards.
   const parkedTooltip =
@@ -717,13 +806,9 @@ function LaneCardView({
             />
           )}
         </Stack>
-        {/* C4: open-problem preview (Grund/Art + note) directly on the card. */}
-        {card.openIssue && (
-          <Typography variant="caption" color="error.main" noWrap sx={{ display: 'block' }}>
-            {card.openIssue.reasonLabel ?? problemKindLabels[card.openIssue.kind]}
-            {card.openIssue.note ? ` — „${card.openIssue.note}"` : ''}
-          </Typography>
-        )}
+        {/* Instruktions-Loop (04.08.2026): Anzahl sichtbar + Aufklappen mit ALLEN
+            Meldungen (Art, Position, Zeit, Einzel-Status). */}
+        {card.issues.length > 0 && <CardIssuesSummary issues={card.issues} />}
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
           {card.totalQuantity} Teile · {formatMinutes(card.estimatedMinutes)}
           {card.assignedTo ? ` · ${card.assignedTo}` : ''}
@@ -755,6 +840,7 @@ function LaneCardView({
           onForward={onForward}
           onAttention={onAttention}
           onSplit={onSplit}
+          onInstructions={onInstructions}
         />
       </CardActions>
     </Card>

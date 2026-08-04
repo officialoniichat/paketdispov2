@@ -56,6 +56,7 @@ import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewSta
 import { DataTable } from '../../components/DataTable.js';
 import { LieferungChip, buildGroupColorMap } from '../../components/LieferungChip.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { InstructionsDialog } from '../../components/InstructionsDialog.js';
 import { ForwardDialog } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
@@ -227,7 +228,7 @@ export function BelegListPage({
     releaseCase,
     approveCase,
     cancelCase,
-    resolveProblems,
+    sendInstruction,
     forwardCase,
     unforwardCase,
     flagAttention,
@@ -241,7 +242,7 @@ export function BelegListPage({
       releaseCase,
       approveCase,
       cancelCase,
-      resolveProblems,
+      sendInstruction,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -254,7 +255,7 @@ export function BelegListPage({
       releaseCase,
       approveCase,
       cancelCase,
-      resolveProblems,
+      sendInstruction,
       forwardCase,
       unforwardCase,
       flagAttention,
@@ -267,6 +268,8 @@ export function BelegListPage({
   const assignBeleg = rows.find((r) => r.id === assignBelegId) ?? null;
 
   // --- Weiterleiten + Besondere Aufmerksamkeit (shared CaseActionMenu custom actions) ---
+  const [instructionsCaseId, setInstructionsCaseId] = useState<string | null>(null);
+  const instructionsBeleg = rows.find((r) => r.id === instructionsCaseId) ?? null;
   const [forwardCaseId, setForwardCaseId] = useState<string | null>(null);
   const forwardBeleg = rows.find((r) => r.id === forwardCaseId) ?? null;
   const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
@@ -561,6 +564,7 @@ export function BelegListPage({
               onAssign={(caseId) => setAssignBelegId(caseId)}
               onForward={(caseId) => setForwardCaseId(caseId)}
               onAttention={(caseId) => setAttentionCaseId(caseId)}
+              onInstructions={(caseId) => setInstructionsCaseId(caseId)}
             />
           </Box>
         );
@@ -887,6 +891,17 @@ export function BelegListPage({
           if (attentionBeleg) flagAttention(attentionBeleg.id, note);
         }}
         onClose={() => setAttentionCaseId(null)}
+      />
+
+      {/* Instruktions-Loop (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */}
+      <InstructionsDialog
+        open={instructionsBeleg !== null}
+        weBelegNo={instructionsBeleg?.weBelegNo ?? ''}
+        issues={instructionsBeleg?.issues ?? []}
+        onSend={(issueId, text) => {
+          if (instructionsBeleg) sendInstruction(instructionsBeleg.id, issueId, text);
+        }}
+        onClose={() => setInstructionsCaseId(null)}
       />
 
       <SplitDialog

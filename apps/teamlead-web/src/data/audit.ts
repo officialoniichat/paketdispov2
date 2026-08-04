@@ -60,16 +60,19 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'position.confirmed': 'Position bestätigt',
   'sku.quantity_confirmed': 'Menge bestätigt',
   'issue.created': 'Problem gemeldet',
-  'issue.resolved': 'Problem gelöst',
+  'issue.instruction_sent': 'Instruktion gesendet',
+  'issue.reopened': 'Meldung erneut geöffnet',
   'box.label_printed': 'Etikett gedruckt',
   'box.sealed': 'Box verschlossen',
   'print.job_created': 'Druckauftrag erstellt',
   'print.job_completed': 'Druck fertig',
   'print.job_failed': 'Druck fehlgeschlagen',
   'case.completed': 'Abgeschlossen',
-  // Problem-Loop (Kundenfeedback 14.07.2026): melden → klären → beim selben MA fortsetzen.
+  // Problem-Loop (14.07.2026) + Instruktions-Loop (04.08.2026): melden → je
+  // Meldung instruieren → ggf. Rückmeldung → beim selben MA fortsetzen.
   'case.problems_reported': 'Probleme gemeldet',
-  'case.problems_resolved': 'Probleme geklärt',
+  'case.problems_resolved': 'Alle Meldungen instruiert (geklärt)',
+  'case.problem_reopened': 'Problem erneut gemeldet',
   'case.resumed': 'Weiterbearbeitung gestartet',
   'zst.created': 'ZST erfasst',
   'zst.exported': 'ZST exportiert',

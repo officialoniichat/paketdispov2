@@ -9,10 +9,41 @@
 import type {
   AssignmentStatus,
   GoodsReceiptCase,
+  IssueAuthorRole,
+  IssueMessageKind,
+  IssueStatus,
   ProblemKind,
   SkillTier,
   WorkIssue,
 } from '@paket/domain-types';
+
+/** Ein Eintrag im Instruktions-Verlauf einer Meldung (Kundenfeedback 04.08.2026). */
+export interface CardIssueMessage {
+  id: string;
+  kind: IssueMessageKind;
+  authorRole: IssueAuthorRole;
+  authorName: string;
+  createdAt: string;
+  text: string;
+}
+
+/**
+ * Eine Einzel-Meldung eines Belegs, wie die Karten/Detail-Ansichten sie zeigen:
+ * Art + Positions-Anker + Einzel-Status + Instruktions-Verlauf.
+ */
+export interface CardIssue {
+  id: string;
+  kind: ProblemKind;
+  reasonLabel: string | null;
+  description: string | null;
+  positionNo: number | null;
+  orderNo: string | null;
+  status: IssueStatus;
+  /** Text der jüngsten TL-Instruktion; null solange die Meldung offen ist. */
+  instruction: string | null;
+  reportedAt: string;
+  messages: CardIssueMessage[];
+}
 
 // ---------------------------------------------------------------------------
 // §10.1 Tagescockpit
@@ -85,11 +116,11 @@ export interface LaneCard {
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];
   /**
-   * C4: latest OPEN problem preview; null without an open issue. Display label
-   * = `reasonLabel ?? problemKindLabels[kind]` (manual problems snapshot their
-   * ProblemReason-Katalog label).
+   * Instruktions-Loop (04.08.2026): ALLE Meldungen des Belegs mit Einzel-Status.
+   * Display label = `reasonLabel ?? problemKindLabels[kind]` (manuelle Probleme
+   * snapshoten ihr ProblemReason-Katalog-Label). Leer ohne Meldungen.
    */
-  openIssue: { kind: ProblemKind; reasonLabel: string | null; note: string | null } | null;
+  issues: CardIssue[];
   /** C5: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
   forwardedTo: string | null;
   /** Fester Bereich des Belegs (Zuweisen-Dialog, weiche Warnung). */

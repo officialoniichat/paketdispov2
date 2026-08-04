@@ -57,9 +57,9 @@ describe('caseActions registry', () => {
     expect(got).toContain('attention');
   });
 
-  it('issue_open offers resolve_problems and cancel, not prioritise', () => {
+  it('issue_open offers send_instructions and cancel, not prioritise', () => {
     const got = ids({ status: 'issue_open', priorityFlags: [] });
-    expect(got).toContain('resolve_problems');
+    expect(got).toContain('send_instructions');
     expect(got).toContain('cancel');
     expect(got).not.toContain('prioritise');
   });

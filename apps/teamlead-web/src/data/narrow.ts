@@ -15,6 +15,8 @@ import {
   assignmentStatusSchema,
   caseStatusSchema,
   employeeRoleSchema,
+  issueAuthorRoleSchema,
+  issueMessageKindSchema,
   issueScopeSchema,
   issueStatusSchema,
   locationKindSchema,
@@ -30,6 +32,8 @@ import {
   type AssignmentStatus,
   type CaseStatus,
   type EmployeeRole,
+  type IssueAuthorRole,
+  type IssueMessageKind,
   type IssueScope,
   type IssueStatus,
   type LocationKind,
@@ -81,6 +85,16 @@ export function toIssueScope(value: string): IssueScope {
 /** Narrow a DTO issue status string to the domain `IssueStatus`, throwing on an unknown value. */
 export function toIssueStatus(value: string): IssueStatus {
   return issueStatusSchema.parse(value);
+}
+
+/** Narrow a DTO Verlaufs-`kind` string to the domain `IssueMessageKind`, throwing on an unknown value. */
+export function toIssueMessageKind(value: string): IssueMessageKind {
+  return issueMessageKindSchema.parse(value);
+}
+
+/** Narrow a DTO Verlaufs-Autorrolle to the domain `IssueAuthorRole`, throwing on an unknown value. */
+export function toIssueAuthorRole(value: string): IssueAuthorRole {
+  return issueAuthorRoleSchema.parse(value);
 }
 
 /** Narrow a DTO SKU-line status string to the domain `SkuLineStatus`, throwing on an unknown value. */
