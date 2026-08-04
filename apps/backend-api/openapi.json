@@ -3488,6 +3488,15 @@
             "nullable": true,
             "description": "Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen"
           },
+          "defaultInstruction": {
+            "type": "string",
+            "nullable": true,
+            "description": "Standardanweisung der Problemart (Katalog-Vorlage für den Instruktions-Dialog, 04.08.2026); null ohne Vorlage"
+          },
+          "defaultInstructionAuto": {
+            "type": "boolean",
+            "description": "true = Standardanweisung im Instruktions-Dialog automatisch vorausfüllen"
+          },
           "reportedAt": {
             "type": "string",
             "description": "ISO-8601 timestamp"
@@ -3505,6 +3514,7 @@
           "scope",
           "kind",
           "status",
+          "defaultInstructionAuto",
           "reportedAt",
           "messages"
         ]
@@ -6508,13 +6518,23 @@
           "sortOrder": {
             "type": "number",
             "description": "Anzeige-Reihenfolge im Auswahlmenü"
+          },
+          "defaultInstruction": {
+            "type": "string",
+            "nullable": true,
+            "description": "Standardanweisung der Teamleitung zu dieser Problemart — Vorlage für den Instruktions-Dialog (04.08.2026)"
+          },
+          "autoInsert": {
+            "type": "boolean",
+            "description": "true = Vorlage im Instruktions-Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar"
           }
         },
         "required": [
           "id",
           "label",
           "active",
-          "sortOrder"
+          "sortOrder",
+          "autoInsert"
         ]
       },
       "ProblemReasonUpsertDto": {
@@ -6535,6 +6555,15 @@
           "sortOrder": {
             "type": "number",
             "description": "Anzeige-Reihenfolge"
+          },
+          "defaultInstruction": {
+            "type": "string",
+            "description": "Standardanweisung (Vorlage für den Instruktions-Dialog); leer/fehlend = keine Vorlage"
+          },
+          "autoInsert": {
+            "type": "boolean",
+            "default": false,
+            "description": "Vorlage im Instruktions-Dialog automatisch vorausfüllen"
           }
         },
         "required": [

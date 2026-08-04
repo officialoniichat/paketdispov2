@@ -41,6 +41,10 @@ export interface CardIssue {
   status: IssueStatus;
   /** Text der jüngsten TL-Instruktion; null solange die Meldung offen ist. */
   instruction: string | null;
+  /** Standardanweisung der Problemart (Katalog-Vorlage); null ohne Vorlage. */
+  defaultInstruction: string | null;
+  /** true = Vorlage im Instruktions-Dialog automatisch vorausfüllen. */
+  defaultInstructionAuto: boolean;
   reportedAt: string;
   messages: CardIssueMessage[];
 }

@@ -133,8 +133,21 @@ export class CasesService {
     const employee = await this.resolveEmployee(principal);
     const today = startOfTodayUtc();
 
+    // Bevorzugt das OFFENE Bündel des Tages (Ein-offenes-Bündel-Invariante):
+    // Altdaten mit mehreren Tages-Bündeln zeigten sonst das neueste statt des
+    // offenen — und die Problem-Belege samt TL-Instruktionen verschwanden beim
+    // MA. Fallback aufs neueste Bündel = Feierabend-Sicht (alles abgeschlossen).
+    const openBundleRef = await this.prisma.assignmentBundle.findFirst({
+      where: {
+        employeeId: employee.id,
+        date: today,
+        status: { notIn: ['completed', 'cancelled'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
     const bundle = await this.prisma.assignmentBundle.findFirst({
-      where: { employeeId: employee.id, date: today },
+      where: openBundleRef ? { id: openBundleRef.id } : { employeeId: employee.id, date: today },
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { select: { displayName: true } },
@@ -165,7 +178,14 @@ export class CasesService {
             },
             // Instruktions-Loop (04.08.2026): Zähler-Badge + Popover der Beleg-
             // Karte brauchen ALLE Meldungen inkl. Einzel-Status + Instruktion.
-            issues: { orderBy: { reportedAt: 'asc' }, include: { messages: true } },
+            issues: {
+              orderBy: { reportedAt: 'asc' },
+              include: {
+                messages: true,
+                // Standardanweisung der Problemart (Vorlage für den TL-Dialog).
+                reason: { select: { defaultInstruction: true, autoInsert: true } },
+              },
+            },
             // Die Bündel-Reihenfolge der Engine. Prisma kann nicht über eine
             // To-many-Relation sortieren — deshalb unten in JS.
             assignmentItems: { select: { sequence: true } },
@@ -349,7 +369,13 @@ export class CasesService {
         },
         // Instruktions-Loop (04.08.2026): Meldungen inkl. Verlauf — die PWA zeigt
         // die TL-Hinweis-Blöcke an der betroffenen Position (positionId-Anker).
-        issues: { orderBy: { reportedAt: 'asc' }, include: { messages: true } },
+        issues: {
+          orderBy: { reportedAt: 'asc' },
+          include: {
+            messages: true,
+            reason: { select: { defaultInstruction: true, autoInsert: true } },
+          },
+        },
       },
     });
     if (!found) {

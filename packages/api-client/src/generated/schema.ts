@@ -1334,6 +1334,10 @@ export interface components {
             description?: string | null;
             /** @description Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen */
             instruction?: string | null;
+            /** @description Standardanweisung der Problemart (Katalog-Vorlage für den Instruktions-Dialog, 04.08.2026); null ohne Vorlage */
+            defaultInstruction?: string | null;
+            /** @description true = Standardanweisung im Instruktions-Dialog automatisch vorausfüllen */
+            defaultInstructionAuto: boolean;
             /** @description ISO-8601 timestamp */
             reportedAt: string;
             /** @description Instruktions-Verlauf chronologisch (Erst-Meldung zuerst) */
@@ -2279,6 +2283,10 @@ export interface components {
             active: boolean;
             /** @description Anzeige-Reihenfolge im Auswahlmenü */
             sortOrder: number;
+            /** @description Standardanweisung der Teamleitung zu dieser Problemart — Vorlage für den Instruktions-Dialog (04.08.2026) */
+            defaultInstruction?: string | null;
+            /** @description true = Vorlage im Instruktions-Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar */
+            autoInsert: boolean;
         };
         ProblemReasonUpsertDto: {
             /** @description Vorhandene id = Update; ohne id = Neuanlage */
@@ -2289,6 +2297,13 @@ export interface components {
             active: boolean;
             /** @description Anzeige-Reihenfolge */
             sortOrder: number;
+            /** @description Standardanweisung (Vorlage für den Instruktions-Dialog); leer/fehlend = keine Vorlage */
+            defaultInstruction?: string;
+            /**
+             * @description Vorlage im Instruktions-Dialog automatisch vorausfüllen
+             * @default false
+             */
+            autoInsert: boolean;
         };
         TodayShiftDto: {
             /** @description ISO date YYYY-MM-DD */

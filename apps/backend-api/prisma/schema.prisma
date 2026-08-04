@@ -699,6 +699,12 @@ model ProblemReason {
   label     String
   active    Boolean  @default(true)
   sortOrder Int      @default(0)
+  /// Standardanweisung der Teamleitung zu dieser Problemart — Vorlagentext für den
+  /// Instruktions-Dialog (Kundenfeedback 04.08.2026); null = keine Vorlage gepflegt.
+  defaultInstruction String?
+  /// true = Vorlage im Instruktions-Dialog automatisch vorausfüllen,
+  /// false = Vorlage nur per Knopf („Standard einfügen") einfügbar.
+  autoInsert Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

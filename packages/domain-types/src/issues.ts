@@ -19,6 +19,10 @@ export const problemReasonSchema = z.object({
   label: z.string().min(1),
   active: z.boolean(),
   sortOrder: z.number().int(),
+  /** Standardanweisung der TL zu dieser Problemart (Vorlage für den Instruktions-Dialog). */
+  defaultInstruction: z.string().min(1).nullable(),
+  /** true = Vorlage im Dialog automatisch vorausfüllen, false = nur per Knopf einfügbar. */
+  autoInsert: z.boolean(),
 });
 export type ProblemReason = z.infer<typeof problemReasonSchema>;
 

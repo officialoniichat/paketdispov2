@@ -5,6 +5,10 @@
  * gesendeten Instruktionstext. Es gibt bewusst keinen Sammel-Knopf: erst wenn
  * jede Meldung ihre Instruktion hat, kippt der Beleg im Backend auf „Geklärt"
  * (problem_resolved) — die Ableitung trifft ausschließlich das Backend.
+ *
+ * Standardanweisung je Problemart (Admin → Problemarten): mit Auto-Vorbefüllen
+ * startet das Feld mit der Katalog-Vorlage, sonst fügt „Standard einfügen" sie
+ * per Knopf ein — in beiden Fällen vor dem Senden frei editierbar.
  */
 import { useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -17,6 +21,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
 import SendIcon from '@mui/icons-material/Send';
 import { ProblemChip, problemKindLabels } from '@paket/ui';
 import type { CardIssue } from '../data/types.js';
@@ -57,10 +62,17 @@ export function InstructionsDialog({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const openIssues = issues.filter((i) => i.status === 'open');
 
-  const send = (issueId: string): void => {
-    const text = (drafts[issueId] ?? '').trim();
-    if (text === '') return;
-    onSend(issueId, text);
+  // Standardanweisung der Problemart (04.08.2026): mit „Auto-Vorbefüllen" ist die
+  // Vorlage der Startwert des Felds; ein selbst geleertes Feld (draft === '')
+  // bleibt leer. Ohne Auto steht die Vorlage über den Knopf „Standard einfügen".
+  const draftValue = (issue: CardIssue): string =>
+    drafts[issue.id] ??
+    (issue.defaultInstructionAuto && issue.defaultInstruction ? issue.defaultInstruction : '');
+
+  const send = (issueId: string, text: string): void => {
+    const trimmed = text.trim();
+    if (trimmed === '') return;
+    onSend(issueId, trimmed);
     setDrafts((d) => ({ ...d, [issueId]: '' }));
   };
 
@@ -106,27 +118,41 @@ export function InstructionsDialog({
                   </Typography>
                 )}
                 {offen ? (
-                  <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
-                    <TextField
-                      fullWidth
-                      required
-                      multiline
-                      minRows={2}
-                      size="small"
-                      label="Instruktion an den Mitarbeiter (Pflichtfeld)"
-                      value={drafts[issue.id] ?? ''}
-                      onChange={(e) => setDrafts((d) => ({ ...d, [issue.id]: e.target.value }))}
-                    />
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<SendIcon />}
-                      disabled={(drafts[issue.id] ?? '').trim() === ''}
-                      onClick={() => send(issue.id)}
-                      sx={{ whiteSpace: 'nowrap', mt: 0.25 }}
-                    >
-                      Senden
-                    </Button>
+                  <Stack spacing={0.5} sx={{ mt: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <TextField
+                        fullWidth
+                        required
+                        multiline
+                        minRows={2}
+                        size="small"
+                        label="Instruktion an den Mitarbeiter (Pflichtfeld)"
+                        value={draftValue(issue)}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [issue.id]: e.target.value }))}
+                      />
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<SendIcon />}
+                        disabled={draftValue(issue).trim() === ''}
+                        onClick={() => send(issue.id, draftValue(issue))}
+                        sx={{ whiteSpace: 'nowrap', mt: 0.25 }}
+                      >
+                        Senden
+                      </Button>
+                    </Stack>
+                    {issue.defaultInstruction ? (
+                      <Button
+                        size="small"
+                        startIcon={<PostAddOutlinedIcon />}
+                        sx={{ alignSelf: 'flex-start' }}
+                        onClick={() =>
+                          setDrafts((d) => ({ ...d, [issue.id]: issue.defaultInstruction ?? '' }))
+                        }
+                      >
+                        Standard einfügen
+                      </Button>
+                    ) : null}
                   </Stack>
                 ) : (
                   issue.instruction && (

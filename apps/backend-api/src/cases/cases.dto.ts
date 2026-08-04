@@ -826,6 +826,17 @@ export class IssueSummaryDto {
     description: 'Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen',
   })
   instruction!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Standardanweisung der Problemart (Katalog-Vorlage für den Instruktions-Dialog, 04.08.2026); null ohne Vorlage',
+  })
+  defaultInstruction!: string | null;
+  @ApiProperty({
+    description: 'true = Standardanweisung im Instruktions-Dialog automatisch vorausfüllen',
+  })
+  defaultInstructionAuto!: boolean;
   @ApiProperty({ description: 'ISO-8601 timestamp' }) reportedAt!: string;
   @ApiProperty({
     type: [IssueMessageDto],

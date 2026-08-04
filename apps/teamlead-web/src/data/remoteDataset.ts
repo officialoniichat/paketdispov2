@@ -330,6 +330,8 @@ function toLaneCard(item: PoolItemDto): LaneCard {
       orderNo: i.orderNo ?? null,
       status: toIssueStatus(i.status),
       instruction: i.instruction ?? null,
+      defaultInstruction: i.defaultInstruction ?? null,
+      defaultInstructionAuto: i.defaultInstructionAuto ?? false,
       reportedAt: i.reportedAt,
       messages: i.messages.map((m) => ({
         id: m.id,

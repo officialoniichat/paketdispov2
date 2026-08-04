@@ -221,7 +221,11 @@ export class TeamleadReadService {
         // die Problemfälle-Karte zeigt Anzahl + Einzel-Status je Meldung.
         issues: {
           orderBy: { reportedAt: 'asc' },
-          include: { messages: true },
+          include: {
+            messages: true,
+            // Standardanweisung der Problemart (Vorlage für den Instruktions-Dialog).
+            reason: { select: { defaultInstruction: true, autoInsert: true } },
+          },
         },
         assignedBundle: {
           select: {
@@ -903,7 +907,13 @@ export class TeamleadReadService {
             skuLines: { orderBy: { ean: 'asc' } },
           },
         },
-        issues: { orderBy: { reportedAt: 'desc' }, include: { messages: true } },
+        issues: {
+          orderBy: { reportedAt: 'desc' },
+          include: {
+            messages: true,
+            reason: { select: { defaultInstruction: true, autoInsert: true } },
+          },
+        },
         zstRecords: { orderBy: { completedAt: 'asc' } },
       },
     });

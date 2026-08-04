@@ -23,6 +23,10 @@ export interface ProblemReasonRow {
   label: string;
   active: boolean;
   sortOrder: number;
+  /** Standardanweisung (Vorlage für den Instruktions-Dialog); null = keine Vorlage. */
+  defaultInstruction: string | null;
+  /** true = Vorlage im Instruktions-Dialog automatisch vorausfüllen. */
+  autoInsert: boolean;
 }
 
 // --- Locations --------------------------------------------------------------
@@ -77,7 +81,18 @@ export async function saveLocations(locations: LocationMaster[]): Promise<Locati
 export async function fetchProblemReasons(): Promise<ProblemReasonRow[]> {
   const result = await api.GET('/api/admin/problem-reasons');
   const dtos = unwrap<ProblemReasonDto[]>(result, 'Laden der Problemarten');
-  return dtos.map((d) => ({ id: d.id, label: d.label, active: d.active, sortOrder: d.sortOrder }));
+  return dtos.map(toProblemReasonRow);
+}
+
+function toProblemReasonRow(d: ProblemReasonDto): ProblemReasonRow {
+  return {
+    id: d.id,
+    label: d.label,
+    active: d.active,
+    sortOrder: d.sortOrder,
+    defaultInstruction: d.defaultInstruction ?? null,
+    autoInsert: d.autoInsert,
+  };
 }
 
 /** Replace-all-Upsert des Problemarten-Katalogs; gibt die gespeicherte Liste zurück. */
@@ -87,10 +102,12 @@ export async function saveProblemReasons(rows: ProblemReasonRow[]): Promise<Prob
     label: r.label,
     active: r.active,
     sortOrder: r.sortOrder,
+    ...(r.defaultInstruction?.trim() ? { defaultInstruction: r.defaultInstruction } : {}),
+    autoInsert: r.autoInsert,
   }));
   const result = await api.PUT('/api/admin/problem-reasons', { body });
   const dtos = unwrap<ProblemReasonDto[]>(result, 'Speichern der Problemarten');
-  return dtos.map((d) => ({ id: d.id, label: d.label, active: d.active, sortOrder: d.sortOrder }));
+  return dtos.map(toProblemReasonRow);
 }
 
 // --- Rule config ------------------------------------------------------------

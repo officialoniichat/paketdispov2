@@ -288,6 +288,8 @@ export interface IssueRow {
   description: string | null;
   reportedAt: Date;
   messages: IssueMessageRow[];
+  /** Katalog-Referenz (nur kind=manual) — liefert die Standardanweisung der Problemart. */
+  reason?: { defaultInstruction: string | null; autoInsert: boolean } | null;
 }
 
 /** Minimal position context to anchor an issue (id/Nr/Order-Nr + Größenzeilen). */
@@ -358,6 +360,11 @@ export function mapIssueSummary(
     status: issue.status,
     description: issue.description,
     instruction: issue.status === 'instruction_sent' ? (latestInstruction?.text ?? null) : null,
+    // Standardanweisung der Problemart (04.08.2026): Vorlage für den
+    // Instruktions-Dialog; Auto-Vorbefüllen nur mit gepflegtem Vorlagentext.
+    defaultInstruction: issue.reason?.defaultInstruction ?? null,
+    defaultInstructionAuto:
+      issue.reason?.defaultInstruction != null && (issue.reason?.autoInsert ?? false),
     reportedAt: issue.reportedAt.toISOString(),
     messages,
   };

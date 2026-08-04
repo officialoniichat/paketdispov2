@@ -282,6 +282,10 @@ export interface BelegIssue {
   description: string | null;
   /** Text der jüngsten TL-Instruktion; null solange die Meldung offen ist. */
   instruction: string | null;
+  /** Standardanweisung der Problemart (Katalog-Vorlage); null ohne Vorlage. */
+  defaultInstruction: string | null;
+  /** true = Vorlage im Instruktions-Dialog automatisch vorausfüllen. */
+  defaultInstructionAuto: boolean;
   reportedAt: string;
   /** Instruktions-Verlauf chronologisch (Erst-Meldung zuerst). */
   messages: CardIssueMessage[];
@@ -806,6 +810,8 @@ function toBelegIssue(i: IssueSummaryDto): BelegIssue {
     status: toIssueStatus(i.status),
     description: i.description ?? null,
     instruction: i.instruction ?? null,
+    defaultInstruction: i.defaultInstruction ?? null,
+    defaultInstructionAuto: i.defaultInstructionAuto ?? false,
     reportedAt: i.reportedAt,
     messages: i.messages.map((m) => ({
       id: m.id,
