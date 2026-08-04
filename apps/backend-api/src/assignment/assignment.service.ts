@@ -602,6 +602,31 @@ export class AssignmentService {
     sequence: BundlePickupSequence | undefined,
     principal: Principal,
   ): Promise<number> {
+    // Ein-offenes-Bündel-Invariante (Instruktions-Loop 04.08.2026): hat der
+    // Mitarbeiter für den Tag noch ein offenes Bündel (z. B. mit in_progress-/
+    // issue_open-/problem_resolved-Belegen), wird auch im Recalculate-Pfad
+    // ANGEHÄNGT statt ein paralleles Bündel zu erzeugen. Sonst verschattet das
+    // neue Bündel die alten Belege: me/today zeigt genau EIN Bündel, und der
+    // MA verlöre seine Problem-Belege samt TL-Instruktionen aus dem Blick.
+    const dayStart = new Date(bundle.date);
+    const dayEnd = new Date(`${bundle.date}T23:59:59.999Z`);
+    const openBundle = await tx.assignmentBundle.findFirst({
+      where: {
+        employeeId: bundle.employeeId,
+        date: { gte: dayStart, lte: dayEnd },
+        status: { notIn: ['completed', 'cancelled'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { select: { caseId: true } },
+        routeStops: { select: { locationCode: true, sequence: true } },
+      },
+    });
+    if (openBundle) {
+      await this.extendBundle(tx, openBundle, bundle, sequence, principal);
+      return bundle.caseIds.length;
+    }
+
     const created = await tx.assignmentBundle.create({
       data: {
         employeeId: bundle.employeeId,
