@@ -673,9 +673,8 @@ export function BelegProcessScreen(): JSX.Element {
                 // alle Größenzeilen. Gemeldete Server-Meldungen zählen mit,
                 // solange sie OFFEN sind; instruierte zeigen stattdessen den
                 // grünen TL-Hinweis-Block.
-                const openIssueAtPosition = (issuesByPosition.get(pos.id) ?? []).some(
-                  (x) => x.status === 'open',
-                );
+                const positionIssues = issuesByPosition.get(pos.id) ?? [];
+                const openIssueAtPosition = positionIssues.some((x) => x.status === 'open');
                 const positionWideProblem =
                   openIssueAtPosition || manualProblems.some((x) => x.skuLineId === undefined);
                 // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
@@ -780,10 +779,18 @@ export function BelegProcessScreen(): JSX.Element {
                             </Stack>
 
                             {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
-                                anbringen + Sichern, groß und wiedererkennbar. */}
+                                anbringen + Sichern, groß und wiedererkennbar. Der
+                                Meldungs-Container (PositionIssueBlock) steht in DERSELBEN
+                                Zeile NEBEN den Piktogrammen, nicht darunter
+                                (Nutzer-Vorgabe 04.08.2026). */}
                             {labelPrintRequired(i.labelPrintVariant) ||
-                            (i.securityRequired && i.securityTypeCode) ? (
-                              <Stack direction="row" sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
+                            (i.securityRequired && i.securityTypeCode) ||
+                            positionIssues.length > 0 ? (
+                              <Stack
+                                direction="row"
+                                alignItems="flex-start"
+                                sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}
+                              >
                                 {labelPrintRequired(i.labelPrintVariant) ? (
                                   <WorkStepPictogram
                                     code={ETIKETT_PICTOGRAM_CODE}
@@ -802,6 +809,11 @@ export function BelegProcessScreen(): JSX.Element {
                                     subtitle={i.securityLocation ?? undefined}
                                   />
                                 ) : null}
+                                <PositionIssueBlock
+                                  issues={positionIssues}
+                                  onReopen={(issueId, text) => reopenIssue.mutate({ issueId, text })}
+                                  reopenPending={reopenIssue.isPending}
+                                />
                               </Stack>
                             ) : null}
 
@@ -838,13 +850,6 @@ export function BelegProcessScreen(): JSX.Element {
                               </Stack>
                             ) : null}
 
-                            {/* TL-Hinweis-Block (04.08.2026): Instruktion der
-                                Teamleitung zu GENAU dieser Position + Rückfrage. */}
-                            <PositionIssueBlock
-                              issues={issuesByPosition.get(pos.id) ?? []}
-                              onReopen={(issueId, text) => reopenIssue.mutate({ issueId, text })}
-                              reopenPending={reopenIssue.isPending}
-                            />
                           </Box>
 
                           <Stack

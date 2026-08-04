@@ -1,12 +1,14 @@
 /**
  * TL-Hinweis-Block an der BETROFFENEN Position (Kundenfeedback 04.08.2026):
- * zeigt unterhalb der Positions-Infos den kompletten Nachrichten-Verlauf der
- * Meldung — wer hat wann was geschrieben (MA-Meldung rot, TL-Instruktion grün,
- * MA-Rückmeldung orange). Offene Meldungen rahmen rot („wartet auf die
- * Teamleitung"), instruierte grün. Am instruierten Problem kann der MA mit
- * Pflichttext reagieren („Erneut melden / Rückfrage"): die Meldung geht zurück
- * auf offen, der Beleg zurück in den Problem-Status — kein freies Chatten,
- * immer am konkreten Problem verankert. Statuslogik: nur Backend.
+ * steht NEBEN den Arbeitsschritt-Piktogrammen („Preisetikett anbringen") und
+ * zeigt dem MA bewusst NUR die AKTUELLSTE Nachricht der Meldung — bei
+ * instruierten Meldungen also die Instruktion der Teamleitung. Der komplette
+ * Nachrichten-Verlauf ist Teamleitungs-Sache (Beleg-Details → „Verlauf").
+ * Offene Meldungen rahmen rot („wartet auf die Teamleitung"), instruierte
+ * grün. Am instruierten Problem kann der MA mit Pflichttext reagieren
+ * („Erneut melden / Rückfrage"): die Meldung geht zurück auf offen, der Beleg
+ * zurück in den Problem-Status — kein freies Chatten, immer am konkreten
+ * Problem verankert. Statuslogik: nur Backend.
  */
 import { useState, type JSX } from 'react';
 import Box from '@mui/material/Box';
@@ -67,9 +69,15 @@ export function PositionIssueBlock({
   };
 
   return (
-    <Stack spacing={1} sx={{ mt: 1 }}>
+    // flex + minWidth: nimmt in der Piktogramm-Zeile den Restplatz NEBEN
+    // „Preisetikett anbringen" ein; auf schmalen Screens bricht die Zeile um.
+    <Stack spacing={1} sx={{ flex: 1, minWidth: 280 }}>
       {issues.map((issue) => {
         const offen = issue.status === 'open';
+        // MA sieht nur die AKTUELLSTE Nachricht (Backend liefert chronologisch):
+        // bei instruierten Meldungen ist das die TL-Instruktion, nach eigener
+        // Rückmeldung die eigene Rückmeldung.
+        const latest = issue.messages.at(-1);
         return (
           <Box
             key={issue.id}
@@ -97,33 +105,27 @@ export function PositionIssueBlock({
                 {offen ? 'Offen — wartet auf die Teamleitung' : 'Hinweis der Teamleitung'}
               </Typography>
             </Stack>
-            {/* Kompletter Nachrichten-Verlauf: wer hat wann was geschrieben.
-                Das Backend liefert chronologisch (Erst-Meldung zuerst). */}
-            {issue.messages.length > 0 ? (
-              <Stack spacing={0.75} sx={{ mt: 0.75, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
-                {issue.messages.map((m) => (
-                  <Box key={m.id}>
-                    <Typography variant="caption" color="text.secondary">
-                      {MESSAGE_TIME.format(new Date(m.createdAt))} ·{' '}
-                      <Typography
-                        component="span"
-                        variant="caption"
-                        sx={{ fontWeight: 700 }}
-                        color={MESSAGE_KIND_COLOR[m.kind]}
-                      >
-                        {MESSAGE_KIND_LABEL[m.kind]}
-                      </Typography>{' '}
-                      · {m.authorName} ({m.authorRole === 'teamlead' ? 'TL' : 'MA'})
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={m.kind === 'instruktion' ? { fontWeight: 600 } : undefined}
-                    >
-                      „{m.text}"
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
+            {latest ? (
+              <Box sx={{ mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {MESSAGE_TIME.format(new Date(latest.createdAt))} ·{' '}
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{ fontWeight: 700 }}
+                    color={MESSAGE_KIND_COLOR[latest.kind]}
+                  >
+                    {MESSAGE_KIND_LABEL[latest.kind]}
+                  </Typography>{' '}
+                  · {latest.authorName} ({latest.authorRole === 'teamlead' ? 'TL' : 'MA'})
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={latest.kind === 'instruktion' ? { fontWeight: 600 } : undefined}
+                >
+                  „{latest.text}"
+                </Typography>
+              </Box>
             ) : issue.description ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                 Deine Meldung: „{issue.description}"
