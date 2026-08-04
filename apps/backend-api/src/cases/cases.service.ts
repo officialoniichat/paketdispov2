@@ -18,6 +18,7 @@ import { LiveStatusService } from '../live/live.module.js';
 import { proratedEffort } from '../modules/completion/completion-logic.js';
 import {
   deriveImplicitProblems,
+  describeImplicitProblem,
   type ReportedSkuState,
 } from '../modules/issue/derive-problems.js';
 import type { Principal } from '../auth/rbac.js';
@@ -28,11 +29,13 @@ import {
   type ClaimWorkstationDto,
   type CompleteDto,
   type CurrentBundleDto,
+  type IssueSummaryDto,
   type MeWorkstationDto,
   type ParkRemainingDto,
   type ParkRemainingResultDto,
   type PartialCompleteDto,
   type ReceiptPositionDto,
+  type ReopenIssueDto,
   type ReportedProblemDto,
   type SkuQuantityDto,
   type TodayResponseDto,
@@ -45,6 +48,7 @@ import {
   earliestCatManDate,
   isLabelsRequired,
   mapBoxTarget,
+  mapIssueSummary,
   mapLabelPrintPositions,
   mapPositionInstruction,
   mapSkuLine,
@@ -109,18 +113,20 @@ export class CasesService {
     private readonly live: LiveStatusService,
   ) {}
 
-  private async resolveEmployee(principal: Principal): Promise<{ id: string; employeeNo: string }> {
+  private async resolveEmployee(
+    principal: Principal,
+  ): Promise<{ id: string; employeeNo: string; displayName: string }> {
     if (!principal.employeeNo) {
       throw new ForbiddenException('Token has no employee number claim');
     }
     const user = await this.prisma.user.findUnique({
       where: { employeeNo: principal.employeeNo },
-      select: { id: true, employeeNo: true, active: true },
+      select: { id: true, employeeNo: true, displayName: true, active: true },
     });
     if (!user || !user.active) {
       throw new ForbiddenException('Employee not provisioned or inactive');
     }
-    return { id: user.id, employeeNo: user.employeeNo };
+    return { id: user.id, employeeNo: user.employeeNo, displayName: user.displayName };
   }
 
   async getToday(principal: Principal): Promise<TodayResponseDto> {
@@ -144,15 +150,22 @@ export class CasesService {
             // catManDate → frühester CatMan-Termin des Belegs.
             positions: {
               select: {
+                id: true,
                 positionNo: true,
+                orderNo: true,
                 supplierArticleNo: true,
                 supplierColor: true,
                 shopNo: true,
                 catManDate: true,
                 instruction: { select: { labelPrintVariant: true } },
+                // Größenzeilen-Anker für die Meldungs-Zuordnung (scope=sku_line).
+                skuLines: { select: { id: true, ean: true, size: true } },
               },
               orderBy: { positionNo: 'asc' },
             },
+            // Instruktions-Loop (04.08.2026): Zähler-Badge + Popover der Beleg-
+            // Karte brauchen ALLE Meldungen inkl. Einzel-Status + Instruktion.
+            issues: { orderBy: { reportedAt: 'asc' }, include: { messages: true } },
             // Die Bündel-Reihenfolge der Engine. Prisma kann nicht über eine
             // To-many-Relation sortieren — deshalb unten in JS.
             assignmentItems: { select: { sequence: true } },
@@ -170,9 +183,13 @@ export class CasesService {
     return {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
-      cases: [...bundle.cases]
-        .sort(byBundleSequence)
-        .map((c) => this.mapSummary(c, assignedEmployeeName)),
+      cases: [...bundle.cases].sort(byBundleSequence).map((c) =>
+        this.mapSummary(
+          c,
+          assignedEmployeeName,
+          c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
+        ),
+      ),
       workstation,
     };
   }
@@ -330,6 +347,9 @@ export class CasesService {
         assignedBundle: {
           select: { employee: { select: { employeeNo: true, displayName: true } } },
         },
+        // Instruktions-Loop (04.08.2026): Meldungen inkl. Verlauf — die PWA zeigt
+        // die TL-Hinweis-Blöcke an der betroffenen Position (positionId-Anker).
+        issues: { orderBy: { reportedAt: 'asc' }, include: { messages: true } },
       },
     });
     if (!found) {
@@ -366,12 +386,14 @@ export class CasesService {
       prefsByWgr.set(pref.wgr, list);
     }
 
+    const issues = found.issues.map((i) => mapIssueSummary(i, found.positions));
     return {
-      case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null),
+      case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null, issues),
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPosition(p, prefsByWgr)),
       boxTargets: found.transportBoxes.map((b) => mapBoxTarget(b)),
       instructionPoints,
+      issues,
     };
   }
 
@@ -519,8 +541,21 @@ export class CasesService {
       );
     }
     const result = await this.prisma.$transaction(async (tx) => {
+      // Jede Meldung startet ihren eigenen Instruktions-Verlauf: die Erst-Meldung
+      // des MA ist der erste Eintrag (Kundenfeedback 04.08.2026).
+      const meldung = (issueId: string, text: string) =>
+        tx.issueMessage.create({
+          data: {
+            issueId,
+            authorId: employee.id,
+            authorName: employee.displayName,
+            authorRole: 'employee',
+            kind: 'meldung',
+            text,
+          },
+        });
       for (const p of manual) {
-        await tx.issue.create({
+        const issue = await tx.issue.create({
           data: {
             caseId: owned.id,
             scope: p.skuLineId ? 'sku_line' : 'position',
@@ -532,9 +567,10 @@ export class CasesService {
             description: p.note,
           },
         });
+        await meldung(issue.id, p.note?.trim() ? p.note : (p.reasonLabel ?? 'Problem gemeldet'));
       }
       for (const p of implicit) {
-        await tx.issue.create({
+        const issue = await tx.issue.create({
           data: {
             caseId: owned.id,
             scope: 'sku_line',
@@ -546,6 +582,7 @@ export class CasesService {
             correctedVkPrice: p.correctedVkPrice,
           },
         });
+        await meldung(issue.id, describeImplicitProblem(p));
       }
       return this.workflow.transition({
         caseId: owned.id,
@@ -567,6 +604,81 @@ export class CasesService {
       countedQuantity: completedQuantity,
       caseTotalQuantity: caseRow.totalQuantity,
       caseEffortPoints: caseRow.effortPoints,
+    });
+    return this.finish(principal, result);
+  }
+
+  /**
+   * Rückmeldung auf eine Instruktion (Kundenfeedback 04.08.2026): der MA reagiert
+   * am KONKRETEN Problem („Erneut melden / Rückfrage", Pflichttext) — kein freies
+   * Chatten. Die Meldung geht zurück auf `open`; der Beleg fällt in den Problem-
+   * Status zurück (problem_resolved/in_progress → issue_open) und erscheint
+   * wieder in der Probleme-Lane des Teamleads.
+   */
+  async reopenIssue(
+    principal: Principal,
+    caseId: string,
+    issueId: string,
+    dto: ReopenIssueDto,
+  ): Promise<TransitionResultDto> {
+    const owned = await this.requireOwnedCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+    const issue = await this.prisma.issue.findFirst({
+      where: { id: issueId, caseId: owned.id },
+      select: { id: true, status: true },
+    });
+    if (!issue) throw new NotFoundException(`Issue ${issueId} not found on case ${caseId}`);
+    if (issue.status !== 'instruction_sent') {
+      throw new ConflictException('Nur eine instruierte Meldung kann erneut gemeldet werden');
+    }
+    if (!['issue_open', 'problem_resolved', 'in_progress'].includes(owned.status)) {
+      throw new ConflictException(`Rückmeldung ist im Status ${owned.status} nicht möglich`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.issueMessage.create({
+        data: {
+          issueId: issue.id,
+          authorId: employee.id,
+          authorName: employee.displayName,
+          authorRole: 'employee',
+          kind: 'rueckmeldung',
+          text: dto.text,
+        },
+      });
+      await tx.issue.update({ where: { id: issue.id }, data: { status: 'open' } });
+      await this.events.append(
+        {
+          eventType: 'issue.reopened',
+          entityType: 'Issue',
+          entityId: issue.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: { caseId: owned.id, text: dto.text },
+        },
+        tx,
+      );
+    });
+
+    if (owned.status === 'issue_open') {
+      // Teilzustand: der Beleg ist ohnehin im Problem-Status — nur live nachladen.
+      this.live.publish({
+        caseId: owned.id,
+        status: owned.status,
+        eventType: 'issue.reopened',
+        employeeNo: principal.employeeNo ?? null,
+        at: new Date().toISOString(),
+      });
+      return { caseId: owned.id, status: owned.status, version: owned.version, eventId: null };
+    }
+
+    const result = await this.workflow.transition({
+      caseId: owned.id,
+      toStatus: 'issue_open',
+      eventType: 'case.problem_reopened',
+      actor: { actorType: 'employee', actorId: principal.sub },
+      payload: { issueId: issue.id },
+      expectedVersion: owned.version,
     });
     return this.finish(principal, result);
   }
@@ -842,6 +954,7 @@ export class CasesService {
       }>;
     },
     assignedEmployeeName: string | null,
+    issues?: IssueSummaryDto[],
   ): CaseSummaryDto {
     return {
       id: c.id,
@@ -873,6 +986,7 @@ export class CasesService {
       attentionFlag: c.attentionFlag,
       attentionNote: c.attentionNote,
       forwardedTo: c.forwardedTo,
+      ...(issues !== undefined ? { issues } : {}),
     };
   }
 

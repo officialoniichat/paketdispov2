@@ -29,7 +29,7 @@ import {
   type ZstExportResultDto,
   type PrioritizeDto,
   type ReorderBundleDto,
-  type ResolveProblemsDto,
+  type SendInstructionDto,
   type TransitionResultDto,
   type WithdrawDto,
 } from './cases.dto.js';
@@ -575,40 +575,96 @@ export class TeamleadService {
   }
 
   /**
-   * „Probleme geklärt" (Kundenfeedback 14.07.2026): der Teamlead löst ALLE offenen
-   * Probleme des Belegs auf einmal. Der Beleg wird grün beim SELBEN Mitarbeiter
-   * (issue_open → problem_resolved); erst dann kann dieser weiterarbeiten.
+   * „Instruktionen senden" (Kundenfeedback 04.08.2026): der Teamlead beantwortet
+   * GENAU EINE Meldung mit einer Handlungsanweisung — es gibt keine Pauschal-
+   * Klärung mehr. Die Meldung kippt auf instruction_sent; erst wenn keine Meldung
+   * des Belegs mehr offen ist, wird der Beleg grün beim SELBEN Mitarbeiter
+   * (issue_open → problem_resolved).
    */
-  async resolveProblems(
+  async sendInstruction(
     principal: Principal,
     caseId: string,
-    dto: ResolveProblemsDto,
+    issueId: string,
+    dto: SendInstructionDto,
   ): Promise<TransitionResultDto> {
-    const openIssues = await this.prisma.issue.findMany({
-      where: { caseId, status: { in: ['open', 'in_review', 'waiting_external'] } },
-      select: { id: true },
+    const issue = await this.prisma.issue.findFirst({
+      where: { id: issueId, caseId },
+      select: { id: true, status: true },
     });
-    if (openIssues.length === 0) throw new NotFoundException(`Case ${caseId} has no open issue`);
+    if (!issue) throw new NotFoundException(`Issue ${issueId} not found on case ${caseId}`);
+    if (issue.status !== 'open') {
+      throw new ConflictException('Meldung ist bereits instruiert');
+    }
+    const theCase = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
+      where: { id: caseId },
+      select: {
+        status: true,
+        version: true,
+        assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
+      },
+    });
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.issue.updateMany({
-        where: { id: { in: openIssues.map((i) => i.id) } },
+    const remainingOpen = await this.prisma.$transaction(async (tx) => {
+      await tx.issueMessage.create({
         data: {
-          status: 'resolved',
-          resolution: dto.resolution,
-          releasedBy: principal.sub,
-          releasedAt: new Date(),
+          issueId: issue.id,
+          authorId: principal.sub,
+          authorName: principal.displayName ?? 'Teamleitung',
+          authorRole: 'teamlead',
+          kind: 'instruktion',
+          text: dto.text,
         },
       });
+      await tx.issue.update({ where: { id: issue.id }, data: { status: 'instruction_sent' } });
+      await this.events.append(
+        {
+          eventType: 'issue.instruction_sent',
+          entityType: 'Issue',
+          entityId: issue.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { caseId, text: dto.text },
+        },
+        tx,
+      );
+      return tx.issue.count({ where: { caseId, status: 'open' } });
+    });
+
+    // Case-Ableitung (Fachlogik hier, nicht in den UIs): erst wenn ALLE Meldungen
+    // instruiert sind, gilt der Beleg als geklärt.
+    const employeeNo = theCase.assignedBundle?.employee?.employeeNo ?? null;
+    if (remainingOpen === 0 && theCase.status === 'issue_open') {
       const result = await this.workflow.transition({
         caseId,
         toStatus: 'problem_resolved',
         eventType: 'case.problems_resolved',
         actor: { actorType: 'teamlead', actorId: principal.sub },
-        payload: { issueIds: openIssues.map((i) => i.id), resolution: dto.resolution },
+        payload: { lastInstructedIssueId: issue.id },
       });
-      return this.toResult(result);
+      this.live.publish({
+        caseId,
+        status: result.status,
+        eventType: 'case.problems_resolved',
+        employeeNo,
+        at: new Date().toISOString(),
+      });
+      return {
+        caseId: result.caseId,
+        status: result.status,
+        version: result.version,
+        eventId: result.event?.id ?? null,
+      };
+    }
+
+    // Teilzustand: Beleg bleibt issue_open, aber beide Apps sollen live nachladen.
+    this.live.publish({
+      caseId,
+      status: theCase.status,
+      eventType: 'issue.instruction_sent',
+      employeeNo,
+      at: new Date().toISOString(),
     });
+    return { caseId, status: theCase.status, version: theCase.version, eventId: null };
   }
 
   // --- §8.4 manual bundle overrides ----------------------------------------

@@ -5,6 +5,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -148,20 +149,13 @@ export class CaseSummaryDto {
       'Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet',
   })
   forwardedTo!: string | null;
-}
-
-/** C4: latest OPEN problem of a Beleg — the Problemfälle-lane card preview. */
-export class OpenIssueRefDto {
-  @ApiProperty({ description: 'ProblemKind: manual|over_delivery|under_delivery|price_deviation' })
-  kind!: string;
   @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    description: 'Label-Snapshot des Problemarten-Katalogs (nur kind=manual)',
+    type: () => [IssueSummaryDto],
+    description:
+      'ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). ' +
+      'Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg.',
   })
-  reasonLabel!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Issue description/note' })
-  note!: string | null;
+  issues?: IssueSummaryDto[];
 }
 
 /**
@@ -447,6 +441,12 @@ export class CaseAggregateDto {
     description: 'Ordered Arbeitsanweisung points (derived from header + positions)',
   })
   instructionPoints!: WorkInstructionPointDto[];
+  @ApiProperty({
+    type: () => [IssueSummaryDto],
+    description:
+      'Meldungen des Belegs inkl. Einzel-Status + Verlauf — Anker für die TL-Hinweis-Blöcke je Position (positionId)',
+  })
+  issues!: IssueSummaryDto[];
 }
 
 export class PoolItemDto extends CaseSummaryDto {
@@ -472,12 +472,6 @@ export class PoolItemDto extends CaseSummaryDto {
       'A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt',
   })
   bundleQueue!: BundleQueueRefDto | null;
-  @ApiPropertyOptional({
-    type: OpenIssueRefDto,
-    nullable: true,
-    description: 'C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem',
-  })
-  openIssue!: OpenIssueRefDto | null;
 }
 
 /** Why a looked-up Beleg is not assignable (B1 WE-Nr-Zuweisung). */
@@ -760,6 +754,20 @@ export class PositionDetailDto {
   @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
 }
 
+/**
+ * Ein Eintrag im Instruktions-Verlauf einer Meldung (Kundenfeedback 04.08.2026):
+ * MA-Meldung, TL-Instruktion oder MA-Rückmeldung — chronologisch, mit Autor.
+ */
+export class IssueMessageDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: 'IssueMessageKind: meldung|instruktion|rueckmeldung' })
+  kind!: string;
+  @ApiProperty({ description: 'IssueAuthorRole: employee|teamlead' }) authorRole!: string;
+  @ApiProperty({ description: 'Anzeigename des Autors (Snapshot)' }) authorName!: string;
+  @ApiProperty({ description: 'ISO-8601 timestamp' }) createdAt!: string;
+  @ApiProperty() text!: string;
+}
+
 /** A problem reported against the case (Anhang A Issue) — the Belegdetail/Klärung issue list. */
 export class IssueSummaryDto {
   @ApiProperty() id!: string;
@@ -787,6 +795,13 @@ export class IssueSummaryDto {
   })
   correctedVkPrice!: number | null;
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Id der betroffenen ReceiptPosition (aufgelöst aus scopeId) — Anker für den TL-Hinweis-Block in der PWA',
+  })
+  positionId!: string | null;
+  @ApiPropertyOptional({
     type: Number,
     nullable: true,
     description: 'Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)',
@@ -802,11 +817,21 @@ export class IssueSummaryDto {
     description: 'Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung)',
   })
   orderNo!: string | null;
-  @ApiProperty({ description: 'IssueStatus: open|in_review|waiting_external|resolved|rejected' })
+  @ApiProperty({ description: 'IssueStatus: open|instruction_sent — Einzel-Status je Meldung' })
   status!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) description!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true }) resolution!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen',
+  })
+  instruction!: string | null;
   @ApiProperty({ description: 'ISO-8601 timestamp' }) reportedAt!: string;
+  @ApiProperty({
+    type: [IssueMessageDto],
+    description: 'Instruktions-Verlauf chronologisch (Erst-Meldung zuerst)',
+  })
+  messages!: IssueMessageDto[];
 }
 
 /** One ZST completion record (Anhang A ZstRecord) — the Belegdetail Abschluss tab. */
@@ -1217,14 +1242,27 @@ export class CancelDto {
 }
 
 /**
- * Body for POST /api/teamlead/cases/:caseId/resolve-problems — der Teamlead
- * klärt ALLE offenen Probleme des Belegs; der Beleg wird grün beim selben MA.
+ * Body for POST /api/teamlead/cases/:caseId/issues/:issueId/instruction — der
+ * Teamlead instruiert GENAU EINE Meldung (Pflichttext). Erst wenn alle Meldungen
+ * instruiert sind, kippt der Beleg auf problem_resolved.
  */
-export class ResolveProblemsDto {
-  @ApiPropertyOptional({ description: 'Anmerkung zur Klärung (auf allen Issues vermerkt)' })
-  @IsOptional()
+export class SendInstructionDto {
+  @ApiProperty({ description: 'Handlungsanweisung für den MA zu genau dieser Meldung' })
   @IsString()
-  resolution?: string;
+  @IsNotEmpty()
+  text!: string;
+}
+
+/**
+ * Body for POST /api/me/cases/:caseId/issues/:issueId/reopen — der MA reagiert
+ * auf eine Instruktion („Erneut melden / Rückfrage", Pflichttext). Die Meldung
+ * geht zurück auf open, der Beleg zurück in den Problem-Status.
+ */
+export class ReopenIssueDto {
+  @ApiProperty({ description: 'Rückmeldung des MA zu genau dieser Instruktion' })
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
 }
 
 /**

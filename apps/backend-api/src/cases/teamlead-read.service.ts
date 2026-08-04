@@ -35,8 +35,8 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapWorkInstruction,
-  wgrDescription,
+import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapIssueSummary,
+  mapWorkInstruction, wgrDescription, type IssuePositionRef,
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
@@ -49,8 +49,6 @@ const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 's
 const COMPLETED_STATUSES: CaseStatus[] = ['completed', 'zst_done'];
 /** Bundle statuses excluded from planned-effort capacity math. */
 const INACTIVE_BUNDLE_STATUSES: AssignmentStatus[] = ['cancelled', 'completed'];
-/** Issue statuses that count as "open" for the C4 card preview (mirrors resolveIssue). */
-const OPEN_ISSUE_STATUSES = ['open', 'in_review', 'waiting_external'] as const;
 
 /**
  * Lebenszyklus-Scopes der Belege-Ansicht (A2), server-seitig gemappt: aktiv =
@@ -219,12 +217,11 @@ export class TeamleadReadService {
       where: { id: { in: pageIds } },
       include: {
         ...caseEffortInclude,
-        // C4: latest OPEN problem only — the Problemfälle-lane card preview.
+        // C4 + Instruktions-Loop (04.08.2026): ALLE Meldungen inkl. Verlauf —
+        // die Problemfälle-Karte zeigt Anzahl + Einzel-Status je Meldung.
         issues: {
-          where: { status: { in: [...OPEN_ISSUE_STATUSES] } },
-          orderBy: { reportedAt: 'desc' },
-          take: 1,
-          select: { kind: true, reasonLabel: true, description: true },
+          orderBy: { reportedAt: 'asc' },
+          include: { messages: true },
         },
         assignedBundle: {
           select: {
@@ -244,6 +241,29 @@ export class TeamleadReadService {
     const rows = pageIds
       .map((id) => rowById.get(id))
       .filter((r): r is NonNullable<typeof r> => r !== undefined);
+
+    // Größenzeilen NUR für Belege mit Meldungen nachladen (Positions-/EAN-Anker
+    // der Issues) — der Pool selbst bleibt schlank.
+    const issueCaseIds = rows.filter((r) => r.issues.length > 0).map((r) => r.id);
+    const skuLinesByPosition = new Map<string, { id: string; ean: string; size: string }[]>();
+    if (issueCaseIds.length > 0) {
+      const skuLines = await this.prisma.receiptSkuLine.findMany({
+        where: { position: { caseId: { in: issueCaseIds } } },
+        select: { id: true, ean: true, size: true, receiptPositionId: true },
+      });
+      for (const line of skuLines) {
+        const list = skuLinesByPosition.get(line.receiptPositionId) ?? [];
+        list.push({ id: line.id, ean: line.ean, size: line.size });
+        skuLinesByPosition.set(line.receiptPositionId, list);
+      }
+    }
+    const issuePositionRefs = (c: (typeof rows)[number]): IssuePositionRef[] =>
+      c.positions.map((p) => ({
+        id: p.id,
+        positionNo: p.positionNo,
+        orderNo: p.orderNo,
+        skuLines: skuLinesByPosition.get(p.id) ?? [],
+      }));
 
     const items: PoolItemDto[] = rows.map((c) => {
       // Show the SAME effort the distribution uses: live-computed for instructionalised
@@ -280,13 +300,10 @@ export class TeamleadReadService {
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
         bundleQueue: this.toBundleQueue(c.id, c.assignedBundle),
-        openIssue: c.issues[0]
-          ? {
-              kind: c.issues[0].kind,
-              reasonLabel: c.issues[0].reasonLabel,
-              note: c.issues[0].description,
-            }
-          : null,
+        issues:
+          c.issues.length > 0
+            ? c.issues.map((i) => mapIssueSummary(i, issuePositionRefs(c)))
+            : undefined,
       };
     });
 
@@ -886,7 +903,7 @@ export class TeamleadReadService {
             skuLines: { orderBy: { ean: 'asc' } },
           },
         },
-        issues: { orderBy: { reportedAt: 'desc' } },
+        issues: { orderBy: { reportedAt: 'desc' }, include: { messages: true } },
         zstRecords: { orderBy: { completedAt: 'asc' } },
       },
     });
@@ -944,7 +961,7 @@ export class TeamleadReadService {
       positions: found.positions.map((p) =>
         this.mapPositionDetail(p, found.primaryShopAreaNo, found.goodsTypeText),
       ),
-      issues: found.issues.map((i) => this.mapIssue(i, found.positions)),
+      issues: found.issues.map((i) => mapIssueSummary(i, found.positions)),
       zstRecords: found.zstRecords.map((z) => ({
         id: z.id,
         completedQuantity: z.completedQuantity,
@@ -1156,69 +1173,4 @@ export class TeamleadReadService {
     };
   }
 
-  /**
-   * Projects an Issue row for the Klärungs-UX: neben Art/Grund werden Position
-   * und Größenzeile aus `scopeId` aufgelöst, damit der Teamlead das Problem ohne
-   * Suche zuordnen kann (WE-Nr/Lieferschein stehen im Beleg-Kopf; eine
-   * Ordernummer existiert im Datenmodell nicht — siehe docs/review/ordernummer-gap.md).
-   */
-  private mapIssue(
-    issue: {
-      id: string;
-      scope: string;
-      scopeId: string | null;
-      kind: string;
-      reasonLabel: string | null;
-      deviationQty: number | null;
-      expectedVkPrice: number | null;
-      correctedVkPrice: number | null;
-      status: string;
-      description: string | null;
-      resolution: string | null;
-      reportedAt: Date;
-    },
-    positions: Array<{
-      id: string;
-      positionNo: number;
-      orderNo?: string | null;
-      skuLines: Array<{ id: string; ean: string; size: string }>;
-    }>,
-  ): IssueSummaryDto {
-    let positionNo: number | null = null;
-    let ean: string | null = null;
-    let size: string | null = null;
-    let orderNo: string | null = null;
-    for (const p of positions) {
-      if (issue.scope === 'position' && p.id === issue.scopeId) {
-        positionNo = p.positionNo;
-        orderNo = p.orderNo ?? null;
-        break;
-      }
-      const sku = p.skuLines.find((s) => s.id === issue.scopeId);
-      if (issue.scope === 'sku_line' && sku) {
-        positionNo = p.positionNo;
-        orderNo = p.orderNo ?? null;
-        ean = sku.ean;
-        size = sku.size;
-        break;
-      }
-    }
-    return {
-      id: issue.id,
-      scope: issue.scope,
-      kind: issue.kind,
-      reasonLabel: issue.reasonLabel,
-      deviationQty: issue.deviationQty,
-      expectedVkPrice: issue.expectedVkPrice,
-      correctedVkPrice: issue.correctedVkPrice,
-      positionNo,
-      ean,
-      size,
-      orderNo,
-      status: issue.status,
-      description: issue.description,
-      resolution: issue.resolution,
-      reportedAt: issue.reportedAt.toISOString(),
-    };
-  }
 }

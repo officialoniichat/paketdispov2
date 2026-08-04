@@ -101,12 +101,27 @@ enum AssignmentCreatedBy {
   teamlead
 }
 
+// Einzel-Status je Meldung (Kundenfeedback 04.08.2026): jede Meldung durchläuft
+// ihren eigenen Instruktions-Loop. `open` = gemeldet bzw. vom MA erneut geöffnet,
+// `instruction_sent` = der Teamlead hat für GENAU diese Meldung eine Instruktion
+// geschickt. Der Beleg kippt erst auf problem_resolved, wenn KEINE Meldung mehr
+// offen ist.
 enum IssueStatus {
   open
-  in_review
-  waiting_external
-  resolved
-  rejected
+  instruction_sent
+}
+
+// Art eines Verlaufs-Eintrags am Problem: Erst-/Wieder-Meldung des MA,
+// Instruktion des TL, Rückmeldung des MA auf eine Instruktion.
+enum IssueMessageKind {
+  meldung
+  instruktion
+  rueckmeldung
+}
+
+enum IssueAuthorRole {
+  employee
+  teamlead
 }
 
 enum IssueScope {
@@ -710,17 +725,36 @@ model Issue {
   photoKeys   String[]    @default([])
   reportedAt  DateTime    @default(now())
   status      IssueStatus @default(open)
-  resolution  String?
-  releasedBy  String?
-  releasedAt  DateTime?
 
   case     GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   employee User             @relation("IssueReporter", fields: [employeeId], references: [id])
   reason   ProblemReason?   @relation(fields: [reasonId], references: [id])
+  messages IssueMessage[]
 
   @@index([caseId])
   @@index([status])
   @@map("issues")
+}
+
+// Instruktions-/Nachrichten-Verlauf je Einzel-Meldung (Kundenfeedback 04.08.2026):
+// die Erst-Meldung des MA ist der erste Eintrag, danach wachsen TL-Instruktionen
+// und MA-Rückmeldungen chronologisch — immer am konkreten Problem verankert, kein
+// freies Chatten. Autor als Snapshot (OIDC-sub + Anzeigename), weil Teamleads
+// nicht zwingend als users-Zeile existieren.
+model IssueMessage {
+  id         String           @id @default(cuid())
+  issueId    String
+  authorId   String
+  authorName String
+  authorRole IssueAuthorRole
+  kind       IssueMessageKind
+  text       String
+  createdAt  DateTime         @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@map("issue_messages")
 }
 
 model TransportBox {

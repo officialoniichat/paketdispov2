@@ -272,13 +272,58 @@ describe('Problem-Loop (Kundenfeedback 14.07.2026 + §17.1 Problemfall)', () => 
     const partialZst = await prisma.zstRecord.findFirstOrThrow({ where: { caseId: owned.id } });
     expect(partialZst.completedQuantity).toBe(17);
 
-    // Teamlead klärt ALLE Probleme auf einmal → grün beim selben MA.
-    await teamleadSvc.resolveProblems(teamlead, owned.id, { resolution: 'Mit Filiale geklärt' });
+    // Jede Meldung startet mit der Erst-Meldung des MA als erstem Verlaufs-Eintrag.
+    const meldungen = await prisma.issueMessage.findMany({
+      where: { issue: { caseId: owned.id } },
+    });
+    expect(meldungen).toHaveLength(3);
+    expect(meldungen.every((m) => m.kind === 'meldung' && m.authorRole === 'employee')).toBe(true);
+
+    // Instruktions-Loop (04.08.2026): der Teamlead instruiert jede Meldung EINZELN.
+    // Solange eine Meldung offen ist, bleibt der Beleg issue_open (Teilzustand).
+    const [first, ...rest] = issues;
+    await teamleadSvc.sendInstruction(teamlead, owned.id, first!.id, {
+      text: 'Bitte Menge nachzählen und Foto anhängen.',
+    });
+    row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: owned.id } });
+    expect(row.status).toBe('issue_open'); // teils instruiert, teils offen
+
+    // Rückmeldung des MA auf die Instruktion → Meldung wieder offen, Beleg bleibt im Problem-Status.
+    await cases.reopenIssue(employee, owned.id, first!.id, {
+      text: 'Nachgezählt — es fehlen wirklich 3 Teile.',
+    });
+    const reopened = await prisma.issue.findUniqueOrThrow({ where: { id: first!.id } });
+    expect(reopened.status).toBe('open');
+
+    // Zweite Instruktion + alle übrigen Meldungen instruieren → Beleg kippt auf „Geklärt".
+    await teamleadSvc.sendInstruction(teamlead, owned.id, first!.id, {
+      text: 'Fehlmenge mit Filiale geklärt — Beleg mit 17 Teilen weiterführen.',
+    });
+    for (const issue of rest) {
+      await teamleadSvc.sendInstruction(teamlead, owned.id, issue.id, {
+        text: 'Mit Filiale geklärt — so übernehmen.',
+      });
+    }
     row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: owned.id } });
     expect(row.status).toBe('problem_resolved');
-    const resolved = await prisma.issue.findMany({ where: { caseId: owned.id } });
-    expect(resolved.every((i) => i.status === 'resolved')).toBe(true);
-    expect(resolved.every((i) => i.releasedBy === teamlead.sub)).toBe(true);
+    const instructed = await prisma.issue.findMany({ where: { caseId: owned.id } });
+    expect(instructed.every((i) => i.status === 'instruction_sent')).toBe(true);
+
+    // Der Verlauf der ersten Meldung: Meldung → Instruktion → Rückmeldung → Instruktion.
+    const verlauf = await prisma.issueMessage.findMany({
+      where: { issueId: first!.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(verlauf.map((m) => m.kind)).toEqual([
+      'meldung',
+      'instruktion',
+      'rueckmeldung',
+      'instruktion',
+    ]);
+    const reopenEv = await prisma.workflowEvent.findFirst({
+      where: { entityId: first!.id, eventType: 'issue.reopened' },
+    });
+    expect(reopenEv).not.toBeNull();
 
     // Derselbe MA setzt fort (case.resumed) und schließt ab.
     await cases.startPreparation(employee, owned.id);

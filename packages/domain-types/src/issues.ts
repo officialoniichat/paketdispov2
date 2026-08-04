@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './primitives.js';
-import { issueScopeSchema, issueStatusSchema, problemKindSchema } from './enums.js';
+import {
+  issueAuthorRoleSchema,
+  issueMessageKindSchema,
+  issueScopeSchema,
+  issueStatusSchema,
+  problemKindSchema,
+} from './enums.js';
 import { fileRefSchema } from './documents.js';
 
 /**
@@ -38,8 +44,23 @@ export const workIssueSchema = z.object({
   photoRefs: z.array(fileRefSchema).optional(),
   reportedAt: isoDateTimeSchema,
   status: issueStatusSchema,
-  resolution: z.string().optional(),
-  releasedBy: idSchema.optional(),
-  releasedAt: isoDateTimeSchema.optional(),
 });
 export type WorkIssue = z.infer<typeof workIssueSchema>;
+
+/**
+ * Verlaufs-Eintrag je Einzel-Meldung (Kundenfeedback 04.08.2026): die Erst-
+ * Meldung des MA ist der erste Eintrag, danach wachsen TL-Instruktionen und
+ * MA-Rückmeldungen chronologisch — immer am konkreten Problem verankert.
+ * Autor als Snapshot (OIDC-sub + Anzeigename).
+ */
+export const issueMessageSchema = z.object({
+  id: idSchema,
+  issueId: idSchema,
+  authorId: z.string().min(1),
+  authorName: z.string().min(1),
+  authorRole: issueAuthorRoleSchema,
+  kind: issueMessageKindSchema,
+  text: z.string().min(1),
+  createdAt: isoDateTimeSchema,
+});
+export type IssueMessage = z.infer<typeof issueMessageSchema>;

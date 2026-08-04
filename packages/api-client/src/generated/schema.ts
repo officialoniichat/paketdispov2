@@ -134,6 +134,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/cases/{caseId}/issues/{issueId}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_reopenIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/park": {
         parameters: {
             query?: never;
@@ -605,7 +621,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/teamlead/cases/{caseId}/resolve-problems": {
+    "/api/teamlead/cases/{caseId}/issues/{issueId}/instruction": {
         parameters: {
             query?: never;
             header?: never;
@@ -614,8 +630,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Probleme geklärt: löst ALLE offenen Probleme des Belegs (issue_open → problem_resolved); der Beleg wird grün beim selben MA */
-        post: operations["TeamleadController_resolveProblems"];
+        /** Instruktion senden: beantwortet GENAU EINE Meldung mit einer Handlungsanweisung (Pflichttext). Erst wenn alle Meldungen instruiert sind, kippt der Beleg auf problem_resolved (grün beim selben MA) */
+        post: operations["TeamleadController_sendInstruction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1277,6 +1293,52 @@ export interface components {
              */
             labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
         };
+        IssueMessageDto: {
+            id: string;
+            /** @description IssueMessageKind: meldung|instruktion|rueckmeldung */
+            kind: string;
+            /** @description IssueAuthorRole: employee|teamlead */
+            authorRole: string;
+            /** @description Anzeigename des Autors (Snapshot) */
+            authorName: string;
+            /** @description ISO-8601 timestamp */
+            createdAt: string;
+            text: string;
+        };
+        IssueSummaryDto: {
+            id: string;
+            /** @description IssueScope: position|sku_line */
+            scope: string;
+            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
+            kind: string;
+            /** @description Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual) */
+            reasonLabel?: string | null;
+            /** @description Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery) */
+            deviationQty?: number | null;
+            /** @description VK-Etikett-Preis laut Beleg */
+            expectedVkPrice?: number | null;
+            /** @description Vom MA korrigierter VK (kind=price_deviation) */
+            correctedVkPrice?: number | null;
+            /** @description Id der betroffenen ReceiptPosition (aufgelöst aus scopeId) — Anker für den TL-Hinweis-Block in der PWA */
+            positionId?: string | null;
+            /** @description Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId) */
+            positionNo?: number | null;
+            /** @description EAN der betroffenen Größenzeile */
+            ean?: string | null;
+            /** @description Größe der betroffenen Größenzeile */
+            size?: string | null;
+            /** @description Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung) */
+            orderNo?: string | null;
+            /** @description IssueStatus: open|instruction_sent — Einzel-Status je Meldung */
+            status: string;
+            description?: string | null;
+            /** @description Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen */
+            instruction?: string | null;
+            /** @description ISO-8601 timestamp */
+            reportedAt: string;
+            /** @description Instruktions-Verlauf chronologisch (Erst-Meldung zuerst) */
+            messages: components["schemas"]["IssueMessageDto"][];
+        };
         CaseSummaryDto: {
             id: string;
             weBelegNo: string;
@@ -1327,6 +1389,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
+            issues?: components["schemas"]["IssueSummaryDto"][];
         };
         MeWorkstationDto: {
             id: string;
@@ -1457,6 +1521,8 @@ export interface components {
             boxTargets: components["schemas"]["TransportBoxTargetDto"][];
             /** @description Ordered Arbeitsanweisung points (derived from header + positions) */
             instructionPoints: components["schemas"]["WorkInstructionPointDto"][];
+            /** @description Meldungen des Belegs inkl. Einzel-Status + Verlauf — Anker für die TL-Hinweis-Blöcke je Position (positionId) */
+            issues: components["schemas"]["IssueSummaryDto"][];
         };
         NextBundleResultDto: {
             assigned: boolean;
@@ -1471,6 +1537,17 @@ export interface components {
             /** @description Workstation-Code (Tisch-Nr. oder gescannter Barcode) */
             code: string;
         };
+        ReopenIssueDto: {
+            /** @description Rückmeldung des MA zu genau dieser Instruktion */
+            text: string;
+        };
+        TransitionResultDto: {
+            caseId: string;
+            status: string;
+            version: number;
+            /** @description Audit event id, if a milestone was recorded */
+            eventId?: Record<string, never> | null;
+        };
         ParkRemainingDto: {
             /** @description Zu parkende Belege (müssen assigned + im eigenen Bündel sein) */
             caseIds: string[];
@@ -1481,13 +1558,6 @@ export interface components {
             /** @description Verbleibende Belege des Bündels (in Reihenfolge) */
             remainingCaseIds: string[];
             plannedEffortMinutes: number;
-        };
-        TransitionResultDto: {
-            caseId: string;
-            status: string;
-            version: number;
-            /** @description Audit event id, if a milestone was recorded */
-            eventId?: Record<string, never> | null;
         };
         SkuQuantityDto: {
             skuLineId: string;
@@ -1651,14 +1721,6 @@ export interface components {
             /** @description true = das Bündel hat bereits einen Beleg in Arbeit */
             started: boolean;
         };
-        OpenIssueRefDto: {
-            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
-            kind: string;
-            /** @description Label-Snapshot des Problemarten-Katalogs (nur kind=manual) */
-            reasonLabel?: string | null;
-            /** @description Issue description/note */
-            note?: string | null;
-        };
         PoolItemDto: {
             id: string;
             weBelegNo: string;
@@ -1709,6 +1771,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
+            issues?: components["schemas"]["IssueSummaryDto"][];
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
@@ -1717,8 +1781,6 @@ export interface components {
             bereich?: string | null;
             /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
             bundleQueue?: components["schemas"]["BundleQueueRefDto"] | null;
-            /** @description C4: neuestes OFFENES Problem (Art + Notiz-Vorschau); null ohne offenes Problem */
-            openIssue?: components["schemas"]["OpenIssueRefDto"] | null;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1826,35 +1888,6 @@ export interface components {
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
             skuLines: components["schemas"]["SkuLineDto"][];
-        };
-        IssueSummaryDto: {
-            id: string;
-            /** @description IssueScope: position|sku_line */
-            scope: string;
-            /** @description ProblemKind: manual|over_delivery|under_delivery|price_deviation */
-            kind: string;
-            /** @description Label-Snapshot aus dem Problemarten-Katalog (nur kind=manual) */
-            reasonLabel?: string | null;
-            /** @description Mengen-Delta Ist−Soll (kind=over_delivery|under_delivery) */
-            deviationQty?: number | null;
-            /** @description VK-Etikett-Preis laut Beleg */
-            expectedVkPrice?: number | null;
-            /** @description Vom MA korrigierter VK (kind=price_deviation) */
-            correctedVkPrice?: number | null;
-            /** @description Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId) */
-            positionNo?: number | null;
-            /** @description EAN der betroffenen Größenzeile */
-            ean?: string | null;
-            /** @description Größe der betroffenen Größenzeile */
-            size?: string | null;
-            /** @description Ordernummer der betroffenen Position (ERP-Referenz zur Fehlerlösung) */
-            orderNo?: string | null;
-            /** @description IssueStatus: open|in_review|waiting_external|resolved|rejected */
-            status: string;
-            description?: string | null;
-            resolution?: string | null;
-            /** @description ISO-8601 timestamp */
-            reportedAt: string;
         };
         ZstSummaryDto: {
             id: string;
@@ -1980,9 +2013,9 @@ export interface components {
             /** @description Reason logged in the case.cancelled audit event */
             reason?: string;
         };
-        ResolveProblemsDto: {
-            /** @description Anmerkung zur Klärung (auf allen Issues vermerkt) */
-            resolution?: string;
+        SendInstructionDto: {
+            /** @description Handlungsanweisung für den MA zu genau dieser Meldung */
+            text: string;
         };
         RecalculateDto: {
             /**
@@ -2690,6 +2723,34 @@ export interface operations {
             };
         };
     };
+    MeController_reopenIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+                /** @description Meldung (Issue) mit gesendeter Instruktion */
+                issueId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
     MeController_parkRemaining: {
         parameters: {
             query?: never;
@@ -3371,18 +3432,19 @@ export interface operations {
             };
         };
     };
-    TeamleadController_resolveProblems: {
+    TeamleadController_sendInstruction: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 caseId: string;
+                issueId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveProblemsDto"];
+                "application/json": components["schemas"]["SendInstructionDto"];
             };
         };
         responses: {

@@ -26,6 +26,7 @@ erDiagram
 
     GOODS_RECEIPT_CASE ||--o{ ISSUE : "löst aus"
     PROBLEM_REASON ||--o{ ISSUE : "kategorisiert (manuell)"
+    ISSUE ||--o{ ISSUE_MESSAGE : "Instruktions-Verlauf (Meldung/Instruktion/Rückmeldung)"
     GOODS_RECEIPT_CASE ||--o{ TRANSPORT_BOX : "verpackt in"
     GOODS_RECEIPT_CASE ||--o{ ZST_RECORD : "abgeschlossen durch"
 
@@ -191,7 +192,17 @@ erDiagram
         int deviationQty "Ist−Soll (Mehr-/Minderlieferung)"
         float expectedVkPrice "VK-Etikett-Preis"
         float correctedVkPrice "korrigierter VK (Preisabweichung)"
-        enum status "open|in_review|resolved|rejected"
+        enum status "open|instruction_sent (Einzel-Status je Meldung)"
+    }
+    ISSUE_MESSAGE {
+        string id PK
+        string issueId FK
+        string authorId "OIDC-sub bzw. User-Id (Snapshot)"
+        string authorName "Anzeigename (Snapshot)"
+        enum authorRole "employee|teamlead"
+        enum kind "meldung|instruktion|rueckmeldung"
+        string text
+        datetime createdAt
     }
     TRANSPORT_BOX {
         string id PK

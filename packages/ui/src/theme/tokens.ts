@@ -99,13 +99,15 @@ export const priorityMeta: Record<PriorityFlag, ChipMeta> = {
   same_day_required: { label: 'Heute', bg: ltColors.danger, fg: '#ffffff', icon: 'schedule' },
 };
 
-/** Problem-Chips (IssueStatus). */
+/** Problem-Chips (IssueStatus): Einzel-Status je Meldung im Instruktions-Loop. */
 export const issueStatusMeta: Record<IssueStatus, ChipMeta> = {
   open: { label: 'Offen', bg: ltColors.danger, fg: '#ffffff', icon: 'error' },
-  in_review: { label: 'In Prüfung', bg: ltColors.warning, fg: '#ffffff', icon: 'pending' },
-  waiting_external: { label: 'Extern', bg: ltColors.warning, fg: '#ffffff', icon: 'pending' },
-  resolved: { label: 'Gelöst', bg: ltColors.success, fg: '#ffffff', icon: 'check' },
-  rejected: { label: 'Abgelehnt', bg: '#6b6b6b', fg: '#ffffff', icon: 'cancel' },
+  instruction_sent: {
+    label: 'Instruktion gesendet',
+    bg: ltColors.success,
+    fg: '#ffffff',
+    icon: 'check',
+  },
 };
 
 /** Offline/Outbox sync state – a UI-only concern (E.3 Offline confidence). */

@@ -14,11 +14,14 @@ import type { CaseStatus } from '@paket/domain-types';
  *   ready ↔ parked                              (deliberately held back)
  *   assigned → ready                            (unassigned_by_teamlead override)
  *
- * Problem-Loop (Kundenfeedback 14.07.2026): Teilabschluss meldet die gesammelten
- * Probleme an den Teamlead; der Beleg bleibt beim SELBEN Mitarbeiter geparkt.
+ * Problem-Loop (Kundenfeedback 14.07.2026 + Instruktions-Loop 04.08.2026):
+ * Teilabschluss meldet die gesammelten Probleme an den Teamlead; der Beleg bleibt
+ * beim SELBEN Mitarbeiter geparkt. Der Teamlead instruiert jede Meldung EINZELN —
+ * erst wenn keine Meldung mehr offen ist, kippt der Beleg auf problem_resolved.
  *   in_progress → issue_open          (Teilabschluss mit Problemen, rot/gesperrt)
- *   issue_open → problem_resolved     (Teamlead klärt ALLE Probleme, grün)
+ *   issue_open → problem_resolved     (alle Meldungen instruiert, grün)
  *   problem_resolved → in_progress    (derselbe MA setzt die Bearbeitung fort)
+ *   problem_resolved → issue_open     (MA-Rückmeldung öffnet eine Meldung erneut)
  *
  * `cancelled` and `zst_done` are terminal.
  */
@@ -31,7 +34,7 @@ export const CASE_TRANSITIONS: Record<CaseStatus, readonly CaseStatus[]> = {
   assigned: ['in_progress', 'ready', 'cancelled'],
   in_progress: ['issue_open', 'completed', 'cancelled'],
   issue_open: ['problem_resolved', 'cancelled'],
-  problem_resolved: ['in_progress', 'cancelled'],
+  problem_resolved: ['in_progress', 'issue_open', 'cancelled'],
   completed: ['zst_done'],
   zst_done: [],
   cancelled: [],
