@@ -3,16 +3,23 @@
  * Kundenfeedback 2026-07-14).
  *
  * Section „1 · Ware holen" lists the route-ordered pick stops inline; checking
- * off (Paket geholt) happens right here — no extra window. Each stop lists its
- * Belege with the same Beleg-Kopf infos as „2 · Bearbeiten" (Filiale,
- * Shopbereich, Etikettendruck/Digitale Etiketten, Warenart, CatMan-Termin) plus
- * „Barcode anzeigen" — the WE-Nr as Code-128 pop-up to request Etiketten per
- * Scanner right while fetching (Kundenfeedback 15.07.2026, Punkte 1+2). Der
- * CatMan-Termin ist der Tag, bis zu dem die Ware auf der Verkaufsfläche stehen
- * muss; ein überschrittener Termin wird rot als „überfällig" markiert. Reine
- * Kontrollinformation — die Bündel-Reihenfolge der assignment-engine bleibt
- * unangetastet, hier wird nichts umsortiert. Section
- * „2 · Bearbeiten" lists the Belege directly below. The worker picks the order
+ * off (Paket geholt) happens right here — no extra window. The Haken is
+ * persisted per Beleg on the backend (`POST /api/cases/:id/collected`,
+ * CaseSummaryDto.collected) — it survives reload, navigation and device
+ * switches; tap and Lagerplatz-Scan share that one path (Kundenfeedback
+ * 04.08.2026, Punkt 2). Each stop lists its Belege with the same Beleg-Kopf
+ * infos as „2 · Bearbeiten" (Filiale, Shopbereich, Etikettendruck/Digitale
+ * Etiketten, Warenart, CatMan-Termin) plus „Barcode anzeigen" — the WE-Nr as
+ * Code-128 pop-up to request Etiketten per Scanner right while fetching
+ * (Kundenfeedback 15.07.2026, Punkte 1+2). Der CatMan-Termin ist der Tag, bis
+ * zu dem die Ware auf der Verkaufsfläche stehen muss; ein überschrittener
+ * Termin wird rot als „überfällig" markiert. Reine Kontrollinformation — die
+ * Bündel-Reihenfolge der assignment-engine bleibt unangetastet, hier wird
+ * nichts umsortiert. Section „2 · Bearbeiten" lists the Belege directly below.
+ * Fertige Belege (completed/zst_done) verschwinden KOMPLETT aus beiden
+ * Abschnitten — die Zähler laufen über alle Belege weiter; sind alle fertig,
+ * bleibt nur eine kurze Fertig-Ansicht + der Pull-Button (Kundenfeedback
+ * 04.08.2026, Punkt 1). The worker picks the order
  * themselves — every fetched Beleg is directly startable, there is no forced
  * „Start Bearbeitung WE x" sequence anymore. Only per-Beleg fetching gates: a
  * Beleg whose stop is not collected yet stays greyed out. Geparkte Problemfälle
@@ -26,8 +33,9 @@
  * backend's single source of truth. There is no more local Dexie cache: the
  * former `useBundle()`/`db.*` live-queries are gone (see `data/useMeToday.ts`).
  */
-import { useEffect, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -60,6 +68,7 @@ import { getSession } from '../data/session.js';
 import { useMeToday, useReferenceDay } from '../data/useMeToday.js';
 import { useRequestNextBundle } from '../data/useNextBundle.js';
 import { useParkRemaining } from '../data/useParkRemaining.js';
+import { useSetCollected } from '../data/useSetCollected.js';
 import { useScanner } from '../scanner/useScanner.js';
 import { scanMatches } from '../workflow/workflowModel.js';
 import type { GoodsCategory } from '../domain/types.js';
@@ -68,7 +77,15 @@ import { caseProcessPath } from '../routes/paths.js';
 type RouteStopDto = components['schemas']['RouteStopDto'];
 type CaseSummaryDto = components['schemas']['CaseSummaryDto'];
 
-export interface CollectStopView extends RouteStopDto {
+/**
+ * Ein Beleg-Container in „1 · Ware holen". `id` ist die Case-Id; der
+ * Abhak-Zustand kommt NICHT von hier, sondern persistiert vom Case selbst
+ * (`CaseSummaryDto.collected`).
+ */
+export interface CollectStopView {
+  id: string;
+  sequence: number;
+  locationCode: string;
   caseIds: string[];
 }
 
@@ -99,17 +116,12 @@ export function deriveStops(
   // Stabiler Sort: gleiche Sequenz (= derselbe Lagerplatz) behält die Bündel-Reihenfolge.
   return entries
     .sort((a, b) => a.seq - b.seq || a.loc.localeCompare(b.loc))
-    .map(({ c, loc }, index) => {
-      const stop = metaByLocation.get(loc);
-      return {
-        id: c.id,
-        sequence: index + 1,
-        locationCode: loc,
-        scanRequired: stop?.scanRequired ?? false,
-        scanned: stop?.scanned ?? false,
-        caseIds: [c.id],
-      };
-    });
+    .map(({ c, loc }, index) => ({
+      id: c.id,
+      sequence: index + 1,
+      locationCode: loc,
+      caseIds: [c.id],
+    }));
 }
 
 /** German messaging for the backend's "no cart assigned" reasons (§continuation). */
@@ -145,8 +157,13 @@ function statusChipFor(status: string): { label: string; color: ChipColor } {
   return STATUS_CHIP[status] ?? { label: 'Offen', color: 'default' };
 }
 
-/** A Beleg needs no more work today once fertig (completed/zst_done). */
-function isCaseClosed(status: string): boolean {
+/**
+ * A Beleg needs no more work today once fertig (completed/zst_done) — und
+ * verschwindet dann KOMPLETT aus beiden Abschnitten (Kundenfeedback 04.08.2026:
+ * „der MA benötigt diesen nicht mehr", sonst wird der Bildschirm unübersichtlich).
+ * Reine Anzeige-Ableitung aus dem Engine-/Backend-Status — kein eigener Zustand.
+ */
+export function isCaseClosed(status: string): boolean {
   return status === 'completed' || status === 'zst_done';
 }
 
@@ -159,18 +176,24 @@ function isCaseParked(status: string): boolean {
 }
 
 /**
- * Anzeige-Reihenfolge in „2 · Bearbeiten": Grundlage bleibt die Bündel-Reihenfolge
+ * Anzeige-Regel für „2 · Bearbeiten": Grundlage bleibt die Bündel-Reihenfolge
  * der assignment-engine (`AssignmentItem.sequence`, sortiert in `getToday()`) —
- * die UI ordnet fachlich nicht um. Einzige Anzeige-Regel (Kundenfeedback
- * 15.07.2026, Punkt 3): geparkte Problemfälle („Problem gemeldet", warten auf
- * Klärung durch die Teamleitung, nicht bearbeitbar) stehen immer ganz unten —
- * unter dem letzten bearbeitbaren Beleg. Stabile Partition: innerhalb beider
- * Gruppen bleibt die Engine-Reihenfolge unangetastet.
+ * die UI ordnet fachlich nicht um. Obendrauf nur zwei Anzeige-Regeln:
+ *
+ * 1. Fertige Belege (completed/zst_done) werden NICHT mehr gelistet
+ *    (Kundenfeedback 04.08.2026, Punkt 1) — sie zählen in den Zählern weiter
+ *    mit. Problemfälle (issue_open) und Geklärte (problem_resolved) sind
+ *    fachlich NICHT fertig und bleiben sichtbar (Problem-Loop).
+ * 2. Geparkte Problemfälle („Problem gemeldet", warten auf Klärung durch die
+ *    Teamleitung, nicht bearbeitbar) stehen immer ganz unten (Kundenfeedback
+ *    15.07.2026, Punkt 3). Stabile Partition: innerhalb beider Gruppen bleibt
+ *    die Engine-Reihenfolge unangetastet.
  */
-export function orderCasesForDisplay(cases: readonly CaseSummaryDto[]): CaseSummaryDto[] {
+export function casesForDisplay(cases: readonly CaseSummaryDto[]): CaseSummaryDto[] {
+  const open = cases.filter((c) => !isCaseClosed(c.status));
   return [
-    ...cases.filter((c) => !isCaseParked(c.status)),
-    ...cases.filter((c) => isCaseParked(c.status)),
+    ...open.filter((c) => !isCaseParked(c.status)),
+    ...open.filter((c) => isCaseParked(c.status)),
   ];
 }
 
@@ -320,17 +343,7 @@ export function BundleHomeScreen(): JSX.Element {
   // Bezugstag der Überfälligkeits-Anzeige: der Server-Tag dieses Bündels.
   const referenceDay = useReferenceDay();
 
-  // TODO(task-13+): there is no backend mutation yet to persist a "Ware holen"
-  // check-off (RouteStopDto has no scan-submit endpoint). Until one exists
-  // this is a local-only echo of the pick UI, seeded from the route stops'
-  // `scanned` flags whenever a *new* bundle is assigned.
-  //
-  // Tracked per Beleg-Container by its Case-Id, NOT the route sequence:
-  // "Rest parken" causes the backend to resequence every remaining stop
-  // (0..n) in the same bundle — the Case-Id is stable across that, a
-  // sequence-keyed set would silently point at the wrong Container.
-  const [collectedStopIds, setCollectedStopIds] = useState<Set<string>>(new Set());
-  const [seededBundleId, setSeededBundleId] = useState<string | undefined>(undefined);
+  const setCollected = useSetCollected();
   const [pullMsg, setPullMsg] = useState<string | undefined>(undefined);
   const [parkMsg, setParkMsg] = useState<string | undefined>(undefined);
   // Punkt 3 / Nachtrag 15.07.2026: welcher Beleg seine WE-Nr als Code-128 im
@@ -340,46 +353,42 @@ export function BundleHomeScreen(): JSX.Element {
   const bundle = data?.bundle;
   const cases = data?.cases ?? [];
 
-  useEffect(() => {
-    if (bundle && bundle.bundleId !== seededBundleId) {
-      // Vom Backend als gescannt gemeldete Lagerplätze markieren alle ihre
-      // Beleg-Container als geholt (lokales Echo, siehe Kommentar oben).
-      const scanned = new Set(
-        deriveStops(bundle.routeStops, cases)
-          .filter((s) => s.scanned)
-          .map((s) => s.id),
-      );
-      setCollectedStopIds(scanned);
-      setSeededBundleId(bundle.bundleId);
-    }
-  }, [bundle, seededBundleId, cases]);
+  // Ware-holen-Zustand (B2) kommt persistiert vom Backend (CaseSummaryDto
+  // .collected, je Beleg-Container = Case-Id) — kein lokales Echo mehr, der
+  // Haken überlebt Reload, Navigation und Gerätewechsel. Fertige Belege
+  // zählen immer als geholt (bearbeitet wurde nur, was auf dem Karren lag),
+  // damit die Zähler korrekt bleiben, obwohl ihre Container nicht mehr
+  // gelistet werden.
+  const closedIds = new Set(cases.filter((c) => isCaseClosed(c.status)).map((c) => c.id));
+  const collectedIds = new Set(
+    cases.filter((c) => c.collected === true || isCaseClosed(c.status)).map((c) => c.id),
+  );
 
-  const collected = collectedStopIds;
-
+  // ALLE Container (auch die fertiger Belege) bilden die Zähler-Basis;
+  // gelistet werden nur die offenen (Kundenfeedback 04.08.2026: fertig = raus).
   const stops = deriveStops(bundle?.routeStops ?? [], cases);
+  const openStops = stops.filter((s) => !closedIds.has(s.id));
 
   const toggleStop = (stopId: string): void => {
-    setCollectedStopIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(stopId)) next.delete(stopId);
-      else next.add(stopId);
-      return next;
-    });
+    setCollected.mutate({ caseId: stopId, collected: !collectedIds.has(stopId) });
   };
 
-  // Optional scan: a scanned code that matches an unfetched stop checks it off.
+  // Optional scan: a scanned code that matches an unfetched stop checks it off —
+  // über DENSELBEN Persistenz-Weg wie der Tipp (kein lokaler Sonderpfad).
   useScanner({
     onScan: (code) => {
-      const hit = stops.find((s) => !collected.has(s.id) && scanMatches(code, s.locationCode));
-      if (hit) toggleStop(hit.id);
+      const hit = openStops.find(
+        (s) => !collectedIds.has(s.id) && scanMatches(code, s.locationCode),
+      );
+      if (hit) setCollected.mutate({ caseId: hit.id, collected: true });
     },
   });
 
   const counts = {
     total: stops.length,
-    collected: stops.filter((s) => collected.has(s.id)).length,
+    collected: stops.filter((s) => collectedIds.has(s.id)).length,
   };
-  const collectComplete = stops.length === 0 || stops.every((s) => collected.has(s.id));
+  const collectComplete = stops.length === 0 || stops.every((s) => collectedIds.has(s.id));
 
   // Pull the next cart from the backend. The `['me','today']` query is
   // invalidated by the mutation itself on success, so the home refreshes
@@ -397,7 +406,9 @@ export function BundleHomeScreen(): JSX.Element {
   };
 
   // B4 Parkposition: the Belege of not-yet-fetched stops go back to the pool.
-  const uncollectedCaseIds = stops.filter((s) => !collected.has(s.id)).flatMap((s) => s.caseIds);
+  const uncollectedCaseIds = stops
+    .filter((s) => !collectedIds.has(s.id))
+    .flatMap((s) => s.caseIds);
 
   const handlePark = async (): Promise<void> => {
     setParkMsg(undefined);
@@ -444,15 +455,19 @@ export function BundleHomeScreen(): JSX.Element {
   }
 
   // `cases` kommt bereits in der Bündel-Reihenfolge der assignment-engine —
-  // die einzige Anzeige-Regel obendrauf: geparkte Problemfälle ganz unten
-  // (siehe `orderCasesForDisplay`).
-  const ordered = orderCasesForDisplay(cases);
+  // obendrauf nur die Anzeige-Regeln aus `casesForDisplay` (fertig = raus,
+  // geparkte Problemfälle ganz unten).
+  const visibleCases = casesForDisplay(cases);
   // Nachtrag 15.07.2026: der Beleg, dessen WE-Nr aktuell im Barcode-Pop-up steht.
   const barcodeCase = cases.find((c) => c.id === barcodeCaseId);
   // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
   // der MA kann sie nicht weiter bearbeiten (Kundenfeedback 14.07.2026, Punkt 10).
   const allDone =
     cases.length > 0 && cases.every((c) => isCaseClosed(c.status) || isCaseParked(c.status));
+  // WIRKLICH alles fertig (completed/zst_done): beide Abschnitte wären leer —
+  // stattdessen die kurze Fertig-Ansicht zeigen (Kundenfeedback 04.08.2026).
+  // Solange Problemfälle/Geklärte übrig sind, bleiben die Abschnitte stehen.
+  const allClosed = cases.length > 0 && cases.every((c) => isCaseClosed(c.status));
 
   // Punkt 4: keine erzwungene Sequenz mehr — jeder GEHOLTE Beleg ist direkt
   // startbar. Nur das Holen selbst gated noch: ein Beleg, dessen Lagerplatz-Stop
@@ -495,189 +510,230 @@ export function BundleHomeScreen(): JSX.Element {
             </Alert>
           ) : null}
 
-          {/* 1 · Ware holen — inline pick list, check off right here (B1/B2). */}
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            1 · Ware holen
-            {stops.length > 0 ? (
-              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                {counts.collected}/{counts.total} Belege
+          {allClosed ? (
+            /* Fertig-Ansicht (Kundenfeedback 04.08.2026, Punkt 1): alle Belege
+               des Bündels sind erledigt — statt leerer Abschnitte eine kurze,
+               aufgeräumte Bestätigung. Das nächste Bündel kommt weiterhin über
+               den bestehenden Pull-Button unten (keine neue Mechanik). */
+            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+              <CheckCircleOutlineIcon color="success" sx={{ fontSize: 56 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700, mt: 1 }}>
+                Alle Belege erledigt
               </Typography>
-            ) : null}
-          </Typography>
-          <Stack spacing={1} sx={{ mb: 1 }}>
-            {stops.map((stop, index) => {
-              const isDone = collected.has(stop.id);
-              const stopBelege = stop.caseIds
-                .map((id) => cases.find((c) => c.id === id))
-                .filter((c): c is NonNullable<typeof c> => Boolean(c));
-              return (
-                <Paper
-                  key={stop.id}
-                  variant="outlined"
-                  onClick={() => toggleStop(stop.id)}
-                  sx={{
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: 'pointer',
-                    borderColor: isDone ? 'success.main' : 'divider',
-                    bgcolor: isDone ? 'action.hover' : 'background.paper',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      bgcolor: isDone ? 'success.main' : 'action.selected',
-                      color: isDone ? 'common.white' : 'text.primary',
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {cases.length}/{cases.length} erledigt — hol dir unten das nächste Bündel.
+              </Typography>
+            </Paper>
+          ) : (
+            <>
+              {/* 1 · Ware holen — inline pick list, check off right here (B1/B2).
+                  Container fertiger Belege sind ausgeblendet (fertig = raus), die
+                  Zähler laufen über ALLE Belege weiter. */}
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                1 · Ware holen
+                {stops.length > 0 ? (
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ ml: 1 }}
                   >
-                    {isDone ? <CheckIcon fontSize="small" /> : index + 1}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
-                    <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
-                      {stop.locationCode}
-                    </Typography>
-                    {/* Kundenfeedback 15.07.2026, Punkte 1+2: je Beleg dieselben
-                        Kopf-Infos wie unter „2 · Bearbeiten" plus „Barcode anzeigen"
-                        (WE-Nr als Code-128-Pop-up) direkt beim Holen. */}
-                    <Stack spacing={1} sx={{ mt: 0.5 }}>
-                      {stopBelege.map((b) => (
-                        <Box key={b.id}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                            {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
-                            {b.goodsType ? (
-                              <Chip size="small" variant="outlined" label={b.goodsType} />
-                            ) : null}
-                          </Stack>
-                          <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                          <Button
-                            size="small"
-                            onClick={(event) => {
-                              // Der Button liegt in der abhakbaren Stop-Zeile — der
-                              // Klick darf den Stop nicht auf „geholt" togglen.
-                              event.stopPropagation();
-                              setBarcodeCaseId(b.id);
-                            }}
-                          >
-                            Barcode anzeigen
-                          </Button>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Box>
-                  <Chip
-                    size="small"
-                    color={isDone ? 'success' : 'default'}
-                    label={isDone ? 'geholt' : 'offen'}
-                  />
-                </Paper>
-              );
-            })}
-          </Stack>
-          {/* B4: Karren voll → Rest (noch nicht geholte Belege) parken. */}
-          {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
-            <Button
-              size="small"
-              disabled={parkRemaining.isPending}
-              onClick={() => void handlePark()}
-              sx={{ mb: 1 }}
-            >
-              {parkRemaining.isPending
-                ? 'Parken…'
-                : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
-            </Button>
-          ) : null}
-
-          {/* 2 · Bearbeiten — the worker freely picks which fetched Beleg first
-              (Punkt 4: no forced sequence; only not-yet-fetched Belege stay greyed). */}
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
-            2 · Bearbeiten
-          </Typography>
-          {!collectComplete && cases.length > 0 ? (
-            <Alert severity="info" sx={{ mb: 1 }}>
-              Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
-              starten.
-            </Alert>
-          ) : null}
-
-          <Stack spacing={1}>
-            {ordered.map((b) => {
-              const chip = statusChipFor(b.status);
-              const parked = isCaseParked(b.status);
-              const resolved = b.status === 'problem_resolved';
-              // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
-              const tint = parked
-                ? { bgcolor: 'rgba(211, 47, 47, 0.08)', borderColor: 'error.light' }
-                : resolved
-                  ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
-                  : {};
-              // Antippbar, sobald die Ware geholt ist — geparkte Problemfälle
-              // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
-              const startable = isBelegStartable(b.id);
-              const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
-              return (
-                <Paper
-                  key={b.id}
-                  variant="outlined"
-                  onClick={() => openBeleg(b.id)}
-                  sx={{
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: startable ? 'pointer' : 'not-allowed',
-                    opacity: isBelegStartable(b.id) ? 1 : 0.5,
-                    ...tint,
-                  }}
+                    {counts.collected}/{counts.total} Belege
+                  </Typography>
+                ) : null}
+              </Typography>
+              <Stack spacing={1} sx={{ mb: 1 }}>
+                {openStops.map((stop, index) => {
+                  const isDone = collectedIds.has(stop.id);
+                  const stopBelege = stop.caseIds
+                    .map((id) => cases.find((c) => c.id === id))
+                    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+                  return (
+                    <Paper
+                      key={stop.id}
+                      variant="outlined"
+                      onClick={() => toggleStop(stop.id)}
+                      sx={{
+                        p: 1.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        cursor: 'pointer',
+                        borderColor: isDone ? 'success.main' : 'divider',
+                        bgcolor: isDone ? 'action.hover' : 'background.paper',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: isDone ? 'success.main' : 'action.selected',
+                          color: isDone ? 'common.white' : 'text.primary',
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isDone ? <CheckIcon fontSize="small" /> : index + 1}
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
+                        <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
+                          {stop.locationCode}
+                        </Typography>
+                        {/* Kundenfeedback 15.07.2026, Punkte 1+2: je Beleg dieselben
+                            Kopf-Infos wie unter „2 · Bearbeiten" plus „Barcode anzeigen"
+                            (WE-Nr als Code-128-Pop-up) direkt beim Holen. */}
+                        <Stack spacing={1} sx={{ mt: 0.5 }}>
+                          {stopBelege.map((b) => (
+                            <Box key={b.id}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                                {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+                                {b.goodsType ? (
+                                  <Chip size="small" variant="outlined" label={b.goodsType} />
+                                ) : null}
+                              </Stack>
+                              <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                              <Button
+                                size="small"
+                                onClick={(event) => {
+                                  // Der Button liegt in der abhakbaren Stop-Zeile — der
+                                  // Klick darf den Stop nicht auf „geholt" togglen.
+                                  event.stopPropagation();
+                                  setBarcodeCaseId(b.id);
+                                }}
+                              >
+                                Barcode anzeigen
+                              </Button>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                      <Chip
+                        size="small"
+                        color={isDone ? 'success' : 'default'}
+                        label={isDone ? 'geholt' : 'offen'}
+                      />
+                    </Paper>
+                  );
+                })}
+              </Stack>
+              {/* B4: Karren voll → Rest (noch nicht geholte Belege) parken. */}
+              {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
+                <Button
+                  size="small"
+                  disabled={parkRemaining.isPending}
+                  onClick={() => void handlePark()}
+                  sx={{ mb: 1 }}
                 >
-                  {(b.issues?.length ?? 0) > 0 ? (
-                    /* Zähler-Badge statt Symbol (04.08.2026): „nx" = Anzahl der
-                       Meldungen; Tap/Hover öffnet das Meldungs-Popover. */
-                    <IssueBadge issues={b.issues ?? []} />
-                  ) : (
-                    <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
-                  )}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
-                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                    {parked ? (
-                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen
-                        zeigt die Meldungen und TL-Hinweise.
-                      </Typography>
-                    ) : null}
-                    {resolved ? (
-                      <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                        Geklärt – zur Weiterbearbeitung freigegeben.
-                      </Typography>
-                    ) : null}
-                  </Box>
-                  {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
-                  {b.goodsType ? (
-                    <Chip size="small" variant="outlined" label={b.goodsType} />
-                  ) : null}
-                  <Chip size="small" color={chip.color} label={chip.label} />
-                </Paper>
-              );
-            })}
-          </Stack>
+                  {parkRemaining.isPending
+                    ? 'Parken…'
+                    : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
+                </Button>
+              ) : null}
 
-          {cases.length === 0 ? (
-            <Alert severity="info">
-              Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege hier.
-            </Alert>
-          ) : null}
+              {/* 2 · Bearbeiten — the worker freely picks which fetched Beleg first
+                  (Punkt 4: no forced sequence; only not-yet-fetched Belege stay greyed).
+                  Fertige Belege sind ausgeblendet; der Zähler nimmt sie weiter mit. */}
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
+                2 · Bearbeiten
+                {cases.length > 0 ? (
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ ml: 1 }}
+                  >
+                    {closedIds.size}/{cases.length} erledigt
+                  </Typography>
+                ) : null}
+              </Typography>
+              {!collectComplete && cases.length > 0 ? (
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger
+                  Reihenfolge starten.
+                </Alert>
+              ) : null}
+
+              <Stack spacing={1}>
+                {visibleCases.map((b) => {
+                  const chip = statusChipFor(b.status);
+                  const parked = isCaseParked(b.status);
+                  const resolved = b.status === 'problem_resolved';
+                  // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
+                  const tint = parked
+                    ? { bgcolor: 'rgba(211, 47, 47, 0.08)', borderColor: 'error.light' }
+                    : resolved
+                      ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
+                      : {};
+                  // Antippbar, sobald die Ware geholt ist — geparkte Problemfälle
+                  // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
+                  const startable = isBelegStartable(b.id);
+                  const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+                  return (
+                    <Paper
+                      key={b.id}
+                      variant="outlined"
+                      onClick={() => openBeleg(b.id)}
+                      sx={{
+                        p: 1.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        cursor: startable ? 'pointer' : 'not-allowed',
+                        opacity: isBelegStartable(b.id) ? 1 : 0.5,
+                        ...tint,
+                      }}
+                    >
+                      {(b.issues?.length ?? 0) > 0 ? (
+                        /* Zähler-Badge statt Symbol (04.08.2026): „nx" = Anzahl der
+                           Meldungen; Tap/Hover öffnet das Meldungs-Popover. */
+                        <IssueBadge issues={b.issues ?? []} />
+                      ) : (
+                        <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                      )}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
+                        <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                        <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                        {parked ? (
+                          <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                            Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen
+                            zeigt die Meldungen und TL-Hinweise.
+                          </Typography>
+                        ) : null}
+                        {resolved ? (
+                          <Typography
+                            variant="body2"
+                            color="success.main"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Geklärt – zur Weiterbearbeitung freigegeben.
+                          </Typography>
+                        ) : null}
+                      </Box>
+                      {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+                      {b.goodsType ? (
+                        <Chip size="small" variant="outlined" label={b.goodsType} />
+                      ) : null}
+                      <Chip size="small" color={chip.color} label={chip.label} />
+                    </Paper>
+                  );
+                })}
+              </Stack>
+
+              {cases.length === 0 ? (
+                <Alert severity="info">
+                  Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege
+                  hier.
+                </Alert>
+              ) : null}
+            </>
+          )}
         </>
       )}
 
@@ -696,7 +752,10 @@ export function BundleHomeScreen(): JSX.Element {
         }}
       >
         <Stack spacing={1}>
-          {allDone ? (
+          {/* Bei allClosed sagt es bereits die Fertig-Ansicht oben — kein zweites
+              Banner. Bleiben nur geparkte Problemfälle übrig, meldet das Banner,
+              dass der eigene Teil getan ist. */}
+          {allDone && !allClosed ? (
             <Alert
               severity="success"
               icon={<CelebrationOutlinedIcon fontSize="inherit" />}

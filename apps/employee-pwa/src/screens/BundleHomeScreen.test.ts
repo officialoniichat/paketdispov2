@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStops, orderCasesForDisplay } from './BundleHomeScreen.js';
+import { casesForDisplay, deriveStops, isCaseClosed } from './BundleHomeScreen.js';
 
 function stop(id: string, sequence: number, locationCode: string, scanned = false) {
   return { id, sequence, locationCode, scanRequired: false, scanned };
@@ -58,12 +58,12 @@ describe('deriveStops', () => {
 });
 
 function kaseWithStatus(id: string, status: string) {
-  return { id, status } as Parameters<typeof orderCasesForDisplay>[0][number];
+  return { id, status } as Parameters<typeof casesForDisplay>[0][number];
 }
 
-describe('orderCasesForDisplay', () => {
+describe('casesForDisplay', () => {
   it('listet einen geparkten Problemfall (issue_open) ganz unten — trotz Engine-Sequenz 1', () => {
-    const ordered = orderCasesForDisplay([
+    const ordered = casesForDisplay([
       kaseWithStatus('p', 'issue_open'),
       kaseWithStatus('a', 'assigned'),
       kaseWithStatus('b', 'in_progress'),
@@ -71,22 +71,52 @@ describe('orderCasesForDisplay', () => {
     expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'p']);
   });
 
+  it('blendet fertige Belege (completed/zst_done) KOMPLETT aus — Kundenfeedback 04.08.2026', () => {
+    const ordered = casesForDisplay([
+      kaseWithStatus('f1', 'completed'),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('f2', 'zst_done'),
+      kaseWithStatus('b', 'in_progress'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('behält Problem-Loop-Belege sichtbar: issue_open (unten) und problem_resolved sind fachlich NICHT fertig', () => {
+    const ordered = casesForDisplay([
+      kaseWithStatus('p', 'issue_open'),
+      kaseWithStatus('f', 'completed'),
+      kaseWithStatus('r', 'problem_resolved'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['r', 'p']);
+  });
+
   it('lässt die Engine-Reihenfolge unangetastet, wenn kein Problemfall geparkt ist — auch „Geklärt" (problem_resolved) sinkt NICHT', () => {
-    const ordered = orderCasesForDisplay([
+    const ordered = casesForDisplay([
       kaseWithStatus('a', 'assigned'),
       kaseWithStatus('b', 'problem_resolved'),
-      kaseWithStatus('c', 'completed'),
+      kaseWithStatus('c', 'in_progress'),
     ]);
     expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('stabile Partition: mehrere Problemfälle behalten untereinander die Engine-Reihenfolge', () => {
-    const ordered = orderCasesForDisplay([
+    const ordered = casesForDisplay([
       kaseWithStatus('p1', 'issue_open'),
       kaseWithStatus('a', 'assigned'),
       kaseWithStatus('p2', 'issue_open'),
       kaseWithStatus('b', 'assigned'),
     ]);
     expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'p1', 'p2']);
+  });
+});
+
+describe('isCaseClosed', () => {
+  it('fertig = completed/zst_done; Problem-Loop und Arbeit zählen NICHT als fertig', () => {
+    expect(isCaseClosed('completed')).toBe(true);
+    expect(isCaseClosed('zst_done')).toBe(true);
+    expect(isCaseClosed('assigned')).toBe(false);
+    expect(isCaseClosed('in_progress')).toBe(false);
+    expect(isCaseClosed('issue_open')).toBe(false);
+    expect(isCaseClosed('problem_resolved')).toBe(false);
   });
 });
