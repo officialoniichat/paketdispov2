@@ -462,9 +462,10 @@ export function BundleHomeScreen(): JSX.Element {
 
   const openBeleg = (caseId: string): void => {
     if (!isBelegStartable(caseId)) return;
-    const target = cases.find((c) => c.id === caseId);
-    // Geparkte Problemfälle sind gesperrt, bis der Teamlead geklärt hat (Punkt 10).
-    if (target && isCaseParked(target.status)) return;
+    // Geparkte Problemfälle (issue_open) öffnen als NUR-ANSICHT (Instruktions-
+    // Loop 04.08.2026): der MA sieht dort die TL-Hinweis-Blöcke an den
+    // betroffenen Positionen — auch bei erst teilweise instruierten Meldungen.
+    // Die Sperre selbst („nicht bearbeitbar") erzwingt der BelegProcessScreen.
     navigate(caseProcessPath(caseId));
   };
 
@@ -620,8 +621,9 @@ export function BundleHomeScreen(): JSX.Element {
                 : resolved
                   ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
                   : {};
-              // Startbar = Ware geholt UND kein geparkter Problemfall.
-              const startable = isBelegStartable(b.id) && !parked;
+              // Antippbar, sobald die Ware geholt ist — geparkte Problemfälle
+              // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
+              const startable = isBelegStartable(b.id);
               const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
               return (
                 <Paper
@@ -651,7 +653,8 @@ export function BundleHomeScreen(): JSX.Element {
                     <BelegInfoLine beleg={b} referenceDay={referenceDay} />
                     {parked ? (
                       <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.
+                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen
+                        zeigt die Meldungen und TL-Hinweise.
                       </Typography>
                     ) : null}
                     {resolved ? (
