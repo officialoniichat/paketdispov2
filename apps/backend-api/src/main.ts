@@ -35,22 +35,31 @@ async function main(): Promise<void> {
   // A "Failed to fetch" in the cockpit is often a CORS block, not just a wrong URL, so
   // the origins must match the frontends exactly (scheme + host). Trailing slashes are
   // tolerated and CORS_ORIGINS=* reflects any origin (handy for a quick demo). Without
-  // CORS_ORIGINS prod stays same-origin; locally the dev origins keep things zero-config.
+  // CORS_ORIGINS prod stays same-origin; locally any localhost port is allowed because
+  // Vite hops to the next free port (5174 → 5175 → 5176 …) when several worktrees run.
   const corsOrigins = (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim().replace(/\/+$/, '')) // tolerate trailing slashes from dashboards
     .filter(Boolean);
   const allowAnyOrigin = corsOrigins.includes('*');
-  const allowedOrigins =
-    corsOrigins.length > 0 ? corsOrigins : ['http://localhost:5174', 'http://localhost:5175'];
+  const devLocalhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   if (config.env !== 'production' || corsOrigins.length > 0) {
     app.enableCors({
-      origin: allowAnyOrigin ? true : allowedOrigins,
+      origin: allowAnyOrigin ? true : corsOrigins.length > 0 ? corsOrigins : devLocalhostOrigin,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type', 'x-correlation-id'],
       credentials: true,
     });
-    logger.info({ origins: allowAnyOrigin ? '*' : allowedOrigins }, 'CORS enabled');
+    logger.info(
+      {
+        origins: allowAnyOrigin
+          ? '*'
+          : corsOrigins.length > 0
+            ? corsOrigins
+            : 'localhost (jeder Port, Dev-Default)',
+      },
+      'CORS enabled',
+    );
   }
 
   app.enableShutdownHooks();
