@@ -15,6 +15,10 @@ async function main(): Promise<void> {
   const adapter = new FastifyAdapter({
     logger: loggerOptions,
     genReqId: (req: IncomingMessage) => (req.headers['x-correlation-id'] as string) ?? undefined,
+    // Offene SSE-Streams (me/teamlead /stream) würden das Graceful-Shutdown sonst
+    // endlos blockieren — der Dev-Watch-Neustart verklemmt sich („Waiting for
+    // graceful termination") und der neue Prozess bekommt Port 3000 nie.
+    forceCloseConnections: true,
   });
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
