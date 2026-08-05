@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { casesForDisplay, deriveStops, isCaseClosed } from './BundleHomeScreen.js';
+import { casesForDisplay, deriveStops, isCaseClosed, stopsForDisplay } from './BundleHomeScreen.js';
 
 function stop(id: string, sequence: number, locationCode: string, scanned = false) {
   return { id, sequence, locationCode, scanRequired: false, scanned };
@@ -57,8 +57,23 @@ describe('deriveStops', () => {
   });
 });
 
+type Kase = Parameters<typeof casesForDisplay>[0][number];
+
 function kaseWithStatus(id: string, status: string) {
-  return { id, status } as Parameters<typeof casesForDisplay>[0][number];
+  return { id, status } as Kase;
+}
+
+/**
+ * Beleg mit Meldungen (Instruktions-Loop 04.08.2026): `issueStatuses` sind die
+ * Einzel-Status der Meldungen — 'open' = wartet auf die Teamleitung,
+ * 'instruction_sent' = vom Teamlead instruiert.
+ */
+function kaseWithIssues(id: string, status: string, issueStatuses: string[]) {
+  return {
+    id,
+    status,
+    issues: issueStatuses.map((s, index) => ({ id: `${id}-i${index}`, status: s })),
+  } as Kase;
 }
 
 describe('casesForDisplay', () => {
@@ -90,23 +105,138 @@ describe('casesForDisplay', () => {
     expect(ordered.map((c) => c.id)).toEqual(['r', 'p']);
   });
 
-  it('lässt die Engine-Reihenfolge unangetastet, wenn kein Problemfall geparkt ist — auch „Geklärt" (problem_resolved) sinkt NICHT', () => {
+  it('setzt einen geklärten Beleg (problem_resolved) an den ANFANG — Kundenfeedback 05.08.2026', () => {
     const ordered = casesForDisplay([
       kaseWithStatus('a', 'assigned'),
-      kaseWithStatus('b', 'problem_resolved'),
+      kaseWithStatus('r', 'problem_resolved'),
       kaseWithStatus('c', 'in_progress'),
     ]);
-    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'c']);
+    expect(ordered.map((c) => c.id)).toEqual(['r', 'a', 'c']);
   });
 
-  it('stabile Partition: mehrere Problemfälle behalten untereinander die Engine-Reihenfolge', () => {
+  it('geklärt ganz oben, geparkt ganz unten, normale Belege dazwischen in Engine-Reihenfolge', () => {
+    const ordered = casesForDisplay([
+      kaseWithStatus('p', 'issue_open'),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('r', 'problem_resolved'),
+      kaseWithStatus('b', 'in_progress'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['r', 'a', 'b', 'p']);
+  });
+
+  it('Rückmeldung: der zurückgeworfene Beleg (problem_resolved → issue_open) wandert wieder ans ENDE', () => {
+    const vorRueckmeldung = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('r', 'problem_resolved'),
+    ]);
+    expect(vorRueckmeldung.map((c) => c.id)).toEqual(['r', 'a']);
+
+    // Das Backend hat 'r' auf issue_open zurückgesetzt (Meldung erneut offen) —
+    // die Anzeige folgt allein diesem Status, ohne eigenen Zustand.
+    const nachRueckmeldung = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('r', 'issue_open'),
+    ]);
+    expect(nachRueckmeldung.map((c) => c.id)).toEqual(['a', 'r']);
+  });
+
+  it('stabile Partition: mehrere Belege derselben Gruppe behalten untereinander die Engine-Reihenfolge', () => {
     const ordered = casesForDisplay([
       kaseWithStatus('p1', 'issue_open'),
       kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('r1', 'problem_resolved'),
       kaseWithStatus('p2', 'issue_open'),
       kaseWithStatus('b', 'assigned'),
+      kaseWithStatus('r2', 'problem_resolved'),
     ]);
-    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'p1', 'p2']);
+    expect(ordered.map((c) => c.id)).toEqual(['r1', 'r2', 'a', 'b', 'p1', 'p2']);
+  });
+
+  /* Instruktions-Loop: maßgeblich sind die EINZEL-Status der Meldungen, nicht
+     ein Status-Wort am Beleg (Kundenfeedback 05.08.2026). */
+  it('alle Meldungen instruiert → an den ANFANG, auch ohne Status „problem_resolved"', () => {
+    const ordered = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithIssues('i', 'in_progress', ['instruction_sent', 'instruction_sent']),
+      kaseWithStatus('b', 'assigned'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['i', 'a', 'b']);
+  });
+
+  it('TEILWEISE instruiert (eine Meldung noch offen) → bleibt gesperrt und damit ganz UNTEN', () => {
+    const ordered = casesForDisplay([
+      kaseWithIssues('t', 'issue_open', ['instruction_sent', 'open']),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithIssues('v', 'problem_resolved', ['instruction_sent']),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['v', 'a', 't']);
+  });
+
+  it('Rückmeldung öffnet eine Meldung erneut → der Beleg wandert wieder ans ENDE', () => {
+    const vorRueckmeldung = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithIssues('r', 'problem_resolved', ['instruction_sent']),
+    ]);
+    expect(vorRueckmeldung.map((c) => c.id)).toEqual(['r', 'a']);
+
+    // Backend nach der Rückmeldung: Meldung wieder `open`, Beleg `issue_open`.
+    const nachRueckmeldung = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithIssues('r', 'issue_open', ['open']),
+    ]);
+    expect(nachRueckmeldung.map((c) => c.id)).toEqual(['a', 'r']);
+  });
+
+  it('Belege ohne Meldung bleiben neutral — eine leere Meldungsliste hebt nichts hoch', () => {
+    const ordered = casesForDisplay([
+      kaseWithIssues('a', 'assigned', []),
+      kaseWithIssues('b', 'in_progress', []),
+      kaseWithStatus('c', 'assigned'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+function stopView(id: string, sequence: number, locationCode: string) {
+  return { id, sequence, locationCode, caseIds: [id] };
+}
+
+describe('stopsForDisplay', () => {
+  it('zieht den Abhol-Container eines geklärten Belegs nach OBEN und den geparkten nach UNTEN', () => {
+    const ordered = stopsForDisplay(
+      [stopView('p', 1, 'A-1'), stopView('a', 2, 'B-2'), stopView('r', 3, 'C-3')],
+      [
+        kaseWithStatus('p', 'issue_open'),
+        kaseWithStatus('a', 'assigned'),
+        kaseWithStatus('r', 'problem_resolved'),
+      ],
+    );
+    expect(ordered.map((s) => s.id)).toEqual(['r', 'a', 'p']);
+  });
+
+  it('gleiche Reihenfolge wie „2 · Bearbeiten" — die Abschnitte sortieren nie widersprüchlich', () => {
+    const cases = [
+      kaseWithStatus('p', 'issue_open'),
+      kaseWithStatus('a', 'assigned'),
+      kaseWithStatus('r', 'problem_resolved'),
+      kaseWithStatus('b', 'in_progress'),
+    ];
+    const stops = cases.map((c, index) => stopView(c.id, index + 1, `L-${index + 1}`));
+    expect(stopsForDisplay(stops, cases).map((s) => s.id)).toEqual(
+      casesForDisplay(cases).map((c) => c.id),
+    );
+  });
+
+  it('Container fertiger Belege verschwinden; ohne Problemfall bleibt die Engine-Route unangetastet', () => {
+    const ordered = stopsForDisplay(
+      [stopView('c1', 1, 'A-1'), stopView('f', 2, 'B-2'), stopView('c2', 3, 'C-3')],
+      [
+        kaseWithStatus('c1', 'assigned'),
+        kaseWithStatus('f', 'completed'),
+        kaseWithStatus('c2', 'in_progress'),
+      ],
+    );
+    expect(ordered.map((s) => s.id)).toEqual(['c1', 'c2']);
   });
 });
 

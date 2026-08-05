@@ -26,6 +26,7 @@ import {
   MA_104,
   MA_105,
   MA_106,
+  MA_107,
   ONLINE_SIZE_PREFERENCE,
   type SeedBelegSpec,
   type SeedEmployeeSpec,
@@ -195,7 +196,7 @@ export async function seedDatabase(databaseUrl: string): Promise<void> {
     // The Online-Größen-Markierung is derived from this preference, so it must
     // exist before the positions that reference its WGR are read back.
     await prisma.onlineSizePreference.create({ data: { ...ONLINE_SIZE_PREFERENCE } });
-    for (const employee of [MA_101, MA_102, MA_103, MA_104, MA_105, MA_106]) {
+    for (const employee of [MA_101, MA_102, MA_103, MA_104, MA_105, MA_106, MA_107]) {
       await seedEmployee(prisma, employee);
     }
   } finally {

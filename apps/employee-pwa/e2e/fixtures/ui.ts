@@ -29,6 +29,16 @@ export function stopRows(page: Page): Locator {
 }
 
 /**
+ * Die Stop-Zeile eines BESTIMMTEN Belegs — unabhängig von ihrer Listenposition.
+ * Seit dem Kundenfeedback 05.08.2026 zieht „1 · Ware holen" geklärte Belege nach
+ * oben und geparkte nach unten; ein Zugriff über `nth(i)` zeigt je nach Status
+ * auf den falschen Container.
+ */
+export function stopRow(page: Page, weBelegNo: string): Locator {
+  return stopRows(page).filter({ hasText: `WE ${weBelegNo}` });
+}
+
+/**
  * Hakt eine Stop-Zeile ab/auf — als Nutzer-Klick auf ihren Status-Chip
  * („offen"/„geholt") statt blind auf die Zeilenmitte: dort stehen seit dem
  * Kundenfeedback 15.07.2026 die Beleg-Infos samt „Barcode anzeigen"-Button,

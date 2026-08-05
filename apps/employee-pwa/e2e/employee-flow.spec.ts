@@ -7,6 +7,7 @@ import {
   MA_104,
   MA_105,
   MA_106,
+  MA_107,
   UNKNOWN_EMPLOYEE_NO,
   belegNos,
   locationCodes,
@@ -17,6 +18,7 @@ import {
   loginAs,
   loginAndWaitForHome,
   openBeleg,
+  stopRow,
   stopRows,
   toggleStop,
 } from './fixtures/ui.js';
@@ -26,7 +28,7 @@ import {
  *
  * Jeder Test trägt im Namen die Kundenforderung aus dem Call vom 07.07.2026,
  * die er absichert. `e2e/fixtures/global-setup.ts` bootet ein reales backend-api
- * gegen ein Testcontainers-Postgres und seedet sechs Mitarbeiter
+ * gegen ein Testcontainers-Postgres und seedet sieben Mitarbeiter
  * (`fixtures/seed-data.ts`) mit je eigenem Bündel.
  *
  * KEIN `recalculate` im Setup: der Seed schreibt die Bündel direkt und legt keine
@@ -360,8 +362,10 @@ test.describe('Kundenfeedback 15.07.2026, Punkt 3 — Problemfälle ganz unten',
     await loginAndWaitForHome(page, MA_106.employeeNo);
 
     // Ware holen abhaken: so ist der Problemfall unten NICHT bloß „noch nicht
-    // geholt", sondern ausschließlich durch seinen Status gesperrt.
-    await toggleStop(stopRows(page).first());
+    // geholt", sondern ausschließlich durch seinen Status gesperrt. Der Zugriff
+    // geht über SEINE Zeile statt über `nth(0)` — seit dem Kundenfeedback
+    // 05.08.2026 sinkt auch sein Abhol-Container ans Listenende.
+    await toggleStop(stopRow(page, problemfall));
 
     // Serverseitig steht der Problemfall VORN (Engine-Sequenz 1): die Absenkung
     // ist reine Anzeige-Regel, keine Umordnung der Engine-Entscheidung.
@@ -370,6 +374,10 @@ test.describe('Kundenfeedback 15.07.2026, Punkt 3 — Problemfälle ganz unten',
       zweiter,
       dritter,
     ]);
+
+    // Beide Abschnitte sortieren gleich (Kundenfeedback 05.08.2026): der
+    // Problemfall steht auch unter „1 · Ware holen" ganz unten.
+    await expect(stopRows(page).last()).toContainText(`WE ${problemfall}`);
 
     const rows = bearbeitenRows(page);
     await expect(rows).toHaveCount(3);
@@ -382,10 +390,56 @@ test.describe('Kundenfeedback 15.07.2026, Punkt 3 — Problemfälle ganz unten',
       'Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar.',
     );
 
-    // Gesperrt heißt gesperrt: der Klick auf den Problemfall öffnet KEINEN Beleg.
+    // Antippen öffnet die NUR-ANSICHT (seit „gesperrte Problem-Belege öffnen als
+    // Nur-Ansicht"): der MA kommt an die Meldungen und TL-Hinweise heran,
+    // bearbeiten kann er den Beleg dort nicht.
     await rows.nth(2).getByText(`WE ${problemfall}`).click();
-    await expect(page.getByRole('heading', { name: GREETING })).toBeVisible();
-    await expect(page.getByRole('heading', { name: `WE ${problemfall}` })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: `WE ${problemfall}` })).toBeVisible();
+    await expect(page.getByText(/Nur Ansicht\./)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Beleg erledigt' })).toHaveCount(0);
+  });
+});
+
+/* ------------------------------------------------------------------------- *
+ * Kundenfeedback 05.08.2026 — vollständig instruierte Belege ganz oben
+ * ------------------------------------------------------------------------- */
+test.describe('Kundenfeedback 05.08.2026 — instruierte Belege ganz oben', () => {
+  /** Die Beleg-Zeilen aus „2 · Bearbeiten" in DOM-Reihenfolge (ohne Stop-Zeilen). */
+  function bearbeitenRows(page: Page): Locator {
+    return page
+      .locator('.MuiPaper-root')
+      .filter({ hasText: /WE WE-E2E-/ })
+      .filter({ hasNot: page.getByText(/^(offen|geholt)$/) });
+  }
+
+  test('ein instruierter Beleg steht über dem ersten Beleg — obwohl die Engine ihn zuletzt liefert', async ({
+    page,
+  }) => {
+    // `problem_resolved` ist die Case-Ableitung aus „alle Meldungen instruiert"
+    // (Backend: teamlead.service.sendInstruction).
+    const [erster, zweiter, instruiert] = belegNos(MA_107);
+    await loginAndWaitForHome(page, MA_107.employeeNo);
+
+    // Serverseitig steht er HINTEN (Engine-Sequenz 3): das Hochziehen ist reine
+    // Anzeige-Regel, keine Umordnung im Backend.
+    expect((await fetchBundleFromBackend(page)).weBelegNos).toEqual([erster, zweiter, instruiert]);
+
+    // „1 · Ware holen": sein Abhol-Container steht ganz oben (gleiche Logik).
+    await expect(stopRows(page).first()).toContainText(`WE ${instruiert}`);
+
+    // „2 · Bearbeiten": ganz oben, damit er dem MA sofort ins Auge fällt.
+    const rows = bearbeitenRows(page);
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText(`WE ${instruiert}`);
+    await expect(rows.nth(0)).toContainText('Geklärt – zur Weiterbearbeitung freigegeben.');
+    // Die übrigen behalten untereinander die Engine-Reihenfolge.
+    await expect(rows.nth(1)).toContainText(`WE ${erster}`);
+    await expect(rows.nth(2)).toContainText(`WE ${zweiter}`);
+
+    // Instruiert heißt bearbeitbar: geholt + angetippt öffnet den Beleg normal.
+    await toggleStop(stopRow(page, instruiert));
+    await rows.nth(0).getByText(`WE ${instruiert}`).click();
+    await expect(page.getByRole('heading', { name: `WE ${instruiert}` })).toBeVisible();
   });
 });
 

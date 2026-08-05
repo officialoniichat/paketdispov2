@@ -22,9 +22,14 @@
  * 04.08.2026, Punkt 1). The worker picks the order
  * themselves — every fetched Beleg is directly startable, there is no forced
  * „Start Bearbeitung WE x" sequence anymore. Only per-Beleg fetching gates: a
- * Beleg whose stop is not collected yet stays greyed out. Geparkte Problemfälle
- * („Problem gemeldet", warten auf die Teamleitung) listen immer ganz unten
- * (Kundenfeedback 15.07.2026, Punkt 3).
+ * Beleg whose stop is not collected yet stays greyed out. Belege mit noch
+ * OFFENER Meldung (warten auf die Teamleitung, nicht bearbeitbar) listen immer
+ * ganz unten (Kundenfeedback 15.07.2026, Punkt 3); ein Beleg, dessen Meldungen
+ * ALLE instruiert sind, steht umgekehrt ganz OBEN, damit er sofort ins Auge
+ * fällt und schnell abgeschlossen werden kann (Kundenfeedback 05.08.2026).
+ * Beides ist reine Anzeige-Sortierung aus der vorhandenen Meldungslage
+ * (`displayRank`), in beiden Abschnitten gleich — die Engine-Reihenfolge und
+ * jede Statuswahrheit bleiben unangetastet.
  * „Rest parken" (B4) sends the Belege of not-yet-fetched stops back to the
  * pool; „Weiteres Bündel anfordern" pulls more work onto the open cart at any
  * time — the decision is the worker's.
@@ -176,25 +181,103 @@ function isCaseParked(status: string): boolean {
 }
 
 /**
+ * Eine Meldung wartet auf die Teamleitung, solange ihr Einzel-Status `open` ist
+ * (Instruktions-Loop 04.08.2026); `instruction_sent` heißt: der Teamlead hat
+ * GENAU diese Meldung mit einer Handlungsanweisung beantwortet.
+ */
+function isIssueOpen(issue: { status: string }): boolean {
+  return issue.status === 'open';
+}
+
+/**
+ * Anzeige-Rang eines Belegs (Kundenfeedback 05.08.2026) — reine Ableitung aus
+ * dem vorhandenen Meldungs-/Case-Status. Kein eigener Zustand, keine
+ * Statusänderung, kein Umsortieren/Resequencing im Backend: die
+ * Engine-Reihenfolge bleibt die Grundlage.
+ *
+ * Maßgeblich sind die INSTRUKTIONEN, nicht ein Status-Wort: seit dem
+ * Instruktions-Loop beantwortet der Teamlead jede Meldung einzeln, und ein
+ * Beleg mit teils instruierten, teils offenen Meldungen bleibt gesperrt.
+ *
+ *   -1 Alle Meldungen instruiert → der Beleg ist wieder bearbeitbar. Ganz nach
+ *      OBEN, damit er dem MA sofort ins Auge fällt und schnell abgeschlossen
+ *      werden kann — gerade bei vielen kleinen Belegen. Er bleibt oben, bis er
+ *      fertig ist (fertig = raus), sonst verlöre ihn der MA beim Fortsetzen
+ *      wieder aus dem Blick.
+ *    0 Belege ohne Meldung → Engine-Reihenfolge unangetastet.
+ *   +1 Mindestens eine Meldung noch offen → wartet auf die Teamleitung, nicht
+ *      bearbeitbar. Ganz nach UNTEN (Kundenfeedback 15.07.2026, Punkt 3). Das
+ *      greift auch bei TEILWEISE instruierten Belegen und wieder, sobald eine
+ *      MA-Rückmeldung eine Meldung erneut öffnet.
+ *
+ * `issue_open`/`problem_resolved` sind die Case-seitige Ableitung genau dieser
+ * Meldungslage (Backend: `teamlead.service.sendInstruction` kippt den Beleg
+ * erst auf `problem_resolved`, wenn keine Meldung mehr offen ist). Sie bleiben
+ * hier als Fallback stehen — schlanke DTO-Listen liefern `issues` nicht mit.
+ */
+function displayRank(beleg: Pick<CaseSummaryDto, 'status' | 'issues'>): -1 | 0 | 1 {
+  const issues = beleg.issues ?? [];
+  if (isCaseParked(beleg.status) || issues.some(isIssueOpen)) return 1;
+  if (beleg.status === 'problem_resolved' || issues.length > 0) return -1;
+  return 0;
+}
+
+/**
+ * Stabile Partition nach `displayRank`: innerhalb jeder der drei Gruppen bleibt
+ * die übergebene Reihenfolge (Bündel- bzw. Routen-Reihenfolge der Engine)
+ * exakt erhalten.
+ */
+function byDisplayRank<T>(items: readonly T[], rankOf: (item: T) => -1 | 0 | 1): T[] {
+  return [
+    ...items.filter((i) => rankOf(i) === -1),
+    ...items.filter((i) => rankOf(i) === 0),
+    ...items.filter((i) => rankOf(i) === 1),
+  ];
+}
+
+/**
  * Anzeige-Regel für „2 · Bearbeiten": Grundlage bleibt die Bündel-Reihenfolge
  * der assignment-engine (`AssignmentItem.sequence`, sortiert in `getToday()`) —
  * die UI ordnet fachlich nicht um. Obendrauf nur zwei Anzeige-Regeln:
  *
  * 1. Fertige Belege (completed/zst_done) werden NICHT mehr gelistet
  *    (Kundenfeedback 04.08.2026, Punkt 1) — sie zählen in den Zählern weiter
- *    mit. Problemfälle (issue_open) und Geklärte (problem_resolved) sind
- *    fachlich NICHT fertig und bleiben sichtbar (Problem-Loop).
- * 2. Geparkte Problemfälle („Problem gemeldet", warten auf Klärung durch die
- *    Teamleitung, nicht bearbeitbar) stehen immer ganz unten (Kundenfeedback
- *    15.07.2026, Punkt 3). Stabile Partition: innerhalb beider Gruppen bleibt
- *    die Engine-Reihenfolge unangetastet.
+ *    mit. Belege mit Meldungen sind fachlich NICHT fertig und bleiben sichtbar.
+ * 2. Reihenfolge nach `displayRank`: vollständig instruierte Belege ganz oben,
+ *    Belege mit offener Meldung ganz unten, alles dazwischen unverändert in
+ *    Engine-Reihenfolge.
  */
 export function casesForDisplay(cases: readonly CaseSummaryDto[]): CaseSummaryDto[] {
-  const open = cases.filter((c) => !isCaseClosed(c.status));
-  return [
-    ...open.filter((c) => !isCaseParked(c.status)),
-    ...open.filter((c) => isCaseParked(c.status)),
-  ];
+  return byDisplayRank(
+    cases.filter((c) => !isCaseClosed(c.status)),
+    displayRank,
+  );
+}
+
+/**
+ * Anzeige-Regel für „1 · Ware holen" — dieselbe Container-Reihenfolge wie unter
+ * „2 · Bearbeiten" (Kundenfeedback 05.08.2026): hat ein instruierter Beleg hier
+ * noch einen Abhol-Stopp, darf ihn dieser Abschnitt nicht widersprüchlich weit
+ * unten einsortieren. Grundlage bleibt die Engine-Route aus `deriveStops`,
+ * darüber nur `displayRank`; Container fertiger Belege verschwinden komplett
+ * (Kundenfeedback 04.08.2026, Punkt 1).
+ */
+export function stopsForDisplay(
+  stops: readonly CollectStopView[],
+  cases: readonly CaseSummaryDto[],
+): CollectStopView[] {
+  // Container ohne Case gibt es nicht — `deriveStops` baut sie AUS den Cases.
+  const caseById = new Map(cases.map((c) => [c.id, c]));
+  return byDisplayRank(
+    stops.filter((s) => {
+      const beleg = caseById.get(s.id);
+      return beleg === undefined || !isCaseClosed(beleg.status);
+    }),
+    (s) => {
+      const beleg = caseById.get(s.id);
+      return beleg ? displayRank(beleg) : 0;
+    },
+  );
 }
 
 /** B6: Icon je Lagerplatz-Art (LocationKind-abgeleitet): Regal / Palette / Kleiderbügel. */
@@ -375,9 +458,10 @@ export function BundleHomeScreen(): JSX.Element {
   );
 
   // ALLE Container (auch die fertiger Belege) bilden die Zähler-Basis;
-  // gelistet werden nur die offenen (Kundenfeedback 04.08.2026: fertig = raus).
+  // gelistet werden nur die offenen (Kundenfeedback 04.08.2026: fertig = raus)
+  // — in derselben Anzeige-Reihenfolge wie „2 · Bearbeiten" (05.08.2026).
   const stops = deriveStops(bundle?.routeStops ?? [], cases);
-  const openStops = stops.filter((s) => !closedIds.has(s.id));
+  const openStops = stopsForDisplay(stops, cases);
 
   const toggleStop = (stopId: string): void => {
     setCollected.mutate({ caseId: stopId, collected: !collectedIds.has(stopId) });
@@ -466,7 +550,7 @@ export function BundleHomeScreen(): JSX.Element {
 
   // `cases` kommt bereits in der Bündel-Reihenfolge der assignment-engine —
   // obendrauf nur die Anzeige-Regeln aus `casesForDisplay` (fertig = raus,
-  // geparkte Problemfälle ganz unten).
+  // vollständig instruierte Belege ganz oben, offene Meldungen ganz unten).
   const visibleCases = casesForDisplay(cases);
   // Nachtrag 15.07.2026: der Beleg, dessen WE-Nr aktuell im Barcode-Pop-up steht.
   const barcodeCase = cases.find((c) => c.id === barcodeCaseId);

@@ -22,6 +22,9 @@ import type { LabelPrintVariant } from '@paket/domain-types';
  * - `MA_106` — ein geparkter Problemfall (`issue_open`) mit Engine-Sequenz 1:
  *   belegt, dass die Anzeige ihn ganz unten listet (Kundenfeedback 15.07.2026,
  *   Punkt 3), obwohl das Backend ihn zuerst liefert.
+ * - `MA_107` — ein geklärter Beleg (`problem_resolved`) mit der LETZTEN
+ *   Engine-Sequenz: belegt, dass die Anzeige ihn ganz nach oben zieht
+ *   (Kundenfeedback 05.08.2026), obwohl das Backend ihn zuletzt liefert.
  */
 
 /** One Größe (SKU line) of a position; the prices are what the table right-aligns. */
@@ -294,6 +297,28 @@ export const MA_106: SeedEmployeeSpec = {
         { weBelegNo: 'WE-E2E-106-P', status: 'issue_open', bundleSequence: 1 },
         { weBelegNo: 'WE-E2E-106-2', bundleSequence: 2 },
         { weBelegNo: 'WE-E2E-106-3', bundleSequence: 3 },
+      ],
+    },
+  ],
+};
+
+/**
+ * Geklärt-Wächter (Kundenfeedback 05.08.2026). Spiegelbild zu MA_106: der
+ * geklärte Beleg (`problem_resolved`) trägt ABSICHTLICH die LETZTE Engine-
+ * Sequenz — `/api/me/today` liefert ihn zuletzt, nur die ANZEIGE hebt ihn an
+ * den Anfang. Stünde er schon in der Engine-Reihenfolge vorn, würde der Test
+ * auch ohne die Regel zufällig grün.
+ */
+export const MA_107: SeedEmployeeSpec = {
+  employeeNo: 'ma-107',
+  displayName: 'Mitarbeiter 107',
+  stops: [
+    {
+      locationCode: 'E2E-R7',
+      belege: [
+        { weBelegNo: 'WE-E2E-107-1', bundleSequence: 1 },
+        { weBelegNo: 'WE-E2E-107-2', bundleSequence: 2 },
+        { weBelegNo: 'WE-E2E-107-G', status: 'problem_resolved', bundleSequence: 3 },
       ],
     },
   ],
