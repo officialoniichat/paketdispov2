@@ -885,6 +885,33 @@
         ]
       }
     },
+    "/api/teamlead/ablagen": {
+      "get": {
+        "operationId": "TeamleadController_ablagen",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AblagenPoolDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "§10.2 Digitale Ablagen: der VOLLSTÄNDIGE steuerbare Pool (ready/parked/issue_open + weitergeleitet), ohne Pagination — Ausnahme-Queues dürfen nichts abschneiden.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/cases/lookup": {
       "get": {
         "operationId": "TeamleadController_lookupCase",
@@ -5073,6 +5100,24 @@
           "total",
           "page",
           "limit"
+        ]
+      },
+      "AblagenPoolDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
         ]
       },
       "CaseLookupResultDto": {

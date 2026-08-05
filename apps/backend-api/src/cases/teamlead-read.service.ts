@@ -10,9 +10,11 @@ import {
   bereichFromLocationKind,
   locationKindSchema,
   type LabelPrintVariant,
+  type RuleConfig,
 } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
+  type AblagenPoolDto,
   type AuditEventDto,
   type BoardDto,
   type BoardRowDto,
@@ -61,6 +63,62 @@ const SCOPE_STATUSES: Record<'aktiv' | 'abgeschlossen' | 'archiv', CaseStatus[]>
   abgeschlossen: ['completed'],
   archiv: ['completed', 'zst_done'],
 };
+
+/**
+ * Belege, die in den Digitalen Ablagen (§10.2) leben: der steuerbare Pool —
+ * alles, was noch park-/freigebbar/priorisierbar ist. Was die Engine bereits
+ * platziert hat (`assigned`) oder ein Mitarbeiter angefangen hat, gehört aufs
+ * Mitarbeiterboard, nicht in eine Lane.
+ */
+const ABLAGEN_STATUSES: CaseStatus[] = ['ready', 'parked', 'issue_open'];
+
+/**
+ * Zugehörigkeit zu den Ablagen — die EINZIGE Quelle dieser Regel (früher als
+ * `isPoolResident` im Cockpit-Frontend dupliziert). Ein weitergeleiteter Beleg
+ * bleibt sichtbar, EGAL welchen Status er hat: Weiterleiten ist status-neutral
+ * und die Lane ist die Queue (C5).
+ */
+const ABLAGEN_WHERE: Prisma.GoodsReceiptCaseWhereInput = {
+  OR: [{ status: { in: ABLAGEN_STATUSES } }, { forwardedTo: { not: null } }],
+};
+
+/**
+ * Row-Umfang jeder Pool-Projektion: Aufwands-Eingaben, der volle Meldungs-Verlauf
+ * und das zugewiesene Bündel (A5-Warteposition). Geteilt von der paginierten
+ * Belege-Liste und den vollständigen Ablagen, damit beide dieselbe Karte zeigen.
+ */
+const poolItemInclude = {
+  ...caseEffortInclude,
+  // C4 + Instruktions-Loop (04.08.2026): ALLE Meldungen inkl. Verlauf —
+  // die Problemfälle-Karte zeigt Anzahl + Einzel-Status je Meldung.
+  issues: {
+    orderBy: { reportedAt: 'asc' },
+    include: {
+      messages: true,
+      // Standardanweisung der Problemart (Vorlage für den Instruktions-Dialog).
+      reason: { select: { defaultInstruction: true, autoInsert: true } },
+    },
+  },
+  assignedBundle: {
+    select: {
+      id: true,
+      employee: { select: { employeeNo: true, displayName: true } },
+      // A5 bundleQueue: position of the Beleg in its Bündel + whether the
+      // Bündel is already running (any case in Arbeit).
+      items: {
+        orderBy: { sequence: 'asc' },
+        select: { caseId: true, case: { select: { status: true } } },
+      },
+    },
+  },
+} satisfies Prisma.GoodsReceiptCaseInclude;
+
+type PoolRow = Prisma.GoodsReceiptCaseGetPayload<{ include: typeof poolItemInclude }>;
+
+/** Nur der Lieferungs-Ausschnitt des Universums, den die Pool-Projektion braucht. */
+interface DeliveryGroupRefLookup {
+  refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
+}
 
 /** Compose the Prisma where clause from the Belege list query (scope + column filters, A2/A7). */
 function poolWhere(query: PoolQueryDto): Prisma.GoodsReceiptCaseWhereInput {
@@ -215,37 +273,54 @@ export class TeamleadReadService {
 
     const pageRows = await this.prisma.goodsReceiptCase.findMany({
       where: { id: { in: pageIds } },
-      include: {
-        ...caseEffortInclude,
-        // C4 + Instruktions-Loop (04.08.2026): ALLE Meldungen inkl. Verlauf —
-        // die Problemfälle-Karte zeigt Anzahl + Einzel-Status je Meldung.
-        issues: {
-          orderBy: { reportedAt: 'asc' },
-          include: {
-            messages: true,
-            // Standardanweisung der Problemart (Vorlage für den Instruktions-Dialog).
-            reason: { select: { defaultInstruction: true, autoInsert: true } },
-          },
-        },
-        assignedBundle: {
-          select: {
-            id: true,
-            employee: { select: { employeeNo: true, displayName: true } },
-            // A5 bundleQueue: position of the Beleg in its Bündel + whether the
-            // Bündel is already running (any case in Arbeit).
-            items: {
-              orderBy: { sequence: 'asc' },
-              select: { caseId: true, case: { select: { status: true } } },
-            },
-          },
-        },
-      },
+      include: poolItemInclude,
     });
     const rowById = new Map(pageRows.map((r) => [r.id, r]));
     const rows = pageIds
       .map((id) => rowById.get(id))
       .filter((r): r is NonNullable<typeof r> => r !== undefined);
 
+    const items = await this.toPoolItems(rows, ruleConfig, universe);
+
+    return { items, total, page, limit };
+  }
+
+  /**
+   * Digitale Ablagen (§10.2): der VOLLSTÄNDIGE steuerbare Pool, bewusst OHNE
+   * Pagination.
+   *
+   * Die Ablagen sind keine blätterbare Tabelle, sondern Ausnahme-Queues, deren
+   * Zweck es ist, dass nichts in ihnen unbemerkt bleibt. Sie deshalb aus einer
+   * Seite der Belege-Liste zu speisen, versteckte genau das: bei 688 Belegen
+   * fielen alle vier Problemfälle aus dem 200-Zeilen-Fenster und die Lane stand
+   * auf „Leer", obwohl es Meldungen gab (Kundenfeedback 05.08.2026). Die
+   * Residenz-Regel gehört hierher, nicht ins Frontend — sonst filtert die
+   * Anzeige über einer bereits unvollständigen Menge.
+   */
+  async listAblagenPool(): Promise<AblagenPoolDto> {
+    const ruleConfig = await loadRuleConfig(this.prisma);
+    const universe = await this.deliveryGroupUniverse(ruleConfig.grouping);
+    const rows = await this.prisma.goodsReceiptCase.findMany({
+      where: ABLAGEN_WHERE,
+      // Deterministisch (älteste Buchung zuerst, weBelegNo als Tie-Break); die
+      // Lane-Zuordnung und die Sortierung INNERHALB einer Lane macht das Board.
+      orderBy: [{ bookingDate: 'asc' }, { weBelegNo: 'asc' }],
+      include: poolItemInclude,
+    });
+    const items = await this.toPoolItems(rows, ruleConfig, universe);
+    return { items, total: items.length };
+  }
+
+  /**
+   * Rows → {@link PoolItemDto}: die gemeinsame Projektion der paginierten
+   * Belege-Liste und der vollständigen Ablagen. Beide zeigen dieselbe Karte,
+   * deshalb darf es dafür nur EINE Abbildung geben.
+   */
+  private async toPoolItems(
+    rows: PoolRow[],
+    ruleConfig: RuleConfig,
+    universe: DeliveryGroupRefLookup,
+  ): Promise<PoolItemDto[]> {
     // Größenzeilen NUR für Belege mit Meldungen nachladen (Positions-/EAN-Anker
     // der Issues) — der Pool selbst bleibt schlank.
     const issueCaseIds = rows.filter((r) => r.issues.length > 0).map((r) => r.id);
@@ -311,7 +386,7 @@ export class TeamleadReadService {
       };
     });
 
-    return { items, total, page, limit };
+    return items;
   }
 
   /**

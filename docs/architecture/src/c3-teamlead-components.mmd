@@ -25,7 +25,7 @@ flowchart TB
         devbadge["components/DevTimeBadge (nur Dev, lazy)<br/><i>fixiertes Overlay oben rechts bei aktivem Server-Zeit-Override (Shell ohne Top-Bar,<br/>Mitarbeiter-App-Button in der Nav-Rail)</i>"]:::dev
         store["data/store.tsx — CockpitDataProvider<br/><b>useCockpitData() : CockpitApi</b><br/><i>View-Models + Mutationen (TanStack Query)</i>"]:::store
         subgraph datal["data/"]
-            remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·cases</i>"]:::logic
+            remote["remoteDataset.ts<br/><i>fetchCockpit() → capacity·dashboard·kpis·board·events·ablagen<br/>Lanes + Pool-Kennzahlen aus dem VOLLSTÄNDIGEN /api/teamlead/ablagen (nicht aus einer Seite der Belege-Liste):<br/>buildLanes() bucketet nur noch, die Zugehörigkeit entscheidet der Server</i>"]:::logic
             belegeData["belege.ts · admin.ts · employees.ts · audit.ts · nachrichten.ts"]:::logic
             devData["dev.ts (nur Dev)<br/><i>/api/dev-Client mit Admin-Dev-Token (VITE_DEV_ADMIN_TOKEN)</i>"]:::dev
             mutations["mutations.ts<br/><i>preview · recalculate · exportZst · withdraw · add · assignToEmployee ·<br/>assignBundleToEmployee (A1/A2) · moveCase (B2) · reorder · pause/resume</i>"]:::logic

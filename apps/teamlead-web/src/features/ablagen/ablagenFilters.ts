@@ -11,10 +11,11 @@ import type { LaneCard, LaneId } from '../../data/types.js';
 
 /**
  * 'assignedTo' is deliberately NOT a groupBy option: by construction (see
- * `laneForPoolItem`/`isPoolResident` in remoteDataset.ts), only the Problemfälle
- * and Weitergeleitet lanes can ever have an assigned employee, and both are
- * filter-exempt lanes (see {@link isFilterExemptLane}) — so grouping by
- * assignedTo would always collapse into a single "Frei" bucket everywhere else.
+ * `laneForPoolItem` in remoteDataset.ts and `ABLAGEN_WHERE` in the backend's
+ * teamlead-read.service.ts), only the Problemfälle and Weitergeleitet lanes can
+ * ever have an assigned employee, and both are filter-exempt lanes (see
+ * {@link isFilterExemptLane}) — so grouping by assignedTo would always collapse
+ * into a single "Frei" bucket everywhere else.
  */
 export type AblagenGroupBy = 'none' | 'bereich';
 export type DeliveryGroupFilter = 'any' | 'only_grouped' | 'only_single';

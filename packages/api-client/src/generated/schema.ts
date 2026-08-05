@@ -335,6 +335,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/ablagen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** §10.2 Digitale Ablagen: der VOLLSTÄNDIGE steuerbare Pool (ready/parked/issue_open + weitergeleitet), ohne Pagination — Ausnahme-Queues dürfen nichts abschneiden. */
+        get: operations["TeamleadController_ablagen"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/cases/lookup": {
         parameters: {
             query?: never;
@@ -1822,6 +1839,10 @@ export interface components {
             page: number;
             limit: number;
         };
+        AblagenPoolDto: {
+            items: components["schemas"]["PoolItemDto"][];
+            total: number;
+        };
         CaseLookupResultDto: {
             found: boolean;
             caseId?: string | null;
@@ -3068,6 +3089,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoolListDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_ablagen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AblagenPoolDto"];
                 };
             };
         };

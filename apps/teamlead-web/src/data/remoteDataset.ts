@@ -46,7 +46,7 @@ type BoardRowDto = components['schemas']['BoardRowDto'];
 type BoardCaseDto = components['schemas']['BoardCaseDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
 type PoolItemDto = components['schemas']['PoolItemDto'];
-type PoolListDto = components['schemas']['PoolListDto'];
+type AblagenPoolDto = components['schemas']['AblagenPoolDto'];
 
 /** The whole cockpit snapshot the provider exposes (mirrors the old selectors). */
 export interface CockpitSnapshot {
@@ -85,7 +85,12 @@ export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
         },
       },
     }),
-    api.GET('/api/teamlead/cases', { params: { query: { page: 1, limit: 200 } } }),
+    // §10.2 Digitale Ablagen: der VOLLSTÄNDIGE Pool. Früher hing das an einer
+    // Seite der Belege-Liste (`/cases?page=1&limit=200`) — bei 688 Belegen fielen
+    // damit alle Problemfälle aus dem Fenster und die Lane stand auf „Leer",
+    // obwohl es Meldungen gab (Kundenfeedback 05.08.2026). Lanes und
+    // Pool-Kennzahlen brauchen Vollständigkeit, keine Seite.
+    api.GET('/api/teamlead/ablagen'),
   ]);
 
   const capacityDto = unwrap<CapacityDto>(capacity, 'Laden der Kapazität');
@@ -93,7 +98,7 @@ export async function fetchCockpit(date: string): Promise<CockpitSnapshot> {
   const kpiDto = unwrap<KpiDto>(kpis, 'Laden der Kennzahlen');
   const boardDto = unwrap<BoardDto>(board, 'Laden der Mitarbeiterübersicht');
   const eventDtos = unwrap<AuditEventDto[]>(events, 'Laden der Ereignisse');
-  const poolDto = unwrap<PoolListDto>(pool, 'Laden der Belege');
+  const poolDto = unwrap<AblagenPoolDto>(pool, 'Laden der Ablagen');
 
   return {
     cockpit: {
@@ -274,27 +279,16 @@ function laneForPoolItem(item: PoolItemDto): LaneId {
 /**
  * The Ablagen board (§10.2) is the steerable pool — cases that are still
  * park-/release-/prioritise-able. A case the engine already placed (`assigned`) or
- * that an employee has started belongs on the Mitarbeiterboard, NOT in a pool lane:
- * showing it here would offer "Parken", which the §7.1 state machine rejects (park is
- * only legal from `ready`). Restrict lanes to genuine pool residents.
+ * that an employee has started belongs on the Mitarbeiterboard, NOT in a pool lane.
+ *
+ * WHICH cases those are is decided once, server-side (`ABLAGEN_WHERE` in
+ * teamlead-read.service.ts): `/api/teamlead/ablagen` returns exactly the pool
+ * residents, complete and unpaginated. Everything that arrives here belongs in a
+ * lane — bucketing is all that is left to do.
  */
-const POOL_LANE_STATUSES = new Set<PoolItemDto['status']>([
-  'ready',
-  'parked',
-  'issue_open',
-]);
-
-function isPoolResident(item: PoolItemDto): boolean {
-  // C5: a forwarded Beleg stays visible in its lane WHATEVER its pool-resident
-  // status — forwarding is status-neutral and the lane is the mocked queue.
-  if (item.forwardedTo != null) return true;
-  return POOL_LANE_STATUSES.has(item.status);
-}
-
 function buildLanes(items: PoolItemDto[]): Lane[] {
   const buckets = new Map<LaneId, LaneCard[]>(LANE_ORDER.map((id) => [id, []]));
   for (const item of items) {
-    if (!isPoolResident(item)) continue;
     buckets.get(laneForPoolItem(item))!.push(toLaneCard(item));
   }
   return LANE_ORDER.map((id) => {

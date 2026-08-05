@@ -11,6 +11,7 @@ import {
   AssignBundleDto,
   AssignToEmployeeDto,
   AuditEventDto,
+  AblagenPoolDto,
   BoardDto,
   BundleMutationResultDto,
   BundlePauseDto,
@@ -101,6 +102,16 @@ export class TeamleadController {
   @ApiOkResponse({ type: PoolListDto })
   pool(@Query() query: PoolQueryDto): Promise<PoolListDto> {
     return this.read.listPool(query);
+  }
+
+  @Get('ablagen')
+  @ApiOperation({
+    summary:
+      '§10.2 Digitale Ablagen: der VOLLSTÄNDIGE steuerbare Pool (ready/parked/issue_open + weitergeleitet), ohne Pagination — Ausnahme-Queues dürfen nichts abschneiden.',
+  })
+  @ApiOkResponse({ type: AblagenPoolDto })
+  ablagen(): Promise<AblagenPoolDto> {
+    return this.read.listAblagenPool();
   }
 
   @Get('cases/lookup')

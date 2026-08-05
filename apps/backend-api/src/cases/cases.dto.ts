@@ -552,6 +552,17 @@ export class PoolListDto {
   @ApiProperty() limit!: number;
 }
 
+/**
+ * Digitale Ablagen (§10.2): der VOLLSTÄNDIGE steuerbare Pool — bewusst ohne
+ * Pagination. Die Ablagen sind Ausnahme-Queues (Problemfälle/Geparkt/
+ * Weitergeleitet); eine Seitengrenze würde genau die Belege verstecken, die dort
+ * auffallen sollen.
+ */
+export class AblagenPoolDto {
+  @ApiProperty({ type: [PoolItemDto] }) items!: PoolItemDto[];
+  @ApiProperty() total!: number;
+}
+
 export class DashboardDto {
   @ApiProperty({ description: 'Open case count grouped by status' })
   countsByStatus!: Record<string, number>;
