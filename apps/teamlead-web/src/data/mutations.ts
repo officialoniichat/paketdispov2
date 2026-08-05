@@ -154,6 +154,12 @@ export interface MoveCaseArgs {
   bundleId: string;
   caseId: string;
   targetEmployeeNo: string;
+  /**
+   * Ziel-Pack im Bündel des Ziel-Mitarbeiters (Index aus `BoardRowDto.packs`).
+   * Weggelassen = ans Ende des Bündels. MIT Pack-Ziel darf der Ziel-Mitarbeiter
+   * auch der QUELL-Mitarbeiter sein — dann hängt der Beleg nur das Pack um.
+   */
+  targetPackIndex?: number;
   /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
   reason?: string;
   /** Operational day of the board (YYYY-MM-DD); the destination Bündel is bound to this day. */
@@ -161,14 +167,20 @@ export interface MoveCaseArgs {
 }
 
 /**
- * B2 §8.4 audited manual override: move one assigned Beleg straight from its
- * current Bündel into another employee's Bündel (find-or-create target).
+ * B2 §8.4 audited manual override: move one assigned Beleg from its current Bündel
+ * into another employee's Bündel (find-or-create target) — oder, mit Pack-Ziel, in
+ * ein anderes Pack desselben Bündels.
  */
 export async function moveCase(
   api: PaketApiClient,
-  { bundleId, caseId, targetEmployeeNo, reason, date }: MoveCaseArgs,
+  { bundleId, caseId, targetEmployeeNo, targetPackIndex, reason, date }: MoveCaseArgs,
 ): Promise<BundleMutationResultDto> {
-  const body: MoveCaseDto = { targetEmployeeNo, date, ...(reason ? { reason } : {}) };
+  const body: MoveCaseDto = {
+    targetEmployeeNo,
+    date,
+    ...(targetPackIndex !== undefined ? { targetPackIndex } : {}),
+    ...(reason ? { reason } : {}),
+  };
   return ensure(
     'Beleg verschieben',
     await api.POST('/api/teamlead/bundles/{bundleId}/cases/{caseId}/move', {

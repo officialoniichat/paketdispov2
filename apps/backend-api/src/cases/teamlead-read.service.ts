@@ -40,6 +40,7 @@ import {
 import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapIssueSummary,
   mapWorkInstruction, wgrDescription, type IssuePositionRef,
 } from './mappers.js';
+import { reconstructPacks, type PackSourceEvent } from './board-packs.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
 import { assignableSearchWhere, rankCaseSearchCandidates, type CaseSearchCandidate } from './case-search.js';
@@ -708,27 +709,35 @@ export class TeamleadReadService {
     }
 
     // Pack-Grenzen (Starter-/Folge-Packs) aus dem Audit-Log rekonstruieren:
-    // `bundle.created`/`bundle.extended` tragen die caseIds des jeweiligen Packs.
+    // `bundle.created`/`bundle.extended` tragen die caseIds des jeweiligen Packs,
+    // ein §8.4-Verschieben mit Pack-Ziel (`assignment.overridden`/`moved`) schreibt
+    // die Zugehörigkeit um. Beides löst {@link reconstructPacks} — dieselbe Funktion,
+    // mit der `moveCase` sein Ziel-Pack auflöst (single source).
     const packsByBundle = new Map<string, string[][]>();
     if (bundles.length > 0) {
       const packEvents = await this.prisma.workflowEvent.findMany({
         where: {
           entityType: 'AssignmentBundle',
           entityId: { in: bundles.map((b) => b.id) },
-          eventType: { in: ['bundle.created', 'bundle.extended'] },
+          eventType: { in: ['bundle.created', 'bundle.extended', 'assignment.overridden'] },
         },
         orderBy: { seq: 'asc' },
-        select: { entityId: true, payload: true },
+        select: { entityId: true, eventType: true, payload: true },
       });
+      const eventsByBundle = new Map<string, PackSourceEvent[]>();
       for (const e of packEvents) {
-        const raw = (e.payload as { caseIds?: unknown } | null)?.caseIds;
-        const caseIds = Array.isArray(raw)
-          ? raw.filter((id): id is string => typeof id === 'string')
-          : [];
-        if (caseIds.length === 0) continue;
-        const list = packsByBundle.get(e.entityId) ?? [];
-        list.push(caseIds);
-        packsByBundle.set(e.entityId, list);
+        const list = eventsByBundle.get(e.entityId) ?? [];
+        list.push({ eventType: e.eventType, payload: e.payload });
+        eventsByBundle.set(e.entityId, list);
+      }
+      for (const b of bundles) {
+        packsByBundle.set(
+          b.id,
+          reconstructPacks(
+            eventsByBundle.get(b.id) ?? [],
+            b.items.map((i) => i.caseId),
+          ),
+        );
       }
     }
 

@@ -15,6 +15,7 @@ import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
+import { isPackIndex, packInsertPosition, reconstructPacks } from './board-packs.js';
 import {
   type AddToBundleDto,
   type AssignBundleDto,
@@ -879,37 +880,73 @@ export class TeamleadService {
         dto.targetEmployeeNo,
         day,
       );
-      if (targetBundle.id === sourceBundleId) {
-        throw new ConflictException('Ziel-Bündel ist identisch mit dem Quell-Bündel.');
-      }
       if (TERMINAL_BUNDLE_STATUSES.includes(targetBundle.status)) {
         throw new ConflictException(
           `Bundle ${targetBundle.id} is ${targetBundle.status} and cannot take cases`,
         );
       }
 
-      // Remove from the source bundle first (mirrors withdraw's resequencing).
-      await tx.assignmentItem.delete({ where: { id: item.id } });
-      const remaining = sourceBundle.items.filter((i) => i.caseId !== caseId).map((i) => i.caseId);
-      await resequenceItems(tx, sourceBundleId, remaining);
-      await resequenceRouteStops(tx, sourceBundleId, remaining);
-      const sourcePlannedEffortMinutes = await recomputeEffort(tx, remaining);
-      await tx.assignmentBundle.update({
-        where: { id: sourceBundleId },
-        data: { plannedEffortMinutes: sourcePlannedEffortMinutes },
-      });
+      const intraBundle = targetBundle.id === sourceBundleId;
+      if (intraBundle && dto.targetPackIndex === undefined) {
+        throw new ConflictException('Ziel-Bündel ist identisch mit dem Quell-Bündel.');
+      }
 
-      // Append to the target bundle (case stays `assigned`, only the link moves —
-      // the ready-only validation in addCasesToBundleTx does not apply to a move).
-      const { plannedEffortMinutes, caseIds } = await this.appendCasesTx(tx, targetBundle, [
-        caseId,
-      ]);
+      // Pack-Zusammensetzung des ZIEL-Bündels VOR dem Verschieben — genau die
+      // Sicht, auf die sich der Index des Aufrufers bezieht.
+      const targetPack = await this.resolveTargetPackTx(
+        tx,
+        targetBundle.id,
+        targetBundle.items.map((i) => i.caseId),
+        dto.targetPackIndex,
+        intraBundle ? caseId : null,
+      );
+
+      let plannedEffortMinutes: number;
+      let caseIds: string[];
+
+      if (intraBundle) {
+        // Nur Pack-Zugehörigkeit + Abhol-Reihenfolge ändern sich: der Beleg bleibt
+        // im Bündel, die Menge der Mitglieder — und damit der Aufwand — auch.
+        const rest = sourceBundle.items.map((i) => i.caseId).filter((id) => id !== caseId);
+        const at = packInsertPosition(rest, targetPack?.members ?? []);
+        caseIds = [...rest.slice(0, at), caseId, ...rest.slice(at)];
+        await resequenceItems(tx, sourceBundleId, caseIds);
+        await resequenceRouteStops(tx, sourceBundleId, caseIds);
+        plannedEffortMinutes = sourceBundle.plannedEffortMinutes;
+      } else {
+        // Remove from the source bundle first (mirrors withdraw's resequencing).
+        await tx.assignmentItem.delete({ where: { id: item.id } });
+        const remaining = sourceBundle.items.filter((i) => i.caseId !== caseId).map((i) => i.caseId);
+        await resequenceItems(tx, sourceBundleId, remaining);
+        await resequenceRouteStops(tx, sourceBundleId, remaining);
+        const sourcePlannedEffortMinutes = await recomputeEffort(tx, remaining);
+        await tx.assignmentBundle.update({
+          where: { id: sourceBundleId },
+          data: { plannedEffortMinutes: sourcePlannedEffortMinutes },
+        });
+
+        // Append to the target bundle (case stays `assigned`, only the link moves —
+        // the ready-only validation in addCasesToBundleTx does not apply to a move).
+        ({ plannedEffortMinutes, caseIds } = await this.appendCasesTx(tx, targetBundle, [caseId]));
+
+        // Mit Pack-Ziel rückt der zunächst angehängte Beleg an seine Pack-Stelle.
+        if (targetPack !== null) {
+          const rest = caseIds.filter((id) => id !== caseId);
+          const at = packInsertPosition(rest, targetPack.members);
+          caseIds = [...rest.slice(0, at), caseId, ...rest.slice(at)];
+          await resequenceItems(tx, targetBundle.id, caseIds);
+          await resequenceRouteStops(tx, targetBundle.id, caseIds);
+        }
+      }
 
       const eventId = await this.auditOverride(tx, principal, targetBundle.id, 'moved', dto.reason, {
         caseId,
         fromBundleId: sourceBundleId,
         toEmployeeNo: dto.targetEmployeeNo,
         bundleCreated,
+        // Trägt die neue Pack-Zugehörigkeit — {@link reconstructPacks} liest sie beim
+        // nächsten Board-Read zurück (null = pack-los, erbt das Pack des Nachbarn).
+        targetPackIndex: targetPack?.index ?? null,
       });
       return {
         bundleId: targetBundle.id,
@@ -1156,6 +1193,44 @@ export class TeamleadService {
         eventId,
       };
     });
+  }
+
+  /**
+   * Löst `targetPackIndex` gegen die aus dem Audit-Log rekonstruierte Pack-Sicht des
+   * Ziel-Bündels auf — {@link reconstructPacks} ist dieselbe Funktion, aus der das
+   * Board seine `packs` liefert, der Index des Aufrufers meint also exakt das, was
+   * der Teamlead gesehen hat. `undefined` = kein Pack-Ziel → null (ans Bündel-Ende).
+   * Ein Index außerhalb der Pack-Liste heißt „Board-Sicht veraltet" (400); zeigt er
+   * auf das Pack, in dem der Beleg schon liegt, gibt es nichts zu tun (409).
+   */
+  private async resolveTargetPackTx(
+    tx: PrismaTx,
+    bundleId: string,
+    memberCaseIds: string[],
+    targetPackIndex: number | undefined,
+    movingCaseId: string | null,
+  ): Promise<{ index: number; members: string[] } | null> {
+    if (targetPackIndex === undefined) return null;
+    const events = await tx.workflowEvent.findMany({
+      where: {
+        entityType: 'AssignmentBundle',
+        entityId: bundleId,
+        eventType: { in: ['bundle.created', 'bundle.extended', 'assignment.overridden'] },
+      },
+      orderBy: { seq: 'asc' },
+      select: { eventType: true, payload: true },
+    });
+    const packs = reconstructPacks(events, memberCaseIds);
+    if (!isPackIndex(targetPackIndex, packs.length)) {
+      throw new BadRequestException(
+        `Pack ${targetPackIndex} gibt es im Ziel-Bündel nicht (${packs.length} Packs) — die Board-Sicht ist veraltet.`,
+      );
+    }
+    const members = packs[targetPackIndex]!;
+    if (movingCaseId !== null && members.includes(movingCaseId)) {
+      throw new ConflictException('Der Beleg liegt bereits in diesem Pack.');
+    }
+    return { index: targetPackIndex, members };
   }
 
   private async loadBundle(

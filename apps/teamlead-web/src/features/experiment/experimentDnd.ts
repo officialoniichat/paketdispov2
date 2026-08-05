@@ -123,9 +123,52 @@ export function matrixDropAction(
     // enthält auch re-geplante `assigned`-Belege, daher nur wenn alle `ready` sind.
     return drag.allReady && drag.caseIds.length > 0 ? { kind: 'assign-bundle' } : null;
   }
-  if (drag.employeeId === targetEmployeeId) return null;
+  if (drag.employeeId === targetEmployeeId) return null; // Pack-genau: siehe packDropAction.
   // Nur ungestartete Belege sind verschiebbar (§7.1: move verlangt `assigned`).
-  return drag.status === 'assigned' && drag.bundleId !== '' ? { kind: 'move' } : null;
+  return matrixVerschiebbar(drag) ? { kind: 'move' } : null;
+}
+
+/**
+ * Verschiebbarer Matrix-Beleg: §7.1 lässt `move` (wie `withdraw`) NUR auf einem noch
+ * `assigned`, also ungestarteten Beleg zu. Alles, was der Mitarbeiter schon angefasst
+ * hat, bleibt liegen — auch `issue_open`/`problem_resolved`: die entstehen erst NACH
+ * dem Start (Teilabschluss mit Problemen) und bleiben laut §7.1 beim selben
+ * Mitarbeiter geparkt. Fertige/stornierte ohnehin.
+ */
+export function matrixVerschiebbar(
+  drag: Extract<ExperimentDragPayload, { source: 'matrix' }>,
+): boolean {
+  return drag.status === 'assigned' && drag.bundleId !== '';
+}
+
+/** Ziel-Pack eines Drops: Pack `index` im Bündel von `employeeId` (Manuell = null). */
+export interface PackDropTarget {
+  employeeId: string;
+  /** Pack-Index im Ziel-Bündel; null = Manuell-Kasten (kein echtes Pack). */
+  index: number | null;
+  /** Belege, die aktuell in diesem Kasten liegen — für „liegt schon hier". */
+  caseIds: readonly string[];
+  /** Abwesend (krank/urlaub) = die ganze Zeile nimmt nichts entgegen. */
+  absent: boolean;
+}
+
+/**
+ * Drop eines Matrix-Belegs auf EIN Pack — deckt beide Richtungen ab: ein anderes
+ * Pack DESSELBEN Mitarbeiters (Umhängen innerhalb) und ein Pack eines ANDEREN
+ * Mitarbeiters (mitarbeiterübergreifend). Beides ist dieselbe auditierte
+ * `moveCase`-Mutation, nur mit `targetPackIndex`; hier fällt lediglich die
+ * Ziel-Entscheidung. `null` = kein gültiges Ziel (kein Drop, keine Hervorhebung).
+ */
+export function packDropAction(
+  drag: ExperimentDragPayload | null,
+  target: PackDropTarget,
+): { kind: 'move'; targetPackIndex: number } | null {
+  if (drag === null || drag.source !== 'matrix') return null; // Ablage-Drags: Zeile/Strich.
+  if (target.absent || target.index === null) return null;
+  if (!matrixVerschiebbar(drag)) return null;
+  // Liegt der Beleg schon in diesem Kasten, gibt es nichts zu tun (Backend: 409).
+  if (target.caseIds.includes(drag.caseId)) return null;
+  return { kind: 'move', targetPackIndex: target.index };
 }
 
 /**

@@ -2170,6 +2170,8 @@ export interface components {
         MoveCaseDto: {
             /** @description employeeNo of the destination employee */
             targetEmployeeNo: string;
+            /** @description Ziel-Pack im Bündel des Ziel-Mitarbeiters — Index in BoardRowDto.packs. Der Beleg wird hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg bereits liegt, ist ein 409 (nichts zu tun). */
+            targetPackIndex?: number;
             /** @description Optional reason logged in the §8.4 audit event */
             reason?: string;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day. */

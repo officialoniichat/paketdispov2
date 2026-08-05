@@ -130,6 +130,12 @@ export interface MoveCaseVars {
   bundleId: string;
   caseId: string;
   targetEmployeeNo: string;
+  /**
+   * Ziel-Pack im Bündel des Ziel-Mitarbeiters (Index aus `BoardRow.packs`).
+   * Weggelassen = ans Bündel-Ende. Mit Pack-Ziel ist auch der Quell-Mitarbeiter
+   * ein gültiges Ziel — dann wird der Beleg nur zwischen seinen Packs umgehängt.
+   */
+  targetPackIndex?: number;
   /** Optional §8.4 audit reason (B2). */
   reason?: string;
 }
@@ -458,12 +464,13 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  // B2 move a Beleg between two employees' Bündel. Touches two board rows at once,
-  // so (like assignToEmployee) this settles via a plain invalidate rather than an
+  // B2 move a Beleg between two employees' Bündel — oder mit `targetPackIndex`
+  // zwischen den Packs EINES Bündels. Touches up to two board rows at once, so
+  // (like assignToEmployee) this settles via a plain invalidate rather than an
   // optimistic patch.
   const moveCase = useMutation<unknown, Error, MoveCaseVars>({
-    mutationFn: ({ bundleId, caseId, targetEmployeeNo, reason }) =>
-      moveCaseRequest(api, { bundleId, caseId, targetEmployeeNo, reason, date }),
+    mutationFn: ({ bundleId, caseId, targetEmployeeNo, targetPackIndex, reason }) =>
+      moveCaseRequest(api, { bundleId, caseId, targetEmployeeNo, targetPackIndex, reason, date }),
     onSettled: invalidateCockpitAndBelege,
   });
 

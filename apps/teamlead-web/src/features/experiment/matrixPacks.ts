@@ -12,6 +12,12 @@ import type { BoardCase } from '../../data/types.js';
 export interface MatrixPack {
   key: string;
   label: string;
+  /**
+   * Pack-Index im Bündel — DERSELBE Index, den `BoardRowDto.packs` liefert und den
+   * `moveCase` als `targetPackIndex` erwartet. `null` beim Manuell-Kasten: der ist
+   * kein echtes Pack, sondern der Sammelplatz pack-loser Belege — also kein Ziel.
+   */
+  index: number | null;
   /** Belege des Packs, anzeige-geordnet (Laufendes oben, Fertiges unten). */
   cases: BoardCase[];
   teile: number;
@@ -156,6 +162,7 @@ export function derivePacks(
     .map(([index, members], displayIndex) => ({
       key: `pack-${index}`,
       label: `Pack ${displayIndex + 1}`,
+      index,
       cases: orderPackCases(members),
       teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
     }));
@@ -164,6 +171,7 @@ export function derivePacks(
     packs.push({
       key: `pack-manuell-${key === '' ? 'ohne-buendel' : key}`,
       label: packs.length === 0 ? 'Pack 1' : 'Manuell',
+      index: null,
       cases: orderPackCases(members),
       teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
     });

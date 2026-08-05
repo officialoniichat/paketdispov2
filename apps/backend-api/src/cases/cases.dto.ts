@@ -1386,14 +1386,28 @@ export class AssignBundleDto {
 
 /**
  * Body for POST /api/teamlead/bundles/:bundleId/cases/:caseId/move — move one Beleg
- * from its current Bündel straight into another employee's Bündel (find-or-create,
- * same as {@link AssignToEmployeeDto}) in a single atomic step. Only an `assigned`
- * (not yet started) case may be moved — same §7.1 guard as withdraw.
+ * from its current Bündel into another employee's Bündel (find-or-create, same as
+ * {@link AssignToEmployeeDto}) OR into another Pack of the SAME Bündel — one atomic
+ * step either way. Only an `assigned` (not yet started) case may be moved — same
+ * §7.1 guard as withdraw.
  */
 export class MoveCaseDto {
   @ApiProperty({ description: 'employeeNo of the destination employee' })
   @IsString()
   targetEmployeeNo!: string;
+
+  @ApiPropertyOptional({
+    type: Number,
+    description:
+      'Ziel-Pack im Bündel des Ziel-Mitarbeiters — Index in BoardRowDto.packs. Der Beleg wird ' +
+      'hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). ' +
+      'Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg ' +
+      'bereits liegt, ist ein 409 (nichts zu tun).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  targetPackIndex?: number;
 
   @ApiPropertyOptional({ description: 'Optional reason logged in the §8.4 audit event' })
   @IsOptional()

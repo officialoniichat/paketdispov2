@@ -12,7 +12,7 @@
  * Mutationen aus (Ablage → Zeile = zuweisen, Zeile → Zeile = verschieben) —
  * immer über den §8.4-ReasonDialog des Parents, nie direkt.
  */
-import { Fragment, useRef, useState, type JSX } from 'react';
+import { Fragment, useRef, useState, type JSX, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
@@ -24,6 +24,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { alpha } from '@mui/material/styles';
 import { assignmentStatusLabels } from '@paket/ui';
 import { useCockpitData } from '../../data/store.js';
@@ -42,6 +43,7 @@ import { lieferungSatz, splitLieferungWarnung } from '../../components/Lieferung
 import {
   ablageAssignbar,
   matrixDropAction,
+  packDropAction,
   type ExperimentDragPayload,
 } from './experimentDnd.js';
 import { LaufendEinfassenDialog, NeuesBuendelDialog } from './NeuesBuendelDialog.js';
@@ -54,6 +56,7 @@ import {
   derivePacks,
   packSections,
   stripStyle,
+  type MatrixPack,
 } from './matrixPacks.js';
 
 /** Breite der sticky Namenszelle — zugleich Zielstrecke des Pausen-Streifens. */
@@ -299,6 +302,36 @@ function MatrixRow({
     }
   };
 
+  /**
+   * Drop eines Beleg-Strichs auf EIN Pack: dieselbe auditierte `moveCase`-Mutation
+   * wie der Zeilen-Drop, nur mit Pack-Ziel. Deckt beide Richtungen ab — Umhängen
+   * zwischen den Packs DESSELBEN Mitarbeiters und mitarbeiterübergreifend.
+   */
+  const handlePackDrop = (pack: MatrixPack, targetPackIndex: number): void => {
+    if (dragging === null || dragging.source !== 'matrix') return;
+    const src = dragging;
+    const gleicherMa = src.employeeId === row.employeeId;
+    requestReason({
+      title: gleicherMa
+        ? `${src.weBelegNo} in ${pack.label} umhängen`
+        : `${src.weBelegNo} zu ${row.displayName} in ${pack.label} verschieben`,
+      description: gleicherMa
+        ? `Der Beleg wechselt im Bündel von ${row.displayName} nach ${pack.label} und wird dort hinten in die Abhol-Reihenfolge einsortiert.`
+        : `Der Beleg wird aus dem Bündel von ${src.employeeName} entfernt und ${row.displayName} in ${pack.label} zugeteilt.`,
+      suggestions: gleicherMa
+        ? ['Reihenfolge anpassen', 'Passt besser in dieses Pack', 'Eilig für Verladung']
+        : ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+      run: (reason) =>
+        moveCase.mutate({
+          bundleId: src.bundleId,
+          caseId: src.caseId,
+          targetEmployeeNo: row.employeeId,
+          targetPackIndex,
+          reason,
+        }),
+    });
+  };
+
   /** Strich inkl. Lieferungs-Gruppenfarbe — in allen Pack-Abschnitten identisch. */
   const stripFor = (c: BoardCase): JSX.Element => (
     <CaseStrip
@@ -452,60 +485,53 @@ function MatrixRow({
 
       {packs.map((pack, packIndex) => (
         <Fragment key={pack.key}>
-        {/* Durchlaufende vertikale Trennwand zwischen den Slot-Spalten. */}
-        {packIndex > 0 && <Divider orientation="vertical" flexItem />}
-        <Box
-          sx={{
-            width: 200,
-            flexShrink: 0,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: 'background.paper',
-            p: 0.5,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.375,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
-            {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
-            {pack.teile} Teile
-          </Typography>
-          {/* EIN Pack, innen aufgeteilt wie die Board-Karte (Nutzer-Vorgabe):
-              Laufend (n) / Geplant (n) / Fertig (n). */}
-          {packSections(pack.cases).map((sec, index) => (
-            <Box
-              key={sec.key}
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 0.375,
-                borderTop: index > 0 ? '1px solid' : 'none',
-                borderColor: 'divider',
-                pt: index > 0 ? 0.375 : 0,
-              }}
-            >
-              <Typography
+          {/* Durchlaufende vertikale Trennwand zwischen den Slot-Spalten. */}
+          {packIndex > 0 && <Divider orientation="vertical" flexItem />}
+          <PackBox
+            pack={pack}
+            employeeId={row.employeeId}
+            action={packDropAction(dragging, {
+              employeeId: row.employeeId,
+              index: pack.index,
+              caseIds: pack.cases.map((c) => c.caseId),
+              absent: absent !== null,
+            })}
+            onDropZiel={(targetPackIndex) => handlePackDrop(pack, targetPackIndex)}
+          >
+            {/* EIN Pack, innen aufgeteilt wie die Board-Karte (Nutzer-Vorgabe):
+                Laufend (n) / Geplant (n) / Fertig (n). */}
+            {packSections(pack.cases).map((sec, index) => (
+              <Box
+                key={sec.key}
                 sx={{
-                  fontSize: '0.56rem',
-                  fontWeight: 700,
-                  letterSpacing: 0.3,
-                  textTransform: 'uppercase',
-                  color: 'text.secondary',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.375,
+                  borderTop: index > 0 ? '1px solid' : 'none',
+                  borderColor: 'divider',
+                  pt: index > 0 ? 0.375 : 0,
                 }}
               >
-                {sec.title}
-              </Typography>
-              {sec.cases.map(stripFor)}
-              {sec.cases.length === 0 && sec.empty !== null && (
-                <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary' }}>
-                  {sec.empty}
+                <Typography
+                  sx={{
+                    fontSize: '0.56rem',
+                    fontWeight: 700,
+                    letterSpacing: 0.3,
+                    textTransform: 'uppercase',
+                    color: 'text.secondary',
+                  }}
+                >
+                  {sec.title}
                 </Typography>
-              )}
-            </Box>
-          ))}
-        </Box>
+                {sec.cases.map(stripFor)}
+                {sec.cases.length === 0 && sec.empty !== null && (
+                  <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary' }}>
+                    {sec.empty}
+                  </Typography>
+                )}
+              </Box>
+            ))}
+          </PackBox>
         </Fragment>
       ))}
       {absent === null && packs.length > 0 && (
@@ -539,6 +565,71 @@ function MatrixRow({
           </Typography>
         </Box>
       )}
+    </Box>
+  );
+}
+
+/**
+ * Ein Pack-Kasten — zugleich die Dropzone fürs Umhängen. Nimmt NUR Beleg-Striche
+ * entgegen (`packDropAction`); Ablage-Drags lässt er durch, damit weiterhin die
+ * Zeile (zuweisen) bzw. der Strich (einsortieren) greift. Ist er ein gültiges Ziel,
+ * zeigt der Rahmen es an, noch bevor der Zeiger ihn erreicht.
+ */
+function PackBox({
+  pack,
+  employeeId,
+  action,
+  onDropZiel,
+  children,
+}: {
+  pack: MatrixPack;
+  employeeId: string;
+  action: { kind: 'move'; targetPackIndex: number } | null;
+  onDropZiel: (targetPackIndex: number) => void;
+  children: ReactNode;
+}): JSX.Element {
+  const [over, setOver] = useState(false);
+  return (
+    <Box
+      data-testid={`matrix-pack-${employeeId}-${pack.index ?? 'manuell'}`}
+      onDragOver={(e) => {
+        if (action === null) return; // Kein Pack-Ziel: Event gehört Zeile/Strich.
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        // Kind-Elemente feuern ebenfalls dragleave — nur echtes Verlassen zählt.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        if (action === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        onDropZiel(action.targetPackIndex);
+      }}
+      sx={{
+        width: 200,
+        flexShrink: 0,
+        border: '1px solid',
+        borderStyle: action !== null ? 'dashed' : 'solid',
+        borderColor: action !== null ? 'primary.main' : 'divider',
+        borderRadius: 1,
+        bgcolor:
+          over && action !== null ? (t) => alpha(t.palette.primary.main, 0.12) : 'background.paper',
+        p: 0.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.375,
+      }}
+    >
+      <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
+        {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
+        {pack.teile} Teile
+      </Typography>
+      {children}
     </Box>
   );
 }
@@ -622,6 +713,13 @@ function CaseStrip({
   // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen verschieden.
   const itemBundleId = c.bundleId ?? row.bundleId;
   const draggable = c.status === 'assigned' && itemBundleId != null;
+  // Warum gesperrt — laufende Arbeit bzw. Fertiges; ohne Bündel gibt es nichts
+  // zu verschieben. Wandert in die aria-Beschriftung des Schlosses.
+  const gesperrtGrund = LAUFEND_STATUSES.includes(c.status)
+    ? `in Arbeit: ${stripStyle(c.status)?.statusLabel ?? c.status}`
+    : FERTIG_STATUSES.includes(c.status)
+      ? `abgeschlossen: ${stripStyle(c.status)?.statusLabel ?? c.status}`
+      : 'kein Bündel';
   const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
   // Einsortieren aus der Ablage: Geplant positionsgenau, Laufend nur mit Frage.
   const [insertPos, setInsertPos] = useState<'davor' | 'danach' | null>(null);
@@ -689,7 +787,7 @@ function CaseStrip({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
-          {draggable && (
+          {draggable ? (
             <Box
               role="button"
               aria-label={`${c.weBelegNo} aus Bündel ziehen`}
@@ -697,6 +795,17 @@ function CaseStrip({
               sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
             >
               <DragDots />
+            </Box>
+          ) : (
+            // Frei/Fix: laufende und fertige Arbeit ist unantastbar (§7.1 lässt
+            // `move` nur auf `assigned` zu). Das Schloss steht an der Stelle der
+            // Griff-Punkte, damit „ziehbar" und „gesperrt" auf denselben Blick
+            // unterscheidbar sind.
+            <Box
+              aria-label={`${c.weBelegNo} ist gesperrt (${gesperrtGrund}) — nicht verschiebbar`}
+              sx={{ display: 'flex', alignItems: 'center', cursor: 'not-allowed' }}
+            >
+              <LockOutlinedIcon sx={{ fontSize: 11, color: 'text.disabled' }} />
             </Box>
           )}
           <Typography
@@ -812,11 +921,17 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
             Gesten
           </Typography>
           <Typography variant="caption">
-            Ablage → Zeile: zuweisen · Beleg-Strich → andere Zeile: verschieben · Beleg-Strich →
+            Ablage → Zeile: zuweisen · Beleg-Strich → anderes Pack (auch beim selben Mitarbeiter):
+            umhängen · Beleg-Strich → andere Zeile: ans Bündel-Ende verschieben · Beleg-Strich →
             Ablagen/rote Zone: entziehen · Hover auf einen Strich: Schnellinfo, Klick:
             Belegdetails · Farbigen Schicht-Streifen links über die Namenszelle aufziehen, bis er
             sie bedeckt (oder Wisch über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über
             den Anschlag hinaus wechselt die Anordnung.
+          </Typography>
+          <Typography variant="caption">
+            Ein <b>Schloss</b> statt der Griff-Punkte heißt: unantastbar. Sobald der Mitarbeiter
+            einen Beleg begonnen hat (in Arbeit, Problem offen, geklärt) oder er fertig bzw.
+            storniert ist, bleibt er, wo er ist — nur ungestartete Belege lassen sich umhängen.
           </Typography>
         </Stack>
       </Popover>

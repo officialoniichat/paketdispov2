@@ -4,7 +4,9 @@ import {
   ablagenDropAction,
   canWithdraw,
   matrixDropAction,
+  packDropAction,
   type ExperimentDragPayload,
+  type PackDropTarget,
 } from './experimentDnd.js';
 
 type AblageDrag = Extract<ExperimentDragPayload, { source: 'ablage' }>;
@@ -113,9 +115,51 @@ describe('matrixDropAction', () => {
 
   it('Matrix-Drag: nur ungestartete Belege auf ANDERE Mitarbeiter = verschieben', () => {
     expect(matrixDropAction(matrix(), 'emp2')).toEqual({ kind: 'move' });
+    // Die eigene Zeile ist kein Ziel — pack-genau entscheidet packDropAction.
     expect(matrixDropAction(matrix(), 'emp1')).toBeNull();
     expect(matrixDropAction(matrix({ status: 'in_progress' }), 'emp2')).toBeNull();
     expect(matrixDropAction(matrix({ bundleId: '' }), 'emp2')).toBeNull();
+  });
+});
+
+describe('packDropAction', () => {
+  const pack = (overrides: Partial<PackDropTarget> = {}): PackDropTarget => ({
+    employeeId: 'emp1',
+    index: 1,
+    caseIds: ['c9'],
+    absent: false,
+    ...overrides,
+  });
+
+  it('hängt innerhalb DESSELBEN Mitarbeiters von Pack zu Pack um', () => {
+    expect(packDropAction(matrix(), pack())).toEqual({ kind: 'move', targetPackIndex: 1 });
+    expect(packDropAction(matrix(), pack({ index: 0 }))).toEqual({
+      kind: 'move',
+      targetPackIndex: 0,
+    });
+  });
+
+  it('verschiebt mitarbeiterübergreifend in ein Ziel-Pack', () => {
+    expect(packDropAction(matrix(), pack({ employeeId: 'emp2' }))).toEqual({
+      kind: 'move',
+      targetPackIndex: 1,
+    });
+  });
+
+  it('laufende und fertige Belege sind unantastbar', () => {
+    for (const status of ['in_progress', 'issue_open', 'problem_resolved', 'completed', 'zst_done', 'cancelled'] as const) {
+      expect(packDropAction(matrix({ status }), pack())).toBeNull();
+    }
+    expect(packDropAction(matrix({ bundleId: '' }), pack())).toBeNull();
+  });
+
+  it('kein Ziel: eigenes Pack, Manuell-Kasten, abwesende Zeile, fremde Drag-Quellen', () => {
+    expect(packDropAction(matrix(), pack({ caseIds: ['c9', 'c1'] }))).toBeNull();
+    expect(packDropAction(matrix(), pack({ index: null }))).toBeNull();
+    expect(packDropAction(matrix(), pack({ absent: true }))).toBeNull();
+    expect(packDropAction(ablage(), pack())).toBeNull();
+    expect(packDropAction(vorschlagBundle(), pack())).toBeNull();
+    expect(packDropAction(null, pack())).toBeNull();
   });
 });
 

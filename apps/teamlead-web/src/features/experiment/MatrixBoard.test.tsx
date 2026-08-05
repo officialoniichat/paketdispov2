@@ -117,7 +117,38 @@ const ablageDrag: ExperimentDragPayload = {
   forwardedTo: null,
 };
 
-function renderMatrix(dragging: ExperimentDragPayload | null): {
+/**
+ * Zwei Packs bei Anna (Starter-Pack + Folge-Pack) und ein Bündel bei Bernd —
+ * die Grundlage fürs Umhängen INNERHALB eines Mitarbeiters und darüber hinweg.
+ */
+const ZWEI_PACKS: BoardRow[] = [
+  row(
+    'emp1',
+    'Anna Berger',
+    [bc('k1', 'in_progress'), bc('k2', 'assigned'), bc('k3', 'assigned')],
+    [
+      ['k1', 'k2'],
+      ['k3'],
+    ],
+  ),
+  row('emp2', 'Bernd Voss', [bc('k7', 'assigned')], [['k7']]),
+];
+
+/** Gezogener Beleg k2 aus Pack 1 von Anna (ungestartet, also verschiebbar). */
+const matrixDragK2: ExperimentDragPayload = {
+  source: 'matrix',
+  caseId: 'k2',
+  weBelegNo: 'WE-k2',
+  status: 'assigned',
+  bundleId: 'b-emp1',
+  employeeId: 'emp1',
+  employeeName: 'Anna Berger',
+};
+
+function renderMatrix(
+  dragging: ExperimentDragPayload | null,
+  board: BoardRow[] = BOARD,
+): {
   requestReason: ReturnType<typeof vi.fn>;
   onDragStart: ReturnType<typeof vi.fn>;
 } {
@@ -127,7 +158,7 @@ function renderMatrix(dragging: ExperimentDragPayload | null): {
     <AppProviders queryClient={createQueryClient({ retry: 0 })}>
       <MemoryRouter>
         <MatrixBoard
-          board={BOARD}
+          board={board}
           groupColorById={new Map()}
           dragging={dragging}
           onDragStart={onDragStart}
@@ -269,8 +300,59 @@ describe('MatrixBoard', () => {
     });
   });
 
-  it('laufende und fertige Belege haben keinen Drag-Griff', () => {
+  it('laufende und fertige Belege haben keinen Drag-Griff, sondern ein Schloss', () => {
     renderMatrix(null);
     expect(screen.queryByLabelText('WE-k1 aus Bündel ziehen')).toBeNull();
+    expect(
+      screen.getByLabelText('WE-k1 ist gesperrt (in Arbeit: in Arbeit) — nicht verschiebbar'),
+    ).toBeTruthy();
+  });
+
+  it('Drop auf ein anderes Pack DESSELBEN Mitarbeiters hängt um (moveCase mit Pack-Ziel)', () => {
+    const { requestReason } = renderMatrix(matrixDragK2, ZWEI_PACKS);
+    fireEvent.drop(screen.getByTestId('matrix-pack-emp1-1'), { dataTransfer: dt() });
+    expect(requestReason).toHaveBeenCalledTimes(1);
+    const action = requestReason.mock.calls[0]![0] as PendingAction;
+    expect(action.title).toBe('WE-k2 in Pack 2 umhängen');
+    action.run('Reihenfolge anpassen');
+    expect(mocks.moveCase.mutate).toHaveBeenCalledWith({
+      bundleId: 'b-emp1',
+      caseId: 'k2',
+      targetEmployeeNo: 'emp1',
+      targetPackIndex: 1,
+      reason: 'Reihenfolge anpassen',
+    });
+  });
+
+  it('Drop auf ein Pack eines ANDEREN Mitarbeiters verschiebt genau dorthin', () => {
+    const { requestReason } = renderMatrix(matrixDragK2, ZWEI_PACKS);
+    fireEvent.drop(screen.getByTestId('matrix-pack-emp2-0'), { dataTransfer: dt() });
+    const action = requestReason.mock.calls[0]![0] as PendingAction;
+    expect(action.title).toBe('WE-k2 zu Bernd Voss in Pack 1 verschieben');
+    action.run('Auslastung ausgleichen');
+    expect(mocks.moveCase.mutate).toHaveBeenCalledWith({
+      bundleId: 'b-emp1',
+      caseId: 'k2',
+      targetEmployeeNo: 'emp2',
+      targetPackIndex: 0,
+      reason: 'Auslastung ausgleichen',
+    });
+  });
+
+  it('das eigene Pack ist kein Ziel — der Drop läuft ins Leere', () => {
+    const { requestReason } = renderMatrix(matrixDragK2, ZWEI_PACKS);
+    fireEvent.drop(screen.getByTestId('matrix-pack-emp1-0'), { dataTransfer: dt() });
+    expect(requestReason).not.toHaveBeenCalled();
+  });
+
+  it('ein laufender Beleg lässt sich in kein Pack ziehen (Frei/Fix)', () => {
+    const { requestReason } = renderMatrix(
+      { ...matrixDragK2, caseId: 'k1', weBelegNo: 'WE-k1', status: 'in_progress' },
+      ZWEI_PACKS,
+    );
+    fireEvent.drop(screen.getByTestId('matrix-pack-emp1-1'), { dataTransfer: dt() });
+    fireEvent.drop(screen.getByTestId('matrix-pack-emp2-0'), { dataTransfer: dt() });
+    expect(requestReason).not.toHaveBeenCalled();
+    expect(mocks.moveCase.mutate).not.toHaveBeenCalled();
   });
 });
