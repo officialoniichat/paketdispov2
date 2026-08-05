@@ -13,12 +13,17 @@ import { AssignmentService } from '../assignment/assignment.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
- * §continuation — POST /api/me/next-bundle (Pull-on-idle). The worker pulls a
- * cart-sized bundle from the ready pool; a second pull while the cart is open
- * APPENDS to it (Kundenfeedback 2026-07-14 „Weiteres Bündel anfordern"); an empty
- * pool / no shift each return the matching reason. Shifts are derived from the
- * weekly pattern (assignNextBundle materializes them), so the seed sets a working
- * pattern rather than a raw shift.
+ * POST /api/me/next-bundle — „nächstes Pack anfordern" (Pull-Prinzip).
+ *
+ * Der Mitarbeiter arbeitet genau EIN Pack ab und fordert dann das nächste an.
+ * Solange im aktiven Pack eigene Arbeit offen ist, antwortet der Guard mit
+ * `pack_open`; Belege mit noch offenem Problem zählen dabei nicht mit (sie hängen
+ * an der Teamleitung). Ist bereits ein Folge-Pack vorgeplant, wird es nur
+ * freigeschaltet — sonst zieht die Engine ein frisches aus dem Pool und hängt es
+ * als neues Pack ans offene Bündel. Ein leerer Pool / keine Schicht liefern
+ * weiterhin ihren jeweiligen Grund. Shifts are derived from the weekly pattern
+ * (assignNextBundle materializes them), so the seed sets a working pattern rather
+ * than a raw shift.
  */
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const owner: Principal = { sub: 'oidc-emp-1', employeeNo: 'E-1', roles: [Role.Employee], claims: {} };
@@ -101,6 +106,33 @@ async function reset(readyCount: number): Promise<void> {
   }
 }
 
+/** Put fresh Belege into the ready pool (the pull empties it) and return their ids. */
+async function addReadyCases(count: number, tag: string): Promise<string[]> {
+  const day = today();
+  const loc = await prisma.location.findFirstOrThrow({ where: { code: 'R1' } });
+  const ids: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const created = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: `nb-${tag}-${i}`,
+        weBelegNo: `WE-NB-${tag}-${i}`,
+        bookingDate: day,
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 1,
+        totalQuantity: 3,
+        status: 'ready',
+        effortPoints: 5,
+        estimatedMinutes: 10,
+      },
+      select: { id: true },
+    });
+    ids.push(created.id);
+  }
+  return ids;
+}
+
 /** Drive the worker's open cart through start → complete so its bundle closes. */
 async function finishOwnersOpenCart(): Promise<void> {
   const bundle = await prisma.assignmentBundle.findFirst({
@@ -148,44 +180,51 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     expect(await prisma.goodsReceiptCase.count({ where: { status: 'ready' } })).toBe(0);
   });
 
-  it('appends a second pull to the still-open cart instead of blocking (Kundenfeedback 2026-07-14)', async () => {
-    // The first pull emptied the pool — put fresh work in so there is something to pull.
-    const day = today();
-    const loc = await prisma.location.findFirstOrThrow({ where: { code: 'R1' } });
-    for (let i = 0; i < 3; i += 1) {
-      await prisma.goodsReceiptCase.create({
-        data: {
-          source: 'manual',
-          externalRef: `nb-extra-${i}`,
-          weBelegNo: `WE-NB-X${i}`,
-          bookingDate: day,
-          branchNo: '1',
-          storageLocationId: loc.id,
-          section: 1,
-          totalQuantity: 3,
-          status: 'ready',
-          effortPoints: 5,
-          estimatedMinutes: 10,
-        },
-      });
-    }
+  it('blockt den nächsten Pull, solange im aktiven Pack eigene Arbeit offen ist', async () => {
+    // Die 8 Belege des ersten Packs sind unangetastet (`assigned`) — Pull-Prinzip:
+    // erst das laufende Pack, dann das nächste.
+    await addReadyCases(3, 'blocked');
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
+    expect(res).toMatchObject({ assigned: false, reason: 'pack_open' });
+  });
+
+  it('ein Beleg mit OFFENEM Problem blockiert den Pull nicht — er hängt am Teamlead', async () => {
     const before = await prisma.assignmentBundle.findFirstOrThrow({ where: { employeeId } });
+    const items = await prisma.assignmentItem.findMany({
+      where: { bundleId: before.id },
+      orderBy: { sequence: 'asc' },
+    });
+    // Alles fertig AUSSER einem Beleg, der auf die Klärung wartet.
+    const [problemItem, ...rest] = items;
+    for (const item of rest) {
+      await cases.startPreparation(owner, item.caseId);
+      await cases.complete(owner, item.caseId);
+    }
+    await prisma.goodsReceiptCase.update({
+      where: { id: problemItem!.caseId },
+      data: { status: 'issue_open' },
+    });
 
     const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res).toMatchObject({ assigned: true, caseCount: 3 });
 
-    // Still exactly ONE bundle — the open cart grew instead of a parallel bundle.
+    // Ein einziges Bündel — das offene wächst um ein NEUES Pack, das sofort aktiv ist.
     expect(await prisma.assignmentBundle.count({ where: { employeeId } })).toBe(1);
     const after = await prisma.assignmentBundle.findFirstOrThrow({
       where: { id: before.id },
       include: { items: true, routeStops: true },
     });
     expect(after.items).toHaveLength(11);
+    expect(after.activePackIndex).toBe(1);
     expect(after.plannedEffortMinutes).toBeGreaterThan(before.plannedEffortMinutes);
     // All new cases share location R1, which the bundle already visits — no duplicate stop.
     expect(new Set(after.routeStops.map((s) => s.locationCode)).size).toBe(
       after.routeStops.length,
     );
+
+    // Der Problem-Beleg bleibt bei Pack 1 — keine Umbuchung ins neue Pack.
+    const problem = after.items.find((i) => i.caseId === problemItem!.caseId);
+    expect(problem?.packIndex).toBe(0);
 
     const extended = await prisma.workflowEvent.findFirst({
       where: { eventType: 'bundle.extended', entityId: before.id },
@@ -193,7 +232,74 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     expect(extended).not.toBeNull();
   });
 
+  it('zeigt dem MA nur das aktive Pack — der Problem-Beleg aus Pack 1 bleibt sichtbar', async () => {
+    const bundle = await prisma.assignmentBundle.findFirstOrThrow({ where: { employeeId } });
+    const todayView = await cases.getToday(owner);
+
+    expect(todayView.pack).toMatchObject({ index: 1, total: 2, caseCount: 3 });
+    // Pack 2 (3 Belege) + der mitgenommene Problem-Beleg aus Pack 1; die fertigen
+    // Belege aus Pack 1 sind raus.
+    const visible = todayView.cases.map((c) => c.packIndex);
+    expect(visible.filter((p) => p === 1)).toHaveLength(3);
+    expect(visible.filter((p) => p === 0)).toHaveLength(1);
+
+    const carried = todayView.cases.find((c) => c.packIndex === 0);
+    expect(carried?.status).toBe('issue_open');
+    expect(bundle.activePackIndex).toBe(1);
+  });
+
+  it('schaltet ein bereits VORGEPLANTES Folge-Pack frei, statt neu zu planen', async () => {
+    await reset(4);
+    const first = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
+    expect(first.assigned).toBe(true);
+
+    // Planung hängt ein zweites Pack an — der MA sieht es noch nicht.
+    const bundle = await prisma.assignmentBundle.findFirstOrThrow({ where: { employeeId } });
+    const extraIds = await addReadyCases(2, 'geplant');
+    for (const [i, caseId] of extraIds.entries()) {
+      await prisma.assignmentItem.create({
+        data: { bundleId: bundle.id, caseId, sequence: 4 + i, packIndex: 1 },
+      });
+      await prisma.goodsReceiptCase.update({
+        where: { id: caseId },
+        data: { status: 'assigned', assignedBundleId: bundle.id },
+      });
+    }
+    const vorher = await cases.getToday(owner);
+    expect(vorher.cases).toHaveLength(4);
+    expect(vorher.pack).toMatchObject({ index: 0, total: 2 });
+
+    // Pack 1 abarbeiten, dann anfordern: nichts wird neu geplant, das vorhandene
+    // Pack 2 wird nur freigeschaltet.
+    const packOne = await prisma.assignmentItem.findMany({
+      where: { bundleId: bundle.id, packIndex: 0 },
+    });
+    for (const item of packOne) {
+      await cases.startPreparation(owner, item.caseId);
+      await cases.complete(owner, item.caseId);
+    }
+    const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
+    expect(res).toMatchObject({ assigned: true, caseCount: 2 });
+
+    const after = await prisma.assignmentBundle.findFirstOrThrow({
+      where: { id: bundle.id },
+      include: { items: true },
+    });
+    expect(after.activePackIndex).toBe(1);
+    // Kein neues Pack: es bleibt bei den 6 Items aus Planung + Vorplanung.
+    expect(after.items).toHaveLength(6);
+    const advanced = await prisma.workflowEvent.findFirst({
+      where: { eventType: 'bundle.pack_advanced', entityId: bundle.id },
+    });
+    expect(advanced).not.toBeNull();
+    expect(await cases.getToday(owner)).toMatchObject({ pack: { index: 1, total: 2 } });
+  });
+
   it('completes the bundle when its last case is done, then the next pull works', async () => {
+    // Eigener Ausgangszustand: EIN Pack, alles abarbeitbar (die Pack-Tests oben
+    // hinterlassen bewusst einen offenen Problem-Beleg).
+    await reset(3);
+    expect((await assignment.assignNextBundle(owner, undefined, PULL_NOW)).assigned).toBe(true);
     await finishOwnersOpenCart();
     const firstBundle = await prisma.assignmentBundle.findFirst({
       where: { employeeId },

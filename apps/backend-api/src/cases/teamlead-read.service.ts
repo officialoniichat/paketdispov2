@@ -40,7 +40,6 @@ import {
 import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapIssueSummary,
   mapWorkInstruction, wgrDescription, type IssuePositionRef,
 } from './mappers.js';
-import { reconstructPacks, type PackSourceEvent } from './board-packs.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
 import { assignableSearchWhere, rankCaseSearchCandidates, type CaseSearchCandidate } from './case-search.js';
@@ -708,39 +707,6 @@ export class TeamleadReadService {
       );
     }
 
-    // Pack-Grenzen (Starter-/Folge-Packs) aus dem Audit-Log rekonstruieren:
-    // `bundle.created`/`bundle.extended` tragen die caseIds des jeweiligen Packs,
-    // ein §8.4-Verschieben mit Pack-Ziel (`assignment.overridden`/`moved`) schreibt
-    // die Zugehörigkeit um. Beides löst {@link reconstructPacks} — dieselbe Funktion,
-    // mit der `moveCase` sein Ziel-Pack auflöst (single source).
-    const packsByBundle = new Map<string, string[][]>();
-    if (bundles.length > 0) {
-      const packEvents = await this.prisma.workflowEvent.findMany({
-        where: {
-          entityType: 'AssignmentBundle',
-          entityId: { in: bundles.map((b) => b.id) },
-          eventType: { in: ['bundle.created', 'bundle.extended', 'assignment.overridden'] },
-        },
-        orderBy: { seq: 'asc' },
-        select: { entityId: true, eventType: true, payload: true },
-      });
-      const eventsByBundle = new Map<string, PackSourceEvent[]>();
-      for (const e of packEvents) {
-        const list = eventsByBundle.get(e.entityId) ?? [];
-        list.push({ eventType: e.eventType, payload: e.payload });
-        eventsByBundle.set(e.entityId, list);
-      }
-      for (const b of bundles) {
-        packsByBundle.set(
-          b.id,
-          reconstructPacks(
-            eventsByBundle.get(b.id) ?? [],
-            b.items.map((i) => i.caseId),
-          ),
-        );
-      }
-    }
-
     // Seed one IDLE row per scheduled employee first. The engine emits at most ONE
     // bundle per employee per day, so each row maps 1:1 to a bundle once folded; the
     // per-employee fold is kept defensively so a legacy multi-bundle day still renders.
@@ -845,8 +811,24 @@ export class TeamleadReadService {
           scanned: rs.scannedAt !== null,
         });
       }
-      for (const caseIds of packsByBundle.get(b.id) ?? []) {
-        row.packs.push({ caseIds });
+      // Pack-Grenzen (Starter-/Folge-Packs) kommen persistiert vom Item — jeder
+      // Beleg gehört genau einem Pack, auch manuell einsortierte. Reihenfolge:
+      // Packs aufsteigend, innerhalb eines Packs die Bündel-Reihenfolge.
+      const packedCaseIds = new Map<number, string[]>();
+      for (const it of b.items) {
+        const list = packedCaseIds.get(it.packIndex) ?? [];
+        list.push(it.caseId);
+        packedCaseIds.set(it.packIndex, list);
+      }
+      for (const [packIndex, caseIds] of [...packedCaseIds.entries()].sort(([a], [c]) => a - c)) {
+        // `index` ist der PERSISTIERTE Pack-Index, nicht die Position in dieser
+        // Liste — genau der Wert, den `moveCase` als `targetPackIndex` erwartet.
+        // Läuft ein Pack durch Verschieben leer, verschwindet sein Kasten; die
+        // Indizes der übrigen Packs bleiben davon unberührt.
+        //
+        // Das aktive Pack ist das, an dem der MA gerade arbeitet; spätere Packs
+        // sind vorgeplant und in seiner App noch unsichtbar.
+        row.packs.push({ index: packIndex, caseIds, active: packIndex === b.activePackIndex });
       }
     }
 

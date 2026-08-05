@@ -211,6 +211,9 @@ export const workflowEventTypeSchema = z.enum([
   'bundle.created',
   'bundle.assigned',
   'bundle.extended',
+  // Pull-Prinzip: der MA hat das nächste (bereits vorgeplante) Pack angefordert —
+  // erst ab hier sieht er dessen Belege.
+  'bundle.pack_advanced',
   'bundle.completed',
   'pickup.location_scanned',
   'case.started',

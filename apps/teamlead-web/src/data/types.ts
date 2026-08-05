@@ -212,11 +212,28 @@ export interface BoardRow {
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
   /**
-   * Engine-Packs (Starter- + Folge-Packs) als caseId-Listen in chronologischer
-   * Reihenfolge (aus `bundle.created`/`bundle.extended`); manuell zugewiesene
-   * Belege gehören keinem Pack an. Optional, damit Test-Fixtures schlank bleiben.
+   * Engine-Packs (Starter- + Folge-Packs) in Bündel-Reihenfolge, persistiert je
+   * Beleg (`AssignmentItem.packIndex`) — jeder Beleg der Zeile gehört genau
+   * einem Pack, auch manuell zugewiesene. Optional, damit Test-Fixtures schlank
+   * bleiben.
    */
-  packs?: string[][];
+  packs?: BoardPack[];
+}
+
+/**
+ * Ein Pack der Zeile. `active` ist das Pack, an dem der Mitarbeiter GERADE
+ * arbeitet — nur dessen Belege sieht er in seiner App (Pull-Prinzip); spätere
+ * Packs sind vorgeplant und dort noch unsichtbar.
+ */
+export interface BoardPack {
+  /**
+   * Persistierter Pack-Index im Bündel (`AssignmentItem.packIndex`) — der Wert,
+   * den `moveCase` als `targetPackIndex` erwartet. Nicht die Position in dieser
+   * Liste: ein leergelaufenes Pack fällt raus, die übrigen behalten ihren Index.
+   */
+  index: number;
+  caseIds: string[];
+  active: boolean;
 }
 
 /** A free (ready, unassigned) case available to assign to an employee (§10.3). */

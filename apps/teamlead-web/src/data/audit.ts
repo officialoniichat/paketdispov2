@@ -54,6 +54,7 @@ export const AUDIT_EVENT_LABELS: Record<WorkflowEventType, string> = {
   'bundle.created': 'Bündel gebildet',
   'bundle.assigned': 'Bündel zugeteilt',
   'bundle.extended': 'Bündel erweitert (weiteres Bündel angefordert)',
+  'bundle.pack_advanced': 'Nächstes Pack angefordert',
   'bundle.completed': 'Bündel abgeschlossen',
   'pickup.location_scanned': 'Lagerplatz gescannt',
   'case.started': 'Bearbeitung gestartet',

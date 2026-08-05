@@ -153,9 +153,8 @@ describe('packDropAction', () => {
     expect(packDropAction(matrix({ bundleId: '' }), pack())).toBeNull();
   });
 
-  it('kein Ziel: eigenes Pack, Manuell-Kasten, abwesende Zeile, fremde Drag-Quellen', () => {
+  it('kein Ziel: eigenes Pack, abwesende Zeile, fremde Drag-Quellen', () => {
     expect(packDropAction(matrix(), pack({ caseIds: ['c9', 'c1'] }))).toBeNull();
-    expect(packDropAction(matrix(), pack({ index: null }))).toBeNull();
     expect(packDropAction(matrix(), pack({ absent: true }))).toBeNull();
     expect(packDropAction(ablage(), pack())).toBeNull();
     expect(packDropAction(vorschlagBundle(), pack())).toBeNull();

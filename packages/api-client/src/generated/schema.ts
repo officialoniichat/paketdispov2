@@ -1315,6 +1315,14 @@ export interface components {
             caseCount: number;
             routeStops: components["schemas"]["RouteStopDto"][];
         };
+        TodayPackDto: {
+            /** @description 0-basierter Index des aktiven Packs (0 = Starter-Pack) */
+            index: number;
+            /** @description Packs des Bündels insgesamt (inkl. vorgeplanter Folge-Packs) */
+            total: number;
+            /** @description Belege im aktiven Pack — die Zähler-Basis. Mitangezeigte Problem-Belege früherer Packs zählen NICHT mit (sie zählen auf ihr altes Pack). */
+            caseCount: number;
+        };
         LabelPrintPositionDto: {
             positionNo: number;
             /** @description Lieferanten-Artikel-Nr der Position */
@@ -1397,6 +1405,8 @@ export interface components {
             labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
             /** @description Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
             collected?: boolean;
+            /** @description Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack (TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
+            packIndex?: number;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -1442,6 +1452,9 @@ export interface components {
             /** @description ISO date YYYY-MM-DD */
             date: string;
             bundle?: components["schemas"]["CurrentBundleDto"] | null;
+            /** @description Aktives Pack; null wenn kein Bündel zugeteilt ist */
+            pack?: components["schemas"]["TodayPackDto"] | null;
+            /** @description Belege des AKTIVEN Packs plus noch offene Problem-Belege früherer Packs (Anzeige-Mitnahme). Für kommende Packs vorgeplante Belege sind NICHT enthalten. */
             cases: components["schemas"]["CaseSummaryDto"][];
             /** @description Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters */
             workstation?: components["schemas"]["MeWorkstationDto"] | null;
@@ -1566,7 +1579,7 @@ export interface components {
         };
         NextBundleResultDto: {
             assigned: boolean;
-            /** @description Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation */
+            /** @description Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation */
             reason?: string;
             /** @description Belege in the assigned cart */
             caseCount?: number;
@@ -1685,8 +1698,12 @@ export interface components {
             scanned: boolean;
         };
         BoardPackDto: {
+            /** @description Persistierter Pack-Index im Bündel (AssignmentItem.packIndex) — genau der Wert, den POST bundles/:id/cases/:caseId/move als targetPackIndex erwartet. NICHT die Position in dieser Liste: ein leergelaufenes Pack fällt raus, die übrigen behalten ihren Index. */
+            index: number;
             /** @description Case ids des Packs in Bündel-Reihenfolge */
             caseIds: string[];
+            /** @description Das Pack, an dem der Mitarbeiter gerade arbeitet — nur dessen Belege sieht er in der App. Alle anderen sind vorgeplant bzw. bereits abgearbeitet. */
+            active: boolean;
         };
         BoardRowDto: {
             employeeNo: string;
@@ -1790,6 +1807,8 @@ export interface components {
             labelPrintPositions?: components["schemas"]["LabelPrintPositionDto"][];
             /** @description Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
             collected?: boolean;
+            /** @description Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack (TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt. */
+            packIndex?: number;
             /** @description Primärer Shop (A7) */
             primaryShopNo?: string | null;
             /** @description Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA */
@@ -2170,7 +2189,7 @@ export interface components {
         MoveCaseDto: {
             /** @description employeeNo of the destination employee */
             targetEmployeeNo: string;
-            /** @description Ziel-Pack im Bündel des Ziel-Mitarbeiters — Index in BoardRowDto.packs. Der Beleg wird hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg bereits liegt, ist ein 409 (nichts zu tun). */
+            /** @description Ziel-Pack im Bündel des Ziel-Mitarbeiters — der `index` eines BoardRowDto.packs-Eintrags (persistierter AssignmentItem.packIndex, nicht die Listenposition). Der Beleg wird hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg bereits liegt, ist ein 409 (nichts zu tun). */
             targetPackIndex?: number;
             /** @description Optional reason logged in the §8.4 audit event */
             reason?: string;

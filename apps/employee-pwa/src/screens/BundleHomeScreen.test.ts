@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { casesForDisplay, deriveStops, isCaseClosed, stopsForDisplay } from './BundleHomeScreen.js';
+import {
+  casesForDisplay,
+  deriveStops,
+  isCaseClosed,
+  partitionByPack,
+  stopsForDisplay,
+} from './BundleHomeScreen.js';
 
 function stop(id: string, sequence: number, locationCode: string, scanned = false) {
   return { id, sequence, locationCode, scanRequired: false, scanned };
@@ -237,6 +243,34 @@ describe('stopsForDisplay', () => {
       ],
     );
     expect(ordered.map((s) => s.id)).toEqual(['c1', 'c2']);
+  });
+});
+
+describe('partitionByPack', () => {
+  function packed(id: string, packIndex: number) {
+    return { id, packIndex } as Parameters<typeof partitionByPack>[0][number];
+  }
+
+  it('trennt das aktive Pack von der Anzeige-Mitnahme früherer Packs', () => {
+    const { active, carriedOver } = partitionByPack(
+      [packed('p1-problem', 0), packed('p2-a', 1), packed('p2-b', 1)],
+      1,
+    );
+    expect(active.map((c) => c.id)).toEqual(['p2-a', 'p2-b']);
+    expect(carriedOver.map((c) => c.id)).toEqual(['p1-problem']);
+  });
+
+  it('ohne Pack-Angabe zählt alles als aktiv (nichts zu trennen)', () => {
+    const { active, carriedOver } = partitionByPack([packed('a', 0), packed('b', 0)], undefined);
+    expect(active).toHaveLength(2);
+    expect(carriedOver).toEqual([]);
+  });
+
+  it('Belege ohne packIndex gelten als Teil des aktiven Packs', () => {
+    const ohneIndex = { id: 'x' } as Parameters<typeof partitionByPack>[0][number];
+    const { active, carriedOver } = partitionByPack([ohneIndex], 2);
+    expect(active.map((c) => c.id)).toEqual(['x']);
+    expect(carriedOver).toEqual([]);
   });
 });
 

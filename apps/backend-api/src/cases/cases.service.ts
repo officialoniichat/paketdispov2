@@ -44,6 +44,7 @@ import {
   type TransitionResultDto,
 } from './cases.dto.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
+import { packCount, packWindow, type PackItem } from './pack-window.js';
 import {
   wgrDescription,
   distinctShopNos,
@@ -188,9 +189,10 @@ export class CasesService {
                 reason: { select: { defaultInstruction: true, autoInsert: true } },
               },
             },
-            // Die Bündel-Reihenfolge der Engine. Prisma kann nicht über eine
+            // Die Bündel-Reihenfolge der Engine plus die Pack-Zugehörigkeit (sie
+            // entscheidet, was der MA überhaupt sieht). Prisma kann nicht über eine
             // To-many-Relation sortieren — deshalb unten in JS.
-            assignmentItems: { select: { sequence: true } },
+            assignmentItems: { select: { sequence: true, packIndex: true } },
           },
         },
       },
@@ -198,20 +200,44 @@ export class CasesService {
 
     const workstation = await this.getMyWorkstation(employee.id);
     if (!bundle) {
-      return { date: isoDay(today), bundle: null, cases: [], workstation };
+      return { date: isoDay(today), bundle: null, pack: null, cases: [], workstation };
     }
+
+    // Pull-Prinzip (single source: `pack-window.ts`): der MA sieht ausschließlich
+    // sein AKTIVES Pack. Vorgeplante Folge-Packs bleiben komplett verborgen —
+    // sonst zöge er Arbeit vor, die er noch gar nicht angefordert hat. Dazu die
+    // Anzeige-Mitnahme: noch offene Belege früherer Packs (Problemfälle, die er
+    // beim Wechsel nicht abschließen konnte) bleiben sichtbar, bis sie fertig
+    // sind. Ihr `packIndex` bleibt unangetastet — sie zählen weiter aufs alte Pack.
+    const packItems: PackItem[] = bundle.cases.map((c) => ({
+      caseId: c.id,
+      packIndex: c.assignmentItems[0]?.packIndex ?? 0,
+      status: c.status,
+    }));
+    const window = packWindow(packItems, bundle.activePackIndex);
+    const visible = new Set([...window.activeCaseIds, ...window.carriedOverCaseIds]);
+    const packIndexByCase = new Map(packItems.map((i) => [i.caseId, i.packIndex]));
 
     const assignedEmployeeName = bundle.employee.displayName;
     return {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
-      cases: [...bundle.cases].sort(byBundleSequence).map((c) =>
-        this.mapSummary(
-          c,
-          assignedEmployeeName,
-          c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
-        ),
-      ),
+      pack: {
+        index: bundle.activePackIndex,
+        total: packCount(packItems),
+        caseCount: window.activeCaseIds.length,
+      },
+      cases: [...bundle.cases]
+        .filter((c) => visible.has(c.id))
+        .sort(byBundleSequence)
+        .map((c) => ({
+          ...this.mapSummary(
+            c,
+            assignedEmployeeName,
+            c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
+          ),
+          packIndex: packIndexByCase.get(c.id) ?? bundle.activePackIndex,
+        })),
       workstation,
     };
   }

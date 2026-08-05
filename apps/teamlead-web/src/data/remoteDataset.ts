@@ -196,7 +196,7 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     shiftEnd: row.shiftEnd,
     absence: row.absence,
     cases: row.cases.map(toBoardCase),
-    packs: row.packs.map((p) => p.caseIds),
+    packs: row.packs.map((p) => ({ index: p.index, caseIds: p.caseIds, active: p.active })),
   };
 }
 

@@ -159,12 +159,14 @@ erDiagram
         float plannedEffortMinutes
         enum status "created|assigned|active|paused|completed|cancelled"
         enum createdBy "system|teamlead"
+        int activePackIndex "Pull-Prinzip: Pack, das der MA gerade sieht"
     }
     ASSIGNMENT_ITEM {
         string id PK
         string bundleId FK
         string caseId FK "UK: Beleg in ≤1 Bündel"
         int sequence
+        int packIndex "Pack im Bündel: 0 = Starter, dann Folge-Packs"
     }
     ROUTE_STOP {
         string id PK

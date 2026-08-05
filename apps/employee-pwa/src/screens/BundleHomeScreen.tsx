@@ -131,6 +131,10 @@ export function deriveStops(
 
 /** German messaging for the backend's "no cart assigned" reasons (§continuation). */
 const PULL_REASON_MSG: Record<string, string> = {
+  // Pull-Prinzip: im laufenden Pack ist noch Arbeit, die der MA selbst erledigen
+  // kann. Belege, die auf die Teamleitung warten, halten ihn NICHT auf — das
+  // entscheidet das Backend (`pack-window.ts`), hier steht nur der Text dazu.
+  pack_open: 'Erst das laufende Pack abarbeiten – Belege mit offener Meldung zählen nicht.',
   pool_empty: 'Aktuell nichts frei zum Holen.',
   capacity_done: 'Feierabend – Tageskapazität erreicht.',
   shift_ending: 'Schichtende – kein neues Bündel mehr, damit nichts offen liegen bleibt.',
@@ -252,6 +256,29 @@ export function casesForDisplay(cases: readonly CaseSummaryDto[]): CaseSummaryDt
     cases.filter((c) => !isCaseClosed(c.status)),
     displayRank,
   );
+}
+
+/**
+ * Trennt die gelieferten Belege in das AKTIVE Pack und die Anzeige-Mitnahme.
+ *
+ * Welche Belege überhaupt kommen, entscheidet das Backend (Pull-Prinzip,
+ * `pack-window.ts`) — hier wird nur noch getrennt, was es mitliefert: Belege des
+ * aktiven Packs (`packIndex === activePackIndex`) und noch offene Problem-Belege
+ * FRÜHERER Packs, die der MA abschließen darf. Letztere zählen bewusst nicht ins
+ * Pack-Pensum: ihr Abschluss zählt weiter auf ihr altes Pack.
+ *
+ * Ohne Pack-Angabe (`activePackIndex === undefined`) gilt alles als aktiv — dann
+ * gibt es schlicht nichts zu trennen.
+ */
+export function partitionByPack(
+  cases: readonly CaseSummaryDto[],
+  activePackIndex: number | undefined,
+): { active: CaseSummaryDto[]; carriedOver: CaseSummaryDto[] } {
+  if (activePackIndex === undefined) return { active: [...cases], carriedOver: [] };
+  return {
+    active: cases.filter((c) => (c.packIndex ?? activePackIndex) === activePackIndex),
+    carriedOver: cases.filter((c) => (c.packIndex ?? activePackIndex) < activePackIndex),
+  };
 }
 
 /**
@@ -444,7 +471,16 @@ export function BundleHomeScreen(): JSX.Element {
   const [barcodeCaseId, setBarcodeCaseId] = useState<string | undefined>(undefined);
 
   const bundle = data?.bundle;
+  // `cases` sind bereits pack-gefiltert (Backend): aktives Pack + mitgenommene
+  // Problem-Belege früherer Packs. Vorgeplante Folge-Packs kommen gar nicht erst
+  // hier an — die UI hat dazu nichts zu entscheiden.
   const cases = data?.cases ?? [];
+  const pack = data?.pack ?? null;
+  const { active: packCases, carriedOver: carriedOverCases } = partitionByPack(
+    cases,
+    pack?.index,
+  );
+  const carriedOverIds = new Set(carriedOverCases.map((c) => c.id));
 
   // Ware-holen-Zustand (B2) kommt persistiert vom Backend (CaseSummaryDto
   // .collected, je Beleg-Container = Case-Id) — kein lokales Echo mehr, der
@@ -460,8 +496,10 @@ export function BundleHomeScreen(): JSX.Element {
   // ALLE Container (auch die fertiger Belege) bilden die Zähler-Basis;
   // gelistet werden nur die offenen (Kundenfeedback 04.08.2026: fertig = raus)
   // — in derselben Anzeige-Reihenfolge wie „2 · Bearbeiten" (05.08.2026).
-  const stops = deriveStops(bundle?.routeStops ?? [], cases);
-  const openStops = stopsForDisplay(stops, cases);
+  // Nur Belege des AKTIVEN Packs: mitgenommene Problem-Belege früherer Packs
+  // liegen längst auf dem Tisch, da gibt es nichts mehr zu holen.
+  const stops = deriveStops(bundle?.routeStops ?? [], packCases);
+  const openStops = stopsForDisplay(stops, packCases);
 
   const toggleStop = (stopId: string): void => {
     setCollected.mutate({ caseId: stopId, collected: !collectedIds.has(stopId) });
@@ -556,11 +594,14 @@ export function BundleHomeScreen(): JSX.Element {
   const barcodeCase = cases.find((c) => c.id === barcodeCaseId);
   // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
   // der MA kann sie nicht weiter bearbeiten (Kundenfeedback 14.07.2026, Punkt 10).
+  // Genau das ist auch die Bedingung, unter der das Backend das nächste Pack
+  // freigibt — der Zustand hier und der Pull-Guard dort sagen dasselbe.
   const allDone =
     cases.length > 0 && cases.every((c) => isCaseClosed(c.status) || isCaseParked(c.status));
   // WIRKLICH alles fertig (completed/zst_done): beide Abschnitte wären leer —
   // stattdessen die kurze Fertig-Ansicht zeigen (Kundenfeedback 04.08.2026).
-  // Solange Problemfälle/Geklärte übrig sind, bleiben die Abschnitte stehen.
+  // Solange Problemfälle/Geklärte übrig sind — auch mitgenommene aus früheren
+  // Packs — bleiben die Abschnitte stehen, sonst verlöre der MA sie aus dem Blick.
   const allClosed = cases.length > 0 && cases.every((c) => isCaseClosed(c.status));
 
   // Punkt 4: keine erzwungene Sequenz mehr — jeder GEHOLTE Beleg ist direkt
@@ -568,6 +609,10 @@ export function BundleHomeScreen(): JSX.Element {
   // nicht abgehakt ist, bleibt ausgegraut.
   const uncollectedCaseIdSet = new Set(uncollectedCaseIds);
   const isBelegStartable = (caseId: string): boolean => !uncollectedCaseIdSet.has(caseId);
+
+  // „Pack 1 von 2" — nur wenn es überhaupt mehr als ein Pack gibt; bei einem
+  // einzigen Pack wäre die Nummer nur Lärm.
+  const packLabel = pack && pack.total > 1 ? `Pack ${pack.index + 1} von ${pack.total}` : null;
 
   const openBeleg = (caseId: string): void => {
     if (!isBelegStartable(caseId)) return;
@@ -585,7 +630,16 @@ export function BundleHomeScreen(): JSX.Element {
         {greetingForHour(new Date().getHours())}
         {session ? `, ${session.displayName}` : ''}
       </Typography>
-      <Typography sx={{ mb: 2 }}>Arbeitsplatz: {data?.workstation?.name ?? '—'}</Typography>
+      <Typography sx={{ mb: packLabel ? 0.5 : 2 }}>
+        Arbeitsplatz: {data?.workstation?.name ?? '—'}
+      </Typography>
+      {/* Pull-Prinzip: du arbeitest immer genau EIN Pack; das nächste holst du
+          dir selbst. Kommende Packs sind hier bewusst nicht zu sehen. */}
+      {packLabel ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {packLabel}
+        </Typography>
+      ) : null}
 
       {!bundle ? (
         <Alert severity="info">
@@ -612,10 +666,10 @@ export function BundleHomeScreen(): JSX.Element {
             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
               <CheckCircleOutlineIcon color="success" sx={{ fontSize: 56 }} />
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 1 }}>
-                Alle Belege erledigt
+                {packLabel ? `${packLabel} erledigt` : 'Alle Belege erledigt'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {cases.length}/{cases.length} erledigt — hol dir unten das nächste Bündel.
+                {packCases.length}/{packCases.length} erledigt — hol dir unten das nächste Pack.
               </Typography>
             </Paper>
           ) : (
@@ -735,14 +789,16 @@ export function BundleHomeScreen(): JSX.Element {
                   Fertige Belege sind ausgeblendet; der Zähler nimmt sie weiter mit. */}
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
                 2 · Bearbeiten
-                {cases.length > 0 ? (
+                {packCases.length > 0 ? (
+                  /* Zähler des AKTIVEN Packs — mitgenommene Belege früherer Packs
+                     zählen dort weiter, nicht hier. */
                   <Typography
                     component="span"
                     variant="body2"
                     color="text.secondary"
                     sx={{ ml: 1 }}
                   >
-                    {closedIds.size}/{cases.length} erledigt
+                    {packCases.filter((c) => closedIds.has(c.id)).length}/{packCases.length} erledigt
                   </Typography>
                 ) : null}
               </Typography>
@@ -792,7 +848,19 @@ export function BundleHomeScreen(): JSX.Element {
                       )}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
-                        <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                          {/* Anzeige-Mitnahme: der Beleg stammt aus einem früheren
+                              Pack und wird nur weiter angezeigt, damit du ihn nach
+                              der Klärung abschließen kannst. Gezählt wird er dort. */}
+                          {carriedOverIds.has(b.id) ? (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={`aus Pack ${(b.packIndex ?? 0) + 1}`}
+                            />
+                          ) : null}
+                        </Stack>
                         <BelegInfoLine beleg={b} referenceDay={referenceDay} />
                         {parked ? (
                           <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
@@ -831,9 +899,11 @@ export function BundleHomeScreen(): JSX.Element {
         </>
       )}
 
-      {/* Punkt 1: „Weiteres Bündel anfordern" — jederzeit möglich, auch mit offenem
-          Bündel. Die Entscheidung liegt beim Mitarbeiter; das Backend hängt die
-          neuen Belege an das offene Bündel an. */}
+      {/* Pull-Prinzip: „Nächstes Pack anfordern". Ob das geht, entscheidet das
+          Backend (`pack-window.ts`) — ist im laufenden Pack noch eigene Arbeit
+          offen, antwortet es mit `pack_open`. Belege, die auf die Teamleitung
+          warten, blockieren dabei nicht. Ist bereits ein Pack vorgeplant, wird es
+          nur freigeschaltet; sonst zieht die Engine ein frisches aus dem Pool. */}
       <Box
         sx={{
           position: 'fixed',
@@ -871,8 +941,8 @@ export function BundleHomeScreen(): JSX.Element {
             {requestNextBundle.isPending
               ? 'Lädt…'
               : !bundle || allDone
-                ? 'Nächstes Bündel holen'
-                : 'Weiteres Bündel anfordern'}
+                ? 'Nächstes Pack holen'
+                : 'Nächstes Pack anfordern'}
           </TouchButton>
         </Stack>
       </Box>

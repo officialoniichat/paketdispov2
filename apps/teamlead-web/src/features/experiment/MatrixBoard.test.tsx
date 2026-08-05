@@ -68,6 +68,11 @@ const GROUP: BoardCase['deliveryGroup'] = {
   released: false,
 };
 
+/**
+ * `packs` als reine caseId-Listen: der persistierte Pack-Index ist hier die
+ * Position, das erste Pack gilt als das beim MA aktive — genau die Form, in der
+ * das Board sie ausliefert.
+ */
 function row(
   employeeId: string,
   displayName: string,
@@ -89,12 +94,14 @@ function row(
     paused: false,
     bereiche: [],
     cases,
-    packs,
+    packs: packs?.map((caseIds, index) => ({ index, caseIds, active: index === 0 })),
   };
 }
 
 const BOARD: BoardRow[] = [
-  row('emp1', 'Anna Berger', [bc('k1', 'in_progress'), bc('k2', 'assigned', GROUP)], [['k1', 'k2']]),
+  row('emp1', 'Anna Berger', [bc('k1', 'in_progress'), bc('k2', 'assigned', GROUP)], [
+    ['k1', 'k2'],
+  ]),
   row('emp2', 'Bernd Voss', []),
 ];
 

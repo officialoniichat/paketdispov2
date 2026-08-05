@@ -54,6 +54,7 @@ import {
   LAUFEND_STATUSES,
   STRIP_LEGEND,
   derivePacks,
+  packPullLabel,
   packSections,
   stripStyle,
   type MatrixPack,
@@ -249,7 +250,7 @@ function MatrixRow({
   const absent = row.absence ?? null;
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
-  const packs = derivePacks(row.cases, row.packs, row.bundleId);
+  const packs = derivePacks(row.cases, row.packs);
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
@@ -489,6 +490,7 @@ function MatrixRow({
           {packIndex > 0 && <Divider orientation="vertical" flexItem />}
           <PackBox
             pack={pack}
+            pullStatus={packPullLabel(pack, packs)}
             employeeId={row.employeeId}
             action={packDropAction(dragging, {
               employeeId: row.employeeId,
@@ -577,12 +579,15 @@ function MatrixRow({
  */
 function PackBox({
   pack,
+  pullStatus,
   employeeId,
   action,
   onDropZiel,
   children,
 }: {
   pack: MatrixPack;
+  /** Stand im Pull-Ablauf des MA (`packPullLabel`); null = einziges Pack. */
+  pullStatus: 'abgearbeitet' | 'aktiv beim MA' | 'vorgeplant' | null;
   employeeId: string;
   action: { kind: 'move'; targetPackIndex: number } | null;
   onDropZiel: (targetPackIndex: number) => void;
@@ -591,7 +596,7 @@ function PackBox({
   const [over, setOver] = useState(false);
   return (
     <Box
-      data-testid={`matrix-pack-${employeeId}-${pack.index ?? 'manuell'}`}
+      data-testid={`matrix-pack-${employeeId}-${pack.index}`}
       onDragOver={(e) => {
         if (action === null) return; // Kein Pack-Ziel: Event gehört Zeile/Strich.
         e.preventDefault();
@@ -629,6 +634,21 @@ function PackBox({
         {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
         {pack.teile} Teile
       </Typography>
+      {/* Pull-Prinzip: der MA sieht in seiner App NUR sein aktives Pack. Abgearbeitete
+          und vorgeplante Packs stehen hier, bei ihm aber nicht (mehr bzw. noch nicht). */}
+      {pullStatus !== null && (
+        <Typography
+          sx={{
+            fontSize: '0.56rem',
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            textTransform: 'uppercase',
+            color: pullStatus === 'aktiv beim MA' ? 'primary.main' : 'text.disabled',
+          }}
+        >
+          {pullStatus}
+        </Typography>
+      )}
       {children}
     </Box>
   );

@@ -2,18 +2,25 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, Matches } from 'class-validator';
 
 /**
- * Result of POST /api/me/next-bundle (§continuation, Pull-on-idle). Either a cart
- * was assigned, or `reason` says why not (no_shift | capacity_done | shift_ending |
- * pool_empty | skill_tier | continuation). `shift_ending` (Punkt 6) means the
- * remaining time before shift end is too short to finish another cart — nothing is
- * handed out. An open cart no longer blocks the pull (Kundenfeedback 2026-07-14):
- * the new work is appended to it.
+ * Result of POST /api/me/next-bundle — „nächstes Pack anfordern" (Pull-Prinzip).
+ * Either the next pack is now active, or `reason` says why not (pack_open |
+ * no_shift | capacity_done | shift_ending | pool_empty | skill_tier | continuation).
+ *
+ * Zwei Wege führen zu `assigned: true`: ist bereits ein Folge-Pack VORGEPLANT,
+ * wird es nur freigeschaltet (nichts wird neu geplant, nichts aus dem Pool
+ * gezogen); sonst baut die Engine ein frisches Pack und hängt es ans offene Bündel.
+ *
+ * `pack_open` heißt: im aktiven Pack liegt noch Arbeit, die der Mitarbeiter selbst
+ * erledigen kann. Belege mit noch OFFENEM Problem zählen dabei bewusst nicht — die
+ * hängen an der Teamleitung, und der Mitarbeiter soll deswegen nicht stillstehen.
+ * `shift_ending` (Punkt 6) means the remaining time before shift end is too short
+ * to finish another cart — nothing is handed out.
  */
 export class NextBundleResultDto {
   @ApiProperty() assigned!: boolean;
   @ApiPropertyOptional({
     description:
-      'Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation',
+      'Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation',
   })
   reason?: string;
   @ApiPropertyOptional({ type: Number, description: 'Belege in the assigned cart' })

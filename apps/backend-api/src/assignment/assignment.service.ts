@@ -27,9 +27,24 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
 import { buildEffortVectors } from './effort-vector.js';
 import { caseEffortInclude } from '../cases/case-effort.js';
+import {
+  hasPlannedFollowUpPack,
+  lastPackIndex,
+  packAdvanceBlockers,
+  type PackItem,
+} from '../cases/pack-window.js';
 import { loadRuleConfig } from '../config/rule-config.js';
 
 type PrismaTx = Prisma.TransactionClient;
+
+/** Bündel-Item → {@link PackItem}. Ohne geladenen Case zählt der Beleg als offen. */
+function toPackItem(item: {
+  caseId: string;
+  packIndex: number;
+  case?: { status: string };
+}): PackItem {
+  return { caseId: item.caseId, packIndex: item.packIndex, status: item.case?.status ?? 'assigned' };
+}
 import { EventLogService } from '../events/event-log.service.js';
 import type { Principal } from '../auth/rbac.js';
 import { toEmployeeShift, toGoodsReceiptCase, toLocationMaster } from './assignment.mappers.js';
@@ -241,6 +256,39 @@ export class AssignmentService {
     });
     if (openLargeCase) return { assigned: false, reason: 'continuation' };
 
+    // Pull-Prinzip: der Mitarbeiter arbeitet EIN Pack, dann fordert er das nächste
+    // an. Solange das aktive Pack läuft, gibt es nichts Neues — Belege mit noch
+    // OFFENEM Problem ausgenommen: die hängen an der Teamleitung, nicht an ihm
+    // (sonst stünde er bis zur Klärung still). Ein bereits vorgeplantes Folge-Pack
+    // wird nur freigeschaltet, nicht neu geplant: es gehört ihm schon.
+    const openBundleForPack = await this.prisma.assignmentBundle.findFirst({
+      where: {
+        employeeId: employee.id,
+        date: { gte: dayStart, lte: dayEnd },
+        status: { notIn: ['completed', 'cancelled'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        activePackIndex: true,
+        items: { select: { caseId: true, packIndex: true, case: { select: { status: true } } } },
+      },
+    });
+    if (openBundleForPack) {
+      const packItems = openBundleForPack.items.map(toPackItem);
+      if (packAdvanceBlockers(packItems, openBundleForPack.activePackIndex).length > 0) {
+        return { assigned: false, reason: 'pack_open' };
+      }
+      if (hasPlannedFollowUpPack(packItems, openBundleForPack.activePackIndex)) {
+        return this.activateNextPack(
+          openBundleForPack.id,
+          openBundleForPack.activePackIndex,
+          packItems,
+          principal,
+        );
+      }
+    }
+
     await this.materializeShiftsForDate(day, dayStart);
     const shift = await this.prisma.shift.findFirst({
       where: { employeeId: employee.id, date: { gte: dayStart, lte: dayEnd }, active: true },
@@ -346,7 +394,7 @@ export class AssignmentService {
         },
         orderBy: { createdAt: 'desc' },
         include: {
-          items: { select: { caseId: true } },
+          items: { select: { caseId: true, packIndex: true } },
           routeStops: { select: { locationCode: true, sequence: true } },
         },
       });
@@ -376,12 +424,55 @@ export class AssignmentService {
       );
 
       if (openBundle) {
-        await this.extendBundle(tx, openBundle, bundleSkeleton, sequence, principal);
+        // Selbst angefordert ⇒ das neue Pack wird sofort das aktive.
+        await this.extendBundle(tx, openBundle, bundleSkeleton, sequence, principal, {
+          activate: true,
+        });
       } else {
         await this.persistBundle(tx, bundleSkeleton, sequence, principal);
       }
       return { assigned: true, caseCount: cart.caseIds.length, bereich: cart.bereich ?? null };
     });
+  }
+
+  /**
+   * Schaltet das nächste BEREITS VORGEPLANTE Pack frei (Pull-Prinzip): es gehört
+   * dem Mitarbeiter schon, hier wird nichts neu geplant und nichts aus dem Pool
+   * gezogen. Deshalb greifen hier bewusst weder Kapazitäts- noch Schichtende-Gate —
+   * die haben bei der Planung dieses Packs bereits entschieden.
+   *
+   * Belege des alten Packs werden NICHT umgebucht: ihr `packIndex` bleibt, ein noch
+   * offener Problem-Beleg zählt weiter auf sein altes Pack (er wird in der
+   * Mitarbeiter-App nur weiter mitangezeigt).
+   */
+  private async activateNextPack(
+    bundleId: string,
+    activePackIndex: number,
+    items: readonly PackItem[],
+    principal: Principal,
+  ): Promise<NextBundleResultDto> {
+    const nextPackIndex = Math.min(
+      ...items.filter((i) => i.packIndex > activePackIndex).map((i) => i.packIndex),
+    );
+    const caseIds = items.filter((i) => i.packIndex === nextPackIndex).map((i) => i.caseId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assignmentBundle.update({
+        where: { id: bundleId },
+        data: { activePackIndex: nextPackIndex },
+      });
+      await this.events.append(
+        {
+          eventType: 'bundle.pack_advanced',
+          entityType: 'AssignmentBundle',
+          entityId: bundleId,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: { fromPackIndex: activePackIndex, packIndex: nextPackIndex, caseIds },
+        },
+        tx,
+      );
+    });
+    return { assigned: true, caseCount: caseIds.length, bereich: null };
   }
 
   /**
@@ -618,12 +709,14 @@ export class AssignmentService {
       },
       orderBy: { createdAt: 'desc' },
       include: {
-        items: { select: { caseId: true } },
+        items: { select: { caseId: true, packIndex: true } },
         routeStops: { select: { locationCode: true, sequence: true } },
       },
     });
     if (openBundle) {
-      await this.extendBundle(tx, openBundle, bundle, sequence, principal);
+      // Planung rückt das aktive Pack NIE vor: das angehängte Pack ist vorgeplant
+      // und bleibt beim Mitarbeiter unsichtbar, bis er es selbst anfordert.
+      await this.extendBundle(tx, openBundle, bundle, sequence, principal, { activate: false });
       return bundle.caseIds.length;
     }
 
@@ -638,9 +731,13 @@ export class AssignmentService {
       },
     });
 
+    // Starter-Pack: das erste Pack des Bündels ist zugleich das aktive (der
+    // Mitarbeiter arbeitet es ab, bevor er das nächste anfordert).
     await Promise.all(
       bundle.caseIds.map((caseId, index) =>
-        tx.assignmentItem.create({ data: { bundleId: created.id, caseId, sequence: index } }),
+        tx.assignmentItem.create({
+          data: { bundleId: created.id, caseId, sequence: index, packIndex: 0 },
+        }),
       ),
     );
 
@@ -705,6 +802,10 @@ export class AssignmentService {
    * existing stop already covers a same-location case), planned effort/points grow
    * by the cart. The stop ids of already-collected stops stay untouched, so the
    * PWA's local check-off state survives the extension.
+   *
+   * Der Anhang ist immer ein EIGENES Pack (`packIndex` = bisher höchstes + 1).
+   * `activate` entscheidet, ob der Mitarbeiter es sofort sieht: beim Self-Pull ja
+   * (er hat es angefordert), bei der Planung nein (vorgeplant, bleibt verdeckt).
    */
   private async extendBundle(
     tx: PrismaTx,
@@ -712,17 +813,19 @@ export class AssignmentService {
       id: string;
       plannedEffortMinutes: number;
       effortPoints: number;
-      items: { caseId: string }[];
+      items: { caseId: string; packIndex: number }[];
       routeStops: { locationCode: string; sequence: number }[];
     },
     cart: AssignmentBundle,
     sequence: BundlePickupSequence | undefined,
     principal: Principal,
+    options: { activate: boolean },
   ): Promise<void> {
+    const packIndex = lastPackIndex(openBundle.items) + 1;
     let nextItemSeq = openBundle.items.length;
     for (const caseId of cart.caseIds) {
       await tx.assignmentItem.create({
-        data: { bundleId: openBundle.id, caseId, sequence: nextItemSeq },
+        data: { bundleId: openBundle.id, caseId, sequence: nextItemSeq, packIndex },
       });
       nextItemSeq += 1;
     }
@@ -756,6 +859,7 @@ export class AssignmentService {
       data: {
         plannedEffortMinutes: openBundle.plannedEffortMinutes + cart.plannedEffortMinutes,
         effortPoints: openBundle.effortPoints + cart.effortPoints,
+        ...(options.activate ? { activePackIndex: packIndex } : {}),
       },
     });
 
@@ -766,7 +870,12 @@ export class AssignmentService {
         entityId: openBundle.id,
         actorType: 'system',
         actorId: principal.sub,
-        payload: { caseIds: cart.caseIds, effortPoints: cart.effortPoints },
+        payload: {
+          caseIds: cart.caseIds,
+          effortPoints: cart.effortPoints,
+          packIndex,
+          activated: options.activate,
+        },
       },
       tx,
     );

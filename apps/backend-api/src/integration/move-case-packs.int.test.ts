@@ -10,6 +10,7 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
+import type { BoardRowDto } from '../cases/cases.dto.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -48,11 +49,16 @@ const id = (weBelegNo: string): string => {
 };
 
 /**
- * Legt ein Bündel mit Packs an, wie die Engine es täte: die Items flach, die
- * Pack-Grenze als `bundle.created` (Starter-Pack) + `bundle.extended` (Folge-Packs).
+ * Legt ein Bündel mit Packs an, wie die Engine es täte: die Items flach in der
+ * Abhol-Reihenfolge, die Pack-Grenze persistiert am Item (`packIndex`). Die
+ * `bundle.created`/`bundle.extended`-Events schreibt die Engine weiterhin mit —
+ * sie dokumentieren die Planung, entscheiden die Zugehörigkeit aber nicht.
  */
 async function seedBundle(employeeId: string, packs: string[][]): Promise<string> {
   const flat = packs.flat();
+  const packOf = new Map(
+    packs.flatMap((pack, packIndex) => pack.map((we) => [we, packIndex] as const)),
+  );
   const bundle = await prisma.assignmentBundle.create({
     data: {
       employeeId,
@@ -64,7 +70,12 @@ async function seedBundle(employeeId: string, packs: string[][]): Promise<string
   });
   for (const [index, weBelegNo] of flat.entries()) {
     await prisma.assignmentItem.create({
-      data: { bundleId: bundle.id, caseId: id(weBelegNo), sequence: index },
+      data: {
+        bundleId: bundle.id,
+        caseId: id(weBelegNo),
+        sequence: index,
+        packIndex: packOf.get(weBelegNo)!,
+      },
     });
     await prisma.goodsReceiptCase.update({
       where: { id: id(weBelegNo) },
@@ -98,11 +109,17 @@ async function order(bundleId: string): Promise<string[]> {
 
 /** Pack-Zuordnung, wie das Board sie ausliefert (WE-Nummern je Pack). */
 async function boardPacks(employeeNo: string): Promise<string[][]> {
+  const row = await boardRow(employeeNo);
+  const byId = new Map(row.cases.map((c) => [c.id, c.weBelegNo]));
+  return row.packs.map((p) => p.caseIds.map((cid) => byId.get(cid) ?? cid));
+}
+
+/** Die Board-Zeile eines Mitarbeiters — für Zusagen über die Pack-Indizes selbst. */
+async function boardRow(employeeNo: string): Promise<BoardRowDto> {
   const board = await readSvc.board(DATE);
   const row = board.rows.find((r) => r.employeeNo === employeeNo);
   if (row === undefined) throw new Error(`keine Board-Zeile für ${employeeNo}`);
-  const byId = new Map(row.cases.map((c) => [c.id, c.weBelegNo]));
-  return row.packs.map((p) => p.caseIds.map((cid) => byId.get(cid) ?? cid));
+  return row;
 }
 
 let annaBundle: string;
@@ -262,7 +279,11 @@ describe('B2 moveCase mit Pack-Ziel — mitarbeiterübergreifend', () => {
 
     // Quell-Bündel: kein Geister-Beleg, lückenlose Reihenfolge, Aufwand gesunken.
     expect(await order(annaBundle)).toEqual(['WE-A3', 'WE-A4', 'WE-A1']);
-    expect(await boardPacks('ma-401')).toEqual([[], ['WE-A3', 'WE-A4', 'WE-A1']]);
+    // Annas Pack 0 ist leergelaufen: es liefert keinen (leeren) Kasten mehr aus.
+    // Sein Nachbar behält trotzdem Index 1 — der ist persistiert, nicht die
+    // Position in dieser Liste. Ein gemerktes Pack-Ziel zeigt also weiter richtig.
+    expect(await boardPacks('ma-401')).toEqual([['WE-A3', 'WE-A4', 'WE-A1']]);
+    expect((await boardRow('ma-401')).packs.map((p) => p.index)).toEqual([1]);
     const source = await prisma.assignmentBundle.findUniqueOrThrow({ where: { id: annaBundle } });
     expect(source.plannedEffortMinutes).toBe(45);
 

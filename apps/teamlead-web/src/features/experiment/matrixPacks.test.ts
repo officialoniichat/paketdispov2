@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardCase } from '../../data/types.js';
-import { derivePacks, orderPackCases, stripStyle } from './matrixPacks.js';
+import type { BoardCase, BoardPack } from '../../data/types.js';
+import { derivePacks, orderPackCases, packPullLabel, stripStyle } from './matrixPacks.js';
 
 function bc(
   caseId: string,
@@ -21,17 +21,26 @@ function bc(
   };
 }
 
+function pack(index: number, caseIds: string[], active = false): BoardPack {
+  return { index, caseIds, active };
+}
+
 describe('derivePacks', () => {
-  it('gruppiert nach den Event-Packs und nummeriert chronologisch', () => {
+  it('gruppiert nach den gelieferten Packs und nummeriert in Bündel-Reihenfolge', () => {
     const cases = [bc('a', 'assigned'), bc('b', 'assigned'), bc('c', 'assigned')];
-    const packs = derivePacks(cases, [
-      ['a', 'b'],
-      ['c'],
-    ]);
+    const packs = derivePacks(cases, [pack(0, ['a', 'b'], true), pack(1, ['c'])]);
     expect(packs.map((p) => p.label)).toEqual(['Pack 1', 'Pack 2']);
     expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['a', 'b']);
     expect(packs[1]!.cases.map((c) => c.caseId)).toEqual(['c']);
     expect(packs[0]!.teile).toBe(20);
+  });
+
+  it('markiert das aktive Pack — alle weiteren sind beim MA nur vorgeplant', () => {
+    const packs = derivePacks(
+      [bc('a', 'assigned'), bc('b', 'assigned')],
+      [pack(0, ['a'], true), pack(1, ['b'])],
+    );
+    expect(packs.map((p) => p.active)).toEqual([true, false]);
   });
 
   it('ohne Pack-Daten: alle Belege als „Pack 1"', () => {
@@ -41,48 +50,43 @@ describe('derivePacks', () => {
     expect(packs[0]!.cases).toHaveLength(2);
   });
 
-  it('einsortierte Belege ERBEN das Pack ihrer Bündel-Nachbarn (kein Kasten daneben)', () => {
-    // m wurde per Einsortieren zwischen a und b gesetzt (gleiches Bündel b1).
+  it('manuell einsortierte Belege stehen IM Pack, das sie mitliefert (kein Kasten daneben)', () => {
+    // m wurde per Einsortieren ans Pack angehängt — das Backend liefert es mit.
     const packs = derivePacks(
       [bc('a', 'assigned', 10, 'b1'), bc('m', 'assigned', 10, 'b1'), bc('b', 'assigned', 10, 'b1')],
-      [['a', 'b']],
-      'b1',
+      [pack(0, ['a', 'm', 'b'], true)],
     );
     expect(packs).toHaveLength(1);
     expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['a', 'm', 'b']);
     expect(packs[0]!.teile).toBe(30);
   });
 
-  it('vor dem ersten Pack-Mitglied einsortiert: erbt rückwärts vom nächsten Nachbarn', () => {
-    const packs = derivePacks([bc('m', 'assigned', 10, 'b1'), bc('a', 'assigned', 10, 'b1')], [['a']], 'b1');
+  it('Belege, die nicht (mehr) in der Zeile liegen, erzeugen keine leeren Packs', () => {
+    const packs = derivePacks([bc('a', 'assigned')], [pack(0, ['weg']), pack(1, ['a'], true)]);
     expect(packs).toHaveLength(1);
-    expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['m', 'a']);
-  });
-
-  it('Belege FREMDER Bündel (Soll bestehen) bilden je Bündel einen eigenen Manuell-Kasten', () => {
-    const packs = derivePacks(
-      [bc('a', 'assigned', 10, 'b1'), bc('m1', 'assigned', 10, 'b2'), bc('m2', 'assigned', 10, 'b3')],
-      [['a']],
-      'b1',
-    );
-    expect(packs.map((p) => p.label)).toEqual(['Pack 1', 'Manuell', 'Manuell']);
-    expect(packs[1]!.cases.map((c) => c.caseId)).toEqual(['m1']);
-    expect(packs[2]!.cases.map((c) => c.caseId)).toEqual(['m2']);
-  });
-
-  it('nennen mehrere Events denselben Beleg, gewinnt das spätere Pack (Wieder-Zuweisung)', () => {
-    const packs = derivePacks([bc('a', 'assigned'), bc('b', 'assigned')], [
-      ['a', 'b'],
-      ['a'],
-    ]);
-    expect(packs.map((p) => p.cases.map((c) => c.caseId))).toEqual([['b'], ['a']]);
-  });
-
-  it('Events über Belege, die nicht (mehr) im Bündel sind, erzeugen keine leeren Packs', () => {
-    const packs = derivePacks([bc('a', 'assigned')], [['weg'], ['a']]);
-    expect(packs).toHaveLength(1);
+    // Beschriftung zählt fortlaufend durch, der Index bleibt der persistierte —
+    // sonst zielte ein Drop auf „Pack 1" plötzlich auf das leergelaufene Pack 0.
     expect(packs[0]!.label).toBe('Pack 1');
+    expect(packs[0]!.index).toBe(1);
     expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['a']);
+  });
+});
+
+describe('packPullLabel', () => {
+  const packs = [
+    { ...pack(0, ['a']), key: 'p0', label: 'Pack 1', cases: [], teile: 0 },
+    { ...pack(1, ['b'], true), key: 'p1', label: 'Pack 2', cases: [], teile: 0 },
+    { ...pack(2, ['c']), key: 'p2', label: 'Pack 3', cases: [], teile: 0 },
+  ];
+
+  it('unterscheidet abgearbeitet / aktiv / vorgeplant am aktiven Pack', () => {
+    expect(packPullLabel(packs[0]!, packs)).toBe('abgearbeitet');
+    expect(packPullLabel(packs[1]!, packs)).toBe('aktiv beim MA');
+    expect(packPullLabel(packs[2]!, packs)).toBe('vorgeplant');
+  });
+
+  it('bei einem einzigen Pack gibt es nichts zu unterscheiden', () => {
+    expect(packPullLabel(packs[1]!, [packs[1]!])).toBeNull();
   });
 });
 

@@ -15,7 +15,7 @@ import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
-import { isPackIndex, packInsertPosition, reconstructPacks } from './board-packs.js';
+import { lastPackIndex, packInsertPosition, packMembers } from './pack-window.js';
 import {
   type AddToBundleDto,
   type AssignBundleDto,
@@ -893,10 +893,8 @@ export class TeamleadService {
 
       // Pack-Zusammensetzung des ZIEL-Bündels VOR dem Verschieben — genau die
       // Sicht, auf die sich der Index des Aufrufers bezieht.
-      const targetPack = await this.resolveTargetPackTx(
-        tx,
-        targetBundle.id,
-        targetBundle.items.map((i) => i.caseId),
+      const targetPack = this.resolveTargetPack(
+        targetBundle.items,
         dto.targetPackIndex,
         intraBundle ? caseId : null,
       );
@@ -907,9 +905,16 @@ export class TeamleadService {
       if (intraBundle) {
         // Nur Pack-Zugehörigkeit + Abhol-Reihenfolge ändern sich: der Beleg bleibt
         // im Bündel, die Menge der Mitglieder — und damit der Aufwand — auch.
+        // `targetPack` ist hier nie null (ohne Pack-Ziel schlägt der Guard oben zu).
         const rest = sourceBundle.items.map((i) => i.caseId).filter((id) => id !== caseId);
         const at = packInsertPosition(rest, targetPack?.members ?? []);
         caseIds = [...rest.slice(0, at), caseId, ...rest.slice(at)];
+        // Die eigentliche Umhängung: die Pack-Zugehörigkeit wird GESCHRIEBEN, nicht
+        // nur protokolliert — sonst sähe weder das Board noch der Mitarbeiter etwas.
+        await tx.assignmentItem.update({
+          where: { id: item.id },
+          data: { packIndex: targetPack?.index ?? item.packIndex },
+        });
         await resequenceItems(tx, sourceBundleId, caseIds);
         await resequenceRouteStops(tx, sourceBundleId, caseIds);
         plannedEffortMinutes = sourceBundle.plannedEffortMinutes;
@@ -927,7 +932,13 @@ export class TeamleadService {
 
         // Append to the target bundle (case stays `assigned`, only the link moves —
         // the ready-only validation in addCasesToBundleTx does not apply to a move).
-        ({ plannedEffortMinutes, caseIds } = await this.appendCasesTx(tx, targetBundle, [caseId]));
+        // Mit Pack-Ziel entsteht das Item gleich MIT der neuen Pack-Zugehörigkeit.
+        ({ plannedEffortMinutes, caseIds } = await this.appendCasesTx(
+          tx,
+          targetBundle,
+          [caseId],
+          targetPack?.index,
+        ));
 
         // Mit Pack-Ziel rückt der zunächst angehängte Beleg an seine Pack-Stelle.
         if (targetPack !== null) {
@@ -944,8 +955,10 @@ export class TeamleadService {
         fromBundleId: sourceBundleId,
         toEmployeeNo: dto.targetEmployeeNo,
         bundleCreated,
-        // Trägt die neue Pack-Zugehörigkeit — {@link reconstructPacks} liest sie beim
-        // nächsten Board-Read zurück (null = pack-los, erbt das Pack des Nachbarn).
+        // Dokumentiert das Ziel-Pack für die Nachvollziehbarkeit. Die Zugehörigkeit
+        // SELBST steht in `AssignmentItem.packIndex` (oben geschrieben) — das Event
+        // hält nur fest, wer wann wohin verschoben hat. null = kein Pack-Ziel, der
+        // Beleg ist ans Bündel-Ende gewandert.
         targetPackIndex: targetPack?.index ?? null,
       });
       return {
@@ -975,7 +988,11 @@ export class TeamleadService {
     day: Date,
     forceNew = false,
   ): Promise<{
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] };
+    bundle: {
+      id: string;
+      status: AssignmentStatus;
+      items: { caseId: string; packIndex: number }[];
+    };
     bundleCreated: boolean;
   }> {
     const employee = await tx.user.findUnique({
@@ -990,7 +1007,12 @@ export class TeamleadService {
       : await tx.assignmentBundle.findFirst({
       where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
       orderBy: { createdAt: 'asc' },
-      include: { items: { orderBy: { sequence: 'asc' }, select: { id: true, caseId: true } } },
+      include: {
+        items: {
+          orderBy: { sequence: 'asc' },
+          select: { id: true, caseId: true, packIndex: true },
+        },
+      },
     });
     if (existing) {
       return {
@@ -1023,7 +1045,7 @@ export class TeamleadService {
    */
   private async addCaseToBundleTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
     caseId: string,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
     return this.addCasesToBundleTx(tx, bundle, [caseId]);
@@ -1039,7 +1061,7 @@ export class TeamleadService {
    */
   private async addCasesToBundleTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
     caseIds: string[],
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
     if (TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) {
@@ -1084,12 +1106,22 @@ export class TeamleadService {
    */
   private async appendCasesTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string }[] },
+    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
     caseIds: string[],
+    targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
+    // Mit ausdrücklichem Pack-Ziel (§8.4 `moveCase`) zählt genau dieses. Sonst gilt:
+    // manuell einsortierte Belege hängen sich ans LETZTE Pack des Bündels, statt ein
+    // eigenes aufzumachen — genau dort landen sie auch in der Reihenfolge (Tail).
+    // Hat der Mitarbeiter nur sein Starter-Pack, ist das sein aktives: der Beleg ist
+    // sofort sichtbar. Existiert schon ein vorgeplantes Folge-Pack, reiht er sich
+    // dort ein und wird mit diesem freigeschaltet.
+    const packIndex = targetPackIndex ?? Math.max(0, lastPackIndex(bundle.items));
     let nextSeq = bundle.items.length;
     for (const caseId of caseIds) {
-      await tx.assignmentItem.create({ data: { bundleId: bundle.id, caseId, sequence: nextSeq } });
+      await tx.assignmentItem.create({
+        data: { bundleId: bundle.id, caseId, sequence: nextSeq, packIndex },
+      });
       await tx.goodsReceiptCase.update({
         where: { id: caseId },
         data: { status: 'assigned', assignedBundleId: bundle.id, version: { increment: 1 } },
@@ -1196,37 +1228,29 @@ export class TeamleadService {
   }
 
   /**
-   * Löst `targetPackIndex` gegen die aus dem Audit-Log rekonstruierte Pack-Sicht des
-   * Ziel-Bündels auf — {@link reconstructPacks} ist dieselbe Funktion, aus der das
-   * Board seine `packs` liefert, der Index des Aufrufers meint also exakt das, was
-   * der Teamlead gesehen hat. `undefined` = kein Pack-Ziel → null (ans Bündel-Ende).
-   * Ein Index außerhalb der Pack-Liste heißt „Board-Sicht veraltet" (400); zeigt er
-   * auf das Pack, in dem der Beleg schon liegt, gibt es nichts zu tun (409).
+   * Löst `targetPackIndex` gegen die PERSISTIERTE Pack-Zugehörigkeit des Ziel-Bündels
+   * auf (`AssignmentItem.packIndex`) — dieselbe Spalte, aus der das Board seine
+   * `packs` gruppiert und aus der die Mitarbeiter-App ihr Sichtfenster zieht. Der
+   * Index des Aufrufers meint also exakt das, was der Teamlead gesehen hat, und was
+   * er hier verschiebt, sieht der Mitarbeiter danach auch.
+   *
+   * `undefined` = kein Pack-Ziel → null (ans Bündel-Ende). Ein Index oberhalb des
+   * höchsten Packs heißt „Board-Sicht veraltet" (400); zeigt er auf das Pack, in dem
+   * der Beleg schon liegt, gibt es nichts zu tun (409).
    */
-  private async resolveTargetPackTx(
-    tx: PrismaTx,
-    bundleId: string,
-    memberCaseIds: string[],
+  private resolveTargetPack(
+    items: readonly { caseId: string; packIndex: number }[],
     targetPackIndex: number | undefined,
     movingCaseId: string | null,
-  ): Promise<{ index: number; members: string[] } | null> {
+  ): { index: number; members: string[] } | null {
     if (targetPackIndex === undefined) return null;
-    const events = await tx.workflowEvent.findMany({
-      where: {
-        entityType: 'AssignmentBundle',
-        entityId: bundleId,
-        eventType: { in: ['bundle.created', 'bundle.extended', 'assignment.overridden'] },
-      },
-      orderBy: { seq: 'asc' },
-      select: { eventType: true, payload: true },
-    });
-    const packs = reconstructPacks(events, memberCaseIds);
-    if (!isPackIndex(targetPackIndex, packs.length)) {
+    const packCount = lastPackIndex(items) + 1;
+    if (targetPackIndex >= packCount) {
       throw new BadRequestException(
-        `Pack ${targetPackIndex} gibt es im Ziel-Bündel nicht (${packs.length} Packs) — die Board-Sicht ist veraltet.`,
+        `Pack ${targetPackIndex} gibt es im Ziel-Bündel nicht (${packCount} Packs) — die Board-Sicht ist veraltet.`,
       );
     }
-    const members = packs[targetPackIndex]!;
+    const members = packMembers(items, targetPackIndex);
     if (movingCaseId !== null && members.includes(movingCaseId)) {
       throw new ConflictException('Der Beleg liegt bereits in diesem Pack.');
     }
@@ -1240,7 +1264,7 @@ export class TeamleadService {
     id: string;
     status: AssignmentStatus;
     plannedEffortMinutes: number;
-    items: { id: string; caseId: string; sequence: number }[];
+    items: { id: string; caseId: string; sequence: number; packIndex: number }[];
   }> {
     const bundle = await tx.assignmentBundle.findUnique({
       where: { id: bundleId },
@@ -1251,7 +1275,12 @@ export class TeamleadService {
       id: bundle.id,
       status: bundle.status,
       plannedEffortMinutes: bundle.plannedEffortMinutes,
-      items: bundle.items.map((i) => ({ id: i.id, caseId: i.caseId, sequence: i.sequence })),
+      items: bundle.items.map((i) => ({
+        id: i.id,
+        caseId: i.caseId,
+        sequence: i.sequence,
+        packIndex: i.packIndex,
+      })),
     };
   }
 

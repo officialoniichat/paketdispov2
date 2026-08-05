@@ -671,6 +671,11 @@ export async function seedIntakeGateFixtures(
 // (Rot/Grün 38/40), ein CatMan-Termin, plus die Sonderzustände Fertig
 // (completed + ZST), Problem gemeldet (issue_open) und Geklärt (problem_resolved).
 //
+// Das Bündel trägt ZWEI Packs (Pull-Prinzip, siehe MA108_FOLLOW_UP_PACK_START_WE):
+// Pack 1 (Stops R7 + R19) ist aktiv und damit das Einzige, was die Mitarbeiter-App
+// zeigt; Pack 2 (PA-1 + Hängebahn) ist vorgeplant und erscheint dort erst, wenn
+// Hakan es anfordert. Im DAMB-Board der Teamleitung sind beide zu sehen.
+//
 // Ordnung: NACH `seedCaseDetails` aufrufen — die Belege hier tragen ihre eigenen,
 // expliziten Positionen/Größen und dürfen nicht vom generischen 38/40-Detail
 // überschrieben werden. „Automatik neu berechnen" verhält sich systemkonform:
@@ -997,6 +1002,21 @@ const MA108_STOP_ORDER = ['R7', 'R19', 'PA-1', 'HB-5/234'] as const;
 /** Stop 2 (R19) ist bereits geholt — dort liegen die schon bearbeiteten Fälle. */
 const MA108_SCANNED_STOPS = new Set(['R19']);
 
+/**
+ * Pack-Grenze des Demo-Bündels (Pull-Prinzip): ab diesem Beleg beginnt das
+ * VORGEPLANTE Folge-Pack. Es steht im DAMB-Board der Teamleitung als „Pack 2",
+ * ist in der Mitarbeiter-App aber unsichtbar, bis Hakan es anfordert.
+ *
+ * Damit sind alle drei Regeln am Demo-Datensatz nachstellbar:
+ *  - Pack 1 (aktiv, Stops R7 + R19): drei offene Belege, ein fertiger, ein
+ *    geklärter und ZWEI mit noch offenem Problem.
+ *  - „Nächstes Pack" bleibt gesperrt, bis die drei offenen und der geklärte
+ *    Beleg fertig sind — die beiden Problem-Belege blockieren bewusst NICHT.
+ *  - Nach dem Wechsel auf Pack 2 bleiben genau diese Problem-Belege sichtbar,
+ *    zählen aber weiter auf Pack 1.
+ */
+const MA108_FOLLOW_UP_PACK_START_WE = '9.108.031';
+
 function ma108TotalQuantity(spec: Ma108CaseSpec): number {
   return spec.positions.reduce(
     (sum, p) => sum + p.skuLines.reduce((s, l) => s + l.qty, 0),
@@ -1255,7 +1275,14 @@ export async function seedMa108DemoBundle(
   }
 
   // 2) Das Bündel selbst: heute, aktiv (Arbeit hat begonnen — der Fertig-Beleg
-  //    beweist es), direkt von der Teamleitung zugewiesen.
+  //    beweist es), direkt von der Teamleitung zugewiesen. Es trägt ZWEI Packs;
+  //    aktiv ist das erste (activePackIndex bleibt beim Default 0).
+  const followUpStart = MA108_CASES.findIndex(
+    (c) => c.weBelegNo === MA108_FOLLOW_UP_PACK_START_WE,
+  );
+  const packIndexOf = (index: number): number =>
+    followUpStart >= 0 && index >= followUpStart ? 1 : 0;
+
   const bundle = await prisma.assignmentBundle.create({
     data: {
       employeeId,
@@ -1266,13 +1293,14 @@ export async function seedMa108DemoBundle(
       ),
       status: 'active',
       createdBy: 'teamlead',
+      activePackIndex: 0,
     },
   });
   for (const [index, spec] of MA108_CASES.entries()) {
     const caseId = caseIdByWeBelegNo.get(spec.weBelegNo);
     if (!caseId) continue;
     await prisma.assignmentItem.create({
-      data: { bundleId: bundle.id, caseId, sequence: index },
+      data: { bundleId: bundle.id, caseId, sequence: index, packIndex: packIndexOf(index) },
     });
     await prisma.goodsReceiptCase.update({
       where: { id: caseId },

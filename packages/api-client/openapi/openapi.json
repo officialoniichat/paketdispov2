@@ -3423,6 +3423,28 @@
           "routeStops"
         ]
       },
+      "TodayPackDto": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "0-basierter Index des aktiven Packs (0 = Starter-Pack)"
+          },
+          "total": {
+            "type": "number",
+            "description": "Packs des Bündels insgesamt (inkl. vorgeplanter Folge-Packs)"
+          },
+          "caseCount": {
+            "type": "number",
+            "description": "Belege im aktiven Pack — die Zähler-Basis. Mitangezeigte Problem-Belege früherer Packs zählen NICHT mit (sie zählen auf ihr altes Pack)."
+          }
+        },
+        "required": [
+          "index",
+          "total",
+          "caseCount"
+        ]
+      },
       "LabelPrintPositionDto": {
         "type": "object",
         "properties": {
@@ -3648,6 +3670,10 @@
             "type": "boolean",
             "description": "Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
           },
+          "packIndex": {
+            "type": "number",
+            "description": "Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack (TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
+          },
           "primaryShopNo": {
             "type": "string",
             "nullable": true,
@@ -3787,7 +3813,18 @@
               }
             ]
           },
+          "pack": {
+            "nullable": true,
+            "description": "Aktives Pack; null wenn kein Bündel zugeteilt ist",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TodayPackDto"
+              }
+            ]
+          },
           "cases": {
+            "description": "Belege des AKTIVEN Packs plus noch offene Problem-Belege früherer Packs (Anzeige-Mitnahme). Für kommende Packs vorgeplante Belege sind NICHT enthalten.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CaseSummaryDto"
@@ -4219,7 +4256,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why no cart was assigned: no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation"
+            "description": "Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation"
           },
           "caseCount": {
             "type": "number",
@@ -4605,16 +4642,26 @@
       "BoardPackDto": {
         "type": "object",
         "properties": {
+          "index": {
+            "type": "number",
+            "description": "Persistierter Pack-Index im Bündel (AssignmentItem.packIndex) — genau der Wert, den POST bundles/:id/cases/:caseId/move als targetPackIndex erwartet. NICHT die Position in dieser Liste: ein leergelaufenes Pack fällt raus, die übrigen behalten ihren Index."
+          },
           "caseIds": {
             "description": "Case ids des Packs in Bündel-Reihenfolge",
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Das Pack, an dem der Mitarbeiter gerade arbeitet — nur dessen Belege sieht er in der App. Alle anderen sind vorgeplant bzw. bereits abgearbeitet."
           }
         },
         "required": [
-          "caseIds"
+          "index",
+          "caseIds",
+          "active"
         ]
       },
       "BoardRowDto": {
@@ -4939,6 +4986,10 @@
           "collected": {
             "type": "boolean",
             "description": "Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
+          },
+          "packIndex": {
+            "type": "number",
+            "description": "Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack (TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt."
           },
           "primaryShopNo": {
             "type": "string",
@@ -6122,7 +6173,7 @@
           },
           "targetPackIndex": {
             "type": "number",
-            "description": "Ziel-Pack im Bündel des Ziel-Mitarbeiters — Index in BoardRowDto.packs. Der Beleg wird hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg bereits liegt, ist ein 409 (nichts zu tun)."
+            "description": "Ziel-Pack im Bündel des Ziel-Mitarbeiters — der `index` eines BoardRowDto.packs-Eintrags (persistierter AssignmentItem.packIndex, nicht die Listenposition). Der Beleg wird hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg bereits liegt, ist ein 409 (nichts zu tun)."
           },
           "reason": {
             "type": "string",

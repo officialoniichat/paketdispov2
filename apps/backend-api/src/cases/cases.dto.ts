@@ -89,6 +89,14 @@ export class CaseSummaryDto {
       'Ware-holen-Haken (B2): Ware des Belegs am Lagerplatz geholt (persistiert, geräteübergreifend). Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt.',
   })
   collected?: boolean;
+  @ApiPropertyOptional({
+    type: Number,
+    description:
+      'Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack ' +
+      '(TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren ' +
+      'Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt.',
+  })
+  packIndex?: number;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
   @ApiPropertyOptional({
@@ -246,11 +254,42 @@ export class MeWorkstationDto {
   @ApiProperty() name!: string;
 }
 
+/**
+ * Das aktive Pack des Mitarbeiters (Pull-Prinzip). Er arbeitet immer genau EIN
+ * Pack ab und fordert danach das nächste an; vorgeplante Folge-Packs bleiben bis
+ * dahin unsichtbar. Alle Fortschritts-/Zähleranzeigen der App beziehen sich auf
+ * dieses Pack.
+ */
+export class TodayPackDto {
+  @ApiProperty({ description: '0-basierter Index des aktiven Packs (0 = Starter-Pack)' })
+  index!: number;
+  @ApiProperty({ description: 'Packs des Bündels insgesamt (inkl. vorgeplanter Folge-Packs)' })
+  total!: number;
+  @ApiProperty({
+    description:
+      'Belege im aktiven Pack — die Zähler-Basis. Mitangezeigte Problem-Belege ' +
+      'früherer Packs zählen NICHT mit (sie zählen auf ihr altes Pack).',
+  })
+  caseCount!: number;
+}
+
 export class TodayResponseDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD' }) date!: string;
   @ApiPropertyOptional({ type: CurrentBundleDto, nullable: true })
   bundle!: CurrentBundleDto | null;
-  @ApiProperty({ type: [CaseSummaryDto] }) cases!: CaseSummaryDto[];
+  @ApiPropertyOptional({
+    type: TodayPackDto,
+    nullable: true,
+    description: 'Aktives Pack; null wenn kein Bündel zugeteilt ist',
+  })
+  pack!: TodayPackDto | null;
+  @ApiProperty({
+    type: [CaseSummaryDto],
+    description:
+      'Belege des AKTIVEN Packs plus noch offene Problem-Belege früherer Packs ' +
+      '(Anzeige-Mitnahme). Für kommende Packs vorgeplante Belege sind NICHT enthalten.',
+  })
+  cases!: CaseSummaryDto[];
   @ApiPropertyOptional({
     type: MeWorkstationDto,
     nullable: true,
@@ -611,12 +650,29 @@ export class BoardCaseDto {
 /**
  * Ein vom System gebildetes Pack (Engine-Terminologie: Starter-Pack bzw.
  * Folge-Pack). Packs werden beim Erweitern FLACH ins offene Bündel gemerged;
- * die Grenze lebt nur in den `bundle.created`/`bundle.extended` Audit-Events
- * und wird hier fürs Board rekonstruiert (reine Anzeige-Gruppierung).
+ * die Grenze trägt persistiert `AssignmentItem.packIndex`.
+ *
+ * Fürs Board ist das mehr als Gruppierung: der Mitarbeiter sieht in seiner App
+ * NUR das aktive Pack (Pull-Prinzip). `active` sagt der Teamleitung, welches
+ * Pack beim Mitarbeiter gerade läuft und welche Packs erst vorgeplant sind.
  */
 export class BoardPackDto {
+  @ApiProperty({
+    type: Number,
+    description:
+      'Persistierter Pack-Index im Bündel (AssignmentItem.packIndex) — genau der Wert, den ' +
+      'POST bundles/:id/cases/:caseId/move als targetPackIndex erwartet. NICHT die Position ' +
+      'in dieser Liste: ein leergelaufenes Pack fällt raus, die übrigen behalten ihren Index.',
+  })
+  index!: number;
   @ApiProperty({ type: [String], description: 'Case ids des Packs in Bündel-Reihenfolge' })
   caseIds!: string[];
+  @ApiProperty({
+    description:
+      'Das Pack, an dem der Mitarbeiter gerade arbeitet — nur dessen Belege sieht ' +
+      'er in der App. Alle anderen sind vorgeplant bzw. bereits abgearbeitet.',
+  })
+  active!: boolean;
 }
 
 export class BoardRowDto {
@@ -1399,7 +1455,8 @@ export class MoveCaseDto {
   @ApiPropertyOptional({
     type: Number,
     description:
-      'Ziel-Pack im Bündel des Ziel-Mitarbeiters — Index in BoardRowDto.packs. Der Beleg wird ' +
+      'Ziel-Pack im Bündel des Ziel-Mitarbeiters — der `index` eines BoardRowDto.packs-Eintrags ' +
+      '(persistierter AssignmentItem.packIndex, nicht die Listenposition). Der Beleg wird ' +
       'hinter das letzte Mitglied dieses Packs einsortiert (die Abhol-Reihenfolge folgt). ' +
       'Weggelassen = ans Ende des Bündels. Ein Index, der auf das Pack zeigt, in dem der Beleg ' +
       'bereits liegt, ist ein 409 (nichts zu tun).',

@@ -141,11 +141,15 @@ export function matrixVerschiebbar(
   return drag.status === 'assigned' && drag.bundleId !== '';
 }
 
-/** Ziel-Pack eines Drops: Pack `index` im Bündel von `employeeId` (Manuell = null). */
+/** Ziel-Pack eines Drops: Pack `index` im Bündel von `employeeId`. */
 export interface PackDropTarget {
   employeeId: string;
-  /** Pack-Index im Ziel-Bündel; null = Manuell-Kasten (kein echtes Pack). */
-  index: number | null;
+  /**
+   * Persistierter Pack-Index im Ziel-Bündel (`AssignmentItem.packIndex`). Jeder
+   * Beleg eines Bündels gehört genau einem Pack, es gibt also keinen pack-losen
+   * Sammelkasten — jeder Kasten ist ein echtes Ziel.
+   */
+  index: number;
   /** Belege, die aktuell in diesem Kasten liegen — für „liegt schon hier". */
   caseIds: readonly string[];
   /** Abwesend (krank/urlaub) = die ganze Zeile nimmt nichts entgegen. */
@@ -164,7 +168,7 @@ export function packDropAction(
   target: PackDropTarget,
 ): { kind: 'move'; targetPackIndex: number } | null {
   if (drag === null || drag.source !== 'matrix') return null; // Ablage-Drags: Zeile/Strich.
-  if (target.absent || target.index === null) return null;
+  if (target.absent) return null;
   if (!matrixVerschiebbar(drag)) return null;
   // Liegt der Beleg schon in diesem Kasten, gibt es nichts zu tun (Backend: 409).
   if (target.caseIds.includes(drag.caseId)) return null;

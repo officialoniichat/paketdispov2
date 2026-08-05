@@ -2,25 +2,36 @@
  * Experiment DA.M.B — Pack-Ableitung für die Mitarbeiter-Matrix (reine Anzeige).
  *
  * Ein „Pack" ist die Engine-Einheit der Tagesplanung (Starter-Pack + Folge-
- * Packs, Konfig starterPackMin/MaxTeile). Persistiert wird nur das flache
- * Bündel; die Pack-Grenzen liefert der Board-Endpoint als caseId-Listen
- * (BoardRow.packs, rekonstruiert aus `bundle.created`/`bundle.extended`).
- * Hier wird nur gruppiert und für die Anzeige geordnet — keine Fachlogik.
+ * Packs, Konfig starterPackMin/MaxTeile). Mehrere Packs werden flach in EIN
+ * Bündel gemerged; die Pack-Grenze ist persistiert (`AssignmentItem.packIndex`)
+ * und kommt fertig vom Board-Endpoint (BoardRow.packs) — inklusive der Angabe,
+ * welches Pack beim Mitarbeiter gerade aktiv ist. Hier wird nur gruppiert und
+ * für die Anzeige geordnet — keine Fachlogik.
  */
-import type { BoardCase } from '../../data/types.js';
+import type { BoardCase, BoardPack } from '../../data/types.js';
 
 export interface MatrixPack {
   key: string;
   label: string;
   /**
-   * Pack-Index im Bündel — DERSELBE Index, den `BoardRowDto.packs` liefert und den
-   * `moveCase` als `targetPackIndex` erwartet. `null` beim Manuell-Kasten: der ist
-   * kein echtes Pack, sondern der Sammelplatz pack-loser Belege — also kein Ziel.
+   * Pack-Index im Bündel — DERSELBE persistierte Index, den `BoardRowDto.packs`
+   * liefert und den `moveCase` als `targetPackIndex` erwartet. Jeder Beleg eines
+   * Bündels gehört genau einem Pack, es gibt also keinen pack-losen Sammelkasten
+   * mehr: jeder Kasten ist ein gültiges Drop-Ziel.
+   *
+   * Nicht mit der Beschriftung verwechseln: läuft ein Pack leer, verschwindet sein
+   * Kasten und die Nummerierung im `label` schließt die Lücke — `index` nicht.
    */
-  index: number | null;
+  index: number;
   /** Belege des Packs, anzeige-geordnet (Laufendes oben, Fertiges unten). */
   cases: BoardCase[];
   teile: number;
+  /**
+   * Das Pack, an dem der Mitarbeiter GERADE arbeitet — nur dessen Belege sieht
+   * er in seiner App (Pull-Prinzip). Alle späteren sind vorgeplant und dort
+   * noch unsichtbar.
+   */
+  active: boolean;
 }
 
 /** Status, die im Pack als „Laufend" gelten (oberster Abschnitt des Containers). */
@@ -89,94 +100,64 @@ export function orderPackCases(cases: readonly BoardCase[]): BoardCase[] {
 }
 
 /**
- * Gruppiert die Bündel-Belege einer Zeile in Packs. Nennen mehrere Events einen
- * Beleg (z. B. nach Wieder-Zuweisung), gewinnt das chronologisch spätere Pack.
- * Belege OHNE eigene Pack-Zugehörigkeit (manuell zugewiesen oder einsortiert)
- * ERBEN das Pack ihres Nachbarn in Abhol-Reihenfolge — nur innerhalb DESSELBEN
- * Bündels (erst der vorige, sonst der nächste Nachbar): ein aus der Ablage
- * einsortierter Beleg erscheint damit IM bestehenden Pack an seiner Position
- * statt in einem eigenen Kasten daneben. Nur Belege fremder Bündel (z. B.
- * „+ Nächstes Bündel"/Soll bestehen) bilden je Bündel einen eigenen
- * Schluss-Kasten „Manuell" — bzw. „Pack 1", wenn gar keine Pack-Daten vorliegen.
+ * Gruppiert die Bündel-Belege einer Zeile in ihre Packs. Die Zuordnung kommt
+ * vollständig vom Backend (persistierter `packIndex`) — auch manuell zugewiesene
+ * oder einsortierte Belege tragen eines, sie hängen sich ans letzte Pack ihres
+ * Bündels. Hier wird deshalb nichts mehr geraten oder vererbt: Packs in
+ * gelieferter Reihenfolge durchnummerieren, Belege daraus nachschlagen, fertig.
+ *
+ * Ohne Pack-Angabe (schlanke Test-Fixtures) läuft die Zeile als EIN „Pack 1".
  */
 export function derivePacks(
   cases: readonly BoardCase[],
-  packCaseIds: readonly string[][] | undefined,
-  rowBundleId?: string,
+  packs: readonly BoardPack[] | undefined,
 ): MatrixPack[] {
-  const inRow = new Set(cases.map((c) => c.caseId));
-  const packIndexByCase = new Map<string, number>();
-  (packCaseIds ?? []).forEach((ids, index) => {
-    for (const id of ids) {
-      if (inRow.has(id)) packIndexByCase.set(id, index); // später überschreibt früher
-    }
-  });
+  const byId = new Map(cases.map((c) => [c.caseId, c]));
+  const groups = (packs ?? [])
+    .map((pack) => ({
+      index: pack.index,
+      active: pack.active,
+      members: pack.caseIds
+        .map((id) => byId.get(id))
+        .filter((c): c is BoardCase => c !== undefined),
+    }))
+    // Belege, die nicht (mehr) in der Zeile liegen, erzeugen keinen leeren Kasten.
+    .filter((g) => g.members.length > 0);
 
-  const bundleKey = (c: BoardCase): string => c.bundleId ?? rowBundleId ?? '';
-
-  // Pack-Vererbung in Abhol-Reihenfolge: vorwärts (voriger Nachbar) …
-  const resolved = new Map<string, number>();
-  const prevPackByBundle = new Map<string, number>();
-  for (const c of cases) {
-    const own = packIndexByCase.get(c.caseId);
-    if (own !== undefined) {
-      resolved.set(c.caseId, own);
-      prevPackByBundle.set(bundleKey(c), own);
-    } else {
-      const geerbt = prevPackByBundle.get(bundleKey(c));
-      if (geerbt !== undefined) resolved.set(c.caseId, geerbt);
-    }
-  }
-  // … dann rückwärts für Belege VOR dem ersten Pack-Mitglied ihres Bündels.
-  const nextPackByBundle = new Map<string, number>();
-  for (let i = cases.length - 1; i >= 0; i -= 1) {
-    const c = cases[i];
-    if (c === undefined) continue;
-    const own = packIndexByCase.get(c.caseId);
-    if (own !== undefined) {
-      nextPackByBundle.set(bundleKey(c), own);
-    } else if (!resolved.has(c.caseId)) {
-      const geerbt = nextPackByBundle.get(bundleKey(c));
-      if (geerbt !== undefined) resolved.set(c.caseId, geerbt);
-    }
+  if (groups.length === 0 && cases.length > 0) {
+    groups.push({ index: 0, active: true, members: [...cases] });
   }
 
-  const buckets = new Map<number, BoardCase[]>();
-  // Rest ohne Pack-Nachbarn im eigenen Bündel: je Bündel ein Manuell-Kasten.
-  const manualBuckets = new Map<string, BoardCase[]>();
-  for (const c of cases) {
-    const index = resolved.get(c.caseId);
-    if (index === undefined) {
-      const list = manualBuckets.get(bundleKey(c)) ?? [];
-      list.push(c);
-      manualBuckets.set(bundleKey(c), list);
-    } else {
-      const list = buckets.get(index) ?? [];
-      list.push(c);
-      buckets.set(index, list);
-    }
-  }
+  // `key`/`index` tragen den persistierten Pack-Index (Drop-Ziel, stabil), die
+  // Beschriftung zählt fortlaufend durch — ein leergelaufenes Pack hinterlässt
+  // beim Teamlead also keine Lücke in der Nummerierung.
+  return groups.map((g, displayIndex) => ({
+    key: `pack-${g.index}`,
+    label: `Pack ${displayIndex + 1}`,
+    index: g.index,
+    active: g.active,
+    cases: orderPackCases(g.members),
+    teile: g.members.reduce((sum, c) => sum + c.totalQuantity, 0),
+  }));
+}
 
-  const packs: MatrixPack[] = [...buckets.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([index, members], displayIndex) => ({
-      key: `pack-${index}`,
-      label: `Pack ${displayIndex + 1}`,
-      index,
-      cases: orderPackCases(members),
-      teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
-    }));
-
-  for (const [key, members] of manualBuckets) {
-    packs.push({
-      key: `pack-manuell-${key === '' ? 'ohne-buendel' : key}`,
-      label: packs.length === 0 ? 'Pack 1' : 'Manuell',
-      index: null,
-      cases: orderPackCases(members),
-      teile: members.reduce((sum, c) => sum + c.totalQuantity, 0),
-    });
-  }
-  return packs;
+/**
+ * Wo steht dieses Pack im Pull-Ablauf des Mitarbeiters? In seiner App sieht er NUR
+ * sein aktives Pack — der Teamlead soll hier ablesen können, was davon beim MA
+ * schon durch ist, was er gerade vor sich hat und was er noch nicht sieht.
+ *
+ * `null` bei einem einzigen Pack: dann gibt es nichts zu unterscheiden, und die
+ * Zeile bleibt ruhig.
+ */
+export function packPullLabel(
+  pack: MatrixPack,
+  packs: readonly MatrixPack[],
+): 'abgearbeitet' | 'aktiv beim MA' | 'vorgeplant' | null {
+  if (packs.length < 2) return null;
+  if (pack.active) return 'aktiv beim MA';
+  const activeIndex = packs.find((p) => p.active)?.index;
+  if (activeIndex === undefined) return null;
+  return pack.index < activeIndex ? 'abgearbeitet' : 'vorgeplant';
 }
 
 /** Status-Farbe eines Belegstrichs; null = neutrale bzw. Lieferungs-Gruppenfarbe. */

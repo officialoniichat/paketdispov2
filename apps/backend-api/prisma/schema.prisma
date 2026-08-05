@@ -645,6 +645,11 @@ model AssignmentBundle {
   effortPoints        Float               @default(0)
   status              AssignmentStatus    @default(created)
   createdBy           AssignmentCreatedBy @default(system)
+  /// Pull-Prinzip: das Pack, an dem der Mitarbeiter GERADE arbeitet. Nur dessen
+  /// Belege zeigt die Mitarbeiter-App; spätere Packs sind vorgeplant, aber dort
+  /// unsichtbar. Rückt AUSSCHLIESSLICH beim Anfordern des nächsten Packs vor
+  /// (POST /api/me/next-bundle) — nie durch Planung.
+  activePackIndex     Int                 @default(0)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -663,6 +668,10 @@ model AssignmentItem {
   bundleId String
   caseId   String
   sequence Int    @default(0)
+  /// Das Pack (Engine-Arbeitseinheit: Starter-Pack 0, dann Folge-Packs) innerhalb
+  /// des Bündels. Packs werden flach ins offene Bündel gemerged — dieser Index ist
+  /// die einzige Wahrheit über die Pack-Grenze (früher aus Audit-Events geraten).
+  packIndex Int   @default(0)
 
   bundle AssignmentBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   case   GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
