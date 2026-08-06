@@ -10,6 +10,7 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { TeamleadReadService } from '../cases/teamlead-read.service.js';
+import { AssignmentService } from '../assignment/assignment.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -41,6 +42,7 @@ let prisma: PrismaClient;
 let events: EventLogService;
 let teamleadSvc: TeamleadService;
 let read: TeamleadReadService;
+let assignment: AssignmentService;
 
 async function seed(): Promise<void> {
   const frieda = await prisma.user.create({
@@ -145,6 +147,7 @@ beforeAll(async () => {
   const live = new LiveStatusService();
   teamleadSvc = new TeamleadService(p, workflow, events, live);
   read = new TeamleadReadService(p);
+  assignment = new AssignmentService(p, events);
   await seed();
 }, 180_000);
 
@@ -316,5 +319,86 @@ describe('PoolItemDto.bereich', () => {
     const pool = await read.listPool({ status: 'ready' });
     const item = pool.items.find((i) => i.weBelegNo === 'WE-A5')!;
     expect(item.bereich).toBe('Regal');
+  });
+});
+
+describe('„+"-Slot: newPack = vorgeplantes nächstes Pack — die Automatik lässt es stehen', () => {
+  let vorgeplant!: { bundleId: string; packIndex: number };
+
+  it('legt den Beleg als eigenes, NICHT aktives Pack ins bestehende Bündel (kein Zweit-Bündel)', async () => {
+    const loc = await prisma.location.findFirstOrThrow({ select: { id: true } });
+    const np = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: 'assign-newpack',
+        weBelegNo: 'WE-NP1',
+        bookingDate: asDay(DATE),
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 7,
+        totalQuantity: 20,
+        status: 'ready',
+        effortPoints: 8,
+        estimatedMinutes: 20,
+      },
+    });
+
+    const openBefore = await prisma.assignmentBundle.findMany({
+      where: { employee: { employeeNo: 'ma-202' }, status: { notIn: ['completed', 'cancelled'] } },
+      include: { items: true },
+    });
+    expect(openBefore).toHaveLength(1);
+    const maxPackBefore = Math.max(...openBefore[0]!.items.map((i) => i.packIndex));
+
+    const result = await teamleadSvc.assignToEmployee(
+      teamlead,
+      'ma-202',
+      { caseId: np.id, date: DATE, newPack: true, reason: 'Fürs nächste Pack vorplanen' },
+      NOW,
+    );
+    expect(result.bundleCreated).toBe(false);
+    expect(result.bundleId).toBe(openBefore[0]!.id);
+
+    // Weiterhin genau EIN offenes Bündel — die Invariante, die /api/me/today trägt:
+    // ein paralleles Zweit-Bündel verschattete dort das aktive Pack des MA.
+    const openAfter = await prisma.assignmentBundle.findMany({
+      where: { employee: { employeeNo: 'ma-202' }, status: { notIn: ['completed', 'cancelled'] } },
+    });
+    expect(openAfter).toHaveLength(1);
+
+    // Eigenes Pack HINTER den bestehenden, als Teamlead-Platzierung markiert; das
+    // aktive Pack rückt NICHT vor — der MA sieht das Pack erst nach seinem Pull.
+    const item = await prisma.assignmentItem.findFirstOrThrow({ where: { caseId: np.id } });
+    expect(item.bundleId).toBe(openBefore[0]!.id);
+    expect(item.packIndex).toBe(maxPackBefore + 1);
+    expect(item.createdBy).toBe('teamlead');
+    const bundleAfter = await prisma.assignmentBundle.findUniqueOrThrow({
+      where: { id: item.bundleId },
+    });
+    expect(bundleAfter.activePackIndex).toBe(openBefore[0]!.activePackIndex);
+
+    vorgeplant = { bundleId: item.bundleId, packIndex: item.packIndex };
+  });
+
+  it('recalculate räumt die Teamlead-Platzierung NICHT ab — die Automatik plant drumherum', async () => {
+    await assignment.recalculate(teamlead, DATE, NOW);
+
+    // Der vorgeplante Beleg liegt unverändert in SEINEM Pack desselben Bündels …
+    const np = await prisma.goodsReceiptCase.findFirstOrThrow({ where: { weBelegNo: 'WE-NP1' } });
+    expect(np.status).toBe('assigned');
+    expect(np.assignedBundleId).toBe(vorgeplant.bundleId);
+    const item = await prisma.assignmentItem.findFirstOrThrow({ where: { caseId: np.id } });
+    expect(item.packIndex).toBe(vorgeplant.packIndex);
+    expect(item.createdBy).toBe('teamlead');
+
+    // … und ma-202 hat weiterhin genau EIN offenes Bündel: die Engine hängt ihre
+    // neue Planung als Folge-Pack an, statt ein paralleles Bündel zu erzeugen.
+    const open = await prisma.assignmentBundle.findMany({
+      where: { employee: { employeeNo: 'ma-202' }, status: { notIn: ['completed', 'cancelled'] } },
+    });
+    expect(open).toHaveLength(1);
+    expect(open[0]!.id).toBe(vorgeplant.bundleId);
+
+    expect((await events.verifyIntegrity()).ok).toBe(true);
   });
 });

@@ -2173,8 +2173,8 @@ export interface components {
             caseId: string;
             /** @description Optional reason logged in the §8.4 audit event (assignment.overridden) */
             reason?: string;
-            /** @description true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen") statt an das Tages-Bündel anzuhängen. */
-            newBundle?: boolean;
+            /** @description true = der Beleg wird ein eigenes, VORGEPLANTES nächstes Pack im Tages-Bündel („+"-Slot der Mitarbeiter-Matrix) statt sich ins letzte Pack einzureihen. Der Mitarbeiter sieht es erst, wenn er es sich per Pull holt. Ein paralleles Zweit-Bündel entsteht nie (Ein-offenes-Bündel-Invariante). */
+            newPack?: boolean;
             /** @description Target day YYYY-MM-DD; defaults to today (UTC). The Bündel is bound to this day. */
             date?: string;
         };

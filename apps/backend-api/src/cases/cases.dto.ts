@@ -1385,11 +1385,14 @@ export class AssignToEmployeeDto {
 
   @ApiPropertyOptional({
     description:
-      'true = IMMER ein NEUES, eigenständiges Bündel anlegen (Vorverteilungs-Geste „soll bestehen") statt an das Tages-Bündel anzuhängen.',
+      'true = der Beleg wird ein eigenes, VORGEPLANTES nächstes Pack im Tages-Bündel ' +
+      '(„+"-Slot der Mitarbeiter-Matrix) statt sich ins letzte Pack einzureihen. Der ' +
+      'Mitarbeiter sieht es erst, wenn er es sich per Pull holt. Ein paralleles ' +
+      'Zweit-Bündel entsteht nie (Ein-offenes-Bündel-Invariante).',
   })
   @IsOptional()
   @IsBoolean()
-  newBundle?: boolean;
+  newPack?: boolean;
 
   @ApiPropertyOptional({
     type: String,

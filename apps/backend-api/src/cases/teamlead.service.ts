@@ -762,8 +762,9 @@ export class TeamleadService {
    * `status=assigned`) and places the Beleg as its first member. A pure override —
    * it does NOT run the engine; it reuses the exact §8.4 append path
    * ({@link addCaseToBundleTx}). The Beleg's Bereich is a SOFT signal handled in the
-   * UI: a Bereich mismatch is never blocked here. A later `recalculate` re-plans the
-   * day and can overwrite the manual Bündel (same caveat as every §8.4 override).
+   * UI: a Bereich mismatch is never blocked here. Ein späterer `recalculate` plant um
+   * manuelle Platzierungen HERUM (`AssignmentItem.createdBy=teamlead`) — die Automatik
+   * räumt sie nicht mehr ab.
    */
   async assignToEmployee(
     principal: Principal,
@@ -773,26 +774,27 @@ export class TeamleadService {
   ): Promise<BundleMutationResultDto> {
     const day = resolveDay(dto.date, now);
     return this.prisma.$transaction(async (tx) => {
-      // newBundle (Vorverteilung „soll bestehen"): IMMER ein eigenständiges
-      // Bündel anlegen — der Beleg bleibt dessen einziger Inhalt, bis der
-      // Teamlead selbst mehr hineinlegt.
-      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(
-        tx,
-        employeeNo,
-        day,
-        dto.newBundle === true,
-      );
+      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(tx, employeeNo, day);
 
+      // newPack („+"-Slot der Matrix): der Beleg wird ein eigenes, VORGEPLANTES
+      // Pack hinter den bestehenden — der Mitarbeiter sieht es erst, wenn er es
+      // sich per Pull holt. Ohne newPack reiht er sich ins letzte Pack ein.
+      // Ein paralleles Zweit-Bündel gibt es bewusst NICHT mehr: /api/me/today
+      // zeigt genau EIN offenes Bündel, ein zweites verschattete dort das aktive
+      // Pack samt Problem-Belegen (dieselbe Ein-offenes-Bündel-Invariante, die
+      // auch der Recalculate-Pfad in persistBundle wahrt).
+      const targetPackIndex = dto.newPack === true ? lastPackIndex(bundle.items) + 1 : undefined;
       const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(
         tx,
         bundle,
         dto.caseId,
+        targetPackIndex,
       );
       const eventId = await this.auditOverride(tx, principal, bundle.id, 'manual_assign', dto.reason, {
         caseId: dto.caseId,
         employeeNo,
         bundleCreated,
-        newBundle: dto.newBundle === true,
+        newPack: dto.newPack === true,
       });
       return {
         bundleId: bundle.id,
@@ -913,7 +915,9 @@ export class TeamleadService {
         // nur protokolliert — sonst sähe weder das Board noch der Mitarbeiter etwas.
         await tx.assignmentItem.update({
           where: { id: item.id },
-          data: { packIndex: targetPack?.index ?? item.packIndex },
+          // Der Zug ist ein manueller Eingriff: ab jetzt Teamlead-Platzierung,
+          // die Automatik plant um den Beleg herum.
+          data: { packIndex: targetPack?.index ?? item.packIndex, createdBy: 'teamlead' },
         });
         await resequenceItems(tx, sourceBundleId, caseIds);
         await resequenceRouteStops(tx, sourceBundleId, caseIds);
@@ -979,14 +983,11 @@ export class TeamleadService {
    * (`createdBy=teamlead`, `status=assigned`). Shared by every manual-assign path
    * that targets "the employee's Bündel for the day" — there is no
    * `@@unique([employeeId, date])`, so this is always find-then-create.
-   * `forceNew` überspringt die Suche und legt IMMER ein frisches Bündel an
-   * (Vorverteilung „soll bestehen" — eigenständiger nächster Slot).
    */
   private async findOrCreateBundleTx(
     tx: PrismaTx,
     employeeNo: string,
     day: Date,
-    forceNew = false,
   ): Promise<{
     bundle: {
       id: string;
@@ -1002,9 +1003,7 @@ export class TeamleadService {
     if (!employee) throw new NotFoundException(`Employee ${employeeNo} not found`);
     if (!employee.active) throw new ConflictException(`Employee ${employeeNo} is inactive`);
 
-    const existing = forceNew
-      ? null
-      : await tx.assignmentBundle.findFirst({
+    const existing = await tx.assignmentBundle.findFirst({
       where: { employeeId: employee.id, date: day, status: { notIn: TERMINAL_BUNDLE_STATUSES } },
       orderBy: { createdAt: 'asc' },
       include: {
@@ -1047,8 +1046,9 @@ export class TeamleadService {
     tx: PrismaTx,
     bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
     caseId: string,
+    targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
-    return this.addCasesToBundleTx(tx, bundle, [caseId]);
+    return this.addCasesToBundleTx(tx, bundle, [caseId], targetPackIndex);
   }
 
   /**
@@ -1063,6 +1063,7 @@ export class TeamleadService {
     tx: PrismaTx,
     bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
     caseIds: string[],
+    targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
     if (TERMINAL_BUNDLE_STATUSES.includes(bundle.status)) {
       throw new ConflictException(`Bundle ${bundle.id} is ${bundle.status} and cannot take cases`);
@@ -1094,7 +1095,7 @@ export class TeamleadService {
       });
     }
 
-    return this.appendCasesTx(tx, bundle, uniqueIds);
+    return this.appendCasesTx(tx, bundle, uniqueIds, targetPackIndex);
   }
 
   /**
@@ -1120,7 +1121,9 @@ export class TeamleadService {
     let nextSeq = bundle.items.length;
     for (const caseId of caseIds) {
       await tx.assignmentItem.create({
-        data: { bundleId: bundle.id, caseId, sequence: nextSeq, packIndex },
+        // createdBy=teamlead: JEDER Aufrufer hier ist ein manueller §8.4-Eingriff —
+        // die Automatik (recalculate) lässt so platzierte Belege stehen.
+        data: { bundleId: bundle.id, caseId, sequence: nextSeq, packIndex, createdBy: 'teamlead' },
       });
       await tx.goodsReceiptCase.update({
         where: { id: caseId },

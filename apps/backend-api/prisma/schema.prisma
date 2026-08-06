@@ -672,6 +672,11 @@ model AssignmentItem {
   /// des Bündels. Packs werden flach ins offene Bündel gemerged — dieser Index ist
   /// die einzige Wahrheit über die Pack-Grenze (früher aus Audit-Events geraten).
   packIndex Int   @default(0)
+  /// Wer den Beleg an GENAU diese Stelle gelegt hat: die Engine (system) oder ein
+  /// manueller §8.4-Eingriff (teamlead — Zuweisen, Einsortieren, Verschieben,
+  /// vorgeplantes Pack). Die Automatik (recalculate) räumt nur system-platzierte,
+  /// unbegonnene Belege wieder ab; Teamlead-Platzierungen bleiben stehen.
+  createdBy AssignmentCreatedBy @default(system)
 
   bundle AssignmentBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   case   GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)

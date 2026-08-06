@@ -46,7 +46,7 @@ import {
   packDropAction,
   type ExperimentDragPayload,
 } from './experimentDnd.js';
-import { LaufendEinfassenDialog, NeuesBuendelDialog } from './NeuesBuendelDialog.js';
+import { LaufendEinfassenDialog, NaechstesPackDialog } from './NaechstesPackDialog.js';
 import { FOKUS_MARKIERUNG_SX } from './fokus.js';
 import { sendeNachricht } from '../../data/nachrichten.js';
 import {
@@ -89,7 +89,7 @@ export function MatrixBoard({
 }: MatrixBoardProps): JSX.Element {
   const { assignToEmployee, reorder } = useCockpitData();
   // Drop auf den „+ Nächstes Bündel"-Slot → Frage „soll enthalten / bestehen".
-  const [neuesBuendel, setNeuesBuendel] = useState<{ row: BoardRow; drag: AblageDrag } | null>(
+  const [naechstesPack, setNaechstesPack] = useState<{ row: BoardRow; drag: AblageDrag } | null>(
     null,
   );
   // Drop auf einen LAUFEND-Strich → Sicherheitsfrage vor dem Einfassen.
@@ -152,7 +152,7 @@ export function MatrixBoard({
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               requestReason={requestReason}
-              onNeuesBuendel={(r, drag) => setNeuesBuendel({ row: r, drag })}
+              onNaechstesPack={(r, drag) => setNaechstesPack({ row: r, drag })}
               onEinsortieren={einsortieren}
               fokussiert={fokusEmployeeNos?.has(row.employeeId) ?? false}
             />
@@ -164,23 +164,19 @@ export function MatrixBoard({
         )}
       </Box>
 
-      <NeuesBuendelDialog
-        offen={neuesBuendel !== null}
-        weBelegNo={neuesBuendel?.drag.weBelegNo ?? ''}
-        employeeName={neuesBuendel?.row.displayName ?? ''}
-        onClose={() => setNeuesBuendel(null)}
-        onBestaetigen={(wahl, grund, nachricht) => {
-          const ctx = neuesBuendel;
+      <NaechstesPackDialog
+        offen={naechstesPack !== null}
+        weBelegNo={naechstesPack?.drag.weBelegNo ?? ''}
+        employeeName={naechstesPack?.row.displayName ?? ''}
+        onClose={() => setNaechstesPack(null)}
+        onBestaetigen={(grund, nachricht) => {
+          const ctx = naechstesPack;
           if (ctx === null) return;
-          // Die Wahl wandert wortwörtlich in den §8.4-Audit-Grund.
-          const reason = `${wahl === 'bestehen' ? 'Soll bestehen' : 'Soll enthalten'}${
-            grund !== '' ? ` — ${grund}` : ''
-          }`;
           assignToEmployee.mutate({
             employeeNo: ctx.row.employeeId,
             caseId: ctx.drag.caseId,
-            reason,
-            newBundle: true,
+            ...(grund !== '' ? { reason: grund } : {}),
+            newPack: true,
           });
           if (nachricht !== '')
             void sendeNachricht({
@@ -188,7 +184,7 @@ export function MatrixBoard({
               text: nachricht,
               caseId: ctx.drag.caseId,
             });
-          setNeuesBuendel(null);
+          setNaechstesPack(null);
         }}
       />
       <LaufendEinfassenDialog
@@ -225,7 +221,7 @@ interface MatrixRowProps {
   onDragEnd: () => void;
   requestReason: (action: PendingAction) => void;
   /** Drop auf den „+ Nächstes Bündel"-Slot hinter der Trennwand. */
-  onNeuesBuendel: (row: BoardRow, drag: AblageDrag) => void;
+  onNaechstesPack: (row: BoardRow, drag: AblageDrag) => void;
   /** Ablage-Beleg zwischen zwei Belegen einsortieren (Geplant) bzw. Laufend-Frage. */
   onEinsortieren: (row: BoardRow, ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
   /** 3-s-Fokus-Markierung der Zeile (Schnellaktion-Sprung aus dem Cockpit). */
@@ -239,7 +235,7 @@ function MatrixRow({
   onDragStart,
   onDragEnd,
   requestReason,
-  onNeuesBuendel,
+  onNaechstesPack,
   onEinsortieren,
   fokussiert,
 }: MatrixRowProps): JSX.Element {
@@ -539,11 +535,11 @@ function MatrixRow({
       {absent === null && packs.length > 0 && (
         <>
           <Divider orientation="vertical" flexItem />
-          {/* Komplett neuer Slot hinter der Trennwand = das NÄCHSTE Bündel. */}
+          {/* Komplett neuer Slot hinter der Trennwand = das nächste, VORGEPLANTE Pack. */}
           <NeuerSlot
             aktiv={ablageAssignbar(dragging)}
             onDropZiel={() => {
-              if (ablageAssignbar(dragging)) onNeuesBuendel(row, dragging);
+              if (ablageAssignbar(dragging)) onNaechstesPack(row, dragging);
             }}
           />
         </>
@@ -695,7 +691,7 @@ function NeuerSlot({
       }}
     >
       <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
-        + Nächstes Bündel
+        + Nächstes Pack
       </Typography>
     </Box>
   );

@@ -27,6 +27,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
 import { buildEffortVectors } from './effort-vector.js';
 import { caseEffortInclude } from '../cases/case-effort.js';
+import { resequenceItems, resequenceRouteStops } from '../cases/bundle-mutations.js';
 import {
   hasPlannedFollowUpPack,
   lastPackIndex,
@@ -649,14 +650,17 @@ export class AssignmentService {
     if (priorBundles.length === 0) return;
     const bundleIds = priorBundles.map((b) => b.id);
 
-    // Cases this prior recalc placed but nobody has started yet (status `assigned`).
-    // These are reverted to the ready pool; their AssignmentItems must be dropped so
-    // the @@unique([caseId]) constraint stays free when the engine re-bundles them.
-    const revertable = await tx.goodsReceiptCase.findMany({
-      where: { assignedBundleId: { in: bundleIds }, status: 'assigned' },
-      select: { id: true },
+    // Nur was die ENGINE platziert hat und noch niemand angefangen hat (Item
+    // createdBy=system, Case `assigned`), geht zurück in den Pool — die Items fallen
+    // mit, damit @@unique([caseId]) beim Re-Bundling frei ist. Manuelle §8.4-
+    // Platzierungen (createdBy=teamlead: Zuweisen, Einsortieren, Verschieben,
+    // vorgeplante Packs) bleiben stehen: die Automatik plant um sie herum, nie über
+    // sie hinweg. Ihre Bündel überleben unten automatisch (stillReferenced).
+    const revertable = await tx.assignmentItem.findMany({
+      where: { bundleId: { in: bundleIds }, createdBy: 'system', case: { status: 'assigned' } },
+      select: { caseId: true },
     });
-    const revertCaseIds = revertable.map((c) => c.id);
+    const revertCaseIds = revertable.map((i) => i.caseId);
 
     if (revertCaseIds.length > 0) {
       // Drop stale items for reverted cases first (even if their bundle survives
@@ -811,6 +815,7 @@ export class AssignmentService {
     tx: PrismaTx,
     openBundle: {
       id: string;
+      activePackIndex: number;
       plannedEffortMinutes: number;
       effortPoints: number;
       items: { caseId: string; packIndex: number }[];
@@ -821,7 +826,19 @@ export class AssignmentService {
     principal: Principal,
     options: { activate: boolean },
   ): Promise<void> {
-    const packIndex = lastPackIndex(openBundle.items) + 1;
+    // Recalc-Sonderfall: hat die Neuberechnung das AKTIVE Pack geleert (die
+    // unbegonnene Engine-Ware ging zurück in den Pool, nur vorgeplante Teamlead-
+    // Packs blieben stehen), füllt die neue Planung GENAU dieses Pack wieder —
+    // der Mitarbeiter behält sein sichtbares Pensum, statt vor einem leeren Pack
+    // zu stehen und sich die eigene Tagesarbeit erst er-pullen zu müssen. Beim
+    // Self-Pull (activate) wird dagegen immer hinten angebaut und freigeschaltet.
+    const activePackEmpty = !openBundle.items.some(
+      (i) => i.packIndex === openBundle.activePackIndex,
+    );
+    const refillActive = !options.activate && activePackEmpty;
+    const packIndex = refillActive
+      ? openBundle.activePackIndex
+      : lastPackIndex(openBundle.items) + 1;
     let nextItemSeq = openBundle.items.length;
     for (const caseId of cart.caseIds) {
       await tx.assignmentItem.create({
@@ -848,6 +865,19 @@ export class AssignmentService {
         },
       });
       nextStopSeq += 1;
+    }
+
+    if (refillActive) {
+      // Abholreihenfolge dem Pack-Layout nachziehen: das wiederbefüllte aktive
+      // Pack gehört VOR die vorgeplanten (die Inserts landeten am Tabellen-Ende).
+      const all = await tx.assignmentItem.findMany({
+        where: { bundleId: openBundle.id },
+        orderBy: [{ packIndex: 'asc' }, { sequence: 'asc' }],
+        select: { caseId: true },
+      });
+      const ordered = all.map((i) => i.caseId);
+      await resequenceItems(tx, openBundle.id, ordered);
+      await resequenceRouteStops(tx, openBundle.id, ordered);
     }
 
     await tx.goodsReceiptCase.updateMany({

@@ -91,25 +91,30 @@ export interface AssignToEmployeeArgs {
   reason?: string;
   /** Operational day of the board (YYYY-MM-DD); the Bündel is bound to this day. */
   date: string;
-  /** true = eigenständiges NEUES Bündel anlegen (Vorverteilung „soll bestehen"). */
-  newBundle?: boolean;
+  /**
+   * true = eigenes, VORGEPLANTES nächstes Pack im Tages-Bündel („+"-Slot der
+   * Matrix) statt sich ins letzte Pack einzureihen — der MA sieht es erst nach
+   * seinem Pull. Es entsteht nie ein paralleles Zweit-Bündel.
+   */
+  newPack?: boolean;
 }
 
 /**
  * §8.4 audited manual override: assign a ready Beleg to an employee. If the employee
  * has no Bündel for the day yet, the backend creates it and places the Beleg as its
- * first member (find-or-create); otherwise the Beleg is appended. The engine stays
- * single-source for the automatic plan — this is an override.
+ * first member (find-or-create); otherwise the Beleg is appended — mit `newPack` als
+ * eigenes, vorgeplantes Pack dahinter. The engine stays single-source for the
+ * automatic plan — this is an override the plan works around.
  */
 export async function assignToEmployee(
   api: PaketApiClient,
-  { employeeNo, caseId, reason, date, newBundle }: AssignToEmployeeArgs,
+  { employeeNo, caseId, reason, date, newPack }: AssignToEmployeeArgs,
 ): Promise<BundleMutationResultDto> {
   const body: AssignToEmployeeDto = {
     caseId,
     date,
     ...(reason ? { reason } : {}),
-    ...(newBundle === true ? { newBundle: true } : {}),
+    ...(newPack === true ? { newPack: true } : {}),
   };
   return ensure(
     'Beleg zuweisen',

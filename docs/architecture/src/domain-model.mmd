@@ -167,6 +167,7 @@ erDiagram
         string caseId FK "UK: Beleg in ≤1 Bündel"
         int sequence
         int packIndex "Pack im Bündel: 0 = Starter, dann Folge-Packs"
+        enum createdBy "system|teamlead — Automatik räumt nur system-Platzierungen ab"
     }
     ROUTE_STOP {
         string id PK
