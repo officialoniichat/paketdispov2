@@ -402,3 +402,104 @@ describe('„+"-Slot: newPack = vorgeplantes nächstes Pack — die Automatik l�
     expect((await events.verifyIntegrity()).ok).toBe(true);
   });
 });
+
+describe('Automatik-Sperre: das angefasste bzw. gezogene aktive Pack bleibt stehen', () => {
+  /** Mitarbeiter + Bündel mit vorgegebenen Packs/Status — direkt in der DB. */
+  async function seedEmployeeBundle(
+    employeeNo: string,
+    activePackIndex: number,
+    packs: { packIndex: number; weBelegNo: string; status: 'assigned' | 'completed' }[],
+  ): Promise<{ bundleId: string; itemIdByWe: Map<string, string> }> {
+    const emp = await prisma.user.create({
+      data: { employeeNo, displayName: employeeNo, bereiche: ['Regal'] },
+    });
+    await prisma.shift.create({
+      data: {
+        employeeId: emp.id,
+        date: asDay(DATE),
+        plannedStart: new Date(`${DATE}T07:00:00.000Z`),
+        plannedEnd: new Date(`${DATE}T15:00:00.000Z`),
+        plannedHours: 8,
+        netCapacityMinutes: 480,
+      },
+    });
+    const loc = await prisma.location.findFirstOrThrow({ select: { id: true } });
+    const bundle = await prisma.assignmentBundle.create({
+      data: {
+        employeeId: emp.id,
+        date: asDay(DATE),
+        status: 'assigned',
+        createdBy: 'system',
+        plannedEffortMinutes: packs.length * 20,
+        activePackIndex,
+      },
+    });
+    const itemIdByWe = new Map<string, string>();
+    for (const [seq, p] of packs.entries()) {
+      const c = await prisma.goodsReceiptCase.create({
+        data: {
+          source: 'manual',
+          externalRef: 'lock-test',
+          weBelegNo: p.weBelegNo,
+          bookingDate: asDay(DATE),
+          branchNo: '1',
+          storageLocationId: loc.id,
+          section: 7,
+          totalQuantity: 20,
+          status: p.status,
+          effortPoints: 8,
+          estimatedMinutes: 20,
+          assignedBundleId: bundle.id,
+        },
+      });
+      const item = await prisma.assignmentItem.create({
+        // createdBy default `system` — genau die Engine-Platzierung, um die es geht.
+        data: { bundleId: bundle.id, caseId: c.id, sequence: seq, packIndex: p.packIndex },
+      });
+      itemIdByWe.set(p.weBelegNo, item.id);
+    }
+    return { bundleId: bundle.id, itemIdByWe };
+  }
+
+  it('angefasstes aktives Pack: der unbegonnene Rest wird NICHT abgeräumt', async () => {
+    // Pack 0 ist angefangen (ein Beleg fertig) — der zweite, noch unbegonnene
+    // Beleg ist das laufende Pensum des MA und für die Automatik tabu.
+    const { bundleId, itemIdByWe } = await seedEmployeeBundle('ma-204', 0, [
+      { packIndex: 0, weBelegNo: 'WE-LOCK-DONE', status: 'completed' },
+      { packIndex: 0, weBelegNo: 'WE-LOCK-REST', status: 'assigned' },
+    ]);
+
+    await assignment.recalculate(teamlead, DATE, NOW);
+
+    // Dasselbe Item liegt unverändert da — nicht ein von der Engine neu erzeugtes.
+    const rest = await prisma.assignmentItem.findFirstOrThrow({
+      where: { case: { weBelegNo: 'WE-LOCK-REST' } },
+    });
+    expect(rest.id).toBe(itemIdByWe.get('WE-LOCK-REST'));
+    expect(rest.bundleId).toBe(bundleId);
+    expect(rest.packIndex).toBe(0);
+    const c = await prisma.goodsReceiptCase.findFirstOrThrow({
+      where: { weBelegNo: 'WE-LOCK-REST' },
+    });
+    expect(c.status).toBe('assigned');
+    expect(c.assignedBundleId).toBe(bundleId);
+  });
+
+  it('selbst gezogenes Pack (activePackIndex > 0): auch unberührt bleibt es stehen', async () => {
+    // Der MA hat sich Pack 1 per Pull geholt (Pull-Prinzip) — auch wenn er noch
+    // nichts angefasst hat, ist das SEIN angefordertes Pensum.
+    const { bundleId, itemIdByWe } = await seedEmployeeBundle('ma-205', 1, [
+      { packIndex: 0, weBelegNo: 'WE-PULL-DONE', status: 'completed' },
+      { packIndex: 1, weBelegNo: 'WE-PULL-FRESH', status: 'assigned' },
+    ]);
+
+    await assignment.recalculate(teamlead, DATE, NOW);
+
+    const fresh = await prisma.assignmentItem.findFirstOrThrow({
+      where: { case: { weBelegNo: 'WE-PULL-FRESH' } },
+    });
+    expect(fresh.id).toBe(itemIdByWe.get('WE-PULL-FRESH'));
+    expect(fresh.bundleId).toBe(bundleId);
+    expect(fresh.packIndex).toBe(1);
+  });
+});

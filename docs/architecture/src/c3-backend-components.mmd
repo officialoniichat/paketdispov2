@@ -37,7 +37,7 @@ flowchart TB
         end
 
         subgraph assignment["AssignmentModule"]
-            asgSvc["AssignmentService<br/><i>recalculate() (Folge-Packs vorgeplant, NICHT aktiv; räumt nur ENGINE-Platzierungen ab —<br/>AssignmentItem.createdBy=teamlead bleibt stehen, die Automatik plant drumherum) · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen</i>"]:::svc
+            asgSvc["AssignmentService<br/><i>recalculate() (Folge-Packs vorgeplant, NICHT aktiv; räumt nur ENGINE-Platzierungen ab —<br/>AssignmentItem.createdBy=teamlead bleibt stehen, die Automatik plant drumherum;<br/>das angefasste bzw. selbst gezogene AKTIVE Pack ist gesperrt, nur ein unberührtes Starter-Pack wird umgeplant) · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen</i>"]:::svc
         end
 
         subgraph empl["EmployeesModule"]

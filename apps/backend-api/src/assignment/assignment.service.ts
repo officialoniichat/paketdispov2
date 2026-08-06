@@ -656,11 +656,40 @@ export class AssignmentService {
     // Platzierungen (createdBy=teamlead: Zuweisen, Einsortieren, Verschieben,
     // vorgeplante Packs) bleiben stehen: die Automatik plant um sie herum, nie über
     // sie hinweg. Ihre Bündel überleben unten automatisch (stillReferenced).
+    //
+    // Zusätzlich gesperrt ist das AKTIVE Pack, sobald der Mitarbeiter es angefasst
+    // hat (ein Mitglied über `assigned` hinaus oder Ware bereits geholt) oder er es
+    // sich selbst gezogen hat (activePackIndex > 0, Pull-Prinzip): das laufende
+    // Pensum ist unantastbar — sonst schrumpft dem MA mitten im Pack der Zähler
+    // („1/1 erledigt" statt 1/2). Die Automatik plant Zukunft um (vorgeplante
+    // Engine-Packs), nie die Gegenwart. Nur ein komplett UNBERÜHRTES Starter-Pack
+    // (Index 0) bleibt frei umplanbar — genau dafür ist sie da.
+    const priorState = await tx.assignmentBundle.findMany({
+      where: { id: { in: bundleIds } },
+      select: {
+        id: true,
+        activePackIndex: true,
+        items: {
+          select: { packIndex: true, case: { select: { status: true, collectedAt: true } } },
+        },
+      },
+    });
+    const lockedActivePack = new Map<string, number | null>();
+    for (const b of priorState) {
+      const touched = b.items.some(
+        (i) =>
+          i.packIndex === b.activePackIndex &&
+          (i.case.status !== 'assigned' || i.case.collectedAt !== null),
+      );
+      lockedActivePack.set(b.id, b.activePackIndex > 0 || touched ? b.activePackIndex : null);
+    }
     const revertable = await tx.assignmentItem.findMany({
       where: { bundleId: { in: bundleIds }, createdBy: 'system', case: { status: 'assigned' } },
-      select: { caseId: true },
+      select: { caseId: true, bundleId: true, packIndex: true },
     });
-    const revertCaseIds = revertable.map((i) => i.caseId);
+    const revertCaseIds = revertable
+      .filter((i) => i.packIndex !== lockedActivePack.get(i.bundleId))
+      .map((i) => i.caseId);
 
     if (revertCaseIds.length > 0) {
       // Drop stale items for reverted cases first (even if their bundle survives
