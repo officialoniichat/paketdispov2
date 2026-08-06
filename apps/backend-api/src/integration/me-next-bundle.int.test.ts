@@ -9,6 +9,7 @@ import { EventLogService } from '../events/event-log.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { CasesService } from '../cases/cases.service.js';
+import { ClockService } from '../clock/clock.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
@@ -159,7 +160,13 @@ beforeAll(async () => {
   const p = prisma as unknown as PrismaService;
   const events = new EventLogService(p);
   assignment = new AssignmentService(p, events);
-  cases = new CasesService(p, new WorkflowService(p, events), events, new LiveStatusService());
+  cases = new CasesService(
+    p,
+    new WorkflowService(p, events),
+    events,
+    new LiveStatusService(),
+    new ClockService(p),
+  );
 }, 180_000);
 
 afterAll(async () => {

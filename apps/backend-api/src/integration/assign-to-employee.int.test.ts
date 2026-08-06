@@ -391,13 +391,19 @@ describe('„+"-Slot: newPack = vorgeplantes nächstes Pack — die Automatik l�
     expect(item.packIndex).toBe(vorgeplant.packIndex);
     expect(item.createdBy).toBe('teamlead');
 
-    // … und ma-202 hat weiterhin genau EIN offenes Bündel: die Engine hängt ihre
-    // neue Planung als Folge-Pack an, statt ein paralleles Bündel zu erzeugen.
+    // … und ma-202 hat weiterhin genau EIN offenes Bündel. Die Automatik beplant
+    // Überlebende gar nicht mehr (Nachschub kommt über den Pull) — es liegt danach
+    // kein einziges Engine-Item mehr im Bündel, nur die Teamlead-Platzierungen.
     const open = await prisma.assignmentBundle.findMany({
       where: { employee: { employeeNo: 'ma-202' }, status: { notIn: ['completed', 'cancelled'] } },
     });
     expect(open).toHaveLength(1);
     expect(open[0]!.id).toBe(vorgeplant.bundleId);
+    expect(
+      await prisma.assignmentItem.count({
+        where: { bundleId: vorgeplant.bundleId, createdBy: 'system' },
+      }),
+    ).toBe(0);
 
     expect((await events.verifyIntegrity()).ok).toBe(true);
   });

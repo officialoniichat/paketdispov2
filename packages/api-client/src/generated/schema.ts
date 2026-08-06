@@ -1316,9 +1316,9 @@ export interface components {
             routeStops: components["schemas"]["RouteStopDto"][];
         };
         TodayPackDto: {
-            /** @description 0-basierter Index des aktiven Packs (0 = Starter-Pack) */
+            /** @description 0-basierte ANZEIGE-Position des aktiven Packs unter den vorhandenen Packs (lücken-fest — nicht der persistierte packIndex). Die App zeigt index+1. */
             index: number;
-            /** @description Packs des Bündels insgesamt (inkl. vorgeplanter Folge-Packs) */
+            /** @description Tatsächlich vorhandene Packs des Bündels (distinct packIndex, inkl. vom Teamlead vorgeplanter Folge-Packs). */
             total: number;
             /** @description Belege im aktiven Pack — die Zähler-Basis. Mitangezeigte Problem-Belege früherer Packs zählen NICHT mit (sie zählen auf ihr altes Pack). */
             caseCount: number;

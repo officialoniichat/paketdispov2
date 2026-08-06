@@ -123,15 +123,19 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
     expect(bundle?.status).toBe('active');
 
     // 8 Belege über 4 Stops / alle drei Bereiche, alle vier Warenarten, plus die
-    // Sonderzustände Fertig / Problem gemeldet / Geklärt.
-    expect(bundle?.cases).toHaveLength(8);
+    // Sonderzustände Fertig / Problem gemeldet / Geklärt — und seit dem
+    // Pull-Prinzip zusätzlich EIN vorgeplanter Folge-Pack-Beleg (Pack 2, in der
+    // MA-App erst nach dem eigenen Pull sichtbar): 9 insgesamt.
+    expect(bundle?.cases).toHaveLength(9);
     const byStatus = new Map<string, number>();
     for (const c of bundle?.cases ?? []) {
       byStatus.set(c.status, (byStatus.get(c.status) ?? 0) + 1);
     }
     expect(byStatus.get('assigned')).toBe(5);
     expect(byStatus.get('completed')).toBe(1);
-    expect(byStatus.get('issue_open')).toBe(1);
+    // Zwei offene Meldungen: die Pull-Ausnahme (Regel 2) braucht in der Demo
+    // MEHRERE Problem-Belege, die den Pack-Wechsel gemeinsam nicht blockieren.
+    expect(byStatus.get('issue_open')).toBe(2);
     expect(byStatus.get('problem_resolved')).toBe(1);
 
     const goodsTypes = new Set((bundle?.cases ?? []).map((c) => c.goodsTypeText));
@@ -161,17 +165,22 @@ describe('Szenario-Framework (C3): loadScenario lädt jedes Katalog-Szenario', (
     });
     expect(zst?.completedQuantity).toBe(done?.totalQuantity);
 
-    // Problemfall offen, geklärter Fall resolved — beide mit Position-Scope.
-    const issueCase = (bundle?.cases ?? []).find((c) => c.status === 'issue_open');
-    const openIssues = await prisma.issue.count({
-      where: { caseId: issueCase?.id, status: 'open' },
-    });
-    expect(openIssues).toBe(1);
+    // Meldungs-Demo (Instruktions-Loop, Einzel-Status je Meldung): 9.108.052 trägt
+    // ZWEI offene Meldungen (Badge „2x" rot), 9.108.054 den Teilzustand 1× offen +
+    // 1× instruiert; beim GEKLÄRTEN Beleg ist keine Meldung mehr offen.
+    const zweiOffen = (bundle?.cases ?? []).find((c) => c.weBelegNo === '9.108.052');
+    expect(await prisma.issue.count({ where: { caseId: zweiOffen?.id, status: 'open' } })).toBe(2);
+    const teilzustand = (bundle?.cases ?? []).find((c) => c.weBelegNo === '9.108.054');
+    expect(
+      await prisma.issue.count({ where: { caseId: teilzustand?.id, status: 'open' } }),
+    ).toBe(1);
+    expect(
+      await prisma.issue.count({ where: { caseId: teilzustand?.id, status: 'instruction_sent' } }),
+    ).toBe(1);
     const resolvedCase = (bundle?.cases ?? []).find((c) => c.status === 'problem_resolved');
-    const resolvedIssues = await prisma.issue.count({
-      where: { caseId: resolvedCase?.id, status: 'resolved' },
-    });
-    expect(resolvedIssues).toBe(1);
+    expect(
+      await prisma.issue.count({ where: { caseId: resolvedCase?.id, status: 'open' } }),
+    ).toBe(0);
 
     // Online-relevante Position mit mehreren Größen-Zeilen (EK/VK/VK-Etikett gesetzt).
     const nosCase = (bundle?.cases ?? []).find((c) => c.weBelegNo === '9.108.031');

@@ -87,9 +87,24 @@ export function lastPackIndex(items: readonly PackMember[]): number {
   return items.reduce((max, i) => Math.max(max, i.packIndex), -1);
 }
 
-/** Anzahl der Packs eines Bündels (leeres Bündel = 0). */
+/**
+ * Anzahl der tatsächlich vorhandenen Packs eines Bündels (distinct packIndex,
+ * leeres Bündel = 0). Lücken-fest: läuft ein Pack durch Entziehen/Umplanen leer,
+ * schrumpft die Anzahl — die persistierten Indizes der übrigen bleiben unberührt.
+ */
 export function packCount(items: readonly PackMember[]): number {
-  return items.length === 0 ? 0 : lastPackIndex(items) + 1;
+  return new Set(items.map((i) => i.packIndex)).size;
+}
+
+/**
+ * Ordinale Anzeige-Position eines Packs („Pack N von M"): 1-basiert in der
+ * sortierten Liste der vorhandenen Pack-Indizes. Der gefragte Index zählt sich
+ * selbst dazu, falls sein Pack leergelaufen ist — sonst zeigte die Anzeige „Pack 0".
+ */
+export function packOrdinal(items: readonly PackMember[], packIndex: number): number {
+  const distinct = new Set(items.map((i) => i.packIndex));
+  distinct.add(packIndex);
+  return [...distinct].sort((a, b) => a - b).indexOf(packIndex) + 1;
 }
 
 /** Gibt es hinter dem aktiven Pack ein bereits vorgeplantes weiteres Pack? */

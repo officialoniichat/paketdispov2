@@ -10,6 +10,7 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { CasesService } from '../cases/cases.service.js';
+import { ClockService } from '../clock/clock.service.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
@@ -108,7 +109,7 @@ beforeAll(async () => {
   workflow = new WorkflowService(p, events);
   assignment = new AssignmentService(p, events);
   const live = new LiveStatusService();
-  cases = new CasesService(p, workflow, events, live);
+  cases = new CasesService(p, workflow, events, live, new ClockService(p));
   teamleadSvc = new TeamleadService(p, workflow, events, live);
 
   await seedReadyPool();

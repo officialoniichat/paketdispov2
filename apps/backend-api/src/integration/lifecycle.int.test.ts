@@ -10,6 +10,7 @@ import { WorkflowService } from '../workflow/workflow.service.js';
 import { AssignmentService } from '../assignment/assignment.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { CasesService } from '../cases/cases.service.js';
+import { ClockService } from '../clock/clock.service.js';
 import { TeamleadService } from '../cases/teamlead.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
@@ -109,7 +110,7 @@ beforeAll(async () => {
   workflow = new WorkflowService(p, events);
   assignment = new AssignmentService(p, events);
   const live = new LiveStatusService();
-  cases = new CasesService(p, workflow, events, live);
+  cases = new CasesService(p, workflow, events, live, new ClockService(p));
   teamleadSvc = new TeamleadService(p, workflow, events, live);
 }, 180_000);
 
@@ -170,9 +171,16 @@ async function seedAssignedCaseWithPositions(weBelegNo: string): Promise<{
     create: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
   });
   const day = todayMidnightUtc();
-  const bundle = await prisma.assignmentBundle.create({
-    data: { employeeId: emp.id, date: day, status: 'assigned', createdBy: 'system' },
-  });
+  // Ein-offenes-Bündel-Invariante (Unique-Index one_open_bundle_per_employee_day):
+  // das offene Tages-Bündel wird wiederverwendet, statt je Fixture-Aufruf ein
+  // weiteres offenes für denselben Mitarbeiter+Tag anzulegen.
+  const bundle =
+    (await prisma.assignmentBundle.findFirst({
+      where: { employeeId: emp.id, date: day, status: { notIn: ['completed', 'cancelled'] } },
+    })) ??
+    (await prisma.assignmentBundle.create({
+      data: { employeeId: emp.id, date: day, status: 'assigned', createdBy: 'system' },
+    }));
   const gcase = await prisma.goodsReceiptCase.create({
     data: {
       source: 'manual',

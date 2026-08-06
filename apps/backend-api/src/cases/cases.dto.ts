@@ -261,9 +261,17 @@ export class MeWorkstationDto {
  * dieses Pack.
  */
 export class TodayPackDto {
-  @ApiProperty({ description: '0-basierter Index des aktiven Packs (0 = Starter-Pack)' })
+  @ApiProperty({
+    description:
+      '0-basierte ANZEIGE-Position des aktiven Packs unter den vorhandenen Packs ' +
+      '(lücken-fest — nicht der persistierte packIndex). Die App zeigt index+1.',
+  })
   index!: number;
-  @ApiProperty({ description: 'Packs des Bündels insgesamt (inkl. vorgeplanter Folge-Packs)' })
+  @ApiProperty({
+    description:
+      'Tatsächlich vorhandene Packs des Bündels (distinct packIndex, inkl. vom ' +
+      'Teamlead vorgeplanter Folge-Packs).',
+  })
   total!: number;
   @ApiProperty({
     description:

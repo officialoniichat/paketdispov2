@@ -27,7 +27,6 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { applyResolvedLoadPlanDates, engineConfigFromRuleConfig } from './load-plan.js';
 import { buildEffortVectors } from './effort-vector.js';
 import { caseEffortInclude } from '../cases/case-effort.js';
-import { resequenceItems, resequenceRouteStops } from '../cases/bundle-mutations.js';
 import {
   hasPlannedFollowUpPack,
   lastPackIndex,
@@ -162,6 +161,21 @@ export class AssignmentService {
         await tx.assignmentItem.deleteMany({ where: { caseId: { in: poolCaseIds } } });
       }
 
+      // Pull-Prinzip: Die Automatik beplant nur FREIE Mitarbeiter. Wer nach dem
+      // Aufräumen noch ein offenes Bündel besitzt (laufendes/angefasstes Pack,
+      // Teamlead-Platzierungen, fertige-aber-nicht-abgeschlossene Arbeit), bekommt
+      // Nachschub AUSSCHLIESSLICH über seinen eigenen Pull — die Engine plant ihm
+      // nichts mehr vor. Vorgeplante Packs gibt es damit nur noch vom Teamlead.
+      const surviving = await tx.assignmentBundle.findMany({
+        where: {
+          date: { gte: dayStart, lte: dayEnd },
+          status: { notIn: ['completed', 'cancelled'] },
+        },
+        select: { employeeId: true },
+      });
+      const busyEmployeeIds = new Set(surviving.map((b) => b.employeeId));
+      const plannableShiftRows = shiftRows.filter((s) => !busyEmployeeIds.has(s.employee.id));
+
       const input: EngineInput = {
         date: day,
         // Resolve each case's next Verladetag from the live calendar so the engine's
@@ -171,7 +185,9 @@ export class AssignmentService {
           ruleConfig.loadPlan,
           day,
         ),
-        shifts: shiftRows.map((s) => toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier)),
+        shifts: plannableShiftRows.map((s) =>
+          toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier),
+        ),
         locations: locationRows.map(toLocationMaster),
         // §8.2 LIVE wiring: for every case that has a work instruction, recompute its
         // effort from the cockpit-edited parameters (engineConfig.effort) via the pure
@@ -272,7 +288,10 @@ export class AssignmentService {
       select: {
         id: true,
         activePackIndex: true,
+        plannedEffortMinutes: true,
+        effortPoints: true,
         items: { select: { caseId: true, packIndex: true, case: { select: { status: true } } } },
+        routeStops: { select: { locationCode: true, sequence: true } },
       },
     });
     if (openBundleForPack) {
@@ -387,18 +406,10 @@ export class AssignmentService {
       // Weiteres Bündel anfordern (Kundenfeedback 2026-07-14): while a cart is still
       // open, the pull APPENDS to it instead of opening a parallel bundle — the PWA,
       // "Rest parken" and the board all assume one open bundle per employee.
-      const openBundle = await tx.assignmentBundle.findFirst({
-        where: {
-          employeeId: employee.id,
-          date: { gte: dayStart, lte: dayEnd },
-          status: { notIn: ['completed', 'cancelled'] },
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          items: { select: { caseId: true, packIndex: true } },
-          routeStops: { select: { locationCode: true, sequence: true } },
-        },
-      });
+      // EIN Bündel-Objekt für Guard UND Extend: was der Pack-Guard oben gesehen hat,
+      // wird hier GENAU erweitert. Eine zweite, eigene Abfrage könnte im Race daneben
+      // greifen und ein paralleles Bündel erzeugen (Beleg: Zweit-Bündel vom 06.08.).
+      const openBundle = openBundleForPack;
 
       const bundleSkeleton: AssignmentBundle = assignmentBundleSchema.parse({
         id: openBundle?.id ?? `bundle-${day}-${employee.id}-${todaysBundles.length}`,
@@ -726,12 +737,12 @@ export class AssignmentService {
     sequence: BundlePickupSequence | undefined,
     principal: Principal,
   ): Promise<number> {
-    // Ein-offenes-Bündel-Invariante (Instruktions-Loop 04.08.2026): hat der
-    // Mitarbeiter für den Tag noch ein offenes Bündel (z. B. mit in_progress-/
-    // issue_open-/problem_resolved-Belegen), wird auch im Recalculate-Pfad
-    // ANGEHÄNGT statt ein paralleles Bündel zu erzeugen. Sonst verschattet das
-    // neue Bündel die alten Belege: me/today zeigt genau EIN Bündel, und der
-    // MA verlöre seine Problem-Belege samt TL-Instruktionen aus dem Blick.
+    // Ein-offenes-Bündel-Invariante: existiert für den Tag noch ein offenes
+    // Bündel, wird ANGEHÄNGT statt ein paralleles zu erzeugen — sonst verschattet
+    // das neue Bündel die alten Belege (me/today zeigt genau EIN Bündel). Seit die
+    // Automatik nur noch FREIE Mitarbeiter beplant, ist dieser Zweig ein reiner
+    // Race-Guard (z. B. Self-Pull parallel zum Recalculate); letzte Verteidigung
+    // ist der partielle Unique-Index one_open_bundle_per_employee_day.
     const dayStart = new Date(bundle.date);
     const dayEnd = new Date(`${bundle.date}T23:59:59.999Z`);
     const openBundle = await tx.assignmentBundle.findFirst({
@@ -844,7 +855,6 @@ export class AssignmentService {
     tx: PrismaTx,
     openBundle: {
       id: string;
-      activePackIndex: number;
       plannedEffortMinutes: number;
       effortPoints: number;
       items: { caseId: string; packIndex: number }[];
@@ -855,19 +865,7 @@ export class AssignmentService {
     principal: Principal,
     options: { activate: boolean },
   ): Promise<void> {
-    // Recalc-Sonderfall: hat die Neuberechnung das AKTIVE Pack geleert (die
-    // unbegonnene Engine-Ware ging zurück in den Pool, nur vorgeplante Teamlead-
-    // Packs blieben stehen), füllt die neue Planung GENAU dieses Pack wieder —
-    // der Mitarbeiter behält sein sichtbares Pensum, statt vor einem leeren Pack
-    // zu stehen und sich die eigene Tagesarbeit erst er-pullen zu müssen. Beim
-    // Self-Pull (activate) wird dagegen immer hinten angebaut und freigeschaltet.
-    const activePackEmpty = !openBundle.items.some(
-      (i) => i.packIndex === openBundle.activePackIndex,
-    );
-    const refillActive = !options.activate && activePackEmpty;
-    const packIndex = refillActive
-      ? openBundle.activePackIndex
-      : lastPackIndex(openBundle.items) + 1;
+    const packIndex = lastPackIndex(openBundle.items) + 1;
     let nextItemSeq = openBundle.items.length;
     for (const caseId of cart.caseIds) {
       await tx.assignmentItem.create({
@@ -894,19 +892,6 @@ export class AssignmentService {
         },
       });
       nextStopSeq += 1;
-    }
-
-    if (refillActive) {
-      // Abholreihenfolge dem Pack-Layout nachziehen: das wiederbefüllte aktive
-      // Pack gehört VOR die vorgeplanten (die Inserts landeten am Tabellen-Ende).
-      const all = await tx.assignmentItem.findMany({
-        where: { bundleId: openBundle.id },
-        orderBy: [{ packIndex: 'asc' }, { sequence: 'asc' }],
-        select: { caseId: true },
-      });
-      const ordered = all.map((i) => i.caseId);
-      await resequenceItems(tx, openBundle.id, ordered);
-      await resequenceRouteStops(tx, openBundle.id, ordered);
     }
 
     await tx.goodsReceiptCase.updateMany({

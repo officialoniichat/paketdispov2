@@ -10,6 +10,7 @@ import { EventLogService } from '../events/event-log.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { CasesService } from '../cases/cases.service.js';
+import { ClockService } from '../clock/clock.service.js';
 import { Role, type Principal } from '../auth/rbac.js';
 
 /**
@@ -156,7 +157,7 @@ beforeAll(async () => {
   const events = new EventLogService(p);
   const workflow = new WorkflowService(p, events);
   const live = new LiveStatusService();
-  cases = new CasesService(p, workflow, events, live);
+  cases = new CasesService(p, workflow, events, live, new ClockService(p));
 }, 180_000);
 
 afterAll(async () => {

@@ -44,7 +44,8 @@ import {
   type TransitionResultDto,
 } from './cases.dto.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
-import { packCount, packWindow, type PackItem } from './pack-window.js';
+import { packCount, packOrdinal, packWindow, type PackItem } from './pack-window.js';
+import { ClockService } from '../clock/clock.service.js';
 import {
   wgrDescription,
   distinctShopNos,
@@ -97,8 +98,13 @@ function byBundleSequence(
   return seqA !== seqB ? seqA - seqB : a.weBelegNo.localeCompare(b.weBelegNo);
 }
 
-function startOfTodayUtc(): Date {
-  const now = new Date();
+/**
+ * UTC-Tagesanfang zu einem Zeitpunkt. Den Zeitpunkt liefert IMMER der
+ * ClockService (Dev-Zeit-Override oder Systemzeit) — nie `new Date()` direkt:
+ * zwei Uhren im selben Fluss haben genau die Geisterbündel erzeugt, bei denen
+ * der Pull „gestern" suchte, während die App „heute" zeigte.
+ */
+function startOfDayUtc(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
@@ -114,6 +120,7 @@ export class CasesService {
     private readonly workflow: WorkflowService,
     private readonly events: EventLogService,
     private readonly live: LiveStatusService,
+    private readonly clock: ClockService,
   ) {}
 
   private async resolveEmployee(
@@ -134,7 +141,7 @@ export class CasesService {
 
   async getToday(principal: Principal): Promise<TodayResponseDto> {
     const employee = await this.resolveEmployee(principal);
-    const today = startOfTodayUtc();
+    const today = startOfDayUtc(await this.clock.now());
 
     // Bevorzugt das OFFENE Bündel des Tages (Ein-offenes-Bündel-Invariante):
     // Altdaten mit mehreren Tages-Bündeln zeigten sonst das neueste statt des
@@ -223,7 +230,10 @@ export class CasesService {
       date: isoDay(today),
       bundle: this.mapBundle(bundle),
       pack: {
-        index: bundle.activePackIndex,
+        // Anzeige-Position statt persistiertem packIndex: Indizes können Lücken
+        // haben (leergelaufene bzw. von der Automatik abgeräumte Packs) — die App
+        // soll „Pack 2 von 2" sagen, nie „Pack 3 von 2".
+        index: packOrdinal(packItems, bundle.activePackIndex) - 1,
         total: packCount(packItems),
         caseCount: window.activeCaseIds.length,
       },
@@ -389,7 +399,7 @@ export class CasesService {
     await this.prisma.$transaction(async (tx) => {
       await tx.goodsReceiptCase.update({
         where: { id: owned.id },
-        data: { collectedAt: dto.collected ? new Date() : null },
+        data: { collectedAt: dto.collected ? await this.clock.now() : null },
       });
       await this.events.append(
         {
@@ -762,7 +772,7 @@ export class CasesService {
         status: owned.status,
         eventType: 'issue.reopened',
         employeeNo: principal.employeeNo ?? null,
-        at: new Date().toISOString(),
+        at: (await this.clock.now()).toISOString(),
       });
       return { caseId: owned.id, status: owned.status, version: owned.version, eventId: null };
     }
@@ -887,7 +897,7 @@ export class CasesService {
           employeeId,
           completedQuantity: deltaQuantity,
           effortPoints,
-          completedAt: new Date(),
+          completedAt: await this.clock.now(),
           source: 'mobile_app',
         },
       });

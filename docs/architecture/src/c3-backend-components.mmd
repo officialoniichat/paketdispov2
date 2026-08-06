@@ -37,7 +37,7 @@ flowchart TB
         end
 
         subgraph assignment["AssignmentModule"]
-            asgSvc["AssignmentService<br/><i>recalculate() (Folge-Packs vorgeplant, NICHT aktiv; räumt nur ENGINE-Platzierungen ab —<br/>AssignmentItem.createdBy=teamlead bleibt stehen, die Automatik plant drumherum;<br/>das angefasste bzw. selbst gezogene AKTIVE Pack ist gesperrt, nur ein unberührtes Starter-Pack wird umgeplant) · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen</i>"]:::svc
+            asgSvc["AssignmentService<br/><i>recalculate() beplant nur FREIE Mitarbeiter — wer ein offenes Bündel hat, bekommt Nachschub NUR über den Pull;<br/>räumt nur ENGINE-Platzierungen ab (createdBy=teamlead bleibt stehen), das angefasste bzw. selbst gezogene<br/>AKTIVE Pack ist gesperrt — nur ein unberührtes Starter-Pack wird umgeplant;<br/>Ein-offenes-Bündel hart per Unique-Index one_open_bundle_per_employee_day · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen<br/>(Pack-Guard und Extend teilen EIN Bündel-Objekt — nie ein Create daneben)</i>"]:::svc
         end
 
         subgraph empl["EmployeesModule"]
@@ -104,6 +104,7 @@ flowchart TB
     devCtrl --> asgSvc
     tlCtrl --> clock
     meCtrl --> clock
+    casesSvc -->|"EINE Uhr: Tages- und Zeitstempel"| clock
     phCtrl --> clock
     devCtrl --> clock
 

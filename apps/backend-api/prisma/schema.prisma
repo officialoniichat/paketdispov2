@@ -649,6 +649,11 @@ model AssignmentBundle {
   /// Belege zeigt die Mitarbeiter-App; spätere Packs sind vorgeplant, aber dort
   /// unsichtbar. Rückt AUSSCHLIESSLICH beim Anfordern des nächsten Packs vor
   /// (POST /api/me/next-bundle) — nie durch Planung.
+  ///
+  /// Ein-offenes-Bündel-Invariante: je Mitarbeiter und Tag existiert höchstens EIN
+  /// nicht abgeschlossenes Bündel — erzwungen durch den partiellen Unique-Index
+  /// one_open_bundle_per_employee_day (Migration 20260806170000; Prisma kann
+  /// partielle Indizes nicht deklarieren).
   activePackIndex     Int                 @default(0)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt

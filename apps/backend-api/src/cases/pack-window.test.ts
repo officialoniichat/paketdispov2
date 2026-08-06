@@ -6,6 +6,7 @@ import {
   packCount,
   packInsertPosition,
   packMembers,
+  packOrdinal,
   packWindow,
   visibleCaseIds,
   type PackItem,
@@ -90,6 +91,19 @@ describe('Pack-Auskünfte', () => {
     expect(packCount(BUNDLE)).toBe(2);
     expect(packCount([])).toBe(0);
     expect(lastPackIndex([])).toBe(-1);
+  });
+
+  it('zählt lücken-fest und liefert die Anzeige-Position („Pack N von M")', () => {
+    // Pack 1 ist leergelaufen (entzogen/umgeplant): Indizes 0 und 2 bleiben.
+    const gappy = [
+      { caseId: 'a', packIndex: 0 },
+      { caseId: 'b', packIndex: 2 },
+    ];
+    expect(packCount(gappy)).toBe(2);
+    expect(packOrdinal(gappy, 0)).toBe(1);
+    expect(packOrdinal(gappy, 2)).toBe(2);
+    // Aktiver Index ohne Mitglieder zählt sich selbst dazu — nie „Pack 0".
+    expect(packOrdinal([{ caseId: 'b', packIndex: 2 }], 0)).toBe(1);
   });
 
   it('erkennt ein bereits vorgeplantes Folge-Pack', () => {
