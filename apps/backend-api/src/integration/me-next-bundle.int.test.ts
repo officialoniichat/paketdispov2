@@ -245,13 +245,16 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
 
     expect(todayView.pack).toMatchObject({ index: 1, total: 2, caseCount: 3 });
     // Pack 2 (3 Belege) + der mitgenommene Problem-Beleg aus Pack 1; die fertigen
-    // Belege aus Pack 1 sind raus.
-    const visible = todayView.cases.map((c) => c.packIndex);
-    expect(visible.filter((p) => p === 1)).toHaveLength(3);
-    expect(visible.filter((p) => p === 0)).toHaveLength(1);
+    // Belege aus Pack 1 sind raus. Die Trennung kommt als Backend-Flag — die App
+    // vergleicht keine packIndexe mehr (pack.index ist reine Anzeige-Position).
+    const aktive = todayView.cases.filter((c) => c.carriedOver === false);
+    expect(aktive).toHaveLength(3);
+    expect(aktive.every((c) => c.packOrdinal === 2)).toBe(true);
 
-    const carried = todayView.cases.find((c) => c.packIndex === 0);
-    expect(carried?.status).toBe('issue_open');
+    const carried = todayView.cases.filter((c) => c.carriedOver === true);
+    expect(carried).toHaveLength(1);
+    expect(carried[0]?.status).toBe('issue_open');
+    expect(carried[0]?.packOrdinal).toBe(1);
     expect(bundle.activePackIndex).toBe(1);
   });
 

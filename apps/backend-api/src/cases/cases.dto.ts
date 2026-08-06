@@ -90,13 +90,21 @@ export class CaseSummaryDto {
   })
   collected?: boolean;
   @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'Anzeige-Mitnahme: noch offener Beleg eines FRÜHEREN Packs, der bis zum Abschluss ' +
+      'sichtbar bleibt, aber auf sein altes Pack zählt. Entscheidet das Backend (pack-window) ' +
+      '— die App partitioniert nicht selbst. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt.',
+  })
+  carriedOver?: boolean;
+  @ApiPropertyOptional({
     type: Number,
     description:
-      'Pack des Belegs im Bündel (0 = Starter-Pack). Liegt er UNTER dem aktiven Pack ' +
-      '(TodayResponseDto.pack.index), ist er eine Anzeige-Mitnahme aus einem früheren ' +
-      'Pack und zählt dort weiter. Nur in Mitarbeiter-Sichten (/api/me/today) gesetzt.',
+      '1-basierte ANZEIGE-Position des Packs dieses Belegs (lücken-fest, konsistent zu ' +
+      'TodayPackDto.index + 1), z. B. für „aus Pack n". Nur in Mitarbeiter-Sichten ' +
+      '(/api/me/today) gesetzt.',
   })
-  packIndex?: number;
+  packOrdinal?: number;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Primärer Shop (A7)' })
   primaryShopNo!: string | null;
   @ApiPropertyOptional({

@@ -223,6 +223,7 @@ export class CasesService {
     }));
     const window = packWindow(packItems, bundle.activePackIndex);
     const visible = new Set([...window.activeCaseIds, ...window.carriedOverCaseIds]);
+    const carriedOverIds = new Set(window.carriedOverCaseIds);
     const packIndexByCase = new Map(packItems.map((i) => [i.caseId, i.packIndex]));
 
     const assignedEmployeeName = bundle.employee.displayName;
@@ -246,7 +247,10 @@ export class CasesService {
             assignedEmployeeName,
             c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
           ),
-          packIndex: packIndexByCase.get(c.id) ?? bundle.activePackIndex,
+          carriedOver: carriedOverIds.has(c.id),
+          // Lücken-feste Anzeige-Position („aus Pack n") — wie TodayPackDto.index
+          // eine reine Darstellungsgröße, NIE der persistierte packIndex.
+          packOrdinal: packOrdinal(packItems, packIndexByCase.get(c.id) ?? bundle.activePackIndex),
         })),
       workstation,
     };

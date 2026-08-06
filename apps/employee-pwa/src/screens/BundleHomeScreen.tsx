@@ -259,29 +259,6 @@ export function casesForDisplay(cases: readonly CaseSummaryDto[]): CaseSummaryDt
 }
 
 /**
- * Trennt die gelieferten Belege in das AKTIVE Pack und die Anzeige-Mitnahme.
- *
- * Welche Belege überhaupt kommen, entscheidet das Backend (Pull-Prinzip,
- * `pack-window.ts`) — hier wird nur noch getrennt, was es mitliefert: Belege des
- * aktiven Packs (`packIndex === activePackIndex`) und noch offene Problem-Belege
- * FRÜHERER Packs, die der MA abschließen darf. Letztere zählen bewusst nicht ins
- * Pack-Pensum: ihr Abschluss zählt weiter auf ihr altes Pack.
- *
- * Ohne Pack-Angabe (`activePackIndex === undefined`) gilt alles als aktiv — dann
- * gibt es schlicht nichts zu trennen.
- */
-export function partitionByPack(
-  cases: readonly CaseSummaryDto[],
-  activePackIndex: number | undefined,
-): { active: CaseSummaryDto[]; carriedOver: CaseSummaryDto[] } {
-  if (activePackIndex === undefined) return { active: [...cases], carriedOver: [] };
-  return {
-    active: cases.filter((c) => (c.packIndex ?? activePackIndex) === activePackIndex),
-    carriedOver: cases.filter((c) => (c.packIndex ?? activePackIndex) < activePackIndex),
-  };
-}
-
-/**
  * Anzeige-Regel für „1 · Ware holen" — dieselbe Container-Reihenfolge wie unter
  * „2 · Bearbeiten" (Kundenfeedback 05.08.2026): hat ein instruierter Beleg hier
  * noch einen Abhol-Stopp, darf ihn dieser Abschnitt nicht widersprüchlich weit
@@ -476,11 +453,13 @@ export function BundleHomeScreen(): JSX.Element {
   // hier an — die UI hat dazu nichts zu entscheiden.
   const cases = data?.cases ?? [];
   const pack = data?.pack ?? null;
-  const { active: packCases, carriedOver: carriedOverCases } = partitionByPack(
-    cases,
-    pack?.index,
-  );
-  const carriedOverIds = new Set(carriedOverCases.map((c) => c.id));
+  // Auch die Trennung aktiv/Mitnahme entscheidet das BACKEND (`carriedOver` je
+  // Beleg, single source: pack-window). `pack.index` ist eine lücken-feste
+  // ANZEIGE-Position und darf nie gegen persistierte packIndexe verglichen
+  // werden — sonst bleibt „1 · Ware holen" nach abgeräumten Packs leer
+  // (Bug 06.08.2026).
+  const packCases = cases.filter((c) => c.carriedOver !== true);
+  const carriedOverIds = new Set(cases.filter((c) => c.carriedOver === true).map((c) => c.id));
 
   // Ware-holen-Zustand (B2) kommt persistiert vom Backend (CaseSummaryDto
   // .collected, je Beleg-Container = Case-Id) — kein lokales Echo mehr, der
@@ -857,7 +836,7 @@ export function BundleHomeScreen(): JSX.Element {
                             <Chip
                               size="small"
                               variant="outlined"
-                              label={`aus Pack ${(b.packIndex ?? 0) + 1}`}
+                              label={`aus Pack ${b.packOrdinal ?? 1}`}
                             />
                           ) : null}
                         </Stack>
