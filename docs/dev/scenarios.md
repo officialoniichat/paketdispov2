@@ -171,11 +171,21 @@ Ein 2.400-Teile-Beleg (9.404.801) über der Monster-Schwelle (2.000 Teile) warte
 Pool auf die manuelle Teamlead-Entscheidung. Zusätzlich hängt Dirk Hansen (ma-104)
 noch an einem GESTERN begonnenen 2.600-Teile-Beleg (9.404.802, teilabgeschlossen am
 Vortages-Bündel) — die Folgetag-Fortsetzung greift: keine neuen Belege für ihn.
+Dazu ein bereits AUFGETEILTER Beleg (9.404.803, 2.200 Teile): das Original steht als
+Klammer da, Teil (1) ist Anna Berger zugeteilt, Teil (2) liegt frei im Topf.
 
 **Was man danach sehen sollte:** „Automatik ausführen": 9.404.801 bleibt unverteilt
 im Pool (Grund „Groß-Beleg — manuelle TL-Entscheidung", zuweisbar über
-Mitarbeiterboard → Zuweisen); Dirk Hansen erhält KEIN neues Starter-Pack, sein
+Mitarbeiterboard → Zuweisen) und trägt in den Ablagen wie in der Belege-Tabelle den
+roten Chip „Monster"; Dirk Hansen erhält KEIN neues Starter-Pack, sein
 Self-Pull antwortet „continuation". Alle anderen werden normal beplant.
+
+In der Belege-Ansicht stehen 9.404.803 (1) und (2) eingerückt unter ihrem Original,
+das den Status „Aufgeteilt" und den Chip „2 Teile" trägt und weder in den Ablagen
+noch im Verteil-Pool auftaucht; Teil (2) wird von der Automatik regulär eingeplant.
+Gut zum Durchspielen: am Monster-Beleg 9.404.801 „Aufteilen …" öffnen und „Ohne
+Zuweisung" wählen — die entstehenden Teile liegen unter der Schwelle und werden beim
+nächsten Lauf automatisch verteilt.
 
 ### B8 · `shop-31-nos` — Shop 31: NOS-Einzelanlieferungen
 

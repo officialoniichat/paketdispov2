@@ -43,7 +43,10 @@ gewinnt'`: „Ein vom Teamlead manuell gesetzter Prio-Beleg schlägt alle Automa
 Legt die Bündelgrößen in **Teilen** fest: `'Starter-Pack min (Teile)'`, `'Starter-Pack max
 (Teile)'`, `'Folge-Pack min (Teile)'`, `'Folge-Pack max (Teile)'` sowie die
 `'Monster-Beleg-Schwelle (Teile)'` – „Belege ab dieser Teilezahl werden NICHT automatisch verteilt,
-sondern warten auf die manuelle Teamlead-Entscheidung." (Groß-Belege, Kapitel B6).
+sondern warten auf die manuelle Teamlead-Entscheidung." (Groß-Belege, Kapitel B6). Dieselbe Schwelle
+setzt im Cockpit den roten Chip `'Monster'` (Digitale Ablagen + Belege-Tabelle) und bedient dort den
+Filter `'Monster'`. Ändern Sie den Wert, ändern sich Chip, Filter und Verteilung gemeinsam — es gibt
+nur diese eine Grenze.
 
 ### `'Aufwand'` – Kalibrierung
 
@@ -89,8 +92,12 @@ Speichern mit `'Lagerplätze speichern'`.
 
 ### `'Mitarbeiter'` – Skill-Stufe, Arbeitsplatz/Tisch, Temp/Dummy
 
-Links die Mannschaft, rechts das Profil der gewählten Person. Im Profil pflegen Sie u. a.:
+Links die Mannschaft, rechts das Profil der gewählten Person. Über der Liste steht der Hinweis,
+dass die Mitarbeiterdaten künftig aus dem **SEAK-Personalmanagement** fließen sollen (Schnittstelle
+geplant) — bis dahin ist die Pflege hier der Fallback. Im Profil pflegen Sie u. a.:
 
+- **`'Anzeigename'`** – so erscheint die Person in Board, Bündeln und Auswertungen. Gespeichert
+  wird beim Verlassen des Feldes (oder mit Enter).
 - **`'Skill-Stufe'`** (Profi/Fortgeschritten/Basis/Starter/Dummy) – „Profi = alles automatisch;
   Starter/Dummy = nur manuelle Zuteilung."
 - **`'Arbeitsplatz / Tisch'`** – fester Tisch optional (`'— kein Tisch —'` lässt die Person
@@ -101,6 +108,15 @@ Links die Mannschaft, rechts das Profil der gewählten Person. Im Profil pflegen
 **Temp-Kräfte / Dummys:** Über `'+ Temp-Mitarbeiter'` legen Sie Azubis/Aushilfen an (Dialog
 `'Temporäre Kraft anlegen'`). Sie tragen den Chip `'Temp · ohne Messung'`: Sie werden ganz normal
 verplant, zählen aber **nicht** in die Leistungsmessung (nur in den Durchsatz).
+
+**Entfernen:** Ganz unten im Profil steht `'Mitarbeiter löschen …'`. Gelöscht wird nur, solange
+nichts Operatives an der Person hängt. Steht sie heute in einer aktiven Schicht, hat sie Bündel,
+Belege in Arbeit oder Leistungs-/Meldungshistorie, nennt der Dialog genau diesen Grund und bietet
+`'Stattdessen deaktivieren'` an — dann verschwindet die Person aus Planung und Auswahl, die
+Historie bleibt lesbar. Ist nichts blockiert, fällt der Datensatz samt seiner reinen
+Anzeige-Anhänge (geplante Schichten, Abwesenheiten, Nachrichten); das lässt sich nicht rückgängig
+machen. In der Praxis ist Löschen damit der Weg für den versehentlich angelegten Datensatz,
+Deaktivieren der Weg für alle, die schon gearbeitet haben.
 
 ### `'Schichtplan'` – Wochenmuster
 

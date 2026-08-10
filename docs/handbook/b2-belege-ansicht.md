@@ -100,5 +100,15 @@ Belege bleiben im System; DocuWare ist das dauerhafte Archiv.
 - **`'Belege konnten nicht geladen werden: …'`** – über `'Erneut laden'` erneut versuchen.
 - **Kein `'Zuweisen'`-Knopf sichtbar** – der Beleg ist nicht (mehr) frei im Pool; ggf. schon
   zugeteilt, blockiert oder abgeschlossen.
-- **Aufteilen eines großen Belegs** – über die Beleg-Aktion `'Aufteilen …'`; die Ergebnisse liegen
-  unter `'Aufteilungen'` (`'Beleg <Nr> aufgeteilt — Leistung je Anteil unter „Aufteilungen".'`).
+- **Aufteilen eines großen Belegs** – über die Beleg-Aktion `'Aufteilen …'`. Im Dialog wählen Sie,
+  wie viele Teile mit welcher Menge entstehen und ob Sie sie gleich jemandem geben
+  (`'Mitarbeiter wählen'`) oder die Verteilung der Automatik überlassen (`'Ohne Zuweisung'`).
+  Es entstehen **eigenständige Teil-Belege** mit den Nummern `'WE-… (1)'`, `'WE-… (2)'` usw.; sie
+  stehen in dieser Liste eingerückt unter dem Original, das als `'Aufgeteilt'` mit dem Chip
+  `'n Teile'` zurückbleibt und selbst nicht mehr bearbeitet wird.
+- **Warum weicht die Menge eines Teils von meiner Eingabe ab?** – Eine Größenzeile (EAN + Größe)
+  wird nie zerrissen, sonst müssten zwei Personen dieselbe Kiste anfassen. Ihre Mengen sind
+  deshalb Ziele; die Summe über alle Teile ist immer die volle Belegmenge.
+- **Wo finde ich die ganz großen Belege?** – Am roten Chip `'Monster'` in der Spalte `'Teile'`,
+  und über den Filter `'Monster'` (`'nur Monster'` / `'ohne Monster'`). Diese Belege verteilt die
+  Automatik bewusst nicht; die Schwelle steht in der Regelpflege (Kapitel B7).
