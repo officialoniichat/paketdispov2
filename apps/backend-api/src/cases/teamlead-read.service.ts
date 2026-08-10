@@ -120,8 +120,17 @@ interface DeliveryGroupRefLookup {
   refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
 }
 
-/** Compose the Prisma where clause from the Belege list query (scope + column filters, A2/A7). */
-function poolWhere(query: PoolQueryDto): Prisma.GoodsReceiptCaseWhereInput {
+/**
+ * Compose the Prisma where clause from the Belege list query (scope + column filters, A2/A7).
+ *
+ * Die Monster-Schwelle kommt als Parameter herein statt hier gelesen zu werden: sie ist ein
+ * gepflegter Regelparameter (§11), kein Feld am Beleg. Der Filter ist deshalb eine
+ * Mengengrenze gegen `totalQuantity` — so benutzen Liste und Chip zwingend dieselbe Schwelle.
+ */
+function poolWhere(
+  query: PoolQueryDto,
+  monsterThreshold: number,
+): Prisma.GoodsReceiptCaseWhereInput {
   const and: Prisma.GoodsReceiptCaseWhereInput[] = [];
   if (query.scope && query.scope !== 'alle') {
     if (query.scope === 'topf') {
@@ -171,6 +180,10 @@ function poolWhere(query: PoolQueryDto): Prisma.GoodsReceiptCaseWhereInput {
       ],
     });
   }
+  // Monster-Belege (C6): „In welcher Spalte finde ich die?" — hier. Dieselbe Grenze,
+  // die die Engine von der Auto-Verteilung ausschließt (plan.ts), macht sie auffindbar.
+  if (query.monster === 'yes') and.push({ totalQuantity: { gte: monsterThreshold } });
+  if (query.monster === 'no') and.push({ totalQuantity: { lt: monsterThreshold } });
   if (query.bookingFrom) {
     and.push({ bookingDate: { gte: new Date(`${query.bookingFrom}T00:00:00.000Z`) } });
   }
@@ -224,7 +237,10 @@ export class TeamleadReadService {
   async listPool(query: PoolQueryDto): Promise<PoolListDto> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 50;
-    const where = poolWhere(query);
+    // Die Regelkonfiguration steht VOR dem Where-Clause, weil der Monster-Filter die
+    // gepflegte Teile-Schwelle braucht (poolWhere) — dieselbe, die auch den Chip setzt.
+    const ruleConfig = await loadRuleConfig(this.prisma);
+    const where = poolWhere(query, ruleConfig.bundle.largeBelegTeileThreshold);
     // Server-side sort (A2): validated column + direction, weBelegNo as the
     // deterministic tie-break so pagination never shuffles equal rows.
     const sortDir = query.sortDir ?? 'asc';
@@ -233,10 +249,9 @@ export class TeamleadReadService {
       { weBelegNo: 'asc' },
     ];
 
-    const [sortedIds, total, ruleConfig] = await Promise.all([
+    const [sortedIds, total] = await Promise.all([
       this.prisma.goodsReceiptCase.findMany({ where, orderBy, select: { id: true } }),
       this.prisma.goodsReceiptCase.count({ where }),
-      loadRuleConfig(this.prisma),
     ]);
 
     // Delivery groups come from the canonical, status-independent universe (all
@@ -344,6 +359,10 @@ export class TeamleadReadService {
         skuLines: skuLinesByPosition.get(p.id) ?? [],
       }));
 
+    // Monster-Grenze (C6) aus der Regelpflege — EINE Schwelle für Chip, Filter und die
+    // Engine-Entscheidung „wird nicht auto-verteilt" (plan.ts). Nie im Frontend rechnen.
+    const monsterThreshold = ruleConfig.bundle.largeBelegTeileThreshold;
+
     const items: PoolItemDto[] = rows.map((c) => {
       // Show the SAME effort the distribution uses: live-computed for instructionalised
       // cases, stored estimate otherwise (see resolveCaseEffort).
@@ -374,6 +393,7 @@ export class TeamleadReadService {
         forwardedTo: c.forwardedTo,
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
+        isMonster: c.totalQuantity >= monsterThreshold,
         deliveryGroup: universe.refFor(c.id),
         bereich: c.storageLocation
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)

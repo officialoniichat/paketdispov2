@@ -791,6 +791,13 @@ function LaneCardView({
             <PriorityChip key={f} flag={f} size="small" />
           ))}
           {card.section !== null && <Chip size="small" label={`Abschnitt ${card.section}`} />}
+          {/* C6: der Grund, warum dieser Beleg trotz „bereit" liegen bleibt — die
+              Automatik fasst ihn nicht an, er braucht eine Teamlead-Entscheidung. */}
+          {card.isMonster && (
+            <Tooltip title="Monster-Beleg: über der Teile-Schwelle aus der Regelpflege — wird nicht automatisch verteilt und wartet auf Ihre Entscheidung (z. B. Aufteilen).">
+              <Chip size="small" color="error" label="Monster" />
+            </Tooltip>
+          )}
           {card.issueStatus && <ProblemChip status={card.issueStatus} size="small" />}
           {card.attentionFlag && (
             <Tooltip title={card.attentionNote ?? ''}>

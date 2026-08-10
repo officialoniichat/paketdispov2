@@ -530,6 +530,13 @@ export class CaseAggregateDto {
 export class PoolItemDto extends CaseSummaryDto {
   @ApiPropertyOptional({ nullable: true }) assignedEmployeeNo!: string | null;
   @ApiProperty() effortPoints!: number;
+  @ApiProperty({
+    description:
+      'Monster-Beleg (C6): totalQuantity ≥ der gepflegten Teile-Schwelle ⇒ die Automatik ' +
+      'verteilt ihn NICHT, er wartet auf die manuelle Teamlead-Entscheidung. Das Backend ' +
+      'rechnet gegen RuleConfig.bundle.largeBelegTeileThreshold — die UI zeigt nur an.',
+  })
+  isMonster!: boolean;
   @ApiPropertyOptional({
     type: DeliveryGroupRefDto,
     nullable: true,
@@ -1139,6 +1146,16 @@ export class PoolQueryDto {
   @IsOptional()
   @IsIn(['yes', 'no'])
   labels?: 'yes' | 'no';
+
+  @ApiPropertyOptional({
+    enum: ['yes', 'no'],
+    description:
+      'Filter: Monster-Belege (Teile ≥ gepflegte Schwelle) ja/nein. Die Schwelle kommt aus ' +
+      'der Regelpflege, deshalb filtert der Server über die Menge — nicht über ein Flag.',
+  })
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  monster?: 'yes' | 'no';
 
   @ApiPropertyOptional({
     enum: POOL_SCOPES,

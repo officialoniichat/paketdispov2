@@ -1849,6 +1849,8 @@ export interface components {
             issues?: components["schemas"]["IssueSummaryDto"][];
             assignedEmployeeNo?: Record<string, never> | null;
             effortPoints: number;
+            /** @description Monster-Beleg (C6): totalQuantity ≥ der gepflegten Teile-Schwelle ⇒ die Automatik verteilt ihn NICHT, er wartet auf die manuelle Teamlead-Entscheidung. Das Backend rechnet gegen RuleConfig.bundle.largeBelegTeileThreshold — die UI zeigt nur an. */
+            isMonster: boolean;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
             /** @description Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds. */
@@ -3090,6 +3092,8 @@ export interface operations {
                 assigned?: "yes" | "no";
                 /** @description Filter: Etiketten nötig ja/nein */
                 labels?: "yes" | "no";
+                /** @description Filter: Monster-Belege (Teile ≥ gepflegte Schwelle) ja/nein. Die Schwelle kommt aus der Regelpflege, deshalb filtert der Server über die Menge — nicht über ein Flag. */
+                monster?: "yes" | "no";
                 /** @description Lebenszyklus-Scope (server-seitig): aktiv | abgeschlossen | archiv (completed+zst_done) | topf (Aufmerksamkeit/blocked/needs_review) | alle */
                 scope?: "aktiv" | "abgeschlossen" | "archiv" | "topf" | "alle";
                 /** @description Buchungsdatum ab (YYYY-MM-DD, inklusive) */

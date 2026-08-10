@@ -116,6 +116,12 @@ export interface LaneCard {
   totalQuantity: number;
   effortPoints: number;
   estimatedMinutes: number;
+  /**
+   * Monster-Beleg (C6): über der gepflegten Teile-Schwelle, deshalb von der Automatik
+   * ausgenommen und auf eine Teamlead-Entscheidung wartend. Kommt fertig gerechnet vom
+   * Backend — die Schwelle lebt in der Regelpflege, nicht hier.
+   */
+  isMonster: boolean;
   storageCode: string;
   assignedTo?: string;
   issueStatus?: WorkIssue['status'];

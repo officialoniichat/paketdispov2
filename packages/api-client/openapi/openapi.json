@@ -777,6 +777,19 @@
             }
           },
           {
+            "name": "monster",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Monster-Belege (Teile ≥ gepflegte Schwelle) ja/nein. Die Schwelle kommt aus der Regelpflege, deshalb filtert der Server über die Menge — nicht über ein Flag.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
             "name": "scope",
             "required": false,
             "in": "query",
@@ -5093,6 +5106,10 @@
           "effortPoints": {
             "type": "number"
           },
+          "isMonster": {
+            "type": "boolean",
+            "description": "Monster-Beleg (C6): totalQuantity ≥ der gepflegten Teile-Schwelle ⇒ die Automatik verteilt ihn NICHT, er wartet auf die manuelle Teamlead-Entscheidung. Das Backend rechnet gegen RuleConfig.bundle.largeBelegTeileThreshold — die UI zeigt nur an."
+          },
           "deliveryGroup": {
             "nullable": true,
             "description": "Delivery-group context so groups are visible BEFORE distribution; null if standalone",
@@ -5132,7 +5149,8 @@
           "labelsRequired",
           "shopNos",
           "attentionFlag",
-          "effortPoints"
+          "effortPoints",
+          "isMonster"
         ]
       },
       "PoolListDto": {

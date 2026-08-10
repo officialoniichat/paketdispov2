@@ -341,6 +341,7 @@ export function BelegListPage({
     filters.section,
     filters.labels,
     filters.assigned,
+    filters.monster,
     filters.bookingFrom,
     filters.bookingTo,
   ].filter((v) => v !== undefined && v !== '').length;
@@ -401,7 +402,23 @@ export function BelegListPage({
           </Stack>
         ),
       },
-      { accessorKey: 'quantity', header: 'Teile', id: 'totalQuantity' },
+      {
+        accessorKey: 'quantity',
+        header: 'Teile',
+        id: 'totalQuantity',
+        // Der Monster-Chip steht bewusst IN der Teile-Spalte: die Menge ist der Grund,
+        // und die Teamlead-Frage lautet „in welcher Spalte finde ich die?" (C6).
+        cell: (ctx) => (
+          <Stack direction="row" gap={0.5} alignItems="center">
+            <span>{ctx.row.original.quantity}</span>
+            {ctx.row.original.isMonster && (
+              <Tooltip title="Monster-Beleg: über der Teile-Schwelle aus der Regelpflege — wird nicht automatisch verteilt und wartet auf eine Teamlead-Entscheidung.">
+                <Chip size="small" color="error" label="Monster" />
+              </Tooltip>
+            )}
+          </Stack>
+        ),
+      },
       { accessorKey: 'effortPoints', header: 'Punkte', id: 'effortPoints' },
       {
         id: 'labels',
@@ -800,6 +817,21 @@ export function BelegListPage({
           <MenuItem value="">Alle</MenuItem>
           <MenuItem value="yes">ja</MenuItem>
           <MenuItem value="no">nein</MenuItem>
+        </TextField>
+        <TextField
+          size="small"
+          select
+          label="Monster"
+          value={filters.monster ?? ''}
+          onChange={(e) =>
+            updateFilters({ monster: (e.target.value || undefined) as BelegeFilters['monster'] })
+          }
+          sx={{ minWidth: 140 }}
+          helperText="Teile ≥ Schwelle"
+        >
+          <MenuItem value="">Alle</MenuItem>
+          <MenuItem value="yes">nur Monster</MenuItem>
+          <MenuItem value="no">ohne Monster</MenuItem>
         </TextField>
         <TextField
           size="small"

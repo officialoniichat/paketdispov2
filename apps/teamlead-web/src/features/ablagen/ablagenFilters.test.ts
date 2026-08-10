@@ -26,6 +26,7 @@ function makeCard(overrides: Partial<LaneCard> = {}): LaneCard {
     totalQuantity: 20,
     effortPoints: 5,
     estimatedMinutes: 30,
+    isMonster: false,
     storageCode: 'R-1-1',
     assignedTo: undefined,
     issueStatus: undefined,

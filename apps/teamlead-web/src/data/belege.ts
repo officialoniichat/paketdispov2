@@ -86,6 +86,8 @@ export interface BelegeFilters {
   section?: SectionCode;
   labels?: 'yes' | 'no';
   assigned?: 'yes' | 'no';
+  /** Monster-Belege (Teile ≥ gepflegte Schwelle) ein-/ausblenden — die Grenze kennt der Server. */
+  monster?: 'yes' | 'no';
   bookingFrom?: string;
   bookingTo?: string;
 }
@@ -131,6 +133,11 @@ export interface BelegRow {
   shopNos: string[];
   /** Etiketten nötig (abgeleitet aus der Arbeitsanweisung, A1). */
   labelsRequired: boolean;
+  /**
+   * Monster-Beleg (C6): Teile ≥ gepflegte Schwelle ⇒ die Automatik verteilt ihn nicht,
+   * er wartet auf die Teamlead-Entscheidung. Vom Backend gerechnet, hier nur angezeigt.
+   */
+  isMonster: boolean;
   bookingDate: string;
   /** ISO-Abschlusszeitpunkt (Archiv-Spalte, A6); null solange offen. */
   completedAt: string | null;
@@ -433,6 +440,7 @@ export async function fetchBelegeList(
         ...(f.section !== undefined ? { section: f.section } : {}),
         ...(f.labels ? { labels: f.labels } : {}),
         ...(f.assigned ? { assigned: f.assigned } : {}),
+        ...(f.monster ? { monster: f.monster } : {}),
         ...(f.bookingFrom ? { bookingFrom: f.bookingFrom } : {}),
         ...(f.bookingTo ? { bookingTo: f.bookingTo } : {}),
       },
@@ -647,6 +655,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     branchNo: item.branchNo,
     shopNos: item.shopNos,
     labelsRequired: item.labelsRequired,
+    isMonster: item.isMonster,
     bookingDate: item.bookingDate,
     completedAt: item.completedAt ?? null,
     docuWareUrl: item.docuWareUrl ?? null,
