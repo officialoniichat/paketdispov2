@@ -1881,6 +1881,10 @@ export interface components {
             bereich?: string | null;
             /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
             bundleQueue?: components["schemas"]["BundleQueueRefDto"] | null;
+            /** @description Etikett-Druckvarianten, die auf dem Beleg TATSÄCHLICH vorkommen (dedupliziert, Anzeige-Reihenfolge). Aggregiert aus den Positions-Anweisungen; Positionen ohne gespeicherte Anweisung zählen als „Etikett mit Preis". */
+            labelPrintVariants: ("etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett")[];
+            /** @description Sicherung nötig: mindestens eine Position des Belegs verlangt sie (PositionInstruction.securityRequired). */
+            securityRequired: boolean;
         };
         PoolListDto: {
             items: components["schemas"]["PoolItemDto"][];
@@ -1925,6 +1929,14 @@ export interface components {
             storageLocationCode?: string | null;
             priorityFlags: string[];
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
+            /** @description Filiale (Beleg-Kopf) */
+            branchNo: string;
+            /** @description Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst) */
+            shopNos: string[];
+            /** @description Etikett-Druckvarianten, die auf dem Beleg TATSÄCHLICH vorkommen (dedupliziert, Anzeige-Reihenfolge). Aggregiert aus den Positions-Anweisungen; Positionen ohne gespeicherte Anweisung zählen als „Etikett mit Preis". */
+            labelPrintVariants: ("etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett")[];
+            /** @description Sicherung nötig: mindestens eine Position des Belegs verlangt sie (PositionInstruction.securityRequired). */
+            securityRequired: boolean;
         };
         EffortComponentsDto: {
             /** @description Grundzeit je Beleg */
@@ -3165,6 +3177,10 @@ export interface operations {
                 assigned?: "yes" | "no";
                 /** @description Filter: Etiketten nötig ja/nein */
                 labels?: "yes" | "no";
+                /** @description Filter: Digi Tags — yes = mindestens eine Position druckt das Etikett OHNE Preis (digitag_etikett_ohne_preis), no = keine solche Position. */
+                digiTags?: "yes" | "no";
+                /** @description Filter: Sichern — yes = mindestens eine Position verlangt Sicherung, no = keine. */
+                security?: "yes" | "no";
                 /** @description Filter: Monster-Belege (Teile ≥ gepflegte Schwelle) ja/nein. Die Schwelle kommt aus der Regelpflege, deshalb filtert der Server über die Menge — nicht über ein Flag. */
                 monster?: "yes" | "no";
                 /** @description Lebenszyklus-Scope (server-seitig): aktiv | abgeschlossen | archiv (completed+zst_done) | topf (Aufmerksamkeit/blocked/needs_review) | alle */

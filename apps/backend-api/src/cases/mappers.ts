@@ -10,6 +10,7 @@ import type { DeliveryGroup } from '@paket/assignment-engine';
 import {
   DEFAULT_INSPECTION_LEVELS,
   DEFAULT_WGR_CATALOG,
+  summarizeLabelPrintVariants,
   type LabelPrintVariant,
 } from '@paket/domain-types';
 import type {
@@ -100,6 +101,32 @@ export function mapLabelPrintPositions(
       supplierColor: p.supplierColor ?? '',
       labelPrintVariant: p.instruction?.labelPrintVariant ?? 'etikett_mit_preis',
     }));
+}
+
+/**
+ * Welche Etikett-Druckvarianten kommen auf dem Beleg vor (Kundenfeedback 07.08.2026,
+ * Kachel-/Zeilen-Infos)? Dedupliziert und in der Anzeige-Reihenfolge — die Ableitung
+ * selbst liegt in domain-types ({@link summarizeLabelPrintVariants}), hier wird nur
+ * die Positions-Liste auf ihre Varianten reduziert. Positionen ohne gespeicherte
+ * Anweisung fallen wie überall auf „Etikett mit Preis" zurück.
+ */
+export function caseLabelPrintVariants(
+  positions: ReadonlyArray<{ instruction?: { labelPrintVariant: LabelPrintVariant } | null }>,
+): LabelPrintVariant[] {
+  return summarizeLabelPrintVariants(
+    positions.map((p) => p.instruction?.labelPrintVariant ?? 'etikett_mit_preis'),
+  );
+}
+
+/**
+ * Sicherung nötig (Kundenfeedback 07.08.2026): mindestens eine Position des Belegs
+ * verlangt sie. Bewusst belegweit — die Kachel beantwortet „muss hier gesichert
+ * werden?", nicht „wo genau"; das Wo steht in der Arbeitsanweisung.
+ */
+export function caseSecurityRequired(
+  positions: ReadonlyArray<{ instruction?: { securityRequired: boolean } | null }>,
+): boolean {
+  return positions.some((p) => p.instruction?.securityRequired === true);
 }
 
 /**

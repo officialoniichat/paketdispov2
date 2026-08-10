@@ -24,6 +24,19 @@ import {
 /** Wire-Vokabular der Etikett-Druckvariante — 1:1 aus dem Zod-Enum (single source). */
 const LABEL_PRINT_VARIANTS = labelPrintVariantSchema.options;
 
+/**
+ * Beschreibungen der beiden Kachel-/Zeilen-Aggregate (Kundenfeedback 07.08.2026).
+ * Gemeinsam formuliert, weil sie in mehreren Teamlead-Projektionen auftauchen und
+ * dieselbe Ableitung meinen — eine Beschreibung, kein Copy-Paste-Drift.
+ */
+const LABEL_PRINT_VARIANTS_SUMMARY_DESC =
+  'Etikett-Druckvarianten, die auf dem Beleg TATSÄCHLICH vorkommen (dedupliziert, ' +
+  'Anzeige-Reihenfolge). Aggregiert aus den Positions-Anweisungen; Positionen ohne ' +
+  'gespeicherte Anweisung zählen als „Etikett mit Preis".';
+
+const SECURITY_REQUIRED_DESC =
+  'Sicherung nötig: mindestens eine Position des Belegs verlangt sie (PositionInstruction.securityRequired).';
+
 // --- Responses --------------------------------------------------------------
 
 /**
@@ -576,6 +589,14 @@ export class PoolItemDto extends CaseSummaryDto {
       'A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt',
   })
   bundleQueue!: BundleQueueRefDto | null;
+  @ApiProperty({
+    enum: LABEL_PRINT_VARIANTS,
+    isArray: true,
+    description: LABEL_PRINT_VARIANTS_SUMMARY_DESC,
+  })
+  labelPrintVariants!: string[];
+  @ApiProperty({ description: SECURITY_REQUIRED_DESC })
+  securityRequired!: boolean;
 }
 
 /** Why a looked-up Beleg is not assignable (B1 WE-Nr-Zuweisung). */
@@ -1169,6 +1190,25 @@ export class PoolQueryDto {
   @ApiPropertyOptional({
     enum: ['yes', 'no'],
     description:
+      'Filter: Digi Tags — yes = mindestens eine Position druckt das Etikett OHNE Preis ' +
+      '(digitag_etikett_ohne_preis), no = keine solche Position.',
+  })
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  digiTags?: 'yes' | 'no';
+
+  @ApiPropertyOptional({
+    enum: ['yes', 'no'],
+    description:
+      'Filter: Sichern — yes = mindestens eine Position verlangt Sicherung, no = keine.',
+  })
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  security?: 'yes' | 'no';
+
+  @ApiPropertyOptional({
+    enum: ['yes', 'no'],
+    description:
       'Filter: Monster-Belege (Teile ≥ gepflegte Schwelle) ja/nein. Die Schwelle kommt aus ' +
       'der Regelpflege, deshalb filtert der Server über die Menge — nicht über ein Flag.',
   })
@@ -1340,6 +1380,20 @@ export class CaseSearchResultDto {
   @ApiProperty({ type: [String] }) priorityFlags!: string[];
   @ApiPropertyOptional({ type: DeliveryGroupRefDto, nullable: true })
   deliveryGroup!: DeliveryGroupRefDto | null;
+  @ApiProperty({ description: 'Filiale (Beleg-Kopf)' }) branchNo!: string;
+  @ApiProperty({
+    type: [String],
+    description: 'Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst)',
+  })
+  shopNos!: string[];
+  @ApiProperty({
+    enum: LABEL_PRINT_VARIANTS,
+    isArray: true,
+    description: LABEL_PRINT_VARIANTS_SUMMARY_DESC,
+  })
+  labelPrintVariants!: string[];
+  @ApiProperty({ description: SECURITY_REQUIRED_DESC })
+  securityRequired!: boolean;
 }
 
 /** Body for POST /api/teamlead/cases/:caseId/forward — Weiterleiten an … (C5). */

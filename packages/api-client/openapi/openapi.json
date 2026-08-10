@@ -777,6 +777,32 @@
             }
           },
           {
+            "name": "digiTags",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Digi Tags — yes = mindestens eine Position druckt das Etikett OHNE Preis (digitag_etikett_ohne_preis), no = keine solche Position.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
+            "name": "security",
+            "required": false,
+            "in": "query",
+            "description": "Filter: Sichern — yes = mindestens eine Position verlangt Sicherung, no = keine.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
             "name": "monster",
             "required": false,
             "in": "query",
@@ -5231,6 +5257,22 @@
                 "$ref": "#/components/schemas/BundleQueueRefDto"
               }
             ]
+          },
+          "labelPrintVariants": {
+            "type": "array",
+            "description": "Etikett-Druckvarianten, die auf dem Beleg TATSÄCHLICH vorkommen (dedupliziert, Anzeige-Reihenfolge). Aggregiert aus den Positions-Anweisungen; Positionen ohne gespeicherte Anweisung zählen als „Etikett mit Preis\".",
+            "items": {
+              "type": "string",
+              "enum": [
+                "etikett_mit_preis",
+                "digitag_etikett_ohne_preis",
+                "kein_etikett"
+              ]
+            }
+          },
+          "securityRequired": {
+            "type": "boolean",
+            "description": "Sicherung nötig: mindestens eine Position des Belegs verlangt sie (PositionInstruction.securityRequired)."
           }
         },
         "required": [
@@ -5248,7 +5290,9 @@
           "attentionFlag",
           "effortPoints",
           "isMonster",
-          "partCount"
+          "partCount",
+          "labelPrintVariants",
+          "securityRequired"
         ]
       },
       "PoolListDto": {
@@ -5405,6 +5449,33 @@
                 "$ref": "#/components/schemas/DeliveryGroupRefDto"
               }
             ]
+          },
+          "branchNo": {
+            "type": "string",
+            "description": "Filiale (Beleg-Kopf)"
+          },
+          "shopNos": {
+            "description": "Alle Shops des Belegs (distinct über die Positionen, Primär-Shop zuerst)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labelPrintVariants": {
+            "type": "array",
+            "description": "Etikett-Druckvarianten, die auf dem Beleg TATSÄCHLICH vorkommen (dedupliziert, Anzeige-Reihenfolge). Aggregiert aus den Positions-Anweisungen; Positionen ohne gespeicherte Anweisung zählen als „Etikett mit Preis\".",
+            "items": {
+              "type": "string",
+              "enum": [
+                "etikett_mit_preis",
+                "digitag_etikett_ohne_preis",
+                "kein_etikett"
+              ]
+            }
+          },
+          "securityRequired": {
+            "type": "boolean",
+            "description": "Sicherung nötig: mindestens eine Position des Belegs verlangt sie (PositionInstruction.securityRequired)."
           }
         },
         "required": [
@@ -5412,7 +5483,11 @@
           "weBelegNo",
           "teile",
           "estimatedMinutes",
-          "priorityFlags"
+          "priorityFlags",
+          "branchNo",
+          "shopNos",
+          "labelPrintVariants",
+          "securityRequired"
         ]
       },
       "EffortComponentsDto": {

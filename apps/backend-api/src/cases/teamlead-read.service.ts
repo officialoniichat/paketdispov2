@@ -37,8 +37,9 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { distinctShopNos, isLabelsRequired, mapDeliveryGroupRef, mapIssueSummary,
-  mapWorkInstruction, wgrDescription, type IssuePositionRef,
+import { caseLabelPrintVariants, caseSecurityRequired, distinctShopNos, isLabelsRequired,
+  mapDeliveryGroupRef, mapIssueSummary, mapWorkInstruction, wgrDescription,
+  type IssuePositionRef,
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
@@ -193,6 +194,22 @@ function poolWhere(
       ],
     });
   }
+  // Digi Tags / Sichern (Kundenfeedback 07.08.2026): dieselbe Positions-Ableitung wie
+  // die Chips auf Karte und Zeile, nur als Mengen-Frage an die Datenbank formuliert —
+  // „mind. eine Position" ⇒ `some`, „keine" ⇒ dessen Negation (deckt auch Belege ganz
+  // ohne Anweisung ab, denn die haben die Eigenschaft ebenfalls nicht).
+  const digiTagPosition: Prisma.ReceiptPositionWhereInput = {
+    instruction: { is: { labelPrintVariant: 'digitag_etikett_ohne_preis' } },
+  };
+  if (query.digiTags === 'yes') and.push({ positions: { some: digiTagPosition } });
+  if (query.digiTags === 'no') and.push({ positions: { none: digiTagPosition } });
+
+  const securedPosition: Prisma.ReceiptPositionWhereInput = {
+    instruction: { is: { securityRequired: true } },
+  };
+  if (query.security === 'yes') and.push({ positions: { some: securedPosition } });
+  if (query.security === 'no') and.push({ positions: { none: securedPosition } });
+
   // Monster-Belege (C6): „In welcher Spalte finde ich die?" — hier. Dieselbe Grenze,
   // die die Engine von der Auto-Verteilung ausschließt (plan.ts), macht sie auffindbar.
   if (query.monster === 'yes') and.push({ totalQuantity: { gte: monsterThreshold } });
@@ -426,6 +443,10 @@ export class TeamleadReadService {
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
         bundleQueue: this.toBundleQueue(c.id, c.assignedBundle),
+        // Kachel-/Zeilen-Infos (Kundenfeedback 07.08.2026): belegweit aggregiert,
+        // damit Ablagen-Karte und Belege-Zeile NICHT selbst über Positionen rechnen.
+        labelPrintVariants: caseLabelPrintVariants(c.positions),
+        securityRequired: caseSecurityRequired(c.positions),
         issues:
           c.issues.length > 0
             ? c.issues.map((i) => mapIssueSummary(i, issuePositionRefs(c)))
@@ -582,6 +603,13 @@ export class TeamleadReadService {
         storageLocationCode: r.row.storageLocation?.code ?? null,
         priorityFlags: r.row.priorityFlags,
         deliveryGroup: universe.refFor(r.row.id),
+        // Dieselben Kachel-Infos wie in Ablage und Belege-Liste (07.08.2026) — die
+        // Bündel-Auswahl zeigt je Zeile dasselbe Bild wie die Karte, aus derselben
+        // Ableitung.
+        branchNo: r.row.branchNo,
+        shopNos: distinctShopNos(r.row.primaryShopNo, r.row.positions),
+        labelPrintVariants: caseLabelPrintVariants(r.row.positions),
+        securityRequired: caseSecurityRequired(r.row.positions),
       };
     });
   }
