@@ -1450,6 +1450,52 @@
         ]
       }
     },
+    "/api/teamlead/cases/{caseId}/split": {
+      "post": {
+        "operationId": "TeamleadController_splitCase",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplitCaseResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Beleg in echte Teil-Belege aufteilen. Ohne employeeNo je Teil verteilt die Automatik; das Original wird zum Container (split_container).",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/teamlead/delivery-groups/split": {
       "post": {
         "operationId": "TeamleadController_splitDeliveryGroup",
@@ -5147,6 +5193,20 @@
             "type": "boolean",
             "description": "Monster-Beleg (C6): totalQuantity ≥ der gepflegten Teile-Schwelle ⇒ die Automatik verteilt ihn NICHT, er wartet auf die manuelle Teamlead-Entscheidung. Das Backend rechnet gegen RuleConfig.bundle.largeBelegTeileThreshold — die UI zeigt nur an."
           },
+          "parentCaseId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Teil-Beleg: Id des Original-Belegs, aus dem er entstanden ist; null = kein Teil-Beleg"
+          },
+          "partNo": {
+            "type": "number",
+            "nullable": true,
+            "description": "1-basierte Teil-Nummer („WE-… (2)\"); null beim Original und bei normalen Belegen"
+          },
+          "partCount": {
+            "type": "number",
+            "description": "Anzahl der Teil-Belege, in die dieser Beleg aufgeteilt wurde (0 = nicht aufgeteilt). Nur beim Container gesetzt — er referenziert damit seine Teile."
+          },
           "deliveryGroup": {
             "nullable": true,
             "description": "Delivery-group context so groups are visible BEFORE distribution; null if standalone",
@@ -5187,7 +5247,8 @@
           "shopNos",
           "attentionFlag",
           "effortPoints",
-          "isMonster"
+          "isMonster",
+          "partCount"
         ]
       },
       "PoolListDto": {
@@ -5906,6 +5967,106 @@
         },
         "required": [
           "recipient"
+        ]
+      },
+      "SplitPartDto": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "number",
+            "description": "Gewünschte Teilmenge (Stück); Summe = Gesamtmenge des Belegs"
+          },
+          "employeeNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Mitarbeiter-Nr für die direkte Zuweisung; leer = die Automatik verteilt"
+          }
+        },
+        "required": [
+          "quantity"
+        ]
+      },
+      "SplitCaseDto": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Mindestens zwei Teile",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SplitPartDto"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Grund des Eingriffs (§8.4 Audit)"
+          }
+        },
+        "required": [
+          "parts"
+        ]
+      },
+      "SplitPartResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "weBelegNo": {
+            "type": "string",
+            "description": "Belegnummer inkl. Teil-Nummer, z. B. „WE-2026-000207 (2)\""
+          },
+          "partNo": {
+            "type": "number",
+            "description": "1-basierte Teil-Nummer"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Tatsächlich zugeteilte Menge. Kann von der Wunschmenge abweichen, weil eine Größenzeile nie zerrissen wird — die Summe über alle Teile bleibt exakt."
+          },
+          "targetQuantity": {
+            "type": "number",
+            "description": "Vom Teamlead gewünschte Menge"
+          },
+          "assignedEmployeeNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Zugewiesener Mitarbeiter; null = die Automatik verteilt den Teil"
+          }
+        },
+        "required": [
+          "caseId",
+          "weBelegNo",
+          "partNo",
+          "quantity",
+          "targetQuantity"
+        ]
+      },
+      "SplitCaseResultDto": {
+        "type": "object",
+        "properties": {
+          "containerCaseId": {
+            "type": "string",
+            "description": "Das Original, jetzt Container (split_container)"
+          },
+          "containerWeBelegNo": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SplitPartResultDto"
+            }
+          },
+          "eventId": {
+            "type": "string",
+            "description": "Audit-Event der Aufteilung (case.split)"
+          }
+        },
+        "required": [
+          "containerCaseId",
+          "containerWeBelegNo",
+          "parts",
+          "eventId"
         ]
       },
       "ParkDto": {

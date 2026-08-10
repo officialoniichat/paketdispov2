@@ -20,8 +20,10 @@ describe('case state machine (§7.1)', () => {
       needs_review: ['ready', 'cancelled'],
       // Intake-Gate (D1): blocked -> ready erst nach Vervollständigung.
       blocked: ['ready', 'cancelled'],
-      ready: ['assigned', 'parked', 'cancelled'],
-      parked: ['ready', 'cancelled'],
+      // Aufteilen (07.08.2026): die Arbeit zieht in echte Teil-Belege um, das
+      // Original bleibt als Klammer zurück.
+      ready: ['assigned', 'parked', 'cancelled', 'split_container'],
+      parked: ['ready', 'cancelled', 'split_container'],
       assigned: ['in_progress', 'ready', 'cancelled'],
       in_progress: ['issue_open', 'completed', 'cancelled'],
       issue_open: ['problem_resolved', 'cancelled'],
@@ -31,6 +33,8 @@ describe('case state machine (§7.1)', () => {
       completed: ['zst_done'],
       zst_done: [],
       cancelled: [],
+      // Terminal: ein aufgeteilter Beleg ist nur noch die Klammer über seinen Teilen.
+      split_container: [],
     };
     for (const status of caseStatusSchema.options) {
       expect([...CASE_TRANSITIONS[status as CaseStatus]]).toEqual(expected[status as CaseStatus]);

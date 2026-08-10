@@ -2,6 +2,10 @@
 %% Kardinalität: ||--o{ = 1:n ; ||--|| = 1:1 ; }o--o{ = n:m (über Join-Tabelle).
 %% Warenbezeichnung (ASN/DESADV): Beleg-Kopf-Felder liegen auf GOODS_RECEIPT_CASE;
 %% Artikel-Identität / NOS / Saison liegen auf RECEIPT_POSITION (siehe Feld-Kommentare).
+%% Beleg-Aufteilung: ein zu grosser Beleg wird in ECHTE Kind-Belege zerlegt (Self-Relation
+%% parentCaseId/partNo). Der gesamte Stack rechnet pro Case-Zeile, deshalb laufen Teil-Belege
+%% ueberall als normale Belege mit; das Original bleibt als Klammer im Status split_container
+%% zurueck — nicht zuteilbar, nicht im Pool.
 erDiagram
     USER ||--o{ USER_ROLE : "hat"
     ROLE ||--o{ USER_ROLE : "gewährt"
@@ -19,6 +23,7 @@ erDiagram
     LOCATION |o--o{ GOODS_RECEIPT_CASE : "lagert an (null nur bei blocked)"
     LOCATION ||--o{ ROUTE_STOP : "angefahren von"
 
+    GOODS_RECEIPT_CASE ||--o{ GOODS_RECEIPT_CASE : "aufgeteilt in Teil-Belege (parentCaseId/partNo)"
     GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf-AW"
     GOODS_RECEIPT_CASE ||--o{ RECEIPT_POSITION : "enthält"
     RECEIPT_POSITION ||--o| POSITION_INSTRUCTION : "Positions-AW"
@@ -99,7 +104,7 @@ erDiagram
         string_array priorityFlags "prio|catman_due|overdue|..."
         date catManDate
         date loadPlanDate
-        enum status "blocked|ready|assigned|in_progress|issue_open|problem_resolved|completed|zst_done|..."
+        enum status "blocked|ready|assigned|in_progress|issue_open|problem_resolved|completed|zst_done|split_container|..."
         float effortPoints
         string assignedBundleId FK
         datetime collectedAt "Ware-holen-Haken B2: geholt-Zeitpunkt (nullable, Toggle)"
@@ -110,6 +115,8 @@ erDiagram
         boolean attentionFlag "TL-Topf: besondere Aufmerksamkeit"
         string attentionNote "Notiz zum Aufmerksamkeits-Flag"
         enum forwardedTo "retourenabteilung|lieferscheinbucher (nullable)"
+        string parentCaseId FK "Teil-Beleg: Container-Beleg (nullable)"
+        int partNo "1-basierte Teil-Nr fuer die Anzeige WE-... (2) (nullable)"
         int version "Optimistic Lock"
     }
     WORK_INSTRUCTION_HEADER {

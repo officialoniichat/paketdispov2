@@ -83,6 +83,8 @@ export const caseStatusMeta: Record<CaseStatus, ChipMeta> = {
   completed: { label: 'Fertig', bg: ltColors.success, fg: '#ffffff', icon: 'doneAll' },
   zst_done: { label: 'ZST erledigt', bg: '#00695c', fg: '#ffffff', icon: 'doneAll' },
   cancelled: { label: 'Storniert', bg: '#6b6b6b', fg: '#ffffff', icon: 'cancel' },
+  // Aufgeteilt: die Arbeit steckt in den Teil-Belegen, der Beleg ist nur noch die Klammer.
+  split_container: { label: 'Aufgeteilt', bg: '#4a4a6a', fg: '#ffffff', icon: 'inventory' },
 };
 
 /** Prioritäts-Chips (PriorityFlag). */

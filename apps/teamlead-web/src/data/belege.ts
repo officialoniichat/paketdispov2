@@ -138,6 +138,12 @@ export interface BelegRow {
    * er wartet auf die Teamlead-Entscheidung. Vom Backend gerechnet, hier nur angezeigt.
    */
   isMonster: boolean;
+  /** Teil-Beleg: Id des Originals; null = kein Teil-Beleg. */
+  parentCaseId: string | null;
+  /** 1-basierte Teil-Nummer; null beim Original und bei normalen Belegen. */
+  partNo: number | null;
+  /** Anzahl der Teile, in die dieser Beleg aufgeteilt wurde (0 = nicht aufgeteilt). */
+  partCount: number;
   bookingDate: string;
   /** ISO-Abschlusszeitpunkt (Archiv-Spalte, A6); null solange offen. */
   completedAt: string | null;
@@ -189,6 +195,9 @@ const PHASE_BY_STATUS: Record<CaseStatus, CasePhase> = {
   completed: 'abgeschlossen',
   zst_done: 'erledigt',
   cancelled: 'erledigt',
+  // Aufgeteilt: an der Klammer selbst passiert nichts mehr, aber ihre Teile werden
+  // gerade bearbeitet — sie gehört deshalb zur Arbeit, nicht ins Archiv.
+  split_container: 'arbeit',
 };
 
 /** Map a case status onto its lifecycle phase. */
@@ -451,6 +460,38 @@ export async function fetchBelegeList(
 }
 
 /** Why a looked-up Beleg is not assignable (B1). Mirrors the backend verdict codes. */
+export type SplitCaseResult = components['schemas']['SplitCaseResultDto'];
+
+/** Ein gewünschter Teil: Menge plus optional der Mitarbeiter, der ihn bekommt. */
+export interface SplitPartInput {
+  quantity: number;
+  /** Leer = „ohne Zuweisung": der Teil geht in den Topf, die Automatik verteilt ihn. */
+  employeeNo?: string;
+}
+
+/**
+ * Beleg in echte Teil-Belege aufteilen. Die Fachlogik (Mengenverteilung entlang der
+ * Größenzeilen, Container-Markierung, Zuweisung) liegt vollständig im Backend — hier
+ * werden nur die Wunschmengen geschickt und das Ergebnis entgegengenommen.
+ */
+export async function splitCase(
+  caseId: string,
+  parts: SplitPartInput[],
+  reason: string,
+): Promise<SplitCaseResult> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/split', {
+    params: { path: { caseId } },
+    body: {
+      reason,
+      parts: parts.map((p) => ({
+        quantity: p.quantity,
+        ...(p.employeeNo ? { employeeNo: p.employeeNo } : {}),
+      })),
+    },
+  });
+  return unwrap<SplitCaseResult>(result, 'Aufteilen des Belegs');
+}
+
 export type BelegLookupReason = 'not_found' | 'already_assigned' | 'wrong_status' | 'blocked';
 
 /** B1: WE-Nr lookup verdict for the board's Zuweisen dialog. */
@@ -656,6 +697,9 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     shopNos: item.shopNos,
     labelsRequired: item.labelsRequired,
     isMonster: item.isMonster,
+    parentCaseId: item.parentCaseId ?? null,
+    partNo: item.partNo ?? null,
+    partCount: item.partCount,
     bookingDate: item.bookingDate,
     completedAt: item.completedAt ?? null,
     docuWareUrl: item.docuWareUrl ?? null,

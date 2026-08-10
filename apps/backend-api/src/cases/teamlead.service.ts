@@ -16,6 +16,7 @@ import { LiveStatusService } from '../live/live.module.js';
 import type { Principal } from '../auth/rbac.js';
 import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle-mutations.js';
 import { lastPackIndex, packInsertPosition, packMembers } from './pack-window.js';
+import { allocateParts, SplitNotPossibleError } from './case-split.js';
 import {
   type AddToBundleDto,
   type AssignBundleDto,
@@ -31,9 +32,17 @@ import {
   type PrioritizeDto,
   type ReorderBundleDto,
   type SendInstructionDto,
+  type SplitCaseDto,
+  type SplitCaseResultDto,
+  type SplitPartResultDto,
   type TransitionResultDto,
   type WithdrawDto,
 } from './cases.dto.js';
+
+/** Zwei Nachkommastellen — Aufwandswerte werden nie feiner geführt. */
+function roundTo2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
 type PrismaTx = Prisma.TransactionClient;
 
@@ -984,6 +993,222 @@ export class TeamleadService {
    * that targets "the employee's Bündel for the day" — there is no
    * `@@unique([employeeId, date])`, so this is always find-then-create.
    */
+  /**
+   * Beleg aufteilen — erzeugt ECHTE Teil-Belege statt einer virtuellen Aufteilung.
+   *
+   * Der gesamte Stack (Engine, Bündel, Status, ZST, Probleme, Positionen) rechnet pro
+   * Case-Zeile. Ein virtueller Split müsste jeden dieser Konsumenten lehren, dass „eine
+   * Zeile = n Arbeitseinheiten" sein kann — ein Querschnitts-Hack mit zwei Wahrheiten.
+   * Deshalb: n eigenständige Kind-Belege (parentCaseId + partNo), die überall als ganz
+   * normale Belege mitlaufen, und ein Original, das nur noch die Klammer ist
+   * (`split_container`: nicht zuteilbar, nicht im Pool, nicht in den Ablagen).
+   *
+   * Ohne Mitarbeiterwahl starten die Teile als `ready` und unassigned — die Automatik
+   * verteilt sie beim nächsten Starter-Pack oder Self-Pull regulär weiter. Genau das ist
+   * der Zweck: Teile unter der Monster-Schwelle sind wieder auto-verteilbar. Mit
+   * Mitarbeiterwahl läuft anschließend derselbe §8.4-Zuweisungspfad wie sonst auch, damit
+   * es für „mit" und „ohne Zuweisung" nur EINEN Mechanismus gibt.
+   */
+  async splitCase(
+    principal: Principal,
+    caseId: string,
+    dto: SplitCaseDto,
+    now: Date = new Date(),
+  ): Promise<SplitCaseResultDto> {
+    const day = resolveDay(undefined, now);
+    return this.prisma.$transaction(async (tx) => {
+      const source = await tx.goodsReceiptCase.findUnique({
+        where: { id: caseId },
+        include: {
+          workInstruction: true,
+          positions: { include: { instruction: true, skuLines: true } },
+        },
+      });
+      if (!source) throw new NotFoundException(`Case ${caseId} not found`);
+
+      if (source.status !== 'ready' && source.status !== 'parked') {
+        throw new ConflictException(
+          'Aufteilen geht nur bei bereiten oder geparkten Belegen — dieser ist bereits ' +
+            'in Arbeit oder abgeschlossen.',
+        );
+      }
+      if (source.parentCaseId !== null) {
+        throw new ConflictException(
+          'Dieser Beleg ist bereits ein Teil-Beleg. Teilen Sie das Original auf, ' +
+            'nicht einen seiner Teile.',
+        );
+      }
+      if (source.assignedBundleId !== null) {
+        throw new ConflictException(
+          'Der Beleg liegt in einem Bündel. Ziehen Sie ihn erst zurück, dann teilen Sie ihn auf.',
+        );
+      }
+
+      const targets = dto.parts.map((p) => p.quantity);
+      const targetSum = targets.reduce((sum, q) => sum + q, 0);
+      if (targetSum !== source.totalQuantity) {
+        throw new ConflictException(
+          `Die Teilmengen ergeben ${targetSum} statt ${source.totalQuantity} Teile. Ein Beleg ` +
+            'wird vollständig aufgeteilt — sonst bliebe Ware ohne Bearbeiter liegen.',
+        );
+      }
+
+      let allocations;
+      try {
+        allocations = allocateParts(source.positions, targets);
+      } catch (error) {
+        if (error instanceof SplitNotPossibleError) throw new ConflictException(error.message);
+        throw error;
+      }
+
+      // Aufwand mengenproportional auf die Teile; der letzte Teil traegt die
+      // Rundungsdifferenz, damit die Summe exakt dem Original entspricht.
+      const apportion = (total: number): number[] => {
+        if (source.totalQuantity <= 0) return allocations.map(() => 0);
+        const out: number[] = [];
+        let used = 0;
+        allocations.forEach((allocation, index) => {
+          if (index === allocations.length - 1) {
+            out.push(roundTo2(total - used));
+            return;
+          }
+          const value = roundTo2((total * allocation.quantity) / source.totalQuantity);
+          out.push(value);
+          used = roundTo2(used + value);
+        });
+        return out;
+      };
+      const pointShares = apportion(source.effortPoints);
+      const minuteShares = apportion(source.estimatedMinutes);
+
+      const parts: SplitPartResultDto[] = [];
+      for (const [index, allocation] of allocations.entries()) {
+        const partNo = index + 1;
+        const child = await tx.goodsReceiptCase.create({
+          data: {
+            // Die Anzeige-Nummer IST die Belegnummer: „WE-2026-000207 (2)". Damit bleibt
+            // der Bezug zum Original in jeder Liste, Suche und Meldung sichtbar, ohne
+            // dass irgendeine Oberflaeche eine eigene Formatierung erfinden muss.
+            weBelegNo: `${source.weBelegNo} (${partNo})`,
+            externalRef: source.externalRef,
+            source: source.source,
+            parentCaseId: source.id,
+            partNo,
+            deliveryNoteNo: source.deliveryNoteNo,
+            bookingDate: source.bookingDate,
+            weDate: source.weDate,
+            branchNo: source.branchNo,
+            primaryShopAreaNo: source.primaryShopAreaNo,
+            primaryShopNo: source.primaryShopNo,
+            primaryFloor: source.primaryFloor,
+            storageLocationId: source.storageLocationId,
+            section: source.section,
+            goodsTypeText: source.goodsTypeText,
+            priorityFlags: source.priorityFlags,
+            catManDate: source.catManDate,
+            loadPlanDate: source.loadPlanDate,
+            totalQuantity: allocation.quantity,
+            effortPoints: pointShares[index]!,
+            estimatedMinutes: minuteShares[index]!,
+            // Frisch im Topf: die Automatik darf ihn beim naechsten Lauf einplanen.
+            status: 'ready',
+          },
+        });
+
+        if (source.workInstruction) {
+          const { caseId: _caseId, ...instruction } = source.workInstruction;
+          await tx.workInstructionHeader.create({ data: { ...instruction, caseId: child.id } });
+        }
+
+        for (const [positionIndex, allocated] of allocation.positions.entries()) {
+          const {
+            id: _id,
+            caseId: _sourceCaseId,
+            positionNo: _positionNo,
+            instruction,
+            skuLines: _skuLines,
+            ...article
+          } = allocated.source;
+          const position = await tx.receiptPosition.create({
+            data: { ...article, caseId: child.id, positionNo: positionIndex + 1 },
+          });
+          if (instruction) {
+            const { positionId: _positionId, ...flags } = instruction;
+            await tx.positionInstruction.create({ data: { ...flags, positionId: position.id } });
+          }
+          await tx.receiptSkuLine.createMany({
+            data: allocated.skuLines.map((line) => ({
+              receiptPositionId: position.id,
+              ean: line.ean,
+              size: line.size,
+              expectedQuantity: line.expectedQuantity,
+              ekPrice: line.ekPrice,
+              vkPrice: line.vkPrice,
+              vkLabelPrice: line.vkLabelPrice,
+            })),
+          });
+        }
+
+        parts.push({
+          caseId: child.id,
+          weBelegNo: child.weBelegNo,
+          partNo,
+          quantity: allocation.quantity,
+          targetQuantity: allocation.targetQuantity,
+          assignedEmployeeNo: null,
+        });
+      }
+
+      // Die Ware liegt jetzt in den Teilen. Die Positionen des Originals stehen zu lassen
+      // hiesse, dieselben Mengen zweimal zu fuehren — der Container behaelt nur seinen
+      // Kopf (inkl. totalQuantity) als fachliche Klammer.
+      await tx.receiptPosition.deleteMany({ where: { caseId: source.id } });
+      await tx.transportBox.deleteMany({ where: { caseId: source.id } });
+      await tx.goodsReceiptCase.update({
+        where: { id: source.id },
+        data: { status: 'split_container', assignedBundleId: null, version: { increment: 1 } },
+      });
+
+      // Zuweisung bewusst NACH dem Anlegen und ueber den unveraenderten §8.4-Pfad:
+      // „mit Zuweisung" ist damit dieselbe Aufteilung plus ein normaler Zuweisungsschritt.
+      for (const [index, part] of dto.parts.entries()) {
+        const employeeNo = part.employeeNo?.trim();
+        if (!employeeNo) continue;
+        const { bundle } = await this.findOrCreateBundleTx(tx, employeeNo, day);
+        await this.addCaseToBundleTx(tx, bundle, parts[index]!.caseId);
+        parts[index]!.assignedEmployeeNo = employeeNo;
+      }
+
+      const event = await this.events.append(
+        {
+          eventType: 'case.split',
+          entityType: 'GoodsReceiptCase',
+          entityId: source.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: {
+            reason: dto.reason ?? null,
+            totalQuantity: source.totalQuantity,
+            parts: parts.map((p) => ({
+              caseId: p.caseId,
+              weBelegNo: p.weBelegNo,
+              quantity: p.quantity,
+              assignedEmployeeNo: p.assignedEmployeeNo,
+            })),
+          },
+        },
+        tx,
+      );
+
+      return {
+        containerCaseId: source.id,
+        containerWeBelegNo: source.weBelegNo,
+        parts,
+        eventId: event.id,
+      };
+    });
+  }
+
   private async findOrCreateBundleTx(
     tx: PrismaTx,
     employeeNo: string,

@@ -23,14 +23,20 @@ import type { CaseStatus } from '@paket/domain-types';
  *   problem_resolved → in_progress    (derselbe MA setzt die Bearbeitung fort)
  *   problem_resolved → issue_open     (MA-Rückmeldung öffnet eine Meldung erneut)
  *
- * `cancelled` and `zst_done` are terminal.
+ * Aufteilung (Teamlead-Fragenkatalog 07.08.2026):
+ *   ready|parked → split_container    (die Arbeit zieht in echte Teil-Belege um)
+ * `split_container` ist terminal: der Beleg ist danach nur noch die fachliche Klammer
+ * über seinen Teilen. Ein Zurück gäbe es nur als Wieder-Zusammenführen — die Teile sind
+ * dann aber längst getrennt zugeteilt und bearbeitet worden.
+ *
+ * `cancelled`, `zst_done` and `split_container` are terminal.
  */
 export const CASE_TRANSITIONS: Record<CaseStatus, readonly CaseStatus[]> = {
   needs_review: ['ready', 'cancelled'],
   // Intake-Gate (D1): fehlende Pflichtdaten. Freigabe erst nach Vervollständigung.
   blocked: ['ready', 'cancelled'],
-  ready: ['assigned', 'parked', 'cancelled'],
-  parked: ['ready', 'cancelled'],
+  ready: ['assigned', 'parked', 'cancelled', 'split_container'],
+  parked: ['ready', 'cancelled', 'split_container'],
   assigned: ['in_progress', 'ready', 'cancelled'],
   in_progress: ['issue_open', 'completed', 'cancelled'],
   issue_open: ['problem_resolved', 'cancelled'],
@@ -38,9 +44,14 @@ export const CASE_TRANSITIONS: Record<CaseStatus, readonly CaseStatus[]> = {
   completed: ['zst_done'],
   zst_done: [],
   cancelled: [],
+  split_container: [],
 };
 
-export const TERMINAL_STATUSES: readonly CaseStatus[] = ['zst_done', 'cancelled'];
+export const TERMINAL_STATUSES: readonly CaseStatus[] = [
+  'zst_done',
+  'cancelled',
+  'split_container',
+];
 
 /** Transitions that only a teamlead may trigger (pool steering / overrides). */
 export const TEAMLEAD_ONLY_TARGETS: readonly CaseStatus[] = ['parked'];

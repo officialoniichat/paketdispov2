@@ -555,6 +555,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teamlead/cases/{caseId}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Beleg in echte Teil-Belege aufteilen. Ohne employeeNo je Teil verteilt die Automatik; das Original wird zum Container (split_container). */
+        post: operations["TeamleadController_splitCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teamlead/delivery-groups/split": {
         parameters: {
             query?: never;
@@ -1852,6 +1869,12 @@ export interface components {
             effortPoints: number;
             /** @description Monster-Beleg (C6): totalQuantity ≥ der gepflegten Teile-Schwelle ⇒ die Automatik verteilt ihn NICHT, er wartet auf die manuelle Teamlead-Entscheidung. Das Backend rechnet gegen RuleConfig.bundle.largeBelegTeileThreshold — die UI zeigt nur an. */
             isMonster: boolean;
+            /** @description Teil-Beleg: Id des Original-Belegs, aus dem er entstanden ist; null = kein Teil-Beleg */
+            parentCaseId?: string | null;
+            /** @description 1-basierte Teil-Nummer („WE-… (2)"); null beim Original und bei normalen Belegen */
+            partNo?: number | null;
+            /** @description Anzahl der Teil-Belege, in die dieser Beleg aufgeteilt wurde (0 = nicht aufgeteilt). Nur beim Container gesetzt — er referenziert damit seine Teile. */
+            partCount: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
             /** @description Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds. */
@@ -2086,6 +2109,39 @@ export interface components {
             recipient: "retourenabteilung" | "lieferscheinbucher";
             /** @description Grund, revisionssicher im case.forwarded-Event */
             reason?: string;
+        };
+        SplitPartDto: {
+            /** @description Gewünschte Teilmenge (Stück); Summe = Gesamtmenge des Belegs */
+            quantity: number;
+            /** @description Mitarbeiter-Nr für die direkte Zuweisung; leer = die Automatik verteilt */
+            employeeNo?: string | null;
+        };
+        SplitCaseDto: {
+            /** @description Mindestens zwei Teile */
+            parts: components["schemas"]["SplitPartDto"][];
+            /** @description Grund des Eingriffs (§8.4 Audit) */
+            reason?: string;
+        };
+        SplitPartResultDto: {
+            caseId: string;
+            /** @description Belegnummer inkl. Teil-Nummer, z. B. „WE-2026-000207 (2)" */
+            weBelegNo: string;
+            /** @description 1-basierte Teil-Nummer */
+            partNo: number;
+            /** @description Tatsächlich zugeteilte Menge. Kann von der Wunschmenge abweichen, weil eine Größenzeile nie zerrissen wird — die Summe über alle Teile bleibt exakt. */
+            quantity: number;
+            /** @description Vom Teamlead gewünschte Menge */
+            targetQuantity: number;
+            /** @description Zugewiesener Mitarbeiter; null = die Automatik verteilt den Teil */
+            assignedEmployeeNo?: string | null;
+        };
+        SplitCaseResultDto: {
+            /** @description Das Original, jetzt Container (split_container) */
+            containerCaseId: string;
+            containerWeBelegNo: string;
+            parts: components["schemas"]["SplitPartResultDto"][];
+            /** @description Audit-Event der Aufteilung (case.split) */
+            eventId: string;
         };
         ParkDto: {
             reason?: string;
@@ -3440,6 +3496,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_splitCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitCaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SplitCaseResultDto"];
                 };
             };
         };

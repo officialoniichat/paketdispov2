@@ -5,7 +5,16 @@
     "outDir": "dist",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"],
-    "composite": true
+    "composite": true,
+    // Resolve the workspace libs by their published entrypoints instead of through
+    // node_modules — same reasoning as apps/backend-api/tsconfig.json: in a git
+    // worktree the node_modules symlinks point back at the MAIN checkout, so tsc
+    // would typecheck this package against the other checkout's domain-types.
+    // Type-resolution only; emitted specifiers stay bare "@paket/*".
+    "baseUrl": ".",
+    "paths": {
+      "@paket/domain-types": ["../../packages/domain-types"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": [

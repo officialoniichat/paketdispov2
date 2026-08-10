@@ -16,7 +16,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import GroupsIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
-import CallSplitIcon from '@mui/icons-material/CallSplit';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ScienceIcon from '@mui/icons-material/Science';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
@@ -55,7 +54,6 @@ const NAV: NavItem[] = [
   { to: '/ablagen', label: 'Digitale Ablagen', icon: <ViewKanbanIcon /> },
   { to: '/board', label: 'Mitarbeiterboard', icon: <GroupsIcon /> },
   { to: '/belege', label: 'Belege', icon: <DescriptionIcon /> },
-  { to: '/aufteilungen', label: 'Aufteilungen', icon: <CallSplitIcon /> },
   { to: '/admin', label: 'Admin & Regeln', icon: <SettingsIcon /> },
   { to: '/experiment', label: 'Experiment DA.M.B', icon: <ScienceIcon /> },
 ];

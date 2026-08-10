@@ -538,6 +538,25 @@ export class PoolItemDto extends CaseSummaryDto {
   })
   isMonster!: boolean;
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Teil-Beleg: Id des Original-Belegs, aus dem er entstanden ist; null = kein Teil-Beleg',
+  })
+  parentCaseId!: string | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: '1-basierte Teil-Nummer („WE-… (2)"); null beim Original und bei normalen Belegen',
+  })
+  partNo!: number | null;
+  @ApiProperty({
+    description:
+      'Anzahl der Teil-Belege, in die dieser Beleg aufgeteilt wurde (0 = nicht aufgeteilt). ' +
+      'Nur beim Container gesetzt — er referenziert damit seine Teile.',
+  })
+  partCount!: number;
+  @ApiPropertyOptional({
     type: DeliveryGroupRefDto,
     nullable: true,
     description: 'Delivery-group context so groups are visible BEFORE distribution; null if standalone',
@@ -1198,6 +1217,71 @@ export class PoolQueryDto {
   @Min(1)
   @Max(200)
   limit?: number;
+}
+
+/**
+ * Ein gewünschter Teil-Beleg. `employeeNo` leer/weggelassen = „ohne Zuweisung
+ * aufteilen": der Teil landet als bereiter Beleg im Topf und wird von der Automatik
+ * beim nächsten Starter-Pack bzw. Self-Pull regulär verteilt.
+ */
+export class SplitPartDto {
+  @ApiProperty({ description: 'Gewünschte Teilmenge (Stück); Summe = Gesamtmenge des Belegs' })
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Mitarbeiter-Nr für die direkte Zuweisung; leer = die Automatik verteilt',
+  })
+  @IsOptional()
+  @IsString()
+  employeeNo?: string | null;
+}
+
+/** Body für POST /api/teamlead/cases/:id/split. */
+export class SplitCaseDto {
+  @ApiProperty({ type: [SplitPartDto], description: 'Mindestens zwei Teile' })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => SplitPartDto)
+  parts!: SplitPartDto[];
+
+  @ApiPropertyOptional({ description: 'Grund des Eingriffs (§8.4 Audit)' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/** Ein entstandener Teil-Beleg. */
+export class SplitPartResultDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty({ description: 'Belegnummer inkl. Teil-Nummer, z. B. „WE-2026-000207 (2)"' })
+  weBelegNo!: string;
+  @ApiProperty({ description: '1-basierte Teil-Nummer' }) partNo!: number;
+  @ApiProperty({
+    description:
+      'Tatsächlich zugeteilte Menge. Kann von der Wunschmenge abweichen, weil eine ' +
+      'Größenzeile nie zerrissen wird — die Summe über alle Teile bleibt exakt.',
+  })
+  quantity!: number;
+  @ApiProperty({ description: 'Vom Teamlead gewünschte Menge' }) targetQuantity!: number;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Zugewiesener Mitarbeiter; null = die Automatik verteilt den Teil',
+  })
+  assignedEmployeeNo!: string | null;
+}
+
+export class SplitCaseResultDto {
+  @ApiProperty({ description: 'Das Original, jetzt Container (split_container)' })
+  containerCaseId!: string;
+  @ApiProperty() containerWeBelegNo!: string;
+  @ApiProperty({ type: [SplitPartResultDto] }) parts!: SplitPartResultDto[];
+  @ApiProperty({ description: 'Audit-Event der Aufteilung (case.split)' }) eventId!: string;
 }
 
 /** Query for GET /api/teamlead/cases/lookup (B1 WE-Nr-Zuweisung). */

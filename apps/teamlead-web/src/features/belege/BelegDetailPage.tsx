@@ -58,7 +58,7 @@ import { InstructionsDialog } from '../../components/InstructionsDialog.js';
 import { IssueMessageList } from '../../components/IssueMessageList.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplits } from '../split/SplitProvider.js';
+import { useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
@@ -100,7 +100,10 @@ export function BelegDetailPage(): JSX.Element {
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitDone, setSplitDone] = useState<string | null>(null);
-  const { recordSplit } = useSplits();
+  const split = useSplitCase((result) => {
+    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    setSplitOpen(false);
+  });
   const employeesQuery = useQuery({
     queryKey: ['admin', 'employees', 'split'],
     queryFn: () => fetchEmployees(),
@@ -110,7 +113,12 @@ export function BelegDetailPage(): JSX.Element {
     () =>
       (employeesQuery.data?.employees ?? [])
         .filter((e) => e.active && e.netCapacityToday > 0)
-        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+        .map((e) => ({
+          id: e.id,
+          employeeNo: e.employeeNo,
+          name: e.displayName,
+          ceilingMinutes: e.netCapacityToday,
+        })),
     [employeesQuery.data],
   );
 
@@ -235,16 +243,8 @@ export function BelegDetailPage(): JSX.Element {
       </Stack>
 
       {splitDone && (
-        <Alert
-          severity="success"
-          onClose={() => setSplitDone(null)}
-          action={
-            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
-              Zur Leistung
-            </Button>
-          }
-        >
-          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        <Alert severity="success" onClose={() => setSplitDone(null)}>
+          Beleg aufgeteilt: {splitDone}. Die Teile laufen ab jetzt als eigene Belege.
         </Alert>
       )}
 
@@ -396,11 +396,13 @@ export function BelegDetailPage(): JSX.Element {
           estimatedMinutes: c.estimatedMinutes,
         }}
         employees={splitEmployees}
-        onConfirm={(input) => {
-          recordSplit(input);
-          setSplitDone(input.weBelegNo);
+        pending={split.pending}
+        error={split.error}
+        onConfirm={split.submit}
+        onClose={() => {
+          split.clearError();
+          setSplitOpen(false);
         }}
-        onClose={() => setSplitOpen(false)}
       />
     </Stack>
   );

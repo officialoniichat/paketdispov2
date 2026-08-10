@@ -1,12 +1,17 @@
 /**
- * Beleg-Split dialog (§8.4 manual intervention). The Teamlead splits one oversized
- * Beleg across N employees: pick people, assign quantity shares, see live remaining
- * quantity + per-share effort and shift-fit, choose the capture mode (getrennt vs.
- * anteilig) and give a mandatory reason. Mirrors
- * docs/concept/beleg-split-multi-employee-ux-mockup.html (dialog #2).
+ * Beleg aufteilen (§8.4 manueller Eingriff).
  *
- * All math comes from {@link ./splitMath} (single source); this component only
- * renders + steers. The engine's automatic flagging/persistence is deferred.
+ * Der Teamlead zerlegt einen zu großen Beleg in echte Teil-Belege und entscheidet dabei
+ * nur zwei Dinge: wie viele Teile mit welcher Menge — und ob er sie gleich jemandem gibt
+ * oder die Automatik verteilen lässt.
+ *
+ * „Ohne Zuweisung" ist der Normalfall für Monster-Belege: die Teile landen als bereite
+ * Belege im Topf und werden beim nächsten Starter-Pack bzw. Self-Pull regulär verteilt.
+ * Liegt jeder Teil unter der Monster-Schwelle, fasst die Automatik sie wieder an.
+ *
+ * Der Dialog rechnet nichts Fachliches: die tatsächliche Mengenverteilung entlang der
+ * Größenzeilen, die Container-Markierung und die Zuweisung macht das Backend. Hier
+ * laufen nur Eingabehilfen (Vorschlagsmengen, Rest-Anzeige, Schicht-Passung).
  */
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
@@ -31,18 +36,14 @@ import AddIcon from '@mui/icons-material/Add';
 import { isValidReason, MIN_REASON_LENGTH } from '../../data/audit.js';
 import { formatMinutes } from '../../lib/format.js';
 import {
-  apportion,
   fitForShare,
   suggestedQuantities,
   suggestedSplitCount,
   validateShares,
-  type CaptureMode,
   type ShareFit,
-  type SplitMode,
 } from './splitMath.js';
-import type { RecordSplitInput } from './SplitProvider.js';
 
-/** The Beleg being split (effort envelope + identity). */
+/** Der Beleg, der aufgeteilt wird (Identität + Aufwandsrahmen). */
 export interface SplitDialogBeleg {
   caseId: string;
   weBelegNo: string;
@@ -51,20 +52,36 @@ export interface SplitDialogBeleg {
   estimatedMinutes: number;
 }
 
-/** A pickable employee with today's net capacity (the shift ceiling for fit). */
+/** Ein wählbarer Mitarbeiter mit heutiger Netto-Kapazität (Deckel für die Passung). */
 export interface SplitDialogEmployee {
   id: string;
+  /** Mitarbeiter-Nr — damit adressiert das Backend die Zuweisung. */
+  employeeNo: string;
   name: string;
   ceilingMinutes: number;
+}
+
+/** Was der Dialog nach oben meldet: Mengen, optionale Personen, Grund. */
+export interface SplitSubmit {
+  caseId: string;
+  parts: { quantity: number; employeeNo?: string }[];
+  reason: string;
 }
 
 export interface SplitDialogProps {
   open: boolean;
   beleg: SplitDialogBeleg | null;
   employees: SplitDialogEmployee[];
-  onConfirm: (input: RecordSplitInput) => void;
+  /** Läuft, während das Backend die Teile anlegt. */
+  pending?: boolean;
+  /** Fehlermeldung des Backends (z. B. „nur 2 Größenzeilen"). */
+  error?: string | null;
+  onConfirm: (input: SplitSubmit) => void;
   onClose: () => void;
 }
+
+/** Wer die Teile bekommt. */
+type Handover = 'automatik' | 'mitarbeiter';
 
 interface Row {
   employeeId: string;
@@ -84,11 +101,10 @@ const FIT_META: Record<ShareFit, { label: string; color: 'success' | 'warning' |
   over: { label: 'zu groß', color: 'error' },
 };
 
-/** Build the initial rows: even split across the engine-suggested number of people. */
+/** Startaufteilung: gleichmäßig über die vorgeschlagene Anzahl Teile. */
 function initialRows(beleg: SplitDialogBeleg, employees: SplitDialogEmployee[]): Row[] {
   const ceiling = Math.max(0, ...employees.map((e) => e.ceilingMinutes));
-  const suggested = suggestedSplitCount(beleg.estimatedMinutes, ceiling);
-  const count = Math.min(suggested, employees.length || suggested);
+  const count = suggestedSplitCount(beleg.estimatedMinutes, ceiling);
   const qty = suggestedQuantities(beleg.totalQuantity, count);
   return Array.from({ length: count }, (_, i) => ({
     employeeId: employees[i]?.id ?? '',
@@ -100,67 +116,61 @@ export function SplitDialog({
   open,
   beleg,
   employees,
+  pending = false,
+  error = null,
   onConfirm,
   onClose,
 }: SplitDialogProps): JSX.Element | null {
-  const [splitMode, setSplitMode] = useState<SplitMode>('quantity');
-  const [captureMode, setCaptureMode] = useState<CaptureMode>('getrennt');
+  const [handover, setHandover] = useState<Handover>('automatik');
   const [rows, setRows] = useState<Row[]>([]);
   const [reason, setReason] = useState('');
 
-  // Re-seed whenever a new Beleg opens (or the employee list resolves). `employees`
-  // is memoised upstream, so this only fires on a real open/beleg/list change.
+  // Neu aufsetzen, sobald ein anderer Beleg geöffnet wird (oder die MA-Liste eintrifft).
   useEffect(() => {
     if (open && beleg) {
-      setSplitMode('quantity');
-      setCaptureMode('getrennt');
+      setHandover('automatik');
       setRows(initialRows(beleg, employees));
       setReason('');
     }
   }, [open, beleg, employees]);
 
-  const nameById = useMemo(() => new Map(employees.map((e) => [e.id, e.name])), [employees]);
-  const ceilingById = useMemo(
-    () => new Map(employees.map((e) => [e.id, e.ceilingMinutes])),
-    [employees],
-  );
+  const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
-  const caseEffort = beleg
-    ? {
-        totalQuantity: beleg.totalQuantity,
-        effortPoints: beleg.effortPoints,
-        estimatedMinutes: beleg.estimatedMinutes,
-      }
-    : { totalQuantity: 0, effortPoints: 0, estimatedMinutes: 0 };
-
-  const computed = useMemo(() => apportion(rows, caseEffort), [rows, caseEffort]);
-  const validation = validateShares(rows, caseEffort.totalQuantity);
-  const assignedPct =
-    caseEffort.totalQuantity > 0
-      ? (validation.assignedQuantity / caseEffort.totalQuantity) * 100
-      : 0;
+  const totalQuantity = beleg?.totalQuantity ?? 0;
+  const estimatedMinutes = beleg?.estimatedMinutes ?? 0;
+  const validation = validateShares(rows, totalQuantity);
+  const assignedPct = totalQuantity > 0 ? (validation.assignedQuantity / totalQuantity) * 100 : 0;
 
   const chosenIds = rows.map((r) => r.employeeId).filter(Boolean);
-  const usedIds = new Set(chosenIds);
-  const hasDuplicate = usedIds.size !== chosenIds.length;
-  const allChosen = rows.every((r) => r.employeeId !== '');
+  const hasDuplicate = new Set(chosenIds).size !== chosenIds.length;
+  const needsPeople = handover === 'mitarbeiter';
+  const allChosen = !needsPeople || rows.every((r) => r.employeeId !== '');
   const reasonOk = isValidReason(reason);
-  const canConfirm = validation.isValid && allChosen && !hasDuplicate && reasonOk;
+  // Ein Beleg wird VOLLSTÄNDIG aufgeteilt: ein Rest hätte danach keinen Träger mehr,
+  // weil das Original nur noch die Klammer über seinen Teilen ist.
+  const canConfirm =
+    validation.isValid &&
+    validation.isComplete &&
+    allChosen &&
+    !hasDuplicate &&
+    reasonOk &&
+    !pending;
 
   if (!beleg) return null;
 
+  const usedIds = new Set(chosenIds);
   const nextFreeEmployee = (): string => employees.find((e) => !usedIds.has(e.id))?.id ?? '';
 
   const setRow = (index: number, patch: Partial<Row>): void => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
   const addRow = (): void => {
-    const remaining = Math.max(0, caseEffort.totalQuantity - validation.assignedQuantity);
+    const remaining = Math.max(0, totalQuantity - validation.assignedQuantity);
     setRows((prev) => [...prev, { employeeId: nextFreeEmployee(), quantity: remaining }]);
   };
   const removeRow = (index: number): void => setRows((prev) => prev.filter((_, i) => i !== index));
   const reSuggest = (count: number): void => {
-    const qty = suggestedQuantities(caseEffort.totalQuantity, count);
+    const qty = suggestedQuantities(totalQuantity, count);
     const ids = employees.map((e) => e.id);
     setRows((prev) =>
       Array.from({ length: count }, (_, i) => ({
@@ -174,18 +184,12 @@ export function SplitDialog({
     if (!canConfirm) return;
     onConfirm({
       caseId: beleg.caseId,
-      weBelegNo: beleg.weBelegNo,
-      caseEffort,
-      splitMode,
-      captureMode,
       reason: reason.trim(),
-      shares: rows.map((r) => ({
-        employeeId: r.employeeId,
-        employeeName: nameById.get(r.employeeId) ?? r.employeeId,
-        quantity: r.quantity,
-      })),
+      parts: rows.map((r) => {
+        const employeeNo = needsPeople ? employeeById.get(r.employeeId)?.employeeNo : undefined;
+        return { quantity: r.quantity, ...(employeeNo ? { employeeNo } : {}) };
+      }),
     });
-    onClose();
   };
 
   const barColor: 'error' | 'success' | 'primary' = validation.overAssigned
@@ -199,46 +203,38 @@ export function SplitDialog({
       <DialogTitle sx={{ pb: 0.5 }}>
         Beleg aufteilen · {beleg.weBelegNo}
         <Typography variant="body2" color="text.secondary">
-          {beleg.totalQuantity.toLocaleString('de-DE')} Teile · {formatMinutes(beleg.estimatedMinutes)}{' '}
+          {beleg.totalQuantity.toLocaleString('de-DE')} Teile · {formatMinutes(estimatedMinutes)}{' '}
           Aufwand
         </Typography>
       </DialogTitle>
       <DialogContent>
-        {/* Mode toggles + engine suggestion */}
         <Stack direction="row" spacing={3} flexWrap="wrap" sx={{ mt: 1.5, mb: 2 }}>
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>
-              Aufteilen nach
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 700, display: 'block' }}
+            >
+              Wer bekommt die Teile?
             </Typography>
             <ToggleButtonGroup
               size="small"
               exclusive
-              value={splitMode}
-              onChange={(_e, v) => v && setSplitMode(v as SplitMode)}
-              aria-label="Aufteilen nach"
+              value={handover}
+              onChange={(_e, v) => v && setHandover(v as Handover)}
+              aria-label="Wer bekommt die Teile"
             >
-              <ToggleButton value="quantity">Menge</ToggleButton>
-              <ToggleButton value="position">Position</ToggleButton>
+              <ToggleButton value="automatik">Ohne Zuweisung</ToggleButton>
+              <ToggleButton value="mitarbeiter">Mitarbeiter wählen</ToggleButton>
             </ToggleButtonGroup>
           </Box>
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>
-              Leistung erfassen
-            </Typography>
-            <ToggleButtonGroup
-              size="small"
-              exclusive
-              value={captureMode}
-              onChange={(_e, v) => v && setCaptureMode(v as CaptureMode)}
-              aria-label="Leistung erfassen"
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 700, display: 'block' }}
             >
-              <ToggleButton value="getrennt">getrennt</ToggleButton>
-              <ToggleButton value="anteilig">anteilig</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block' }}>
-              Vorschlag (Anzahl)
+              Anzahl Teile
             </Typography>
             <Stack direction="row" spacing={0.5}>
               {[2, 3, 4, 5].map((n) => (
@@ -256,18 +252,12 @@ export function SplitDialog({
           </Box>
         </Stack>
 
-        {splitMode === 'position' && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Positions-Auswahl folgt — aktuell wird mengenbasiert aufgeteilt.
-          </Alert>
-        )}
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-          {captureMode === 'getrennt'
-            ? 'getrennt: jede Teilmenge wird real gemessen, Aufwand pro Anteil neu gerechnet.'
-            : 'anteilig: der Gesamtaufwand wird strikt nach Mengenanteil aufgeteilt.'}
-        </Typography>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {handover === 'automatik'
+            ? 'Die Teile gehen als eigenständige Belege in den Topf — die Automatik verteilt sie beim nächsten Pack. Liegt jeder Teil unter der Monster-Schwelle, wird er wieder automatisch zugeteilt.'
+            : 'Die Teile werden direkt den gewählten Mitarbeitern zugeteilt. Es entstehen dieselben eigenständigen Teil-Belege wie ohne Zuweisung — nur eben schon vergeben.'}
+        </Alert>
 
-        {/* Remaining quantity bar */}
         <Box sx={{ mb: 2 }}>
           <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
             <Typography variant="body2">Verteilt</Typography>
@@ -287,65 +277,72 @@ export function SplitDialog({
             <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
               Summe übersteigt die Belegmenge — bitte korrigieren.
             </Typography>
-          ) : (
+          ) : validation.isComplete ? (
             <Typography variant="caption" color="success.main" sx={{ fontWeight: 700 }}>
-              ✓ Summe ≤ Gesamtmenge — Teilaufteilung erlaubt, Rest bleibt offen.
+              ✓ Die Teile decken den ganzen Beleg ab.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+              Noch {validation.remaining.toLocaleString('de-DE')} Teile offen — der Beleg wird
+              vollständig aufgeteilt.
             </Typography>
           )}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Größenzeilen werden nie zerrissen: die tatsächlichen Mengen können darum leicht von
+            den Wunschmengen abweichen.
+          </Typography>
         </Box>
 
-        {/* Share rows */}
         <Stack spacing={1.5}>
           {rows.map((row, index) => {
-            const share = computed[index];
-            const ceiling = ceilingById.get(row.employeeId) ?? 0;
-            const fit = fitForShare(share?.estimatedMinutes ?? 0, ceiling);
-            const dup =
-              row.employeeId !== '' && rows.filter((r) => r.employeeId === row.employeeId).length > 1;
+            const shareMinutes =
+              totalQuantity > 0 ? (estimatedMinutes * row.quantity) / totalQuantity : 0;
+            const ceiling = employeeById.get(row.employeeId)?.ceilingMinutes ?? 0;
+            const fit = needsPeople && row.employeeId ? fitForShare(shareMinutes, ceiling) : null;
             return (
               <Stack key={index} direction="row" spacing={1.5} alignItems="center">
-                <TextField
-                  select
-                  size="small"
-                  label="Mitarbeiter:in"
-                  value={row.employeeId}
-                  error={dup}
-                  helperText={dup ? 'doppelt' : undefined}
-                  onChange={(e) => setRow(index, { employeeId: e.target.value })}
-                  sx={{ minWidth: 220 }}
-                >
-                  {employees.map((emp) => (
-                    <MenuItem key={emp.id} value={emp.id}>
-                      {emp.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Chip size="small" label={`Teil ${index + 1}`} sx={{ minWidth: 72 }} />
+                {needsPeople && (
+                  <TextField
+                    select
+                    size="small"
+                    label="Mitarbeiter"
+                    value={row.employeeId}
+                    onChange={(e) => setRow(index, { employeeId: e.target.value })}
+                    sx={{ minWidth: 220 }}
+                  >
+                    {employees.map((e) => (
+                      <MenuItem
+                        key={e.id}
+                        value={e.id}
+                        disabled={usedIds.has(e.id) && e.id !== row.employeeId}
+                      >
+                        {e.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
                 <TextField
                   size="small"
                   type="number"
-                  label="Menge"
-                  value={Number.isFinite(row.quantity) ? row.quantity : 0}
-                  onChange={(e) =>
-                    setRow(index, { quantity: Math.max(0, Math.floor(Number(e.target.value) || 0)) })
-                  }
-                  sx={{ width: 110 }}
-                  inputProps={{ min: 0, 'aria-label': `Menge Anteil ${index + 1}` }}
+                  label="Teile"
+                  value={row.quantity}
+                  onChange={(e) => setRow(index, { quantity: Math.max(0, Number(e.target.value)) })}
+                  sx={{ width: 130 }}
                 />
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ width: 110, fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {formatMinutes(share?.estimatedMinutes ?? 0)}
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>
+                  ≈ {formatMinutes(shareMinutes)}
                 </Typography>
-                <Chip size="small" color={FIT_META[fit].color} variant="outlined" label={FIT_META[fit].label} />
-                <Tooltip title="Anteil entfernen">
+                {fit && (
+                  <Chip size="small" color={FIT_META[fit].color} label={FIT_META[fit].label} />
+                )}
+                <Tooltip title="Teil entfernen">
                   <span>
                     <IconButton
                       size="small"
-                      aria-label="Anteil entfernen"
-                      disabled={rows.length <= 2}
                       onClick={() => removeRow(index)}
+                      disabled={rows.length <= 2}
+                      aria-label={`Teil ${index + 1} entfernen`}
                     >
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
@@ -354,47 +351,47 @@ export function SplitDialog({
               </Stack>
             );
           })}
+          <Box>
+            <Button size="small" startIcon={<AddIcon />} onClick={addRow}>
+              Teil hinzufügen
+            </Button>
+          </Box>
         </Stack>
 
-        <Button
-          size="small"
-          startIcon={<AddIcon />}
-          sx={{ mt: 1 }}
-          disabled={rows.length >= employees.length}
-          onClick={addRow}
-        >
-          Mitarbeiter:in hinzufügen
-        </Button>
+        {hasDuplicate && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Ein Mitarbeiter steht mehrfach in der Liste.
+          </Alert>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-        {/* Mandatory reason */}
         <TextField
           fullWidth
-          multiline
-          minRows={2}
-          required
-          label="Grund (Pflichtfeld · Audit §8.4)"
+          size="small"
+          label="Grund"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          error={reason.length > 0 && !reasonOk}
-          helperText={
-            reason.length > 0 && !reasonOk
-              ? `Bitte mindestens ${MIN_REASON_LENGTH} Zeichen angeben.`
-              : 'Wird als „Beleg aufteilen" mit Anteilen auditiert.'
-          }
-          sx={{ mt: 2.5 }}
+          helperText={`Pflicht (mindestens ${MIN_REASON_LENGTH} Zeichen) — steht später im Verlauf.`}
+          sx={{ mt: 2 }}
         />
-        <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
           {REASON_SUGGESTIONS.map((s) => (
-            <Button key={s} size="small" variant="outlined" onClick={() => setReason(s)}>
-              {s}
-            </Button>
+            <Chip key={s} size="small" variant="outlined" label={s} onClick={() => setReason(s)} />
           ))}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Abbrechen</Button>
-        <Button variant="contained" disabled={!canConfirm} onClick={handleConfirm}>
-          Aufteilen bestätigen · {rows.length} Anteile
+        <Button variant="contained" onClick={handleConfirm} disabled={!canConfirm}>
+          {pending
+            ? 'Wird aufgeteilt …'
+            : handover === 'automatik'
+              ? `In ${rows.length} Teile aufteilen`
+              : 'Aufteilen und zuweisen'}
         </Button>
       </DialogActions>
     </Dialog>

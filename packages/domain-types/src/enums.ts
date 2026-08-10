@@ -111,6 +111,12 @@ export const caseStatusSchema = z.enum([
   'completed',
   'zst_done',
   'cancelled',
+  // Aufgeteilter Beleg: die Arbeit liegt in seinen Teil-Belegen (parentCaseId/partNo),
+  // der Original-Beleg ist nur noch die fachliche Klammer — nicht zuteilbar, nicht im
+  // Pool, nicht in den Ablagen. Bewusst ein eigener Status statt eines Flags: jede
+  // Pool-Abfrage im Stack partitioniert ohnehin über den Status, so faellt der
+  // Container ueberall automatisch heraus, wo eine Erlaubnisliste steht.
+  'split_container',
 ]);
 export type CaseStatus = z.infer<typeof caseStatusSchema>;
 
@@ -246,6 +252,8 @@ export const workflowEventTypeSchema = z.enum([
   'assignment.overridden',
   'case.delivery_group_merged',
   'case.delivery_group_split',
+  // Beleg-Aufteilung in echte Teil-Belege (Original wird Container).
+  'case.split',
   'employee.created',
   'employee.profile_updated',
   'employee.deleted',

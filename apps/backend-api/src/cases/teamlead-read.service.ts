@@ -59,7 +59,18 @@ const INACTIVE_BUNDLE_STATUSES: AssignmentStatus[] = ['cancelled', 'completed'];
  * (Aufmerksamkeitsflag ODER blocked/needs_review) und lebt in {@link poolWhere}.
  */
 const SCOPE_STATUSES: Record<'aktiv' | 'abgeschlossen' | 'archiv', CaseStatus[]> = {
-  aktiv: ['ready', 'parked', 'assigned', 'in_progress', 'issue_open', 'problem_resolved'],
+  // Aufgeteilte Belege stehen im aktiven Scope, obwohl an ihnen selbst nichts mehr zu
+  // tun ist: sie sind die Klammer über Teile, die GERADE bearbeitet werden. Ohne sie
+  // stünden die Teile als elternlose „(1)"/„(2)"-Zeilen in der Liste.
+  aktiv: [
+    'ready',
+    'parked',
+    'assigned',
+    'in_progress',
+    'issue_open',
+    'problem_resolved',
+    'split_container',
+  ],
   abgeschlossen: ['completed'],
   archiv: ['completed', 'zst_done'],
 };
@@ -99,6 +110,8 @@ const poolItemInclude = {
       reason: { select: { defaultInstruction: true, autoInsert: true } },
     },
   },
+  // Der Container referenziert seine Teile (Baum in der Belege-Ansicht).
+  _count: { select: { partCases: true } },
   assignedBundle: {
     select: {
       id: true,
@@ -250,7 +263,11 @@ export class TeamleadReadService {
     ];
 
     const [sortedIds, total] = await Promise.all([
-      this.prisma.goodsReceiptCase.findMany({ where, orderBy, select: { id: true } }),
+      this.prisma.goodsReceiptCase.findMany({
+        where,
+        orderBy,
+        select: { id: true, parentCaseId: true, status: true },
+      }),
       this.prisma.goodsReceiptCase.count({ where }),
     ]);
 
@@ -267,8 +284,15 @@ export class TeamleadReadService {
     // Pagination bleibt zeilenbasiert (ein Block kann an einer Seitengrenze enden).
     const memberIdsByGroup = new Map<string, string[]>();
     const anchorSeq: Array<{ single: string } | { groupId: string }> = [];
-    for (const { id } of sortedIds) {
-      const groupId = universe.groupIdByCaseId.get(id);
+    // Teil-Belege stehen direkt unter ihrem Original — dieselbe Anker-Mechanik wie bei
+    // Lieferungen, damit die Familie auch über Sortierung und Seitengrenzen zusammen
+    // bleibt. Die Aufteilung schlägt die erkannte Lieferung: sie ist eine gesetzte
+    // Tatsache, keine Vermutung.
+    for (const { id, parentCaseId, status } of sortedIds) {
+      // Die Familie wird über den Container geschlüsselt: er selbst über seine Id, seine
+      // Teile über parentCaseId. Normale Belege fallen auf die Lieferungs-Gruppe zurück.
+      const familyId = parentCaseId ?? (status === 'split_container' ? id : undefined);
+      const groupId = familyId ?? universe.groupIdByCaseId.get(id);
       if (!groupId) {
         anchorSeq.push({ single: id });
         continue;
@@ -394,6 +418,9 @@ export class TeamleadReadService {
         assignedEmployeeNo: c.assignedBundle?.employee?.employeeNo ?? null,
         effortPoints: effort.points,
         isMonster: c.totalQuantity >= monsterThreshold,
+        parentCaseId: c.parentCaseId,
+        partNo: c.partNo,
+        partCount: c._count.partCases,
         deliveryGroup: universe.refFor(c.id),
         bereich: c.storageLocation
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)

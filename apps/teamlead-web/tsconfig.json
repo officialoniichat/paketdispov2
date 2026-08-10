@@ -5,7 +5,18 @@
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // Resolve the workspace libs by their published entrypoints instead of through
+    // node_modules — same reasoning as apps/backend-api/tsconfig.json: in a git
+    // worktree the node_modules symlinks point back at the MAIN checkout, so tsc
+    // would typecheck this app against the other checkout's packages. Vite resolves
+    // the same specifiers at build time via the pnpm links; this is types only.
+    "baseUrl": ".",
+    "paths": {
+      "@paket/domain-types": ["../../packages/domain-types"],
+      "@paket/ui": ["../../packages/ui"],
+      "@paket/api-client": ["../../packages/api-client"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

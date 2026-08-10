@@ -59,7 +59,7 @@ import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDi
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplits } from '../split/SplitProvider.js';
+import { useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
@@ -175,7 +175,10 @@ export function AblagenBoard({
   const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
   const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
   const [splitDone, setSplitDone] = useState<string | null>(null);
-  const { recordSplit } = useSplits();
+  const split = useSplitCase((result) => {
+    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    setSplitCaseId(null);
+  });
   const employeesQuery = useQuery({
     queryKey: ['admin', 'employees', 'split'],
     queryFn: () => fetchEmployees(),
@@ -185,7 +188,12 @@ export function AblagenBoard({
     () =>
       (employeesQuery.data?.employees ?? [])
         .filter((e) => e.active && e.netCapacityToday > 0)
-        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+        .map((e) => ({
+          id: e.id,
+          employeeNo: e.employeeNo,
+          name: e.displayName,
+          ceilingMinutes: e.netCapacityToday,
+        })),
     [employeesQuery.data],
   );
 
@@ -317,16 +325,8 @@ export function AblagenBoard({
       </Collapse>
 
       {splitDone && (
-        <Alert
-          severity="success"
-          onClose={() => setSplitDone(null)}
-          action={
-            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
-              Zur Leistung
-            </Button>
-          }
-        >
-          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        <Alert severity="success" onClose={() => setSplitDone(null)}>
+          Beleg aufgeteilt: {splitDone}. Die Teile laufen ab jetzt als eigene Belege.
         </Alert>
       )}
       {/* C1: the strip scrolls horizontally; each lane owns its vertical scroll. */}
@@ -417,11 +417,13 @@ export function AblagenBoard({
           }
         }
         employees={splitEmployees}
-        onConfirm={(input) => {
-          recordSplit(input);
-          setSplitDone(input.weBelegNo);
+        pending={split.pending}
+        error={split.error}
+        onConfirm={split.submit}
+        onClose={() => {
+          split.clearError();
+          setSplitCaseId(null);
         }}
-        onClose={() => setSplitCaseId(null)}
       />
 
       {/* Instruktions-Loop (04.08.2026): je Meldung ein Pflichttext, einzeln absendbar. */}

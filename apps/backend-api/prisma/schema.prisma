@@ -30,6 +30,9 @@ enum CaseStatus {
   completed
   zst_done
   cancelled
+  // Aufgeteilter Beleg: die Arbeit liegt in den Teil-Belegen (parentCaseId/partNo);
+  // das Original ist nur noch die Klammer — nicht zuteilbar, nicht im Pool.
+  split_container
 }
 
 enum CaseSource {
@@ -433,12 +436,22 @@ model GoodsReceiptCase {
   missingFields     String[]       @default([])
   // Lieferungs-Pool-Hold (D2): TL-Freigabe "trotzdem bearbeiten".
   deliveryGroupReleased Boolean    @default(false)
+  // Beleg-Aufteilung: ein zu grosser Beleg wird in ECHTE Teil-Belege zerlegt, statt
+  // eine Zeile virtuell als n Arbeitseinheiten zu deuten. Der gesamte Stack (Engine,
+  // Buendel, Status, ZST, Probleme, Positionen) rechnet pro Case-Zeile — Teil-Belege
+  // laufen damit ueberall als ganz normale Belege.
+  // parentCaseId = Container-Beleg (null bei normalen Belegen und beim Container selbst),
+  // partNo = 1-basierte Nummer des Teils fuer die Anzeige „WE-2026-000207 (2)".
+  parentCaseId      String?
+  partNo            Int?
   version           Int            @default(0) // optimistic locking
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
   storageLocation Location?               @relation(fields: [storageLocationId], references: [id])
   assignedBundle  AssignmentBundle?       @relation(fields: [assignedBundleId], references: [id])
+  parentCase      GoodsReceiptCase?       @relation("CaseSplit", fields: [parentCaseId], references: [id])
+  partCases       GoodsReceiptCase[]      @relation("CaseSplit")
   positions       ReceiptPosition[]
   workInstruction WorkInstructionHeader?
   assignmentItems AssignmentItem[]
@@ -446,9 +459,11 @@ model GoodsReceiptCase {
   transportBoxes  TransportBox[]
   zstRecords      ZstRecord[]
 
+  @@unique([parentCaseId, partNo], name: "case_parent_part")
   @@index([status])
   @@index([bookingDate])
   @@index([section])
+  @@index([parentCaseId])
   @@map("goods_receipt_cases")
 }
 

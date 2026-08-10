@@ -62,7 +62,7 @@ import { AttentionDialog } from '../../components/AttentionDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplits } from '../split/SplitProvider.js';
+import { useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogBeleg, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 
@@ -89,6 +89,7 @@ const STATUS_OPTIONS: CaseStatus[] = [
   'completed',
   'zst_done',
   'cancelled',
+  'split_container',
 ];
 
 const SECTION_OPTIONS = [1, 2, 3, 4, 7, 8] as const;
@@ -275,10 +276,13 @@ export function BelegListPage({
   const [attentionCaseId, setAttentionCaseId] = useState<string | null>(null);
   const attentionBeleg = rows.find((r) => r.id === attentionCaseId) ?? null;
 
-  // --- Manual Beleg-Split (§8.4): pick the case, open the dialog, record the split ---
-  const { recordSplit } = useSplits();
+  // --- Beleg aufteilen (§8.4): Beleg waehlen, Dialog oeffnen, Teil-Belege anlegen lassen ---
   const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
   const [splitDone, setSplitDone] = useState<string | null>(null);
+  const split = useSplitCase((result) => {
+    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    setSplitCaseId(null);
+  });
   const employeesQuery = useQuery({
     queryKey: ['admin', 'employees', 'split'],
     queryFn: () => fetchEmployees(),
@@ -288,7 +292,12 @@ export function BelegListPage({
     () =>
       (employeesQuery.data?.employees ?? [])
         .filter((e) => e.active && e.netCapacityToday > 0)
-        .map((e) => ({ id: e.id, name: e.displayName, ceilingMinutes: e.netCapacityToday })),
+        .map((e) => ({
+          id: e.id,
+          employeeNo: e.employeeNo,
+          name: e.displayName,
+          ceilingMinutes: e.netCapacityToday,
+        })),
     [employeesQuery.data],
   );
 
@@ -348,7 +357,36 @@ export function BelegListPage({
 
   const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
     const defs: ColumnDef<BelegRow>[] = [
-      { accessorKey: 'weBelegNo', header: 'WE-Beleg', id: 'weBelegNo' },
+      {
+        accessorKey: 'weBelegNo',
+        header: 'WE-Beleg',
+        id: 'weBelegNo',
+        // Teil-Belege stehen eingerückt unter ihrem Original (der Server hält die
+        // Familie zusammen), das Original zeigt, in wie viele Teile es zerfallen ist.
+        cell: (ctx) => {
+          const r = ctx.row.original;
+          return (
+            <Stack
+              direction="row"
+              gap={0.75}
+              alignItems="center"
+              sx={{ pl: r.parentCaseId ? 3 : 0 }}
+            >
+              {r.parentCaseId && (
+                <Typography component="span" color="text.disabled" aria-hidden>
+                  └
+                </Typography>
+              )}
+              <span>{r.weBelegNo}</span>
+              {r.partCount > 0 && (
+                <Tooltip title="Dieser Beleg wurde aufgeteilt; die Arbeit liegt in seinen Teilen.">
+                  <Chip size="small" variant="outlined" label={`${r.partCount} Teile`} />
+                </Tooltip>
+              )}
+            </Stack>
+          );
+        },
+      },
       {
         id: 'status',
         header: 'Status',
@@ -698,16 +736,9 @@ export function BelegListPage({
       </Stack>
 
       {splitDone && (
-        <Alert
-          severity="success"
-          onClose={() => setSplitDone(null)}
-          action={
-            <Button color="inherit" size="small" onClick={() => navigate('/aufteilungen')}>
-              Zur Leistung
-            </Button>
-          }
-        >
-          Beleg {splitDone} aufgeteilt — Leistung je Anteil unter „Aufteilungen".
+        <Alert severity="success" onClose={() => setSplitDone(null)}>
+          Beleg aufgeteilt: {splitDone}. Die Teile stehen als eigene Belege direkt unter dem
+          Original in dieser Liste.
         </Alert>
       )}
 
@@ -940,11 +971,13 @@ export function BelegListPage({
         open={splitBeleg !== null}
         beleg={splitBeleg}
         employees={splitEmployees}
-        onConfirm={(input) => {
-          recordSplit(input);
-          setSplitDone(input.weBelegNo);
+        pending={split.pending}
+        error={split.error}
+        onConfirm={split.submit}
+        onClose={() => {
+          split.clearError();
+          setSplitCaseId(null);
         }}
-        onClose={() => setSplitCaseId(null)}
       />
     </Stack>
   );

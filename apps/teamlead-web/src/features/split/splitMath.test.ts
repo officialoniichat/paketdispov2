@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  apportion,
   fitForShare,
   suggestedQuantities,
   suggestedSplitCount,
   validateShares,
-  type CaseEffort,
 } from './splitMath.js';
-
-/** The worked example from docs/concept/beleg-split-multi-employee-concept.md §2.3. */
-const KOFFER: CaseEffort = { totalQuantity: 3000, effortPoints: 1382, estimatedMinutes: 1382 };
 
 describe('suggestedQuantities', () => {
   it('splits evenly when divisible', () => {
@@ -45,35 +40,6 @@ describe('suggestedSplitCount', () => {
   });
 });
 
-describe('apportion (anteilig / plan-phase estimate)', () => {
-  it('apportions total effort strictly by quantity share, sum stays exact', () => {
-    const shares = apportion(
-      [
-        { employeeId: 'emp-ak', quantity: 1500 },
-        { employeeId: 'emp-mb', quantity: 1000 },
-        { employeeId: 'emp-lv', quantity: 500 },
-      ],
-      KOFFER,
-    );
-    expect(shares.map((s) => s.effortPoints)).toEqual([691, 460.67, 230.33]);
-    expect(shares.map((s) => s.estimatedMinutes)).toEqual([691, 460.67, 230.33]);
-    expect(shares.map((s) => s.sharePct)).toEqual([50, 33.3, 16.7]);
-    // last share absorbs the rounding drift → sum is exactly the case total
-    const sum = shares.reduce((a, s) => a + s.effortPoints, 0);
-    expect(Math.round(sum * 100) / 100).toBe(1382);
-  });
-
-  it('returns zeros when the case has no quantity', () => {
-    const shares = apportion([{ employeeId: 'a', quantity: 0 }], {
-      totalQuantity: 0,
-      effortPoints: 0,
-      estimatedMinutes: 0,
-    });
-    expect(shares[0]?.effortPoints).toBe(0);
-    expect(shares[0]?.sharePct).toBe(0);
-  });
-});
-
 describe('validateShares', () => {
   it('accepts a full split that sums to the total', () => {
     const v = validateShares(
@@ -87,7 +53,7 @@ describe('validateShares', () => {
     expect(v).toMatchObject({ assignedQuantity: 3000, remaining: 0, isComplete: true, isValid: true });
   });
 
-  it('accepts a partial split (top-up later) and reports the remainder', () => {
+  it('meldet den Rest, solange die Teile den Beleg nicht abdecken', () => {
     const v = validateShares(
       [
         { employeeId: 'a', quantity: 1000 },
@@ -96,6 +62,8 @@ describe('validateShares', () => {
       3000,
     );
     expect(v.remaining).toBe(1000);
+    // Der Dialog verlangt zusätzlich isComplete — ein Rest hätte nach der Aufteilung
+    // keinen Träger mehr, weil das Original nur noch die Klammer ist.
     expect(v.isComplete).toBe(false);
     expect(v.isValid).toBe(true);
   });

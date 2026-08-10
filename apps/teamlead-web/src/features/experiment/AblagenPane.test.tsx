@@ -69,7 +69,9 @@ vi.mock('../../data/store.js', () => ({ useCockpitData: () => mocks }));
 // Mitarbeiterliste (Split-Dialog) und der Zuweisen-Dialog.
 vi.mock('../../data/api.js', () => ({ api: { GET: vi.fn(async () => ({ data: [] })) } }));
 vi.mock('../../data/employees.js', () => ({ fetchEmployees: vi.fn(async () => ({ employees: [] })) }));
-vi.mock('../split/SplitProvider.js', () => ({ useSplits: () => ({ recordSplit: vi.fn() }) }));
+vi.mock('../split/useSplitCase.js', () => ({
+  useSplitCase: () => ({ submit: vi.fn(), pending: false, error: null, clearError: vi.fn() }),
+}));
 vi.mock('../belege/AssignFromListDialog.js', () => ({ AssignFromListDialog: () => null }));
 
 function dt(): {

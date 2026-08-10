@@ -39,11 +39,33 @@ export interface CustomCaseSpec {
   externalRefSuffix?: string;
   /** Default aus der Teile-Zahl abgeleitet (Generator-Formel). */
   estimatedMinutes?: number;
+  /**
+   * Teil-Beleg einer Aufteilung: Belegnummer des Original-Belegs. Der muss WEITER OBEN
+   * in derselben Spezifikationsliste stehen — die Liste wird der Reihe nach geseedet.
+   */
+  parentWeBelegNo?: string;
+  /** 1-basierte Teil-Nummer (Anzeige „… (2)"); gehört zu {@link parentWeBelegNo}. */
+  partNo?: number;
 }
 
 /** Aufwands-Default: dieselbe Intuition wie der Volumen-Generator. */
 export function defaultMinutes(totalQuantity: number): number {
   return Math.min(75, Math.max(8, Math.round(6 + totalQuantity * 0.18 + 2.5)));
+}
+
+/** Id des Original-Belegs eines Teil-Belegs — er muss vorher geseedet worden sein. */
+async function parentIdOf(prisma: ScenarioPrisma, spec: CustomCaseSpec): Promise<string> {
+  const parent = await prisma.goodsReceiptCase.findUnique({
+    where: { weBelegNo: spec.parentWeBelegNo! },
+    select: { id: true },
+  });
+  if (!parent) {
+    throw new Error(
+      `[scenario] ${spec.weBelegNo}: Original-Beleg ${spec.parentWeBelegNo} fehlt — ` +
+        'er muss in der Spezifikationsliste VOR seinen Teilen stehen.',
+    );
+  }
+  return parent.id;
 }
 
 export async function seedCustomCases(
@@ -94,6 +116,8 @@ export async function seedCustomCases(
       forwardedTo: s.forwardedTo ?? null,
       attentionFlag: s.attentionNote !== undefined,
       attentionNote: s.attentionNote ?? null,
+      parentCaseId: s.parentWeBelegNo === undefined ? null : await parentIdOf(prisma, s),
+      partNo: s.partNo ?? null,
     };
     await prisma.goodsReceiptCase.upsert({
       where: { weBelegNo: s.weBelegNo },

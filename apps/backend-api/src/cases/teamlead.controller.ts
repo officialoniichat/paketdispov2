@@ -34,6 +34,8 @@ import {
   PrioritizeDto,
   ReorderBundleDto,
   SendInstructionDto,
+  SplitCaseDto,
+  SplitCaseResultDto,
   TransitionResultDto,
   WithdrawDto,
   ZstExportResultDto,
@@ -246,6 +248,21 @@ export class TeamleadController {
     @Param('caseId') caseId: string,
   ): Promise<TransitionResultDto> {
     return this.teamlead.unforward(principal, caseId);
+  }
+
+  @Post('cases/:caseId/split')
+  @ApiOperation({
+    summary:
+      'Beleg in echte Teil-Belege aufteilen. Ohne employeeNo je Teil verteilt die ' +
+      'Automatik; das Original wird zum Container (split_container).',
+  })
+  @ApiOkResponse({ type: SplitCaseResultDto })
+  splitCase(
+    @CurrentUser() principal: Principal,
+    @Param('caseId') caseId: string,
+    @Body() dto: SplitCaseDto,
+  ): Promise<SplitCaseResultDto> {
+    return this.teamlead.splitCase(principal, caseId, dto);
   }
 
   @Post('delivery-groups/split')

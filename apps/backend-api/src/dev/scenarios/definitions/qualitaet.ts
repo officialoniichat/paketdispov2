@@ -52,6 +52,13 @@ const B7_CASES: CustomCaseSpec[] = [
   // Gestern begonnener Monster-Beleg (Folgetag-Fortsetzung): noch in Arbeit, hängt
   // am Vortages-Bündel von Dirk Hansen (ma-104) — C6-Fortsetzung blockt neue Zuteilung.
   { weBelegNo: '9.404.802', storageCode: 'PA-2', totalQuantity: 2600, section: 2, status: 'in_progress', bookingOffsetDays: 1, estimatedMinutes: 460 },
+  // Bereits AUFGETEILTER Monster-Beleg: das Original ist nur noch die Klammer
+  // (split_container — nicht zuteilbar, nicht im Pool), die Arbeit steckt in seinen
+  // beiden Teil-Belegen. Teil 1 ist Anna Berger (ma-101) zugeteilt, Teil 2 liegt frei
+  // im Topf und wird von der Automatik regulär verteilt (beide unter der Schwelle).
+  { weBelegNo: '9.404.803', storageCode: 'PA-2', totalQuantity: 2200, section: 2, status: 'split_container', estimatedMinutes: 400 },
+  { weBelegNo: '9.404.803 (1)', storageCode: 'PA-2', totalQuantity: 1100, section: 2, status: 'assigned', estimatedMinutes: 200, parentWeBelegNo: '9.404.803', partNo: 1 },
+  { weBelegNo: '9.404.803 (2)', storageCode: 'PA-2', totalQuantity: 1100, section: 2, estimatedMinutes: 200, parentWeBelegNo: '9.404.803', partNo: 2 },
   // Normaler Tages-Pool.
   { weBelegNo: '9.404.901', storageCode: 'R3', totalQuantity: 48, section: null },
   { weBelegNo: '9.404.905', storageCode: 'R7', totalQuantity: 52, section: null },
@@ -71,13 +78,18 @@ export const grossBelegKneckiScenario: ScenarioDefinition = {
     'im Pool auf die manuelle Teamlead-Entscheidung. Zusätzlich hängt Dirk Hansen ' +
     '(ma-104) noch an einem GESTERN begonnenen 2.600-Teile-Beleg (9.404.802, ' +
     'teilabgeschlossen am Vortages-Bündel) — die Folgetag-Fortsetzung greift: keine ' +
-    'neuen Belege für ihn, bis der Groß-Beleg fertig ist.',
+    'neuen Belege für ihn, bis der Groß-Beleg fertig ist. Dazu ein bereits ' +
+    'AUFGETEILTER Beleg (9.404.803, 2.200 Teile): das Original steht als Klammer da, ' +
+    'Teil (1) ist Anna Berger zugeteilt, Teil (2) liegt frei im Topf.',
   expectedOutcome:
     '„Automatik ausführen": 9.404.801 bleibt unverteilt im Pool (Grund „Groß-Beleg — ' +
     'manuelle TL-Entscheidung", zuweisbar über Mitarbeiterboard → Zuweisen); Dirk ' +
     'Hansen erhält KEIN neues Starter-Pack (seine Schicht ist der Verteilung entzogen, ' +
     'Fortsetzung an 9.404.802); sein Self-Pull antwortet „continuation". Alle anderen ' +
-    'Mitarbeiter werden normal beplant.',
+    'Mitarbeiter werden normal beplant. In der Belege-Ansicht stehen 9.404.803 (1) ' +
+    'und (2) eingerückt unter ihrem Original, das den Status „Aufgeteilt" und den ' +
+    'Chip „2 Teile" trägt und weder in den Ablagen noch im Verteil-Pool auftaucht; ' +
+    'Teil (2) wird von der Automatik regulär eingeplant.',
   async seed(ctx) {
     await forceRuleConfig(ctx.prisma);
     const { userIds, locationIds } = await seedMasterData(ctx);
@@ -88,6 +100,14 @@ export const grossBelegKneckiScenario: ScenarioDefinition = {
       ctx.baseDate,
       requireId(userIds, 'ma-104', 'user'),
       ['9.404.802'],
+    );
+    // Teil (1) hängt am HEUTIGEN Bündel von Anna Berger — Teil (2) bleibt frei.
+    await seedCarryoverBundle(
+      ctx.prisma,
+      ctx.baseDate,
+      requireId(userIds, 'ma-101', 'user'),
+      ['9.404.803 (1)'],
+      0,
     );
   },
 };
