@@ -343,13 +343,19 @@ export class EmployeesService {
     if (runningCases > 0) {
       blockers.push({
         code: 'running_cases',
-        message: `Es sind ${runningCases} Belege in Arbeit oder zugeteilt.`,
+        message:
+          runningCases === 1
+            ? 'Ein Beleg ist in Arbeit oder zugeteilt.'
+            : `${runningCases} Belege sind in Arbeit oder zugeteilt.`,
       });
     }
     if (bundleCount > 0) {
       blockers.push({
         code: 'has_bundles',
-        message: `Es hängen ${bundleCount} Bündel an der Person.`,
+        message:
+          bundleCount === 1
+            ? 'Ein Bündel hängt an der Person.'
+            : `${bundleCount} Bündel hängen an der Person.`,
       });
     }
     if (zstCount > 0 || issueCount > 0) {
