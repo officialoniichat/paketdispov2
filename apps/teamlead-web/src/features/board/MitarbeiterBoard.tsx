@@ -74,6 +74,12 @@ export interface PendingAction {
   title: string;
   description: string;
   suggestions: string[];
+  /**
+   * true = der Grund ist kein Pflichtfeld (Kundenfeedback 07.08.2026). Gesetzt von
+   * den Zuordnungs-Gesten der DA.M.B-Matrix; `run` bekommt dann ggf. einen leeren
+   * String und lässt den Grund weg.
+   */
+  optional?: boolean;
   run: (reason: string) => void;
 }
 

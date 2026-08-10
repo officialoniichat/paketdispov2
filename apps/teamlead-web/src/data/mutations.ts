@@ -198,14 +198,15 @@ export async function moveCase(
 export interface ReorderArgs {
   bundleId: string;
   caseIds: string[];
-  reason: string;
+  /** Optional §8.4 audit reason; omitted (not sent as '') when empty. */
+  reason?: string;
 }
 
 export async function reorderBundle(
   api: PaketApiClient,
   { bundleId, caseIds, reason }: ReorderArgs,
 ): Promise<BundleMutationResultDto> {
-  const body: ReorderBundleDto = { caseIds, reason };
+  const body: ReorderBundleDto = { caseIds, ...(reason ? { reason } : {}) };
   return ensure(
     'Reihenfolge speichern',
     await api.POST('/api/teamlead/bundles/{bundleId}/reorder', {

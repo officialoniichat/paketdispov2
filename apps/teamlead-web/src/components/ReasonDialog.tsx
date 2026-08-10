@@ -24,8 +24,10 @@ export interface ReasonDialogProps {
   /** Quick-pick reasons to speed up common overrides. */
   suggestions?: string[];
   /**
-   * true = the note is OPTIONAL („Anmerkung"): confirm is always enabled and an
-   * empty note is passed through as ''. Default is the mandatory §8.4 reason.
+   * true = der Grund ist OPTIONAL (Kundenfeedback 07.08.2026): „Bestätigen" ist
+   * immer aktiv, ein leeres Feld kommt als '' zurück und der Aufrufer lässt den
+   * Grund dann einfach weg. Das Audit-Event wird trotzdem geschrieben, nur ohne
+   * Text. Default bleibt der Pflicht-Grund aus §8.4.
    */
   optional?: boolean;
   onConfirm: (reason: string) => void;
@@ -66,15 +68,15 @@ export function ReasonDialog({
           multiline
           minRows={2}
           required={!optional}
-          label={optional ? 'Anmerkung (optional)' : 'Grund (Pflichtfeld)'}
+          label={optional ? 'Grund (optional)' : 'Grund (Pflichtfeld)'}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          error={reason.length > 0 && !valid}
+          error={!optional && reason.length > 0 && !valid}
           helperText={
-            reason.length > 0 && !valid
+            !optional && reason.length > 0 && !valid
               ? `Bitte mindestens ${MIN_REASON_LENGTH} Zeichen angeben.`
               : optional
-                ? 'Sichtbar für den Mitarbeiter; wird auditiert (§8.4).'
+                ? 'Kann leer bleiben — der Eingriff wird so oder so auditiert (§8.4).'
                 : 'Wird mit vorheriger und neuer Zuordnung auditiert (§8.4).'
           }
           onKeyDown={(e) => {

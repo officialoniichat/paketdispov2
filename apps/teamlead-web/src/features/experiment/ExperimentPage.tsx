@@ -421,6 +421,7 @@ export function ExperimentPage(): JSX.Element {
         title={pending?.title ?? ''}
         description={pending?.description}
         suggestions={pending?.suggestions}
+        optional={pending?.optional === true}
         onConfirm={(reason) => pending?.run(reason)}
         onClose={() => setPending(null)}
       />

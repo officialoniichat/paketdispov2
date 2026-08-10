@@ -120,6 +120,7 @@ export function MatrixBoard({
       title: `${drag.weBelegNo} ${pos === 'davor' ? 'vor' : 'nach'} ${ziel.weBelegNo} einsortieren`,
       description: `Der Beleg wird ${row.displayName} zugewiesen und exakt an dieser Stelle in die Abhol-Reihenfolge des geplanten Bündels gesetzt.`,
       suggestions: ['Passt zur Route', 'Eilig für Verladung'],
+      optional: true,
       run: (reason) => {
         void assignToEmployee
           .mutateAsync({ employeeNo: row.employeeId, caseId: drag.caseId, reason })
@@ -270,6 +271,7 @@ function MatrixRow({
         description:
           'Der Beleg wird dem Tages-Bündel des Mitarbeiters zugeteilt (bei Bedarf wird ein Bündel angelegt).',
         suggestions: ['Kapazität frei', 'Bereich passt', 'Eilig für Verladung'],
+        optional: true,
         run: (reason) =>
           assignToEmployee.mutate({ employeeNo: row.employeeId, caseId: src.caseId, reason }),
       });
@@ -280,6 +282,7 @@ function MatrixRow({
         description:
           'Alle Belege des vorbereiteten Bündels werden dem Tages-Bündel des Mitarbeiters zugeteilt (alles-oder-nichts).',
         suggestions: ['Vorverteilung übernehmen', 'Kapazität frei', 'Bereich passt'],
+        optional: true,
         run: (reason) =>
           assignBundle.mutate({ employeeNo: row.employeeId, caseIds: src.caseIds, reason }),
       });
@@ -288,6 +291,7 @@ function MatrixRow({
         title: `${src.weBelegNo} zu ${row.displayName} verschieben`,
         description: `Der Beleg wird aus dem Bündel von ${src.employeeName} entfernt und ${row.displayName} zugeteilt.`,
         suggestions: ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+        optional: true,
         run: (reason) =>
           moveCase.mutate({
             bundleId: src.bundleId,
@@ -318,6 +322,7 @@ function MatrixRow({
       suggestions: gleicherMa
         ? ['Reihenfolge anpassen', 'Passt besser in dieses Pack', 'Eilig für Verladung']
         : ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+      optional: true,
       run: (reason) =>
         moveCase.mutate({
           bundleId: src.bundleId,
