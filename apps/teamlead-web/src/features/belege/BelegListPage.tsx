@@ -27,7 +27,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import type { ColumnDef, SortingState } from '@tanstack/react-table';
+import type { ColumnDef, SortingState, VisibilityState } from '@tanstack/react-table';
 import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -53,6 +53,7 @@ import {
 } from '../../data/belege.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
+import { ColumnVisibilityMenu, type ColumnOption } from '../../components/ColumnVisibilityMenu.js';
 import { DataTable } from '../../components/DataTable.js';
 import { LieferungChip, buildGroupColorMap } from '../../components/LieferungChip.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
@@ -124,6 +125,12 @@ interface BelegeSavedView {
   filters: BelegeFilters;
   /** UI-Zustand des einklappbaren Filterblocks (ab „Status" abwärts). */
   filtersOpen?: boolean;
+  /**
+   * Ausgeblendete Spalten (Kundenfeedback 07.08.2026), TanStack-Konvention:
+   * fehlender Eintrag = sichtbar. Hängt am `viewStateKey`, ist also je Ansicht
+   * getrennt — der Basis-Reiter und die DA.M.B-Kombi konfigurieren sich einzeln.
+   */
+  columnVisibility?: VisibilityState;
 }
 
 const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filters: {} };
@@ -157,6 +164,10 @@ export function BelegListPage({
   // Spaltenfilter (ab „Status" abwärts) einklappbar.
   const [filtersOpen, setFiltersOpen] = useState<boolean>(savedView.filtersOpen === true);
   const [searchOpen, setSearchOpen] = useState<boolean>(() => Boolean(savedView.filters.q));
+  // Ausgeblendete Spalten (07.08.2026) — überlebt den Reload, je Ansicht getrennt.
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    savedView.columnVisibility ?? {},
+  );
   const debouncedFilters = useDebounced(filters);
 
   useEffect(() => {
@@ -165,8 +176,9 @@ export function BelegListPage({
       sorting,
       filters: debouncedFilters,
       filtersOpen,
+      columnVisibility,
     });
-  }, [viewStateKey, scope, sorting, debouncedFilters, filtersOpen]);
+  }, [viewStateKey, scope, sorting, debouncedFilters, filtersOpen, columnVisibility]);
 
   /** Every filter change restarts on page 1 — a filtered page 4 makes no sense. */
   const updateFilters = (patch: Partial<BelegeFilters>): void => {
@@ -349,6 +361,8 @@ export function BelegListPage({
     filters.branchNo,
     filters.section,
     filters.labels,
+    filters.digiTags,
+    filters.security,
     filters.assigned,
     filters.monster,
     filters.bookingFrom,
@@ -427,7 +441,7 @@ export function BelegListPage({
           return section === null ? '–' : String(section);
         },
       },
-      { accessorKey: 'goodsType', header: 'Warenart', enableSorting: false },
+      { accessorKey: 'goodsType', header: 'Warenart', id: 'goodsType', enableSorting: false },
       {
         id: 'prio',
         header: 'Prio',
@@ -475,7 +489,7 @@ export function BelegListPage({
         accessorFn: (r) => r.bookingDate,
         cell: (ctx) => formatDate(ctx.row.original.bookingDate),
       },
-      { accessorKey: 'storageCode', header: 'Lagerplatz', enableSorting: false },
+      { accessorKey: 'storageCode', header: 'Lagerplatz', id: 'storageCode', enableSorting: false },
       {
         id: 'lieferung',
         header: 'Lieferung',
@@ -578,6 +592,9 @@ export function BelegListPage({
       id: 'actions',
       header: '',
       enableSorting: false,
+      // Das Kebab-Menü ist der Zugang zu allen Beleg-Aktionen — es darf nicht
+      // ausblendbar sein, sonst wäre die Zeile nicht mehr bedienbar.
+      enableHiding: false,
       // Row click navigates to the detail; stop propagation so an action click
       // never doubles as "open Beleg".
       cell: (ctx) => {
@@ -628,6 +645,22 @@ export function BelegListPage({
 
     return defs;
   }, [scope, store, releaseIntakeMutation, unflagMutation, groupColorById]);
+
+  // Auswahlliste des „Spalten"-Menüs: jede ausblendbare Spalte mit ihrer
+  // Kopf-Beschriftung. Folgt automatisch dem Scope (Archiv/Topf bringen eigene
+  // Spalten mit), deshalb aus derselben Definition abgeleitet statt gepflegt.
+  const columnOptions = useMemo<ColumnOption[]>(
+    () =>
+      columns.flatMap((c) =>
+        c.id !== undefined &&
+        c.enableHiding !== false &&
+        typeof c.header === 'string' &&
+        c.header !== ''
+          ? [{ id: c.id, label: c.header }]
+          : [],
+      ),
+    [columns],
+  );
 
   const splitBeleg = useMemo<SplitDialogBeleg | null>(() => {
     const row = rows.find((r) => r.id === splitCaseId);
@@ -722,6 +755,13 @@ export function BelegListPage({
         >
           Filter{advancedCount > 0 ? ` (${advancedCount})` : ''}
         </Button>
+        {/* Spalten ein-/ausblenden (07.08.2026): der sichtbare Rückweg zu einer
+            über ihr Kopf-Icon ausgeblendeten Spalte. */}
+        <ColumnVisibilityMenu
+          columns={columnOptions}
+          visibility={columnVisibility}
+          onChange={setColumnVisibility}
+        />
         {scope === 'abgeschlossen' && (
           <Button
             variant="outlined"
@@ -835,6 +875,36 @@ export function BelegListPage({
           <MenuItem value="yes">ja</MenuItem>
           <MenuItem value="no">nein</MenuItem>
         </TextField>
+        {/* Digi Tags / Sichern (07.08.2026): dieselbe Positions-Ableitung wie die
+            Chips auf Karte und Zeile — der Server filtert, nicht die Anzeige. */}
+        <TextField
+          size="small"
+          select
+          label="Digi Tags"
+          value={filters.digiTags ?? ''}
+          onChange={(e) =>
+            updateFilters({ digiTags: (e.target.value || undefined) as BelegeFilters['digiTags'] })
+          }
+          sx={{ minWidth: 130 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          <MenuItem value="yes">ja</MenuItem>
+          <MenuItem value="no">nein</MenuItem>
+        </TextField>
+        <TextField
+          size="small"
+          select
+          label="Sichern"
+          value={filters.security ?? ''}
+          onChange={(e) =>
+            updateFilters({ security: (e.target.value || undefined) as BelegeFilters['security'] })
+          }
+          sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="">Alle</MenuItem>
+          <MenuItem value="yes">ja</MenuItem>
+          <MenuItem value="no">nein</MenuItem>
+        </TextField>
         <TextField
           size="small"
           select
@@ -908,6 +978,8 @@ export function BelegListPage({
             dense
             rowHeight={30}
             getRowSx={groupRowSx}
+            columnVisibility={columnVisibility}
+            onHideColumn={(id) => setColumnVisibility((prev) => ({ ...prev, [id]: false }))}
             sorting={sorting}
             onSortingChange={(next) => {
               setSorting(next);

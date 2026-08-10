@@ -9,19 +9,23 @@
 import { useRef, type JSX } from 'react';
 import type { SxProps, Theme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TableSortLabel from '@mui/material/TableSortLabel';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
+  type Column,
   type ColumnDef,
   type SortingState,
   type VisibilityState,
@@ -30,6 +34,16 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 /** Ein einzelnes sx-Objekt (kein Array) — das Element-Format des TableRow-sx-Arrays. */
 type RowSx = Exclude<SxProps<Theme>, ReadonlyArray<unknown>>;
+
+/**
+ * Sprechender Spaltenname für Tooltip/aria-label. Nutzt die Kopf-Beschriftung, wenn
+ * sie ein reiner Text ist (der Normalfall), sonst die Spalten-Id — ein gerenderter
+ * React-Kopf lässt sich nicht in einen Satz einsetzen.
+ */
+export function columnLabel<T>(column: Column<T, unknown>): string {
+  const header = column.columnDef.header;
+  return typeof header === 'string' && header.length > 0 ? header : column.id;
+}
 
 export interface DataTableProps<T> {
   data: T[];
@@ -69,6 +83,14 @@ export interface DataTableProps<T> {
    * damit alle Spalten ohne Horizontal-Scroll auf den Screen passen.
    */
   dense?: boolean;
+  /**
+   * Wenn gesetzt, trägt jeder ausblendbare Spaltenkopf ein eigenes Augen-Icon zum
+   * Ausblenden (Kundenfeedback 07.08.2026). BEWUSST ein eigenes Bedienelement und
+   * nicht der Kopf-Klick: der sortiert bereits — ein doppelt belegter Klick wäre
+   * ein Bedienkonflikt. Wieder-Einblenden läuft über das „Spalten"-Menü des
+   * Aufrufers, der auch den Zustand hält und persistiert.
+   */
+  onHideColumn?: (columnId: string) => void;
 }
 
 export function DataTable<T>({
@@ -87,6 +109,7 @@ export function DataTable<T>({
   serverMode = false,
   getRowSx,
   dense = false,
+  onHideColumn,
 }: DataTableProps<T>): JSX.Element {
   const table = useReactTable({
     data,
@@ -159,6 +182,7 @@ export function DataTable<T>({
             <TableRow key={hg.id}>
               {hg.headers.map((header) => {
                 const canSort = header.column.getCanSort();
+                const hideable = onHideColumn !== undefined && header.column.getCanHide();
                 return (
                   <TableCell
                     key={header.id}
@@ -175,6 +199,18 @@ export function DataTable<T>({
                       </TableSortLabel>
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
+                    )}
+                    {hideable && (
+                      <Tooltip title={`Spalte „${columnLabel(header.column)}" ausblenden`}>
+                        <IconButton
+                          size="small"
+                          aria-label={`Spalte ${columnLabel(header.column)} ausblenden`}
+                          onClick={() => onHideColumn(header.column.id)}
+                          sx={{ ml: 0.25, opacity: 0.4, '&:hover': { opacity: 1 } }}
+                        >
+                          <VisibilityOffOutlinedIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Tooltip>
                     )}
                   </TableCell>
                 );

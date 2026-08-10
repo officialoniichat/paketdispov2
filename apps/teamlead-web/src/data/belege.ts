@@ -85,6 +85,10 @@ export interface BelegeFilters {
   branchNo?: string;
   section?: SectionCode;
   labels?: 'yes' | 'no';
+  /** Digi Tags (07.08.2026): mind. eine Position druckt das Etikett OHNE Preis. */
+  digiTags?: 'yes' | 'no';
+  /** Sichern (07.08.2026): mind. eine Position verlangt Sicherung. */
+  security?: 'yes' | 'no';
   assigned?: 'yes' | 'no';
   /** Monster-Belege (Teile ≥ gepflegte Schwelle) ein-/ausblenden — die Grenze kennt der Server. */
   monster?: 'yes' | 'no';
@@ -448,6 +452,8 @@ export async function fetchBelegeList(
         ...(f.branchNo ? { branchNo: f.branchNo } : {}),
         ...(f.section !== undefined ? { section: f.section } : {}),
         ...(f.labels ? { labels: f.labels } : {}),
+        ...(f.digiTags ? { digiTags: f.digiTags } : {}),
+        ...(f.security ? { security: f.security } : {}),
         ...(f.assigned ? { assigned: f.assigned } : {}),
         ...(f.monster ? { monster: f.monster } : {}),
         ...(f.bookingFrom ? { bookingFrom: f.bookingFrom } : {}),
