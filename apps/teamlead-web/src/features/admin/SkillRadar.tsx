@@ -65,17 +65,24 @@ export function placeholderProfile(employeeNo: string): Record<string, number> {
   return profile;
 }
 
-const SIZE = 230;
-const CENTER = SIZE / 2;
-const RADIUS = 68;
-const LABEL_RADIUS = RADIUS + 20;
+/**
+ * Zeichenfläche: bewusst BREITER als hoch. Das Netz selbst ist rund, aber die
+ * Achsen-Beschriftungen stehen links und rechts daneben — in einem quadratischen
+ * viewBox würden sie an der Kante abgeschnitten.
+ */
+const VIEW_W = 300;
+const VIEW_H = 210;
+const CX = VIEW_W / 2;
+const CY = VIEW_H / 2;
+const RADIUS = 66;
+const LABEL_RADIUS = RADIUS + 18;
 
 /** Punkt auf der Achse `index` im Abstand `ratio` (0–1) vom Mittelpunkt. */
 function point(index: number, ratio: number): { x: number; y: number } {
   const angle = axisAngle(index);
   return {
-    x: CENTER + Math.cos(angle) * RADIUS * ratio,
-    y: CENTER + Math.sin(angle) * RADIUS * ratio,
+    x: CX + Math.cos(angle) * RADIUS * ratio,
+    y: CY + Math.sin(angle) * RADIUS * ratio,
   };
 }
 
@@ -110,12 +117,12 @@ export function SkillRadar({ employeeNo }: SkillRadarProps): JSX.Element {
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
       <Box
         component="svg"
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         role="img"
         aria-label={`Skill-Radar (Vorschau, Skala 0–5): ${SKILL_RADAR_AXES.map(
           (a, i) => `${a.label} ${values[i]?.toFixed(1)}`,
         ).join(', ')}`}
-        sx={{ width: SIZE, maxWidth: '100%', height: 'auto', flexShrink: 0 }}
+        sx={{ width: VIEW_W, maxWidth: '100%', height: 'auto', flexShrink: 0 }}
       >
         {rings.map((ring) => (
           <polygon
@@ -131,8 +138,8 @@ export function SkillRadar({ employeeNo }: SkillRadarProps): JSX.Element {
           return (
             <line
               key={axis.key}
-              x1={CENTER}
-              y1={CENTER}
+              x1={CX}
+              y1={CY}
               x2={outer.x}
               y2={outer.y}
               stroke={theme.palette.divider}
@@ -157,8 +164,8 @@ export function SkillRadar({ employeeNo }: SkillRadarProps): JSX.Element {
           return (
             <text
               key={axis.key}
-              x={CENTER + cos * LABEL_RADIUS}
-              y={CENTER + Math.sin(angle) * LABEL_RADIUS}
+              x={CX + cos * LABEL_RADIUS}
+              y={CY + Math.sin(angle) * LABEL_RADIUS}
               textAnchor={cos > 0.1 ? 'start' : cos < -0.1 ? 'end' : 'middle'}
               dominantBaseline="middle"
               fontSize={9}
