@@ -75,6 +75,9 @@ describe('caseActions registry', () => {
     expect(ids({ status: 'completed', priorityFlags: [] })).toEqual([]);
     expect(ids({ status: 'zst_done', priorityFlags: [] })).toEqual([]);
     expect(ids({ status: 'cancelled', priorityFlags: [] })).toEqual([]);
+    // Aufgeteilter Beleg: die Arbeit liegt in seinen Teilen, an der Klammer selbst
+    // gibt es nichts mehr zu steuern (auch kein Weiterleiten/Aufmerksamkeit).
+    expect(ids({ status: 'split_container', priorityFlags: [] })).toEqual([]);
   });
 
   it('ready + unassigned offers assign; ready + assigned does not', () => {

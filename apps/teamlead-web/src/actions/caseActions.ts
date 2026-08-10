@@ -213,9 +213,19 @@ const REGISTRY: CaseActionDescriptor[] = [
 
 const REGISTRY_ORDER = new Map(REGISTRY.map((a, i) => [a.id, i] as const));
 
-/** Terminal statuses have no legal transitions and no status-neutral actions either. */
+/**
+ * Terminal statuses have no legal transitions and no status-neutral actions either.
+ * Spiegelt TERMINAL_STATUSES im Backend (workflow/case-status.ts) — inklusive
+ * `split_container`: ein aufgeteilter Beleg ist nur noch die Klammer über seine Teile,
+ * an ihm selbst gibt es nichts mehr zu steuern.
+ */
 function isTerminal(status: CaseStatus): boolean {
-  return status === 'completed' || status === 'zst_done' || status === 'cancelled';
+  return (
+    status === 'completed' ||
+    status === 'zst_done' ||
+    status === 'cancelled' ||
+    status === 'split_container'
+  );
 }
 
 export function getAvailableActions(c: CaseLike): CaseActionDescriptor[] {
@@ -243,7 +253,7 @@ export function getAvailableActions(c: CaseLike): CaseActionDescriptor[] {
       // Geklärt: liegt wieder beim selben MA — keine weitere TL-Statusaktion nötig.
       ids.push('cancel');
       break;
-    // completed / zst_done / cancelled: no status-driven actions.
+    // completed / zst_done / cancelled / split_container: no status-driven actions.
   }
   // Priority toggle only where it has an effect: pool states (the planning queue).
   const isPool = c.status === 'needs_review' || c.status === 'ready' || c.status === 'parked';
