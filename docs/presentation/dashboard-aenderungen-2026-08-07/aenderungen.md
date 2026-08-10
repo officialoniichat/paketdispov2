@@ -39,9 +39,8 @@ Die Angaben entstehen aus den hinterlegten Positionsdaten.
 
 ![Mitarbeiterboard → „Bündel anlegen" → „Durchsuchen & mehrere auswählen".](assets/p2-buendel-anlegen-zeilen.png){width=16.5cm}
 
-**Frage an Sie:** Der Reiter DA.M.B enthält dieselbe Mitarbeiter-Matrix, und jede
-Mitarbeiter-Zeile lässt sich dort aufklappen. Das eigene Mitarbeiterboard wird damit
-weitgehend überflüssig. Soll es raus?
+**Frage an Sie:** Der Reiter DA.M.B enthält die Reiter Mitarbeiterboard, Belege und
+Digitale Ablagen. Sollen sie versteckt werden?
 
 \newpage
 
