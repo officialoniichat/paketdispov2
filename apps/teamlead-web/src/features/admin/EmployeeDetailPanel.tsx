@@ -1,7 +1,12 @@
 /**
  * Mitarbeiter-Stammdaten (concept §d Screen 2). WHO + per-head capacity params only:
- * Rolle (read-only), aktiv, Bereich/Skill, Produktivität, Mitarbeiter-App-PIN.
- * Arbeitszeit/Schichten live in the separate Schichtplan tab — not here.
+ * Rolle (read-only), aktiv, Skill-Stufe/Arbeitsplatz, Produktivität, Mitarbeiter-App-PIN,
+ * plus das read-only Skill-Radar. Arbeitszeit/Schichten leben im separaten Schichtplan-
+ * Tab — nicht hier.
+ *
+ * Bereiche werden hier BEWUSST nicht mehr gepflegt (Kundenfeedback 07.08.2026): „Jeder
+ * MA macht alles." Das Feld existiert weiter am Mitarbeiter (die Engine nutzt es), es
+ * gibt hier nur keine Einstellmöglichkeit mehr.
  */
 import { useEffect, useState, type JSX } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,8 +39,8 @@ import {
   type EmployeeProfileUpdate,
   type Workstation,
 } from '../../data/employees.js';
-import { useBereichCatalog } from '../../data/bereichCatalog.js';
 import { formatAuditAction } from '../../data/audit.js';
+import { SkillRadar } from './SkillRadar.js';
 import { employeeRoleLabels, shiftSourceLabels } from '@paket/ui';
 import { toEmployeeRole, toEventType, toShiftSource } from '../../data/narrow.js';
 
@@ -117,6 +122,8 @@ export function EmployeeDetailPanel({
       </div>
 
       <ProfileSection emp={emp} onSaved={onSaved} />
+      <Divider />
+      <SkillRadarSection emp={emp} />
       <Divider />
       <ParamsSection emp={emp} onSaved={onSaved} />
       <Divider />
@@ -292,19 +299,12 @@ function ProfileSection({
   emp: EmployeeDetail;
   onSaved: (e: EmployeeDetail) => void;
 }): JSX.Element {
-  const catalog = useBereichCatalog();
   const mutation = useMutation({
     mutationFn: ([id, patch]: ProfilePatchArgs) => updateEmployeeProfile(id, patch),
     onSuccess: onSaved,
   });
   const save = (patch: EmployeeProfileUpdate): void => {
     mutation.mutate([emp.id, patch]);
-  };
-  const toggle = (bereich: string): void => {
-    const next = emp.bereiche.includes(bereich)
-      ? emp.bereiche.filter((b) => b !== bereich)
-      : [...emp.bereiche, bereich];
-    save({ bereiche: next });
   };
 
   return (
@@ -324,32 +324,26 @@ function ProfileSection({
         aber nicht in die Produktivitäts-/ZST-Leistung. Der Durchsatz bleibt sichtbar.
       </Typography>
       <SkillWorkstationFields emp={emp} save={save} />
-      <div>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-          Bereich / Skill {emp.bereiche.length === 0 && '· Allrounder (übernimmt alles)'}
-        </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          {catalog.length === 0 && (
-            <Typography variant="caption" color="text.secondary">
-              Kein Katalog gepflegt – im Tab „Bereiche" anlegen.
-            </Typography>
-          )}
-          {catalog.map((b) => (
-            <Chip
-              key={b}
-              label={b}
-              size="small"
-              color={emp.bereiche.includes(b) ? 'primary' : 'default'}
-              variant={emp.bereiche.includes(b) ? 'filled' : 'outlined'}
-              onClick={() => toggle(b)}
-            />
-          ))}
-        </Stack>
-        <Typography variant="caption" color="text.secondary">
-          Belege dieses Bereichs werden bevorzugt zugeteilt; fehlt ein Spezialist, springt jeder ein.
-        </Typography>
-      </div>
       <SaveFeedback mutation={mutation} />
+    </Stack>
+  );
+}
+
+/**
+ * Können-Profil statt Bereichs-Auswahl (Kundenfeedback 07.08.2026). Die Kundin:
+ * „Diese Bereiche werden grundsätzlich nicht benötigt … Es gibt keine Mitarbeiter,
+ * die nur z. B. HW bearbeiten. Jeder MA macht alles." Deshalb gibt es hier nichts
+ * mehr einzustellen — nur noch etwas zu sehen.
+ */
+function SkillRadarSection({ emp }: { emp: EmployeeDetail }): JSX.Element {
+  return (
+    <Stack spacing={1}>
+      <Typography variant="subtitle2">Skill-Radar</Typography>
+      <Alert severity="info" variant="outlined">
+        Vorschau — die Werte sind Platzhalter und werden künftig algorithmisch aus echten
+        Arbeitsdaten (ZST, Problemquote) berechnet.
+      </Alert>
+      <SkillRadar employeeNo={emp.employeeNo} />
     </Stack>
   );
 }
