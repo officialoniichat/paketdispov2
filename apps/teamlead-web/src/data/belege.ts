@@ -546,6 +546,14 @@ export interface CaseSearchResult {
   storageLocationCode: string | null;
   priorityFlags: PriorityFlag[];
   deliveryGroup: DeliveryGroupRef | null;
+  /** Filiale (Beleg-Kopf) — Zeilen-Infos beim Bündel-Anlegen (07.08.2026). */
+  branchNo: string;
+  /** Alle Shops (Primär zuerst) — Zeilen-Infos. */
+  shopNos: string[];
+  /** Vorkommende Etikett-Druckvarianten (Backend-Aggregat) — Zeilen-Infos. */
+  labelPrintVariants: LabelPrintVariant[];
+  /** Mindestens eine Position verlangt Sicherung (Backend-Aggregat). */
+  securityRequired: boolean;
 }
 
 /** Query params for the assign-flow search/browse endpoint. */
@@ -588,6 +596,11 @@ function toSearchResult(item: CaseSearchResultDto): CaseSearchResult {
     storageLocationCode: item.storageLocationCode ?? null,
     priorityFlags: toPriorityFlags(item.priorityFlags),
     deliveryGroup: item.deliveryGroup ? toDeliveryGroupRef(item.deliveryGroup) : null,
+    // Zeilen-Infos (07.08.2026) — fertig aggregiert vom Backend, hier durchgereicht.
+    branchNo: item.branchNo,
+    shopNos: item.shopNos,
+    labelPrintVariants: item.labelPrintVariants,
+    securityRequired: item.securityRequired,
   };
 }
 

@@ -8,6 +8,7 @@ import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { BelegInfoChips } from './BelegInfoChips.js';
 import { LieferungChip } from './LieferungChip.js';
 import type { CaseSearchResult } from '../data/belege.js';
 
@@ -31,8 +32,7 @@ export function BelegSearchResultRow({
     <Stack
       direction="row"
       spacing={1}
-      alignItems="center"
-      flexWrap="wrap"
+      alignItems="flex-start"
       onClick={onSelect}
       sx={{
         p: 1,
@@ -44,22 +44,35 @@ export function BelegSearchResultRow({
       {checkbox && (
         <Checkbox
           size="small"
+          sx={{ p: 0.25 }}
           checked={checkbox.checked}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => checkbox.onChange(e.target.checked)}
           inputProps={{ 'aria-label': `${result.weBelegNo} auswählen` }}
         />
       )}
-      <Typography sx={{ fontWeight: 700 }}>{result.weBelegNo}</Typography>
-      {result.bereich && <Chip size="small" variant="outlined" label={result.bereich} />}
-      <Chip size="small" variant="outlined" label={`${result.teile} Teile`} />
-      <LieferungChip group={result.deliveryGroup} />
-      {result.priorityFlags.length > 0 && (
-        <Chip size="small" color="warning" variant="outlined" label="Prio" />
-      )}
-      <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-        {result.storageLocationCode ?? '–'}
-      </Typography>
+      <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Typography sx={{ fontWeight: 700 }}>{result.weBelegNo}</Typography>
+          {result.bereich && <Chip size="small" variant="outlined" label={result.bereich} />}
+          <Chip size="small" variant="outlined" label={`${result.teile} Teile`} />
+          <LieferungChip group={result.deliveryGroup} />
+          {result.priorityFlags.length > 0 && (
+            <Chip size="small" color="warning" variant="outlined" label="Prio" />
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+            {result.storageLocationCode ?? '–'}
+          </Typography>
+        </Stack>
+        {/* Zeilen-Infos (Kundenfeedback 07.08.2026): dieselbe Komponente und damit
+            dieselbe Optik wie auf den Karten der Digitalen Ablage. */}
+        <BelegInfoChips
+          branchNo={result.branchNo}
+          shopNos={result.shopNos}
+          labelPrintVariants={result.labelPrintVariants}
+          securityRequired={result.securityRequired}
+        />
+      </Stack>
     </Stack>
   );
 }

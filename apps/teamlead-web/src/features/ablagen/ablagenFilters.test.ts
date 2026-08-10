@@ -36,6 +36,10 @@ function makeCard(overrides: Partial<LaneCard> = {}): LaneCard {
     attentionFlag: false,
     attentionNote: null,
     deliveryGroup: null,
+    branchNo: '1000',
+    shopNos: ['42'],
+    labelPrintVariants: ['etikett_mit_preis'],
+    securityRequired: false,
     ...overrides,
   };
 }

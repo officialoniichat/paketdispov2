@@ -53,6 +53,7 @@ import { unwrap } from '../../data/http.js';
 import { useCockpitData } from '../../data/store.js';
 import { formatDateTime, formatMinutes } from '../../lib/format.js';
 import { ABLAGEN_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
+import { BelegInfoChips } from '../../components/BelegInfoChips.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
 import { InstructionsDialog, issueLabel } from '../../components/InstructionsDialog.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
@@ -815,6 +816,14 @@ function LaneCardView({
             />
           )}
         </Stack>
+        {/* Kachel-Infos (Kundenfeedback 07.08.2026): Filiale, Shop, Etiketten/Digi
+            Tags, Sicherung — dieselbe Komponente wie in der Bündel-Auswahl. */}
+        <BelegInfoChips
+          branchNo={card.branchNo}
+          shopNos={card.shopNos}
+          labelPrintVariants={card.labelPrintVariants}
+          securityRequired={card.securityRequired}
+        />
         {/* Instruktions-Loop (04.08.2026): Anzahl sichtbar + Aufklappen mit ALLEN
             Meldungen (Art, Position, Zeit, Einzel-Status). */}
         {card.issues.length > 0 && <CardIssuesSummary issues={card.issues} />}

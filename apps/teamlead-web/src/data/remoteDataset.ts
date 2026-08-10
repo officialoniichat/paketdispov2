@@ -342,6 +342,11 @@ function toLaneCard(item: PoolItemDto): LaneCard {
     attentionFlag: item.attentionFlag,
     attentionNote: item.attentionNote ?? null,
     deliveryGroup: item.deliveryGroup ?? null,
+    // Kachel-Infozeile (07.08.2026) — fertig aggregiert vom Backend, hier nur durchgereicht.
+    branchNo: item.branchNo,
+    shopNos: item.shopNos,
+    labelPrintVariants: item.labelPrintVariants,
+    securityRequired: item.securityRequired,
   };
 }
 

@@ -36,6 +36,10 @@ const mocks = vi.hoisted(() => {
     attentionFlag: false,
     attentionNote: null,
     deliveryGroup: null,
+    branchNo: '1000',
+    shopNos: ['42'],
+    labelPrintVariants: ['etikett_mit_preis'],
+    securityRequired: false,
   });
   const lane = (id: string, title: string, cards: unknown[]): Record<string, unknown> => ({
     id,

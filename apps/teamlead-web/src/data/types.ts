@@ -12,6 +12,7 @@ import type {
   IssueAuthorRole,
   IssueMessageKind,
   IssueStatus,
+  LabelPrintVariant,
   ProblemKind,
   SkillTier,
   WorkIssue,
@@ -140,6 +141,17 @@ export interface LaneCard {
   attentionNote: string | null;
   /** „Gehört zusammen"-Lieferung; null für Einzel-Belege (A1). */
   deliveryGroup: DeliveryGroupRef | null;
+  /** Filiale des Beleg-Kopfs — Kachel-Infozeile (Kundenfeedback 07.08.2026). */
+  branchNo: string;
+  /** Alle Shops des Belegs (Primär zuerst) — Kachel-Infozeile. */
+  shopNos: string[];
+  /**
+   * Etikett-Druckvarianten, die auf dem Beleg vorkommen — belegweit vom Backend
+   * aggregiert (nur tatsächlich vorkommende, in Anzeige-Reihenfolge).
+   */
+  labelPrintVariants: LabelPrintVariant[];
+  /** Mindestens eine Position verlangt Sicherung (Backend-Aggregat). */
+  securityRequired: boolean;
 }
 
 export interface Lane {

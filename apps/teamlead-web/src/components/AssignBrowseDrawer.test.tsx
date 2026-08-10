@@ -37,6 +37,10 @@ function result(partial: Partial<CaseSearchResult> & Pick<CaseSearchResult, 'cas
     storageLocationCode: 'R41',
     priorityFlags: [],
     deliveryGroup: null,
+    branchNo: '1000',
+    shopNos: ['42'],
+    labelPrintVariants: ['etikett_mit_preis'],
+    securityRequired: false,
     ...partial,
   };
 }
