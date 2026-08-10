@@ -121,6 +121,15 @@ export class EmployeeDetailDto extends EmployeeListItemDto {
 
 /** PATCH profile. Roles are read-only in this pilot (identity stays in the IdP). */
 export class EmployeeProfileUpdateDto {
+  @ApiPropertyOptional({
+    description:
+      'Anzeigename. Manuelle Pflege ist der Fallback — künftig soll der Name aus dem ' +
+      'SEAK-Personalmanagement fließen (Schnittstelle geplant).',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  displayName?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
   @ApiPropertyOptional({ description: 'false = temporäre Kraft (ohne Leistungsmessung)' })
   @IsOptional()
@@ -162,6 +171,29 @@ export class EmployeeProfileUpdateDto {
   @ValidateNested()
   @Type(() => WeeklyPatternDto)
   weeklyPattern?: WeeklyPatternDto | null;
+}
+
+/**
+ * Warum ein Mitarbeiter NICHT hart gelöscht werden darf. Der Schutz ist Fachlogik und
+ * gehört deshalb hierher, nicht in die Oberfläche: das Cockpit zeigt die Gründe nur an
+ * und bietet den Weg über „Deaktivieren" statt eines zweiten, eigenen Regelwerks.
+ */
+export class EmployeeDeleteBlockerDto {
+  @ApiProperty({
+    enum: ['active_shift', 'has_bundles', 'running_cases', 'has_history'],
+    description:
+      'active_shift = aktive Schicht heute · has_bundles = Bündel vorhanden · ' +
+      'running_cases = Belege in Arbeit · has_history = Leistungs-/Meldungshistorie',
+  })
+  code!: 'active_shift' | 'has_bundles' | 'running_cases' | 'has_history';
+  @ApiProperty({ description: 'Erklärung im Klartext für den Hinweis im Cockpit' })
+  message!: string;
+}
+
+/** 409-Antwort des Löschversuchs: Klartext-Hinweis plus die einzelnen Gründe. */
+export class EmployeeDeleteConflictDto {
+  @ApiProperty({ description: 'Hinweis inkl. Verweis auf „Deaktivieren"' }) message!: string;
+  @ApiProperty({ type: [EmployeeDeleteBlockerDto] }) blockers!: EmployeeDeleteBlockerDto[];
 }
 
 /** Admin-only PIN reset (Auth-Task 5). Same length constraint as `LoginRequestDto`. */

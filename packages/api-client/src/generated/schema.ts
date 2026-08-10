@@ -1079,7 +1079,8 @@ export interface paths {
         get: operations["EmployeesController_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Mitarbeiter löschen. 409 mit Gründen, wenn aktive Schicht/Bündel/laufende Belege/Historie dagegenstehen — dann ist Deaktivieren der Weg. */
+        delete: operations["EmployeesController_remove"];
         options?: never;
         head?: never;
         /** Update profile (active, area tags, productivity, overtime, pattern). */
@@ -2521,6 +2522,8 @@ export interface components {
             endDate: string;
         };
         EmployeeProfileUpdateDto: {
+            /** @description Anzeigename. Manuelle Pflege ist der Fallback — künftig soll der Name aus dem SEAK-Personalmanagement fließen (Schnittstelle geplant). */
+            displayName?: string;
             active?: boolean;
             /** @description false = temporäre Kraft (ohne Leistungsmessung) */
             measured?: boolean;
@@ -2534,6 +2537,20 @@ export interface components {
             /** @description Arbeitsplatz/Tisch (Workstation-Id); null löst die Zuweisung */
             workstationId?: string | null;
             weeklyPattern?: components["schemas"]["WeeklyPatternDto"] | null;
+        };
+        EmployeeDeleteBlockerDto: {
+            /**
+             * @description active_shift = aktive Schicht heute · has_bundles = Bündel vorhanden · running_cases = Belege in Arbeit · has_history = Leistungs-/Meldungshistorie
+             * @enum {string}
+             */
+            code: "active_shift" | "has_bundles" | "running_cases" | "has_history";
+            /** @description Erklärung im Klartext für den Hinweis im Cockpit */
+            message: string;
+        };
+        EmployeeDeleteConflictDto: {
+            /** @description Hinweis inkl. Verweis auf „Deaktivieren" */
+            message: string;
+            blockers: components["schemas"]["EmployeeDeleteBlockerDto"][];
         };
         PinResetDto: {
             pin: string;
@@ -4238,6 +4255,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailDto"];
+                };
+            };
+        };
+    };
+    EmployeesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nicht löschbar; die Antwort nennt die Gründe und verweist auf Deaktivieren. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeDeleteConflictDto"];
                 };
             };
         };

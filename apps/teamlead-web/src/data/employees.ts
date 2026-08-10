@@ -70,6 +70,51 @@ export async function resetEmployeePin(id: string, pin: string): Promise<void> {
   }
 }
 
+export type EmployeeDeleteBlocker = components['schemas']['EmployeeDeleteBlockerDto'];
+
+/**
+ * Der Server hat das Löschen verweigert und sagt warum. Eigener Fehlertyp, damit der
+ * Dialog die Gründe auflisten und „Stattdessen deaktivieren" anbieten kann, statt eine
+ * Meldung zu zerlegen — die Regel selbst bleibt im Backend.
+ */
+export class EmployeeDeleteBlockedError extends Error {
+  readonly blockers: EmployeeDeleteBlocker[];
+
+  constructor(message: string, blockers: EmployeeDeleteBlocker[]) {
+    super(message);
+    this.name = 'EmployeeDeleteBlockedError';
+    this.blockers = blockers;
+  }
+}
+
+/** Narrow the openapi-fetch error body to the 409 conflict shape (no `any`). */
+function toDeleteConflict(
+  error: unknown,
+): { message: string; blockers: EmployeeDeleteBlocker[] } | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const body = error as { message?: unknown; blockers?: unknown };
+  if (!Array.isArray(body.blockers)) return null;
+  return {
+    message: typeof body.message === 'string' ? body.message : 'Löschen nicht möglich.',
+    blockers: body.blockers as EmployeeDeleteBlocker[],
+  };
+}
+
+/**
+ * Mitarbeiter löschen. Wirft {@link EmployeeDeleteBlockedError}, wenn der Server den
+ * Schutz greifen lässt (aktive Schicht, Bündel, laufende Belege, Historie).
+ */
+export async function deleteEmployee(id: string): Promise<void> {
+  const result = await api.DELETE('/api/admin/employees/{id}', {
+    params: { path: { id } },
+  });
+  if (hasFetchError(result)) {
+    const conflict = toDeleteConflict(result.error);
+    if (conflict) throw new EmployeeDeleteBlockedError(conflict.message, conflict.blockers);
+    throw new Error(`Löschen des Mitarbeiters fehlgeschlagen (${describeCause(result.error)})`);
+  }
+}
+
 // --- Abwesenheiten (Schichtplan-Kalender) -----------------------------------
 
 export type Absence = components['schemas']['AbsenceDto'];

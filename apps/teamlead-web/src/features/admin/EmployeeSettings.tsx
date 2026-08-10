@@ -69,8 +69,9 @@ export function EmployeeSettings(): JSX.Element {
         </Stack>
         <TempEmployeeDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onCreated} />
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          MSP-Import folgt später — hier nur Stammmannschaft; Azubis/Aushilfen über
-          Dummy-Mitarbeiter.
+          Mitarbeiterdaten sollen künftig aus dem SEAK-Personalmanagement fließen — die
+          Schnittstelle ist geplant. Bis dahin ist die Pflege hier der Fallback: Name
+          ändern, deaktivieren und löschen erledigen Sie im Mitarbeiter-Panel rechts.
         </Typography>
         {query.data && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>

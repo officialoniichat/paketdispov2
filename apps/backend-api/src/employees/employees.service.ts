@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   employeeRoleSchema,
@@ -16,6 +21,7 @@ import type {
   AbsenceCreateDto,
   AbsenceDto,
   EmployeeCreateDto,
+  EmployeeDeleteBlockerDto,
   EmployeeDetailDto,
   EmployeeListItemDto,
   EmployeeListResponseDto,
@@ -203,6 +209,13 @@ export class EmployeesService {
     if (!user) throw new NotFoundException(`Employee ${id} not found`);
 
     const data: Prisma.UserUpdateInput = {};
+    if (dto.displayName !== undefined) {
+      const displayName = dto.displayName.trim();
+      if (displayName.length < 2) {
+        throw new BadRequestException('Der Anzeigename braucht mindestens zwei Zeichen.');
+      }
+      data.displayName = displayName;
+    }
     if (dto.active !== undefined) data.active = dto.active;
     if (dto.measured !== undefined) data.measured = dto.measured;
     if (dto.bereiche !== undefined) data.bereiche = dto.bereiche;
@@ -286,6 +299,92 @@ export class EmployeesService {
       actorType: 'teamlead',
       actorId: principal.sub,
       payload: {},
+    });
+  }
+
+  /**
+   * Mitarbeiter löschen — nur, solange nichts Operatives an ihm hängt.
+   *
+   * Der Schutz ist bewusst streng: sobald jemand ein Bündel bekommen hat, Belege in
+   * Arbeit hat, heute in einer aktiven Schicht steht oder Leistungs-/Meldungshistorie
+   * besitzt, würde ein Hard-Delete entweder die Tagesplanung zerreißen oder auditierbare
+   * Historie stillschweigend entfernen. Für diese Fälle ist „Deaktivieren" der richtige
+   * Weg — die Person verschwindet aus Planung und Auswahl, die Historie bleibt lesbar.
+   *
+   * Löschbar ist damit in der Praxis der versehentlich angelegte Datensatz. Dessen reine
+   * Anzeige-Anhänge (materialisierte Schichten, Abwesenheiten, TL-Nachrichten) räumt das
+   * Löschen mit ab, damit keine verwaisten Zeilen im Kalender stehen bleiben.
+   */
+  async remove(principal: Principal, id: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException(`Employee ${id} not found`);
+
+    const today = absenceDay(todayIso());
+    const [activeShifts, bundleCount, runningCases, zstCount, issueCount] = await Promise.all([
+      this.prisma.shift.count({ where: { employeeId: id, date: today, active: true } }),
+      this.prisma.assignmentBundle.count({ where: { employeeId: id } }),
+      this.prisma.goodsReceiptCase.count({
+        where: {
+          assignedBundle: { employeeId: id },
+          status: { in: ['assigned', 'in_progress', 'issue_open', 'problem_resolved'] },
+        },
+      }),
+      this.prisma.zstRecord.count({ where: { employeeId: id } }),
+      this.prisma.issue.count({ where: { employeeId: id } }),
+    ]);
+
+    const blockers: EmployeeDeleteBlockerDto[] = [];
+    if (activeShifts > 0) {
+      blockers.push({
+        code: 'active_shift',
+        message: 'Die Person steht heute in einer aktiven Schicht.',
+      });
+    }
+    if (runningCases > 0) {
+      blockers.push({
+        code: 'running_cases',
+        message: `Es sind ${runningCases} Belege in Arbeit oder zugeteilt.`,
+      });
+    }
+    if (bundleCount > 0) {
+      blockers.push({
+        code: 'has_bundles',
+        message: `Es hängen ${bundleCount} Bündel an der Person.`,
+      });
+    }
+    if (zstCount > 0 || issueCount > 0) {
+      blockers.push({
+        code: 'has_history',
+        message: 'Es gibt Leistungs- oder Meldungshistorie, die erhalten bleiben muss.',
+      });
+    }
+
+    if (blockers.length > 0) {
+      throw new ConflictException({
+        message:
+          'Dieser Mitarbeiter kann nicht gelöscht werden. Deaktivieren Sie ihn stattdessen — ' +
+          'dann verschwindet er aus Planung und Auswahl, die Historie bleibt erhalten.',
+        blockers,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Reine Anzeige-Anhänge: ohne sie bleiben sonst verwaiste Kalender-Einträge stehen.
+      await tx.shift.deleteMany({ where: { employeeId: id } });
+      await tx.employeeAbsence.deleteMany({ where: { employeeId: id } });
+      await tx.teamleadMessage.deleteMany({ where: { employeeId: id } });
+      await tx.user.delete({ where: { id } });
+      await this.events.append(
+        {
+          eventType: 'employee.deleted',
+          entityType: 'User',
+          entityId: id,
+          actorType: 'admin',
+          actorId: principal.sub,
+          payload: { employeeNo: user.employeeNo, displayName: user.displayName },
+        },
+        tx,
+      );
     });
   }
 

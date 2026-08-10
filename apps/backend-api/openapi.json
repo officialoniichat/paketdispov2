@@ -2899,6 +2899,43 @@
         "tags": [
           "employees"
         ]
+      },
+      "delete": {
+        "operationId": "EmployeesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "409": {
+            "description": "Nicht löschbar; die Antwort nennt die Gründe und verweist auf Deaktivieren.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDeleteConflictDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mitarbeiter löschen. 409 mit Gründen, wenn aktive Schicht/Bündel/laufende Belege/Historie dagegenstehen — dann ist Deaktivieren der Weg.",
+        "tags": [
+          "employees"
+        ]
       }
     },
     "/api/admin/employees/{id}/pin": {
@@ -7267,6 +7304,10 @@
       "EmployeeProfileUpdateDto": {
         "type": "object",
         "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Anzeigename. Manuelle Pflege ist der Fallback — künftig soll der Name aus dem SEAK-Personalmanagement fließen (Schnittstelle geplant)."
+          },
           "active": {
             "type": "boolean"
           },
@@ -7307,6 +7348,48 @@
             ]
           }
         }
+      },
+      "EmployeeDeleteBlockerDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "active_shift",
+              "has_bundles",
+              "running_cases",
+              "has_history"
+            ],
+            "description": "active_shift = aktive Schicht heute · has_bundles = Bündel vorhanden · running_cases = Belege in Arbeit · has_history = Leistungs-/Meldungshistorie"
+          },
+          "message": {
+            "type": "string",
+            "description": "Erklärung im Klartext für den Hinweis im Cockpit"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "EmployeeDeleteConflictDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Hinweis inkl. Verweis auf „Deaktivieren\""
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeDeleteBlockerDto"
+            }
+          }
+        },
+        "required": [
+          "message",
+          "blockers"
+        ]
       },
       "PinResetDto": {
         "type": "object",

@@ -1,11 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Role, Roles, type Principal } from '../auth/rbac.js';
 import { EmployeesService } from './employees.service.js';
 import {
   AbsenceCreateDto,
   AbsenceDto,
   EmployeeCreateDto,
+  EmployeeDeleteConflictDto,
   EmployeeDetailDto,
   EmployeeListResponseDto,
   EmployeeProfileUpdateDto,
@@ -96,6 +97,22 @@ export class EmployeesController {
     @Body() body: EmployeeProfileUpdateDto,
   ): Promise<EmployeeDetailDto> {
     return this.employees.updateProfile(principal, id, body);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary:
+      'Mitarbeiter löschen. 409 mit Gründen, wenn aktive Schicht/Bündel/laufende Belege/' +
+      'Historie dagegenstehen — dann ist Deaktivieren der Weg.',
+  })
+  @ApiNoContentResponse()
+  @ApiConflictResponse({
+    type: EmployeeDeleteConflictDto,
+    description: 'Nicht löschbar; die Antwort nennt die Gründe und verweist auf Deaktivieren.',
+  })
+  async remove(@CurrentUser() principal: Principal, @Param('id') id: string): Promise<void> {
+    await this.employees.remove(principal, id);
   }
 
   @Patch(':id/pin')

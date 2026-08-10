@@ -23,10 +23,13 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { SkillTier } from '@paket/domain-types';
 import {
+  deleteEmployee,
+  EmployeeDeleteBlockedError,
   fetchEmployee,
   fetchWorkstations,
   resetEmployeePin,
   updateEmployeeProfile,
+  type EmployeeDeleteBlocker,
   type EmployeeDetail,
   type EmployeeProfileUpdate,
   type Workstation,
@@ -120,7 +123,165 @@ export function EmployeeDetailPanel({
       <PinSection emp={emp} onSaved={onSaved} />
       <Divider />
       <AuditSection emp={emp} />
+      <Divider />
+      <DeleteSection emp={emp} onSaved={onSaved} onDeleted={onChanged} />
     </Stack>
+  );
+}
+
+/**
+ * Mitarbeiter löschen — mit dem Schutz, den das Backend setzt. Das Cockpit kennt die
+ * Regel nicht, es zeigt nur die Gründe, die der Server im 409 mitschickt, und bietet
+ * dann den vorgesehenen Ausweg an: deaktivieren statt löschen.
+ */
+function DeleteSection({
+  emp,
+  onSaved,
+  onDeleted,
+}: {
+  emp: EmployeeDetail;
+  onSaved: (e: EmployeeDetail) => void;
+  onDeleted: () => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [blocked, setBlocked] = useState<EmployeeDeleteBlocker[] | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const deletion = useMutation({
+    mutationFn: () => deleteEmployee(emp.id),
+    onSuccess: () => {
+      setOpen(false);
+      onDeleted();
+    },
+    onError: (error: Error) => {
+      if (error instanceof EmployeeDeleteBlockedError) {
+        setBlocked(error.blockers);
+        setFailure(error.message);
+      } else {
+        setBlocked(null);
+        setFailure(error.message);
+      }
+    },
+  });
+
+  const deactivation = useMutation({
+    mutationFn: () => updateEmployeeProfile(emp.id, { active: false }),
+    onSuccess: (saved) => {
+      onSaved(saved);
+      setOpen(false);
+    },
+  });
+
+  const openDialog = (): void => {
+    setBlocked(null);
+    setFailure(null);
+    setOpen(true);
+  };
+
+  return (
+    <Stack spacing={1} alignItems="flex-start">
+      <Typography variant="subtitle2">Mitarbeiter entfernen</Typography>
+      <Typography variant="body2" color="text.secondary">
+        Löschen geht nur, solange nichts Operatives an der Person hängt. Wer schon
+        gearbeitet hat, wird deaktiviert — dann verschwindet er aus Planung und Auswahl,
+        die Historie bleibt lesbar.
+      </Typography>
+      <Button size="small" color="error" variant="outlined" onClick={openDialog}>
+        Mitarbeiter löschen …
+      </Button>
+
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {emp.displayName} (#{emp.employeeNo}) löschen?
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {blocked === null && failure === null && (
+              <Typography variant="body2">
+                Der Datensatz wird endgültig entfernt, zusammen mit geplanten Schichten,
+                Abwesenheiten und Nachrichten dieser Person. Das lässt sich nicht rückgängig
+                machen.
+              </Typography>
+            )}
+            {failure !== null && (
+              <Alert severity={blocked ? 'warning' : 'error'}>
+                {failure}
+                {blocked && blocked.length > 0 && (
+                  <ul style={{ margin: '8px 0 0', paddingInlineStart: 20 }}>
+                    {blocked.map((b) => (
+                      <li key={b.code}>{b.message}</li>
+                    ))}
+                  </ul>
+                )}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>Abbrechen</Button>
+          {blocked !== null && emp.active && (
+            <Button
+              variant="contained"
+              onClick={() => deactivation.mutate()}
+              disabled={deactivation.isPending}
+            >
+              Stattdessen deaktivieren
+            </Button>
+          )}
+          {blocked === null && (
+            <Button
+              color="error"
+              variant="contained"
+              onClick={() => deletion.mutate()}
+              disabled={deletion.isPending}
+            >
+              Endgültig löschen
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </Stack>
+  );
+}
+
+/**
+ * Anzeigename bearbeiten. Gespeichert wird beim Verlassen des Feldes (und mit Enter),
+ * nicht bei jedem Tastendruck — sonst liefe je Buchstabe ein PATCH. Ein leerer oder zu
+ * kurzer Name fällt auf den gespeicherten Wert zurück; die Regel selbst prüft das Backend.
+ */
+function NameField({
+  emp,
+  onSave,
+}: {
+  emp: EmployeeDetail;
+  onSave: (displayName: string) => void;
+}): JSX.Element {
+  const [draft, setDraft] = useState(emp.displayName);
+  useEffect(() => setDraft(emp.displayName), [emp.displayName]);
+
+  const commit = (): void => {
+    const next = draft.trim();
+    if (next.length < 2) {
+      setDraft(emp.displayName);
+      return;
+    }
+    if (next !== emp.displayName) onSave(next);
+  };
+
+  return (
+    <TextField
+      size="small"
+      label="Anzeigename"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') setDraft(emp.displayName);
+      }}
+      helperText="So erscheint die Person in Board, Bündeln und Auswertungen."
+      sx={{ maxWidth: 360 }}
+    />
   );
 }
 
@@ -149,6 +310,7 @@ function ProfileSection({
   return (
     <Stack spacing={1.5}>
       <Typography variant="subtitle2">Stammdaten</Typography>
+      <NameField emp={emp} onSave={(displayName) => save({ displayName })} />
       <FormControlLabel
         control={<Switch checked={emp.active} onChange={(e) => save({ active: e.target.checked })} />}
         label="Aktiv"

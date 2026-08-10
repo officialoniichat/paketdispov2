@@ -248,6 +248,7 @@ export const workflowEventTypeSchema = z.enum([
   'case.delivery_group_split',
   'employee.created',
   'employee.profile_updated',
+  'employee.deleted',
   'employee.shift_overridden',
   'employee.workstation_assigned',
   'employee.pin_reset',
