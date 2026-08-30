@@ -30,6 +30,10 @@ Neben `'1 · Ware holen'` siehst du einen Zähler wie `'<geholt>/<gesamt> Plätz
    angezeigt (z. B. `'R3'`, `'HB-3'`, `'P-2'`). Vorne steht die **Stop-Nummer** (1, 2, 3 …).
 2. Pro Stop siehst du die Belege als Kürzel `'WE <Nummer>'`. Muss dort etwas gedruckt werden, steht
    zusätzlich `'· Etiketten drucken'` mit dem Etiketten-Symbol.
+   Gehören zu einem Beleg **mehrere Kartons**, steht in der Infozeile fett `'<Anzahl> Kartons'` —
+   z. B. `'4 Kartons'`. Auf dem Platz stehen auch Kartons anderer Aufträge; deine tragen die
+   WE-Nummer, aber erst diese Zahl sagt dir, wann du **alle** hast. Steht dort nichts, ist es ein
+   einzelner Karton (oder die Anzahl wurde beim Buchen nicht erfasst).
 3. **Hole die Ware** und hake den Stop ab – auf zwei Arten:
    - Tippe die Karte an, **oder**
    - scanne den Barcode am Lagerplatz (passt der Scan zum Platz, wird abgehakt).

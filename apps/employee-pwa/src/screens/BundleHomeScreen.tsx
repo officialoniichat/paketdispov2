@@ -8,8 +8,8 @@
  * CaseSummaryDto.collected) — it survives reload, navigation and device
  * switches; tap and Lagerplatz-Scan share that one path (Kundenfeedback
  * 04.08.2026, Punkt 2). Each stop lists its Belege with the same Beleg-Kopf
- * infos as „2 · Bearbeiten" (Filiale, Shopbereich, Etikettendruck/Digitale
- * Etiketten, Warenart, CatMan-Termin) plus „Barcode anzeigen" — the WE-Nr as
+ * infos as „2 · Bearbeiten" (Filiale, Shopbereich, Kartons, Etikettendruck/
+ * Digitale Etiketten, Warenart, CatMan-Termin) plus „Barcode anzeigen" — the WE-Nr as
  * Code-128 pop-up to request Etiketten per Scanner right while fetching
  * (Kundenfeedback 15.07.2026, Punkte 1+2). Der CatMan-Termin ist der Tag, bis
  * zu dem die Ware auf der Verkaufsfläche stehen muss; ein überschrittener
@@ -382,7 +382,7 @@ function BarcodeLabelBreakdown({ beleg }: { beleg: CaseSummaryDto }): JSX.Elemen
 }
 
 /**
- * Beleg-Kopf-Infos (Filiale · Shopbereich, Etiketten-Art, CatMan-Termin) —
+ * Beleg-Kopf-Infos (Filiale · Shopbereich, Kartons, Etiketten-Art, CatMan-Termin) —
  * identisch unter „1 · Ware holen" und „2 · Bearbeiten" (Kundenfeedback
  * 15.07.2026, Punkt 1: die Zusatz-Infos stehen auch am Ware-holen-Eintrag des
  * Belegs). EINE Zeile, die Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
@@ -405,6 +405,14 @@ function BelegInfoLine({
   referenceDay: string;
 }): JSX.Element {
   const variants = belegLabelVariants(beleg);
+  // Kartons der Anlieferung — NUR wenn es mehr als einer ist. Auf dem Lagerplatz
+  // stehen auch Kartons anderer Aufträge; der Mitarbeiter erkennt seine an der
+  // WE-Nummer, weiß aber nicht, wann er vollständig ist. Genau diese Zahl fehlt
+  // ihm (Kundenrückmeldung 06.08.2026) — „1 Karton" ist der Normalfall und wäre
+  // nur Rauschen. Fehlt die Angabe, wird NICHTS gezeigt: das Feld ist im ERP
+  // (noch) kein Pflichtfeld, und ein stillschweigendes „1" wäre genau der
+  // Fehlgriff, den die Anzeige verhindern soll.
+  const cartons = beleg.inboundCartonCount ?? null;
   return (
     <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
       {/* EINE fließende Zeile, Blöcke mit „|" getrennt (Nachtrag 17.07.2026).
@@ -415,6 +423,21 @@ function BelegInfoLine({
       <Typography variant="body2" color="text.secondary">
         Filiale {beleg.branchNo}
         {beleg.primaryShopAreaNo ? ` · Shopbereich ${beleg.primaryShopAreaNo}` : ''}
+        {cartons !== null && cartons > 1 ? (
+          <>
+            {' | '}
+            {/* Kräftig gesetzt: die Zahl entscheidet, wie viel der MA vom Platz
+                mitnimmt — sie darf nicht im grauen Fließtext untergehen. */}
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.primary"
+              sx={{ fontWeight: 700 }}
+            >
+              {cartons} Kartons
+            </Typography>
+          </>
+        ) : null}
         {variants.map((v) => (
           <Fragment key={v}>
             {' | '}

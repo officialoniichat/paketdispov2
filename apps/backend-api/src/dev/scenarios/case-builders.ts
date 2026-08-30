@@ -751,6 +751,12 @@ interface Ma108CaseSpec {
   checkMode: 'quantity_only' | 'percentage_check' | 'full_check';
   checkPercentage?: 10 | 20;
   estimatedMinutes: number;
+  /**
+   * Kartons der Anlieferung. Explizit statt aus der Teile-Menge gerechnet: das
+   * Demo-Bündel soll beide Zustände nebeneinander zeigen — Stop R7 trägt einen
+   * Beleg mit 1 Karton (die App zeigt dann nichts) und zwei mit mehreren.
+   */
+  inboundCartonCount: number;
   positions: Ma108PositionSpec[];
   /** HH:mm — nur für completed (ZST-Record + Abschlusszeit). */
   completedAt?: string;
@@ -769,6 +775,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.021', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
     goodsTypeText: 'Vororder', status: 'assigned',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 18,
+    inboundCartonCount: 1,
     positions: [
       {
         // CatMan-Fall „überfällig": Termin liegt VOR dem Seed-Tag → rote
@@ -794,6 +801,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.022', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
     goodsTypeText: 'Vororder', status: 'assigned',
     checkMode: 'quantity_only', estimatedMinutes: 14,
+    inboundCartonCount: 4,
     positions: [
       {
         // Ware kommt fertig ausgezeichnet — kein Etikettendruck, kein Gang zum Drucker.
@@ -814,6 +822,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.023', deliveryNoteNo: 'LS-25-9108', storageCode: 'R7',
     goodsTypeText: 'Nachorder', status: 'assigned',
     checkMode: 'percentage_check', checkPercentage: 10, estimatedMinutes: 12,
+    inboundCartonCount: 2,
     positions: [
       {
         // CatMan-Fall „normal": Termin eine Woche nach dem Seed-Tag → 📅-Chip
@@ -832,6 +841,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.051', deliveryNoteNo: 'LS-25-9151', storageCode: 'R19',
     goodsTypeText: 'Vororder', status: 'completed',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 10,
+    inboundCartonCount: 1,
     completedAt: '11:40',
     positions: [
       {
@@ -850,6 +860,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.052', deliveryNoteNo: 'LS-25-9152', storageCode: 'R19',
     goodsTypeText: 'Nachorder', status: 'issue_open',
     checkMode: 'percentage_check', checkPercentage: 20, estimatedMinutes: 11,
+    inboundCartonCount: 1,
     issues: [
       {
         reasonId: 'pr_wrong_article', positionIndex: 0,
@@ -884,6 +895,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.054', deliveryNoteNo: 'LS-25-9154', storageCode: 'R19',
     goodsTypeText: 'Nachorder', status: 'issue_open',
     checkMode: 'quantity_only', estimatedMinutes: 10,
+    inboundCartonCount: 1,
     issues: [
       {
         reasonId: 'pr_wrong_color', positionIndex: 0,
@@ -917,6 +929,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.053', deliveryNoteNo: 'LS-25-9153', storageCode: 'R19',
     goodsTypeText: 'Extrabestellung', status: 'problem_resolved',
     checkMode: 'quantity_only', estimatedMinutes: 9,
+    inboundCartonCount: 1,
     issues: [
       {
         reasonId: 'pr_other', positionIndex: 0,
@@ -944,6 +957,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.031', deliveryNoteNo: 'LS-25-9131', storageCode: 'PA-1',
     goodsTypeText: 'NOS', status: 'assigned',
     checkMode: 'full_check', estimatedMinutes: 26,
+    inboundCartonCount: 6,
     positions: [
       {
         wgr: '218110', supplierArticleNo: 'ART-2131', supplierColor: 'schwarz', nosFlag: true,
@@ -981,6 +995,7 @@ const MA108_CASES: Ma108CaseSpec[] = [
     weBelegNo: '9.108.041', deliveryNoteNo: 'LS-25-9141', storageCode: 'HB-5/234',
     goodsTypeText: 'Extrabestellung', status: 'assigned',
     checkMode: 'quantity_only', estimatedMinutes: 16,
+    inboundCartonCount: 1,
     positions: [
       {
         wgr: '415210', supplierArticleNo: 'ART-2141', supplierColor: 'anthrazit', season: 'HW 26',
@@ -1076,7 +1091,7 @@ export async function seedMa108DemoBundle(
             .filter((d): d is number => d !== undefined)))
         : null,
       totalQuantity,
-      inboundCartonCount: Math.max(1, Math.ceil(totalQuantity / 25)),
+      inboundCartonCount: spec.inboundCartonCount,
       status: spec.status,
       effortPoints: round2(spec.estimatedMinutes / 2.2),
       estimatedMinutes: spec.estimatedMinutes,

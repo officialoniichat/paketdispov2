@@ -25,6 +25,10 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
 - **`'WE <Nummer>'`** (fett);
 - **`'Filiale <Nummer>'`** und **`'Shopbereich <Nummer>'`** — so kannst du Zusammengehörendes
   nacheinander abarbeiten;
+- **`'<Anzahl> Kartons'`** (fett) — **nur, wenn zu dem Beleg mehr als ein Karton gehört**. Auf dem
+  Lagerplatz stehen auch Kartons anderer Aufträge; deine erkennst du an der WE-Nummer, aber erst
+  diese Zahl sagt dir, wann du vollständig bist. Steht dort nichts, ist es ein einzelner Karton
+  (oder die Anzahl wurde beim Buchen nicht erfasst);
 - **`'Etikettendruck'`** (mit Etiketten-Symbol) oder **`'Digitale Etiketten'`**;
 - den **CatMan-Termin** als **`'CatMan <TT.MM.JJJJ>'`** mit Kalender-Symbol, falls der Beleg einen
   hat — bis dahin muss die Ware auf der Verkaufsfläche stehen. Ist der Termin schon vorbei, steht
@@ -45,9 +49,7 @@ Etiketten nötig sind oder nicht. Er klappt die WE-Beleg-Nummer direkt in der Ka
 ## Der Beleg-Bildschirm
 
 Oben steht `'‹ Zurück'`, darüber der Lagerplatz-Code, und als große Überschrift
-**`'WE <Nummer>'`**. Gibt es mehrere Kartons, steht darunter
-`'📦 <Anzahl> Karton / Kartons – alle auf dem Karren suchen!'` – ein Hinweis, dass zu diesem Beleg
-mehrere Kartons gehören, die du **alle** brauchst.
+**`'WE <Nummer>'`**.
 
 Im Kopf siehst du die **Warenart** (z. B. `'Vororder'`) und die Gesamtmenge `'<Anzahl> Teile'`.
 Statt technischer Abschnitts-Nummern zeigt die App bewusst die Warenart-Bezeichnung.
