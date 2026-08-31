@@ -30,9 +30,17 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import ViewListIcon from '@mui/icons-material/ViewList';
-import { assignmentStatusLabels, CaseStatusChip, ProblemChip } from '@paket/ui';
+import { assignmentStatusLabels, CaseStatusChip, ltColors, ProblemChip } from '@paket/ui';
+import {
+  GETEILT_KARTE_SX,
+  GeteiltEntfernenMenu,
+  GeteiltHinweis,
+  geteiltEntfernenAction,
+  type GeteiltMenuPosition,
+} from '../../components/GeteiltChip.js';
 import { useCockpitData } from '../../data/store.js';
 import { formatMinutes, formatNumber, formatPct } from '../../lib/format.js';
 import { ReasonDialog } from '../../components/ReasonDialog.js';
@@ -92,8 +100,17 @@ interface MovingCase {
 }
 
 export function MitarbeiterBoard(): JSX.Element {
-  const { board, withdraw, addToBundle, assignToEmployee, assignBundle, moveCase, reorder, pauseResume } =
-    useCockpitData();
+  const {
+    board,
+    withdraw,
+    addToBundle,
+    assignToEmployee,
+    assignBundle,
+    moveCase,
+    reorder,
+    pauseResume,
+    removeParticipant,
+  } = useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [movingCase, setMovingCase] = useState<MovingCase | null>(null);
   // Ansicht (Liste ↔ Kanban-Raster) + Raster-Sortierung/-Filter, als Saved View
@@ -110,9 +127,16 @@ export function MitarbeiterBoard(): JSX.Element {
   }
 
   // First failing intervention drives the error snackbar.
-  const failed = [withdraw, addToBundle, assignToEmployee, assignBundle, moveCase, reorder, pauseResume].find(
-    (m) => m.isError,
-  );
+  const failed = [
+    withdraw,
+    addToBundle,
+    assignToEmployee,
+    assignBundle,
+    moveCase,
+    reorder,
+    pauseResume,
+    removeParticipant,
+  ].find((m) => m.isError);
 
   // Delivery groups (Teamlead-Anforderung Punkt 1) that ended up split across more than
   // one employee — surfaced so the teamlead can pull them back onto one person.
@@ -201,7 +225,11 @@ export function MitarbeiterBoard(): JSX.Element {
           setPending({
             title: `${mc.weBelegNo} zu ${target.displayName} verschieben`,
             description: `Der Beleg wird aus dem aktuellen Bündel entfernt und ${target.displayName} zugeteilt.`,
-            suggestions: ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+            suggestions: [
+              'Auslastung ausgleichen',
+              'Bereich passt besser',
+              'Auf Wunsch des Mitarbeiters',
+            ],
             run: (reason) =>
               moveCase.mutate({
                 bundleId: mc.bundleId,
@@ -235,12 +263,18 @@ interface EmployeeRowProps {
 }
 
 function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX.Element {
-  const { withdraw, assignBundle, reorder, pauseResume } = useCockpitData();
+  const { withdraw, assignBundle, reorder, pauseResume, removeParticipant } = useCockpitData();
   const navigate = useNavigate();
   const bundleId = row.bundleId;
   const caseKey = row.cases.map((c) => c.caseId).join();
   const [draft, setDraft] = useState<string[]>(() => row.cases.map((c) => c.caseId));
   const [assignOpen, setAssignOpen] = useState(false);
+  // Geteilter Beleg (§4): „Aus geteiltem Beleg entfernen" — es ist immer nur EIN
+  // Menü offen, deshalb genügt der Zeile ein Zustand mit der Beleg-Kennung.
+  const [geteiltMenu, setGeteiltMenu] = useState<{
+    caseId: string;
+    pos: GeteiltMenuPosition;
+  } | null>(null);
 
   // Keep the reorder draft in sync once a mutation changes the bundle.
   useEffect(() => {
@@ -251,6 +285,9 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
     .map((id) => row.cases.find((c) => c.caseId === id))
     .filter((c): c is BoardRow['cases'][number] => c !== undefined);
   const dirty = draft.join() !== row.cases.map((c) => c.caseId).join();
+  const geteiltBeleg = geteiltMenu
+    ? (row.cases.find((c) => c.caseId === geteiltMenu.caseId) ?? null)
+    : null;
 
   function move(index: number, dir: -1 | 1): void {
     const next = [...draft];
@@ -314,9 +351,7 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
               {Math.round(row.effortPoints)} Pkt
             </Typography>
           )}
-          {row.openIssues > 0 && (
-            <ProblemChip status="open" count={row.openIssues} size="small" />
-          )}
+          {row.openIssues > 0 && <ProblemChip status="open" count={row.openIssues} size="small" />}
           {row.bundleSize != null && row.bundleSize > 0 && (
             <Typography variant="body2">
               Beleg {(row.currentCaseIndex ?? 0) + 1}/{row.bundleSize}
@@ -339,70 +374,131 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
               Frei — keine Belege zugewiesen.
             </Typography>
           )}
-          {draftCases.map((c, i) => (
-            <Stack key={c.caseId} direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2" sx={{ minWidth: 18 }}>
-                {i + 1}.
-              </Typography>
-              <IconButton
-                size="small"
-                disabled={i === 0}
-                onClick={() => move(i, -1)}
-                aria-label="Nach oben"
-              >
-                <ArrowUpwardIcon fontSize="inherit" />
-              </IconButton>
-              <IconButton
-                size="small"
-                disabled={i === draftCases.length - 1}
-                onClick={() => move(i, 1)}
-                aria-label="Nach unten"
-              >
-                <ArrowDownwardIcon fontSize="inherit" />
-              </IconButton>
-              <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
-              <CaseStatusChip status={c.status} size="small" />
-              <LieferungChip group={c.deliveryGroup} />
-              {/* Teile-first (B3): Menge primär, Minuten nur noch als Neben-Caption. */}
-              <Typography variant="body2">{c.totalQuantity} Teile</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {c.storageCode ? `${c.storageCode} · ` : ''}
-                {formatMinutes(c.estimatedMinutes)}
-              </Typography>
-              <Button size="small" onClick={() => navigate(`/belege/${c.caseId}`)}>
-                Details
-              </Button>
-              <Button
-                size="small"
-                color="error"
-                disabled={!bundleId}
-                onClick={() =>
-                  requestReason({
-                    title: `${c.weBelegNo} von ${row.displayName} entziehen`,
-                    description: 'Beleg geht zurück in den Pool.',
-                    suggestions: ['Überlastet', 'Falsch zugeteilt', 'Pause/Abwesenheit'],
-                    run: (reason) => {
-                      if (bundleId) withdraw.mutate({ caseId: c.caseId, bundleId, reason });
-                    },
-                  })
+          {draftCases.map((c, i) => {
+            const shared = c.sharedWith ?? [];
+            const istGeteilt = shared.length > 0;
+            return (
+              <Stack
+                key={c.caseId}
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                // Geteilter Beleg (§4): goldene Einfassung — Farbe kommt nie allein,
+                // der Hinweis unten nennt die Beteiligten im Klartext.
+                sx={
+                  istGeteilt
+                    ? // Reihenfolge zählt: erst der 1px-Rahmen, dann Farbe und die
+                      // 3px-Kante links (sonst überschreibt die Kurzschreibweise sie).
+                      { border: '1px solid', ...GETEILT_KARTE_SX, borderRadius: 1, pl: 1, py: 0.25 }
+                    : undefined
                 }
               >
-                Entziehen
-              </Button>
-              {/* B2: Beleg direkt in das Bündel eines anderen Mitarbeiters verschieben. */}
-              <Button
-                size="small"
-                disabled={!bundleId}
-                onClick={() => {
-                  if (bundleId) {
-                    requestMove({ bundleId, caseId: c.caseId, weBelegNo: c.weBelegNo, employeeId: row.employeeId });
+                <Typography variant="body2" sx={{ minWidth: 18 }}>
+                  {i + 1}.
+                </Typography>
+                <IconButton
+                  size="small"
+                  disabled={i === 0}
+                  onClick={() => move(i, -1)}
+                  aria-label="Nach oben"
+                >
+                  <ArrowUpwardIcon fontSize="inherit" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  disabled={i === draftCases.length - 1}
+                  onClick={() => move(i, 1)}
+                  aria-label="Nach unten"
+                >
+                  <ArrowDownwardIcon fontSize="inherit" />
+                </IconButton>
+                <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
+                <CaseStatusChip status={c.status} size="small" />
+                <LieferungChip group={c.deliveryGroup} />
+                {istGeteilt && (
+                  // Zwischen Belegnummer/Status und „<n> Teile": mit wem gearbeitet wird
+                  // (Konzept §4); das Personen-Symbol ist der Touch-Weg zum Menü.
+                  <Stack direction="row" spacing={0.25} alignItems="center">
+                    <GeteiltHinweis sharedWith={shared} />
+                    <IconButton
+                      size="small"
+                      aria-label={`${c.weBelegNo}: Aus geteiltem Beleg entfernen`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setGeteiltMenu({ caseId: c.caseId, pos: { top: r.bottom, left: r.left } });
+                      }}
+                      sx={{ p: 0.25, color: ltColors.shared }}
+                    >
+                      <PersonRemoveIcon sx={{ fontSize: 15 }} />
+                    </IconButton>
+                  </Stack>
+                )}
+                {/* Teile-first (B3): Menge primär, Minuten nur noch als Neben-Caption. */}
+                <Typography variant="body2">{c.totalQuantity} Teile</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {c.storageCode ? `${c.storageCode} · ` : ''}
+                  {formatMinutes(c.estimatedMinutes)}
+                </Typography>
+                <Button size="small" onClick={() => navigate(`/belege/${c.caseId}`)}>
+                  Details
+                </Button>
+                <Button
+                  size="small"
+                  color="error"
+                  disabled={!bundleId}
+                  onClick={() =>
+                    requestReason({
+                      title: `${c.weBelegNo} von ${row.displayName} entziehen`,
+                      description: 'Beleg geht zurück in den Pool.',
+                      suggestions: ['Überlastet', 'Falsch zugeteilt', 'Pause/Abwesenheit'],
+                      run: (reason) => {
+                        if (bundleId) withdraw.mutate({ caseId: c.caseId, bundleId, reason });
+                      },
+                    })
                   }
-                }}
-              >
-                Verschieben
-              </Button>
-            </Stack>
-          ))}
+                >
+                  Entziehen
+                </Button>
+                {/* B2: Beleg direkt in das Bündel eines anderen Mitarbeiters verschieben. */}
+                <Button
+                  size="small"
+                  disabled={!bundleId}
+                  onClick={() => {
+                    if (bundleId) {
+                      requestMove({
+                        bundleId,
+                        caseId: c.caseId,
+                        weBelegNo: c.weBelegNo,
+                        employeeId: row.employeeId,
+                      });
+                    }
+                  }}
+                >
+                  Verschieben
+                </Button>
+              </Stack>
+            );
+          })}
+
+          <GeteiltEntfernenMenu
+            position={geteiltMenu?.pos ?? null}
+            sharedWith={geteiltBeleg?.sharedWith ?? []}
+            onClose={() => setGeteiltMenu(null)}
+            onWahl={(helfer) => {
+              setGeteiltMenu(null);
+              if (!geteiltBeleg) return;
+              requestReason(
+                geteiltEntfernenAction(geteiltBeleg.weBelegNo, helfer, (reason) =>
+                  removeParticipant.mutate({
+                    caseId: geteiltBeleg.caseId,
+                    employeeNo: helfer.employeeNo,
+                    reason,
+                  }),
+                ),
+              );
+            }}
+          />
 
           <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" sx={{ pt: 1 }}>
             {/* A1/A2: WE-Nr-Zuweisung — der Dialog prüft jede Belegnummer live und

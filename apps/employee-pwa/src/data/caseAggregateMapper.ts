@@ -48,7 +48,10 @@ const FALLBACK_INSTRUCTION: PositionInstruction = {
   onlineHandlingRequired: false,
 };
 
-function mapWorkInstruction(caseId: string, dto: WorkInstructionHeaderDto | null | undefined): WorkInstructionHeader {
+function mapWorkInstruction(
+  caseId: string,
+  dto: WorkInstructionHeaderDto | null | undefined,
+): WorkInstructionHeader {
   if (!dto) {
     // Defensive only: the backend never omits this for an assigned case.
     return {
@@ -67,7 +70,8 @@ function mapWorkInstruction(caseId: string, dto: WorkInstructionHeaderDto | null
     sortByArticleColorSizeRequired: dto.sortByArticleColorSizeRequired,
     goodsReceiptCheckMode: dto.goodsReceiptCheckMode as CheckMode,
     goodsReceiptCheckPercentage: dto.goodsReceiptCheckPercentage ?? undefined,
-    inspectionLevelCode: (dto.inspectionLevelCode ?? undefined) as WorkInstructionHeader['inspectionLevelCode'],
+    inspectionLevelCode: (dto.inspectionLevelCode ??
+      undefined) as WorkInstructionHeader['inspectionLevelCode'],
     minimumQuantityCheckAlwaysRequired: true,
     boxLabelRequired: dto.boxLabelRequired,
     zstRequired: dto.zstRequired,
@@ -105,6 +109,9 @@ function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
     catMan: dto.catMan ?? undefined,
     catManDate: dto.catManDate ?? undefined,
     instruction,
+    // „Position geprüft" ist serverseitig (Konzept §2): wer/wann steht am Aggregat.
+    confirmedBy: dto.confirmedBy ?? undefined,
+    confirmedAt: dto.confirmedAt ?? undefined,
     skuLines: dto.skuLines.map((s) => ({
       id: s.id,
       receiptPositionId: dto.id,
@@ -115,6 +122,8 @@ function mapPosition(caseId: string, dto: ReceiptPositionDto): PositionView {
       ekPrice: s.ekPrice ?? undefined,
       vkPrice: s.vkPrice ?? undefined,
       vkLabelPrice: s.vkLabelPrice ?? undefined,
+      // Preiskorrektur je Größe — ebenfalls persistiert (Konzept §6).
+      correctedVkPrice: s.correctedVkPrice ?? undefined,
       status: s.status as ReceiptPosition['skuLines'][number]['status'],
     })),
     status: dto.status as ReceiptPosition['status'],
@@ -133,7 +142,9 @@ function mapInstructionPoint(dto: WorkInstructionPointDto): WorkInstructionPoint
 }
 
 /** Rebuild the per-SKU `onlineMarks` map from each position's `skuLines[].onlineMark`. */
-function collectOnlineMarks(positions: readonly ReceiptPositionDto[]): Record<string, OnlineSizeMark> {
+function collectOnlineMarks(
+  positions: readonly ReceiptPositionDto[],
+): Record<string, OnlineSizeMark> {
   const marks: Record<string, OnlineSizeMark> = {};
   for (const pos of positions) {
     for (const sku of pos.skuLines) {
@@ -199,6 +210,9 @@ export function mapCaseAggregate(caseId: string, dto: CaseAggregateDto): CaseAgg
     inspectionLevelLabel: dto.workInstruction?.inspectionLevelLabel ?? undefined,
     inspectionDescription: dto.workInstruction?.inspectionDescription ?? undefined,
     issues: dto.issues.map(mapIssue),
+    // Geteilter Beleg (31.08.2026): Beteiligte + Prüf-Fortschritt, vom Backend
+    // fertig berechnet; null = der Beleg wurde nie geteilt.
+    collaboration: c.collaboration ?? null,
   };
 }
 

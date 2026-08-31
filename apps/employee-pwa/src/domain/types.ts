@@ -14,6 +14,7 @@
  * verbatim from `db/types.ts`, dropping the Dexie-only `id: 'today'` primary-key
  * fields that existed solely for IndexedDB single-row table indexing.
  */
+import type { components } from '@paket/api-client';
 import type {
   GoodsReceiptCase,
   IssueAuthorRole,
@@ -22,9 +23,21 @@ import type {
   OnlineSizeMark,
   ProblemKind,
   ReceiptPosition,
+  ReceiptSkuLine,
   WorkInstructionHeader,
   WorkInstructionPoint,
 } from '@paket/domain-types';
+
+/**
+ * Zusammenarbeit am geteilten Beleg (31.08.2026): Beteiligte und Prüf-Fortschritt
+ * kommen fertig vom Backend (`CaseSummaryDto.collaboration`). Die PWA übernimmt die
+ * generierten DTO-Typen unverändert — eine zweite, handgeschriebene Kopie wäre eine
+ * zweite Wahrheit.
+ */
+export type CaseCollaboration = components['schemas']['CaseCollaborationDto'];
+export type CaseParticipant = components['schemas']['CaseParticipantDto'];
+/** Wer „Position geprüft" gesetzt hat (serverseitig, Konzept §2). */
+export type PositionConfirmer = components['schemas']['PositionConfirmerDto'];
 
 /** Ein Eintrag im Instruktions-Verlauf einer Meldung (Kundenfeedback 04.08.2026). */
 export interface IssueMessageView {
@@ -60,14 +73,33 @@ export interface CaseIssueView {
 export type GoodsCategory = 'regal' | 'palette' | 'haengeware' | 'mixed';
 
 /**
+ * App view einer Größenzeile. `correctedVkPrice` ist die serverseitig
+ * persistierte Preiskorrektur (`SkuLineDto.correctedVkPrice`, Konzept §6) — sie
+ * steht im Aggregat, nicht mehr im lokalen Fortschritt.
+ */
+export interface SkuLineView extends ReceiptSkuLine {
+  /** Korrigierter VK dieser Größe; fehlt, solange der Etikettpreis stimmt. */
+  correctedVkPrice?: number;
+}
+
+/**
  * App view of a ReceiptPosition. `catManDate` is a per-position display field
  * of the aggregate DTO (`ReceiptPositionDto.catManDate`) that the shared
- * domain schema does not carry — the PWA shows the konkrete CatMan-Termin
+ * domain schema does not carry — die PWA zeigt den konkreten CatMan-Termin
  * statt nur des Kennzeichens (Kundenfeedback 14.07.2026).
+ *
+ * `confirmedBy`/`confirmedAt` sind der serverseitige „Position geprüft"-Haken
+ * (Konzept beleg-zusammenarbeit §2, 31.08.2026): eine gemeinsame Wahrheit für
+ * alle Beteiligten statt eines lokalen, beim Neuladen verlorenen Zustands.
  */
 export interface PositionView extends ReceiptPosition {
   /** CatMan-Termin der Position (ISO-Datum), Anzeige „CatMan 12.08.2026". */
   catManDate?: string;
+  /** Prüfer der Position; fehlt, solange sie ungeprüft ist. */
+  confirmedBy?: PositionConfirmer;
+  /** ISO-8601 Prüfzeitpunkt. */
+  confirmedAt?: string;
+  skuLines: SkuLineView[];
 }
 
 /** Everything needed to work one Beleg (case + instruction + positions). */
@@ -88,10 +120,13 @@ export interface CaseAggregate {
   inspectionDescription?: string;
   /** Meldungen des Belegs (Instruktions-Loop 04.08.2026), Anker: positionId. */
   issues: CaseIssueView[];
+  /**
+   * Geteilter Beleg (31.08.2026): Beteiligte + Prüf-Fortschritt, oder null, wenn
+   * der Beleg nie geteilt wurde. Grundlage für „Team-Ansicht" und
+   * „Teilbeleg erledigt" — berechnet wird all das im Backend.
+   */
+  collaboration: CaseCollaboration | null;
 }
-
-/** Per-Beleg workflow step — a single PROCESS phase then DONE. */
-export type CaseStep = 'process' | 'done';
 
 /**
  * Ein manuell erfasstes Problem an einer Position (optional auf eine
@@ -116,45 +151,21 @@ export interface RecordedProblem {
 }
 
 /**
- * Mutable per-Beleg progress with an optimistic-locking `version`. Reducers in
- * workflowModel return new progress objects (immutable update); the persistence
- * layer owns the version bump on save.
+ * Der verbliebene LOKALE Fortschritt eines Belegs.
  *
- * The flow is deliberately flat: check every position („Position geprüft",
- * un-checkable; always required, even "Prüfung = Nein" — §G.1), capture
- * Mehr-/Mindermengen per Größe directly on the card, then erledigt → ZST.
- * Printing happens upstream (vorgelagert) and is no work step here; boxing is
- * info only. Neither gates completion.
+ * Seit der Beleg-Zusammenarbeit (31.08.2026) ist die Wahrheit über „Position
+ * geprüft", Ist-Mengen und Preiskorrekturen das serverseitige Aggregat
+ * (`positions[].confirmedBy/confirmedAt`, `skuLines[].confirmedQuantity/
+ * correctedVkPrice`, Konzept §2) — mehrere Beteiligte brauchen EINEN Stand, und
+ * er überlebt jetzt auch das Neuladen. Lokal bleibt nur, was es serverseitig
+ * (noch) nicht gibt: die bis zum Teilabschluss gesammelten manuellen Meldungen.
  */
 export interface CaseProgress {
   caseId: string;
-  step: CaseStep;
-  /**
-   * Positions confirmed as „Position geprüft". Required for every position even
-   * when the work instruction maps "Prüfung = Nein" to quantity_only
-   * (§G.1: "Nein" never means none). Toggleable (un-checkable, D5).
-   */
-  quantityCheckedPositionIds: string[];
-  /**
-   * D2 Mehr-/Mindermengen: per Größe (skuLineId → gezählte Ist-Menge), erfasst
-   * direkt an der Positions-Karte. Nur Abweichungen werden gespeichert.
-   */
-  confirmedQuantities: Record<string, number>;
-  /**
-   * Korrigierter VK je Größe (skuLineId → Preis), wenn der VK-Etikett-Preis
-   * falsch ist. Ein gesetzter Preis gleich dem Etikettpreis zählt nicht als
-   * Korrektur und wird gar nicht erst gespeichert. Jede Korrektur ist ein
-   * implizites Problem (Preisabweichung) und erzwingt den Teilabschluss.
-   */
-  correctedVkPrices: Record<string, number>;
   /**
    * Manuell erfasste Positions-/Größen-Probleme (Problemarten aus dem
    * admin-verwalteten Katalog). Lokal gesammelt, beim Teilabschluss gesendet;
    * bis dahin entfernbar.
    */
   problems: RecordedProblem[];
-  zstDone: boolean;
-  partial: boolean;
-  version: number;
-  updatedAt: string;
 }

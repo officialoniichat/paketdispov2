@@ -36,17 +36,14 @@ export function mapDeliveryGroupRef(
   group: DeliveryGroup,
   membersById: ReadonlyMap<string, { weBelegNo: string; deliveryNoteNo: string | null }>,
 ): DeliveryGroupRefDto {
-  const missingCount = group.expectedSize
-    ? Math.max(0, group.expectedSize - group.presentSize)
-    : 0;
+  const missingCount = group.expectedSize ? Math.max(0, group.expectedSize - group.presentSize) : 0;
   const members = group.caseIds
     .map((id) => membersById.get(id))
     .filter((m): m is { weBelegNo: string; deliveryNoteNo: string | null } => m !== undefined);
   const notes = new Set(
     members.map((m) => m.deliveryNoteNo?.trim()).filter((n): n is string => !!n),
   );
-  const label =
-    notes.size === 1 ? [...notes][0]! : `ab WE ${members[0]?.weBelegNo ?? group.id}`;
+  const label = notes.size === 1 ? [...notes][0]! : `ab WE ${members[0]?.weBelegNo ?? group.id}`;
   return {
     id: group.id,
     label,
@@ -239,6 +236,8 @@ export interface SkuLineRow {
   size: string;
   expectedQuantity: number;
   confirmedQuantity: number | null;
+  /** Persistierte VK-Preiskorrektur (Konzept beleg-zusammenarbeit §6); null = keine. */
+  correctedVkPrice: number | null;
   ekPrice: number | null;
   vkPrice: number | null;
   vkLabelPrice: number | null;
@@ -253,6 +252,7 @@ export function mapSkuLine(s: SkuLineRow, onlineMark: 'green' | 'red' | null = n
     size: s.size,
     expectedQuantity: s.expectedQuantity,
     confirmedQuantity: s.confirmedQuantity,
+    correctedVkPrice: s.correctedVkPrice,
     ekPrice: s.ekPrice,
     vkPrice: s.vkPrice,
     vkLabelPrice: s.vkLabelPrice,

@@ -40,6 +40,10 @@ Neben `'1 · Ware holen'` siehst du einen Zähler wie `'<geholt>/<gesamt> Plätz
 4. Ein abgehakter Stop wird **grün**, zeigt einen **Haken** und den Status `'geholt'` statt
    `'offen'`.
    Tippst du erneut, nimmst du das Häkchen wieder zurück.
+5. Oben rechts an jedem Beleg – über dem Status-Chip `'offen'` / `'geholt'` – sitzt das
+   **Teilen-Symbol** (`'Beleg teilen'`). Damit lädst du Kolleg:innen ein, den Beleg **gemeinsam** mit
+   dir zu bearbeiten (Kapitel A7). Ein Tipp darauf hakt den Stop **nicht** ab. Die Ware eines
+   geteilten Belegs holst weiterhin **du** – die Helfer sehen ihn nur unter `'2 · Bearbeiten'`.
 
 Die **Reihenfolge gibt das System vor** (sinnvoller Laufweg). Du kannst die Liste nicht umsortieren,
 aber du entscheidest selbst, in welcher Reihenfolge du sie tatsächlich abgehst.
@@ -54,6 +58,7 @@ Passt nicht mehr alles auf deinen Wagen, kannst du den **Rest** parken:
 3. Bestätigung: `'<Anzahl> Beleg / Belege geparkt – kommen ins nächste Bündel.'`
 
 Nur die noch nicht geholten Stops werden geparkt – was du schon auf dem Wagen hast, bleibt bei dir.
+Ist ein geparkter Beleg mit Kolleg:innen **geteilt**, endet damit auch die Zusammenarbeit (Kapitel A7).
 
 ## Was passiert danach
 
@@ -62,15 +67,20 @@ Nur die noch nicht geholten Stops werden geparkt – was du schon auf dem Wagen 
 - Belege von noch **nicht** geholten Stops bleiben ausgegraut. Solange es solche gibt, steht über
   der Liste: `'Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
   starten.'`
+- **Geteilte Belege** (Kapitel A7) sind unter `'2 · Bearbeiten'` golden markiert
+  (`'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'`). Belege, bei denen **du** als Helfer
+  eingeladen bist, stehen dort im eigenen Abschnitt `'Geteilt mit dir'` – ihre Ware holt der Inhaber,
+  sie tauchen bei dir unter `'1 · Ware holen'` nicht auf.
 
-## Weiteres Bündel anfordern
+## Nächstes Pack anfordern
 
-Unten steht immer der Hauptknopf **`'Weiteres Bündel anfordern'`** (bzw.
-`'Nächstes Bündel holen'`, wenn dein Bündel fertig oder keines zugeteilt ist). Du entscheidest
-selbst, ob du dir zusätzliche Arbeit holst — auch wenn dein Bündel noch offen ist. Die neuen
-Belege werden an dein offenes Bündel angehängt: Neue Lagerplätze erscheinen unter
-`'1 · Ware holen'`, die neuen Belege unter `'2 · Bearbeiten'`. Gibt es gerade nichts zu holen,
-sagt dir die App den Grund (z. B. `'Aktuell nichts frei zum Holen.'`).
+Unten steht immer der Hauptknopf **`'Nächstes Pack anfordern'`** (bzw. `'Nächstes Pack holen'`, wenn
+dein Bündel fertig oder keines zugeteilt ist). Du entscheidest selbst, ob du dir zusätzliche Arbeit
+holst — auch wenn dein Bündel noch offen ist. Die neuen Belege werden an dein offenes Bündel
+angehängt: Neue Lagerplätze erscheinen unter `'1 · Ware holen'`, die neuen Belege unter
+`'2 · Bearbeiten'`. Gibt es gerade nichts zu holen, sagt dir die App den Grund (z. B.
+`'Aktuell nichts frei zum Holen.'`; alle Meldungen in Kapitel A8). Bist du an einem geteilten Beleg
+beteiligt, kann die Teamleitung per Regel verlangen, dass du erst dort mithilfst (Kapitel A7).
 
 ## Häufige Fehler / FAQ
 

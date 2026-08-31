@@ -50,6 +50,7 @@ type CaseDetailDto = components['schemas']['CaseDetailDto'];
 type PositionDetailDto = components['schemas']['PositionDetailDto'];
 type SkuLineDto = components['schemas']['SkuLineDto'];
 type AuditEventDto = components['schemas']['AuditEventDto'];
+type CaseParticipantDto = components['schemas']['CaseParticipantDto'];
 type IssueSummaryDto = components['schemas']['IssueSummaryDto'];
 type ZstSummaryDto = components['schemas']['ZstSummaryDto'];
 type WorkInstructionHeaderDto = components['schemas']['WorkInstructionHeaderDto'];
@@ -328,6 +329,27 @@ export interface BelegHistoryEntry {
   reason: string | null;
 }
 
+/**
+ * Beteiligung an einem geteilten Beleg (Konzept beleg-zusammenarbeit §4,
+ * 31.08.2026) — Rolle/Status kommen bereits als Literal-Unions aus dem
+ * generierten Schema, deshalb ist kein Zod-Narrowing nötig.
+ */
+export type BelegParticipantRole = CaseParticipantDto['role'];
+export type BelegParticipantStatus = CaseParticipantDto['status'];
+
+export interface BelegParticipant {
+  participantId: string;
+  employeeNo: string;
+  displayName: string;
+  role: BelegParticipantRole;
+  status: BelegParticipantStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+  partDoneAt: string | null;
+  /** Positionen des Belegs, die DIESER Beteiligte geprüft hat. */
+  confirmedPositionCount: number;
+}
+
 export interface BelegWorkInstruction {
   priceLabelPrintRequired: boolean;
   sortByArticleColorSizeRequired: boolean;
@@ -398,6 +420,11 @@ export interface BelegDetail {
   issues: BelegIssue[];
   zstRecords: BelegZst[];
   history: BelegHistoryEntry[];
+  /**
+   * Geteilter Beleg: ALLE Beteiligten (jeder Status, chronologisch) — leer,
+   * wenn der Beleg nie geteilt wurde. Fertige Belege behalten ihre Beteiligten.
+   */
+  participants: BelegParticipant[];
   /** Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone. */
   deliveryGroup: DeliveryGroupDetail | null;
 }
@@ -496,6 +523,26 @@ export async function splitCase(
     },
   });
   return unwrap<SplitCaseResult>(result, 'Aufteilen des Belegs');
+}
+
+export type CollaborationResult = components['schemas']['CollaborationResultDto'];
+
+/**
+ * „Gemeinsam zuweisen" (Konzept beleg-zusammenarbeit §4/§7): EIN Beleg wandert in
+ * den Karren des ERSTEN Mitarbeiters, alle Genannten werden aktive Beteiligte —
+ * es entstehen KEINE Teil-Belege. Voraussetzungen (ready|parked, kein Bündel,
+ * mindestens zwei Mitarbeitende, Pflicht-Grund) prüft das Backend.
+ */
+export async function createCollaboration(
+  caseId: string,
+  employeeNos: string[],
+  reason: string,
+): Promise<CollaborationResult> {
+  const result = await api.POST('/api/teamlead/cases/{caseId}/collaboration', {
+    params: { path: { caseId } },
+    body: { employeeNos, reason },
+  });
+  return unwrap<CollaborationResult>(result, 'Gemeinsames Zuweisen');
 }
 
 export type BelegLookupReason = 'not_found' | 'already_assigned' | 'wrong_status' | 'blocked';
@@ -779,6 +826,7 @@ function toBelegDetail(dto: CaseDetailDto): BelegDetail {
     issues: dto.issues.map(toBelegIssue),
     zstRecords: dto.zstRecords.map(toBelegZst),
     history: dto.history.map(toBelegHistoryEntry),
+    participants: dto.participants.map(toBelegParticipant),
     deliveryGroup: dto.deliveryGroup
       ? {
           ...toDeliveryGroupRef(dto.deliveryGroup),
@@ -809,6 +857,20 @@ function toDeliveryGroupRef(dto: DeliveryGroupRefDto): DeliveryGroupRef {
     missingCount: dto.missingCount,
     locked: dto.locked,
     released: dto.released,
+  };
+}
+
+function toBelegParticipant(p: CaseParticipantDto): BelegParticipant {
+  return {
+    participantId: p.participantId,
+    employeeNo: p.employeeNo,
+    displayName: p.displayName,
+    role: p.role,
+    status: p.status,
+    invitedAt: p.invitedAt,
+    respondedAt: p.respondedAt ?? null,
+    partDoneAt: p.partDoneAt ?? null,
+    confirmedPositionCount: p.confirmedPositionCount,
   };
 }
 

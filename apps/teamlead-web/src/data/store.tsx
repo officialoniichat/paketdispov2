@@ -36,6 +36,7 @@ import {
   unforwardCase as unforwardCaseRequest,
 } from './belege.js';
 import { fetchCockpit, type CockpitSnapshot } from './remoteDataset.js';
+import { useCockpitLive } from './useCockpitLive.js';
 import {
   addCaseToBundle as addCaseToBundleRequest,
   assignBundleToEmployee as assignBundleToEmployeeRequest,
@@ -150,6 +151,13 @@ export interface PauseVars {
   /** Current bundle state; decides pause vs. resume. */
   paused: boolean;
 }
+/** „Aus geteiltem Beleg entfernen" (Konzept beleg-zusammenarbeit §4): ein Helfer. */
+export interface RemoveParticipantVars {
+  caseId: string;
+  /** employeeNo des Helfers (der Inhaber ist nicht entfernbar — Backend 409). */
+  employeeNo: string;
+  reason: string;
+}
 
 export interface CockpitApi {
   /** Live read state. */
@@ -204,6 +212,8 @@ export interface CockpitApi {
   moveCase: BundleMutation<MoveCaseVars>;
   reorder: BundleMutation<ReorderVars>;
   pauseResume: BundleMutation<PauseVars>;
+  /** Geteilter Beleg (§4): Helfer mit Pflicht-Grund entfernen (→ Status `entfernt`). */
+  removeParticipant: BundleMutation<RemoveParticipantVars>;
 }
 
 const CockpitContext = createContext<CockpitApi | null>(null);
@@ -229,6 +239,9 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     queryKey: cockpitKey,
     queryFn: () => fetchCockpit(date),
   });
+
+  // Live-Kanal (§8): SSE-Ereignisse frischen cockpit/beleg/belege gebündelt auf.
+  useCockpitLive();
 
   const invalidateCockpit = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['cockpit'] });
@@ -401,25 +414,33 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
 
   // --- §8.4 audited bundle interventions, with optimistic board patches -----
 
-  const withdraw = useMutation<unknown, Error, WithdrawVars, { previous: CockpitSnapshot | undefined }>(
-    {
-      mutationFn: ({ caseId, bundleId, reason }) =>
-        withdrawCaseRequest(api, { bundleId, caseId, reason }),
-      onMutate: ({ caseId, bundleId }) =>
-        optimistic((snapshot) =>
-          patchBoardRow(snapshot, bundleId, (row) => {
-            const cases = row.cases.filter((c) => c.caseId !== caseId);
-            return { ...row, cases, bundleSize: cases.length };
-          }),
-        ),
-      onError: (_e, _v, context) => rollback(context),
-      // Bündel-Interventionen ändern Case-Status/Zuteilung, die auch Beleg-Liste
-      // und Belegdetails anzeigen — deshalb beide Query-Familien invalidieren.
-      onSettled: invalidateCockpitAndBelege,
-    },
-  );
+  const withdraw = useMutation<
+    unknown,
+    Error,
+    WithdrawVars,
+    { previous: CockpitSnapshot | undefined }
+  >({
+    mutationFn: ({ caseId, bundleId, reason }) =>
+      withdrawCaseRequest(api, { bundleId, caseId, reason }),
+    onMutate: ({ caseId, bundleId }) =>
+      optimistic((snapshot) =>
+        patchBoardRow(snapshot, bundleId, (row) => {
+          const cases = row.cases.filter((c) => c.caseId !== caseId);
+          return { ...row, cases, bundleSize: cases.length };
+        }),
+      ),
+    onError: (_e, _v, context) => rollback(context),
+    // Bündel-Interventionen ändern Case-Status/Zuteilung, die auch Beleg-Liste
+    // und Belegdetails anzeigen — deshalb beide Query-Familien invalidieren.
+    onSettled: invalidateCockpitAndBelege,
+  });
 
-  const addToBundle = useMutation<unknown, Error, AddVars, { previous: CockpitSnapshot | undefined }>({
+  const addToBundle = useMutation<
+    unknown,
+    Error,
+    AddVars,
+    { previous: CockpitSnapshot | undefined }
+  >({
     mutationFn: ({ caseId, bundleId, reason }) =>
       addCaseToBundleRequest(api, { bundleId, caseId, reason }),
     onMutate: ({ caseId, bundleId }) =>
@@ -474,7 +495,12 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const reorder = useMutation<unknown, Error, ReorderVars, { previous: CockpitSnapshot | undefined }>({
+  const reorder = useMutation<
+    unknown,
+    Error,
+    ReorderVars,
+    { previous: CockpitSnapshot | undefined }
+  >({
     mutationFn: ({ bundleId, caseIds, reason }) =>
       reorderBundleRequest(api, { bundleId, caseIds, reason }),
     onMutate: ({ bundleId, caseIds }) =>
@@ -491,20 +517,40 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
     onSettled: invalidateCockpitAndBelege,
   });
 
-  const pauseResume = useMutation<unknown, Error, PauseVars, { previous: CockpitSnapshot | undefined }>(
-    {
-      mutationFn: ({ bundleId, reason, paused }) =>
-        paused
-          ? resumeBundleRequest(api, { bundleId, reason })
-          : pauseBundleRequest(api, { bundleId, reason }),
-      onMutate: ({ bundleId, paused }) =>
-        optimistic((snapshot) =>
-          patchBoardRow(snapshot, bundleId, (row) => ({ ...row, paused: !paused })),
-        ),
-      onError: (_e, _v, context) => rollback(context),
-      onSettled: invalidateCockpit,
+  const pauseResume = useMutation<
+    unknown,
+    Error,
+    PauseVars,
+    { previous: CockpitSnapshot | undefined }
+  >({
+    mutationFn: ({ bundleId, reason, paused }) =>
+      paused
+        ? resumeBundleRequest(api, { bundleId, reason })
+        : pauseBundleRequest(api, { bundleId, reason }),
+    onMutate: ({ bundleId, paused }) =>
+      optimistic((snapshot) =>
+        patchBoardRow(snapshot, bundleId, (row) => ({ ...row, paused: !paused })),
+      ),
+    onError: (_e, _v, context) => rollback(context),
+    onSettled: invalidateCockpit,
+  });
+
+  // Geteilter Beleg (§4): Helfer entfernen — auditierter Einzel-Eingriff wie
+  // park/prioritise, deshalb ohne optimistischen Patch, nur invalidate-on-settle.
+  const removeParticipant = useMutation<unknown, Error, RemoveParticipantVars>({
+    mutationFn: async ({ caseId, employeeNo, reason }) => {
+      const { data, error } = await api.POST(
+        '/api/teamlead/cases/{caseId}/participants/{employeeNo}/remove',
+        {
+          params: { path: { caseId, employeeNo } },
+          body: { reason },
+        },
+      );
+      if (error) throw new MutationError('Aus geteiltem Beleg entfernen', error);
+      return data;
     },
-  );
+    onSettled: invalidateCockpitAndBelege,
+  });
 
   const cockpitApi = useMemo<CockpitApi>(
     () => ({
@@ -541,6 +587,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       moveCase,
       reorder,
       pauseResume,
+      removeParticipant,
     }),
     [
       query,
@@ -565,6 +612,7 @@ export function CockpitDataProvider({ children }: { children: ReactNode }): JSX.
       moveCase,
       reorder,
       pauseResume,
+      removeParticipant,
       date,
     ],
   );

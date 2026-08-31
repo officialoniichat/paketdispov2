@@ -27,7 +27,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** SSE live status for the caller’s own packages (§16.1) */
+        /** SSE-Live-Ereignisse, die den Aufrufer adressieren (eigene + geteilte Belege, §16.1) */
         get: operations["LiveController_meStream"];
         put?: never;
         post?: never;
@@ -44,7 +44,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** SSE live status for the full operational pool */
+        /** SSE-Live-Ereignisse des gesamten operativen Pools */
         get: operations["LiveController_teamleadStream"];
         put?: never;
         post?: never;
@@ -228,6 +228,40 @@ export interface paths {
         put?: never;
         /** Teilabschluss mit gesammelten Problemen (in_progress → issue_open, case.problems_reported); der Beleg bleibt beim selben MA geparkt */
         post: operations["CasesController_partialComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/positions/{positionId}/confirmed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** „Position geprüft" setzen/zurücknehmen (serverseitig persistiert, Konzept beleg-zusammenarbeit §2/§7). Beleg muss in Bearbeitung sein; kein Versions-Inkrement. */
+        post: operations["CasesController_confirmPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/sku-lines/{skuLineId}/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ist-Menge/Preiskorrektur einer Größenzeile erfassen (pro Aktion persistiert, Konzept §7); null setzt den jeweiligen Wert zurück. */
+        post: operations["CasesController_countSkuLine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -876,6 +910,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/colleagues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aktive Kolleg:innen für „Beleg teilen" (ohne den Aufrufer; heute im Dienst zuerst, dann Name) */
+        get: operations["CollaborationController_colleagues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/cases/{caseId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Kolleg:innen zum geteilten Beleg einladen (Inhaber oder aktiver Beteiligter; Beleg assigned|in_progress|problem_resolved). Abgelehnte/Entfernte werden erneut eingeladen. */
+        post: operations["CollaborationController_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/invitations/{participantId}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Einladung annehmen (grüner Haken) oder ablehnen (rotes Kreuz) — nur der Eingeladene, nur aus „eingeladen" */
+        post: operations["CollaborationController_respond"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/nachrichten": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Posteingang: erhaltene/gesendete Einladungen (alle Status) + Teamlead-Nachrichten, neueste zuerst; pendingCount = Zahl am Profilkreis */
+        get: operations["CollaborationController_nachrichten"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/cases/{caseId}/part-done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** „Teilbeleg erledigt": eigene Beteiligung angenommen → teil_erledigt (Zustand des Beteiligten — keine Beleg-Änderung, keine ZST-Buchung) */
+        post: operations["CollaborationController_partDone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/collaboration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** „Gemeinsam zuweisen": Beleg in den Karren des ERSTEN Mitarbeiters (§8.4-Pfad), alle Beteiligten angenommen; ein geparkter Beleg wird dabei freigegeben. Pflicht-Grund. */
+        post: operations["TeamleadCollaborationController_createCollaboration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/cases/{caseId}/participants/{employeeNo}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** „Aus geteiltem Beleg entfernen": Helfer → entfernt (Pflicht-Grund). Der Inhaber ist nicht entfernbar (409) — dafür Entziehen/Verschieben. */
+        post: operations["TeamleadCollaborationController_removeParticipant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/locations": {
         parameters: {
             query?: never;
@@ -1353,6 +1506,38 @@ export interface components {
              */
             labelPrintVariant: "etikett_mit_preis" | "digitag_etikett_ohne_preis" | "kein_etikett";
         };
+        CaseParticipantDto: {
+            /** @description Id der Beteiligungs-Zeile (CaseParticipant) */
+            participantId: string;
+            employeeNo: string;
+            displayName: string;
+            /**
+             * @description CaseParticipantRole
+             * @enum {string}
+             */
+            role: "inhaber" | "helfer";
+            /**
+             * @description CaseParticipantStatus — aktiv sind angenommen und teil_erledigt
+             * @enum {string}
+             */
+            status: "eingeladen" | "angenommen" | "abgelehnt" | "teil_erledigt" | "entfernt";
+            /** @description ISO-8601 Zeitpunkt der Einladung */
+            invitedAt: string;
+            /** @description ISO-8601 Antwortzeitpunkt */
+            respondedAt?: string | null;
+            /** @description ISO-8601 Zeitpunkt von „Teilbeleg erledigt" */
+            partDoneAt?: string | null;
+            /** @description Positionen des Belegs, die DIESER Beteiligte geprüft hat (confirmedById) */
+            confirmedPositionCount: number;
+        };
+        CaseCollaborationDto: {
+            /** @description Anzahl der Positionen des Belegs */
+            positionCount: number;
+            /** @description Davon geprüft (confirmedById gesetzt) */
+            confirmedPositionCount: number;
+            /** @description Alle Beteiligten, chronologisch */
+            participants: components["schemas"]["CaseParticipantDto"][];
+        };
         IssueMessageDto: {
             id: string;
             /** @description IssueMessageKind: meldung|instruktion|rueckmeldung */
@@ -1459,6 +1644,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description Geteilter Beleg (Zusammenarbeit): Beteiligte + Prüf-Fortschritt; null, wenn der Beleg nie geteilt wurde. Von den Mitarbeiter-Sichten (/api/me/today, Aggregat) geliefert; Teamlead-Listen lassen es weg (dort BoardCaseDto.sharedWith bzw. CaseDetailDto.participants). */
+            collaboration?: components["schemas"]["CaseCollaborationDto"] | null;
             /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
             issues?: components["schemas"]["IssueSummaryDto"][];
         };
@@ -1476,6 +1663,8 @@ export interface components {
             pack?: components["schemas"]["TodayPackDto"] | null;
             /** @description Belege des AKTIVEN Packs plus noch offene Problem-Belege früherer Packs (Anzeige-Mitnahme). Für kommende Packs vorgeplante Belege sind NICHT enthalten. */
             cases: components["schemas"]["CaseSummaryDto"][];
+            /** @description „Geteilt mit dir" (Konzept §3.5): Belege, an denen der Aufrufer aktiver HELFER ist (angenommen|teil_erledigt) und die noch nicht fertig sind. Sie liegen im Karren des Inhabers (assignedEmployeeName), nie im eigenen Bündel — ohne carriedOver/packOrdinal. */
+            sharedCases: components["schemas"]["CaseSummaryDto"][];
             /** @description Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters */
             workstation?: components["schemas"]["MeWorkstationDto"] | null;
         };
@@ -1494,6 +1683,10 @@ export interface components {
             minimumQuantityCheckAlwaysRequired: boolean;
             boxLabelRequired: boolean;
             zstRequired: boolean;
+        };
+        PositionConfirmerDto: {
+            employeeNo: string;
+            displayName: string;
         };
         PositionInstructionDto: {
             /**
@@ -1518,6 +1711,8 @@ export interface components {
             size: string;
             expectedQuantity: number;
             confirmedQuantity?: number | null;
+            /** @description Vom MA korrigierter VK je Größe (persistiert wie confirmedQuantity, Konzept beleg-zusammenarbeit §6); null = keine Korrektur */
+            correctedVkPrice?: number | null;
             /** @description EK-Preis (A1) */
             ekPrice?: number | null;
             /** @description VK-Preis (A1) */
@@ -1557,6 +1752,10 @@ export interface components {
             floor?: string | null;
             /** @description PositionStatus: open|confirmed|issue_open|completed */
             status: string;
+            /** @description „Position geprüft" — wer geprüft hat (serverseitig, Konzept §2); null = ungeprüft */
+            confirmedBy?: components["schemas"]["PositionConfirmerDto"] | null;
+            /** @description ISO-8601 Prüfzeitpunkt */
+            confirmedAt?: string | null;
             instruction?: components["schemas"]["PositionInstructionDto"] | null;
             skuLines: components["schemas"]["SkuLineDto"][];
         };
@@ -1599,7 +1798,7 @@ export interface components {
         };
         NextBundleResultDto: {
             assigned: boolean;
-            /** @description Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation */
+            /** @description Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation|shared_case_open */
             reason?: string;
             /** @description Belege in the assigned cart */
             caseCount?: number;
@@ -1649,7 +1848,7 @@ export interface components {
             correctedVkPrice?: number;
         };
         CompleteDto: {
-            /** @description Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll */
+            /** @description NUR die vom Aufrufer berührten Größenzeilen; der Server mischt sie mit dem persistierten Stand — ohne Angabe gilt der persistierte Wert, sonst Ist = Soll. */
             skuQuantities?: components["schemas"]["SkuQuantityDto"][];
         };
         ReportedProblemDto: {
@@ -1663,10 +1862,37 @@ export interface components {
             note?: string;
         };
         PartialCompleteDto: {
-            /** @description Gezählte Ist-Mengen aller Größenzeilen */
+            /** @description NUR die vom Aufrufer berührten Größenzeilen — der Server mischt sie mit dem persistierten Stand (confirmedQuantity/correctedVkPrice aus dem Zähl-Endpunkt); unberührte Zeilen zählen mit Ist = Soll (Konzept beleg-zusammenarbeit §7). */
             skuQuantities: components["schemas"]["SkuQuantityDto"][];
             /** @description Manuell erfasste Positions-Probleme */
             problems: components["schemas"]["ReportedProblemDto"][];
+        };
+        ConfirmPositionDto: {
+            /** @description true = Haken setzen, false = Haken zurücknehmen */
+            confirmed: boolean;
+        };
+        PositionConfirmResultDto: {
+            caseId: string;
+            positionId: string;
+            /** @description Prüf-Zustand nach dem Aufruf */
+            confirmed: boolean;
+            confirmedBy?: components["schemas"]["PositionConfirmerDto"] | null;
+            /** @description ISO-8601 Prüfzeitpunkt */
+            confirmedAt?: string | null;
+        };
+        CountSkuLineDto: {
+            /** @description Gezählte Ist-Menge; weggelassen = unangetastet, null = Erfassung zurücksetzen (Zeile wieder offen) */
+            confirmedQuantity?: number | null;
+            /** @description Korrigierter VK, wenn der Etikettpreis falsch ist; null = Korrektur zurücknehmen */
+            correctedVkPrice?: number | null;
+        };
+        SkuCountResultDto: {
+            caseId: string;
+            skuLineId: string;
+            confirmedQuantity?: number | null;
+            correctedVkPrice?: number | null;
+            /** @description SkuLineStatus nach dem Aufruf: open|confirmed|deviation */
+            status: string;
         };
         DashboardDto: {
             /** @description Open case count grouped by status */
@@ -1698,6 +1924,15 @@ export interface components {
             /** @description D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben */
             released: boolean;
         };
+        BoardParticipantDto: {
+            employeeNo: string;
+            displayName: string;
+            /**
+             * @description teil_erledigt wird im Tooltip grau dargestellt
+             * @enum {string}
+             */
+            status: "angenommen" | "teil_erledigt";
+        };
         BoardCaseDto: {
             id: string;
             weBelegNo: string;
@@ -1709,6 +1944,8 @@ export interface components {
             effortPoints: number;
             /** @description Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
+            /** @description Geteilter Beleg: aktive Helfer (angenommen|teil_erledigt) — leer, wenn nicht geteilt. Das Board rendert die Karte golden und zeigt „mit <Name>" bzw. „n×" (Konzept §4). */
+            sharedWith: components["schemas"]["BoardParticipantDto"][];
         };
         BoardRouteStopDto: {
             id: string;
@@ -1863,6 +2100,8 @@ export interface components {
             attentionNote?: string | null;
             /** @description Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet */
             forwardedTo?: string | null;
+            /** @description Geteilter Beleg (Zusammenarbeit): Beteiligte + Prüf-Fortschritt; null, wenn der Beleg nie geteilt wurde. Von den Mitarbeiter-Sichten (/api/me/today, Aggregat) geliefert; Teamlead-Listen lassen es weg (dort BoardCaseDto.sharedWith bzw. CaseDetailDto.participants). */
+            collaboration?: components["schemas"]["CaseCollaborationDto"] | null;
             /** @description ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg. */
             issues?: components["schemas"]["IssueSummaryDto"][];
             assignedEmployeeNo?: Record<string, never> | null;
@@ -2073,6 +2312,8 @@ export interface components {
             zstRecords: components["schemas"]["ZstSummaryDto"][];
             /** @description Audit history, newest first */
             history: components["schemas"]["AuditEventDto"][];
+            /** @description Geteilter Beleg: ALLE Beteiligten (jeder Status, chronologisch) — leer, wenn der Beleg nie geteilt wurde. Fertige Belege behalten ihre Beteiligten (Konzept §4). */
+            participants: components["schemas"]["CaseParticipantDto"][];
             /** @description Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupDetailDto"] | null;
         };
@@ -2281,6 +2522,81 @@ export interface components {
             /** @description Reason logged in the §8.4 audit event */
             reason?: string;
         };
+        ColleagueDto: {
+            employeeNo: string;
+            displayName: string;
+            /** @description true = heute im Dienst (aktive Schicht mit Kapazität) */
+            shiftToday: boolean;
+        };
+        InviteParticipantsDto: {
+            /** @description employeeNos der Einzuladenden */
+            employeeNos: string[];
+            /** @description Nachricht an die Eingeladenen (optional, max. 500 Zeichen) */
+            message?: string;
+        };
+        RespondInvitationDto: {
+            /** @description true = annehmen (grüner Haken), false = ablehnen (rotes Kreuz) */
+            accept: boolean;
+        };
+        ParticipantStatusResultDto: {
+            participantId: string;
+            caseId: string;
+            employeeNo: string;
+            /**
+             * @description CaseParticipantStatus nach dem Aufruf
+             * @enum {string}
+             */
+            status: "eingeladen" | "angenommen" | "abgelehnt" | "teil_erledigt" | "entfernt";
+        };
+        NachrichtDto: {
+            /** @description Beteiligungs-Id (Einladungen) bzw. Nachricht-Id (Teamlead) */
+            id: string;
+            /** @enum {string} */
+            kind: "einladung_erhalten" | "einladung_gesendet" | "teamlead";
+            /** @description Bezugs-Beleg; null bei Teamlead-Nachricht ohne Bezug */
+            caseId?: string | null;
+            /** @description WE-Nr des Bezugs-Belegs */
+            weBelegNo?: string | null;
+            /** @description Absender-Anzeige (Einladender, eigener Name oder „Teamleitung") */
+            fromLabel: string;
+            /** @description Empfänger-Anzeige */
+            toLabel: string;
+            /** @description Nachrichtentext; null ohne Text */
+            text?: string | null;
+            /** @description ISO-8601 Zeitpunkt (Einladung bzw. Nachricht) */
+            createdAt: string;
+            /**
+             * @description Einladungen: offen|angenommen|abgelehnt|entfernt (teil_erledigt zählt als angenommen); Teamlead-Nachrichten: gelesen|ungelesen
+             * @enum {string}
+             */
+            status: "offen" | "angenommen" | "abgelehnt" | "entfernt" | "gelesen" | "ungelesen";
+            /** @description ISO-8601 Antwort- bzw. Gelesen-Zeitpunkt; null solange offen/ungelesen */
+            respondedAt?: string | null;
+            /** @description Beteiligungs-Id für die Antwort-Tasten; null bei Teamlead-Nachrichten */
+            participantId?: string | null;
+        };
+        PosteingangDto: {
+            /** @description Offene Einladungen an mich + ungelesene Teamlead-Nachrichten — die Zahl am Profilkreis */
+            pendingCount: number;
+            items: components["schemas"]["NachrichtDto"][];
+        };
+        CreateCollaborationDto: {
+            /** @description Mindestens zwei Mitarbeitende; der ERSTE ist Inhaber (Beleg landet in seinem Karren) */
+            employeeNos: string[];
+            /** @description Pflicht-Grund des Eingriffs (§8.4 Audit) */
+            reason: string;
+        };
+        CollaborationResultDto: {
+            caseId: string;
+            /** @description employeeNo des Inhabers (Mitarbeiter des Bündels); null ohne Bündel */
+            ownerEmployeeNo?: string | null;
+            /** @description Alle Beteiligten, chronologisch */
+            participants: components["schemas"]["CaseParticipantDto"][];
+        };
+        RemoveParticipantDto: {
+            /** @description Pflicht-Grund („Aus geteiltem Beleg entfernen") */
+            reason: string;
+        };
         LocationDto: {
             id: string;
             /** @description Natural code, e.g. "R27", "HB-5/234" */
@@ -2371,6 +2687,10 @@ export interface components {
             /** @description prohandel | dashboard */
             source: string;
         };
+        CollaborationRuleConfigDto: {
+            /** @description Wer an einem geteilten Beleg beteiligt ist, bekommt kein neues Pack, bis alle Positionen geprüft sind */
+            helpBeforeNextBundle: boolean;
+        };
         LoadPlanRowDto: {
             id: string;
             shopAreaNo: string;
@@ -2389,6 +2709,7 @@ export interface components {
             grouping: components["schemas"]["GroupingRuleConfigDto"];
             shiftEnd: components["schemas"]["ShiftEndRuleConfigDto"];
             inspection: components["schemas"]["InspectionRuleConfigDto"];
+            collaboration: components["schemas"]["CollaborationRuleConfigDto"];
             loadPlan: components["schemas"]["LoadPlanRowDto"][];
         };
         WgrCatalogEntryDto: {
@@ -3044,6 +3365,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitionResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_confirmPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+                /** @description ReceiptPosition des Belegs */
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPositionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionConfirmResultDto"];
+                };
+            };
+        };
+    };
+    CasesController_countSkuLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+                /** @description Größenzeile (ReceiptSkuLine) des Belegs */
+                skuLineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CountSkuLineDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkuCountResultDto"];
                 };
             };
         };
@@ -3973,6 +4350,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BundleMutationResultDto"];
+                };
+            };
+        };
+    };
+    CollaborationController_colleagues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColleagueDto"][];
+                };
+            };
+        };
+    };
+    CollaborationController_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteParticipantsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseCollaborationDto"];
+                };
+            };
+        };
+    };
+    CollaborationController_respond: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Beteiligungs-Zeile (CaseParticipant) der Einladung */
+                participantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespondInvitationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantStatusResultDto"];
+                };
+            };
+        };
+    };
+    CollaborationController_nachrichten: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosteingangDto"];
+                };
+            };
+        };
+    };
+    CollaborationController_partDone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParticipantStatusResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadCollaborationController_createCollaboration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id (ready|parked, ohne Bündel) */
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollaborationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollaborationResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadCollaborationController_removeParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Goods-receipt case id */
+                caseId: string;
+                /** @description Zu entfernender Helfer */
+                employeeNo: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveParticipantDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollaborationResultDto"];
                 };
             };
         };

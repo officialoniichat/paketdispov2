@@ -17,6 +17,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 import type { CaseAggregate, CaseProgress } from '../domain/types.js';
+import { istMenge } from '../workflow/workflowModel.js';
 
 const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
@@ -62,36 +63,32 @@ export function collectProblemSummary(
     });
   }
 
-  // Implizite Mehr-/Minderlieferungen.
-  for (const [skuLineId, ist] of Object.entries(p.confirmedQuantities)) {
-    const sku = skuIndex.get(skuLineId);
+  // Implizite Probleme kommen aus dem AGGREGAT: Ist-Menge und Preiskorrektur sind
+  // seit der Zusammenarbeit (31.08.2026) serverseitig erfasst — auch die eines
+  // anderen Beteiligten gehören in diese Zusammenfassung.
+  for (const line of aggregate.positions.flatMap((pos) => pos.skuLines)) {
+    const sku = skuIndex.get(line.id);
     if (!sku) continue;
-    const soll = aggregate.positions
-      .flatMap((pos) => pos.skuLines)
-      .find((s) => s.id === skuLineId)?.expectedQuantity;
-    if (soll === undefined) continue;
-    const delta = ist - soll;
-    if (delta === 0) continue;
-    lines.push({
-      key: `qty-${skuLineId}`,
-      primary:
-        delta > 0
-          ? `Mehrlieferung +${delta} — Position ${sku.positionNo} · ${sku.size}`
-          : `Minderlieferung −${Math.abs(delta)} — Position ${sku.positionNo} · ${sku.size}`,
-      secondary: `Soll ${soll} · Ist ${ist} · ${sku.ean}`,
-    });
-  }
-
-  // Implizite Preisabweichungen.
-  for (const [skuLineId, corrected] of Object.entries(p.correctedVkPrices)) {
-    const sku = skuIndex.get(skuLineId);
-    if (!sku) continue;
-    const from = sku.vkLabelPrice !== undefined ? EUR.format(sku.vkLabelPrice) : '—';
-    lines.push({
-      key: `price-${skuLineId}`,
-      primary: `Preisabweichung — Position ${sku.positionNo} · ${sku.size}`,
-      secondary: `VK-Etikett ${from} → Etikettpreis ${EUR.format(corrected)}`,
-    });
+    const ist = istMenge(line);
+    const delta = ist - line.expectedQuantity;
+    if (delta !== 0) {
+      lines.push({
+        key: `qty-${line.id}`,
+        primary:
+          delta > 0
+            ? `Mehrlieferung +${delta} — Position ${sku.positionNo} · ${sku.size}`
+            : `Minderlieferung −${Math.abs(delta)} — Position ${sku.positionNo} · ${sku.size}`,
+        secondary: `Soll ${line.expectedQuantity} · Ist ${ist} · ${sku.ean}`,
+      });
+    }
+    if (line.correctedVkPrice !== undefined) {
+      const from = sku.vkLabelPrice !== undefined ? EUR.format(sku.vkLabelPrice) : '—';
+      lines.push({
+        key: `price-${line.id}`,
+        primary: `Preisabweichung — Position ${sku.positionNo} · ${sku.size}`,
+        secondary: `VK-Etikett ${from} → Etikettpreis ${EUR.format(line.correctedVkPrice)}`,
+      });
+    }
   }
 
   return lines;

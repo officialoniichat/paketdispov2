@@ -77,6 +77,16 @@ Ein offenes Problem zeigt oben auf jedem Reiter das Banner `'Offenes Problem: <A
 `'Zum Problem'`. Gehört der Beleg zu einer Lieferung, erscheint das Panel `'Zugehörige Lieferung'`
 (siehe Kapitel B6).
 
+Wird der Beleg **gemeinsam bearbeitet** (Kapitel A7), trägt der Kopf den Chip
+**`'Gemeinsam bearbeitet'`** und darunter die Liste der Beteiligten – Name, Rolle (Inhaber/Helfer),
+Stand und Zeitpunkt – mit der Aktion, einen Helfer zu entfernen (Pflicht-Grund, wie im Board,
+Kapitel B3). Der Reiter `'Historie'` führt Einladung, Annahme, Ablehnung, `'Teilbeleg erledigt'`,
+Entfernen und das Ende der Zusammenarbeit auf (Einträge wie `'Zur Zusammenarbeit eingeladen'`,
+`'Einladung angenommen'`, `'Einladung abgelehnt'`, `'Aus geteiltem Beleg entfernt'`,
+`'Zusammenarbeit beendet'` – bzw. `'Gemeinsam zugewiesen'`, wenn Sie den Beleg selbst mehreren
+Personen gegeben haben). Auch bei einem fertigen Beleg bleibt so sichtbar, dass zusammengearbeitet
+wurde.
+
 ## Archiv & DocuWare
 
 Im Scope `'Archiv'` öffnet das DocuWare-Symbol den Beleg im Langzeitarchiv (Tooltip
@@ -100,12 +110,25 @@ Belege bleiben im System; DocuWare ist das dauerhafte Archiv.
 - **`'Belege konnten nicht geladen werden: …'`** – über `'Erneut laden'` erneut versuchen.
 - **Kein `'Zuweisen'`-Knopf sichtbar** – der Beleg ist nicht (mehr) frei im Pool; ggf. schon
   zugeteilt, blockiert oder abgeschlossen.
-- **Aufteilen eines großen Belegs** – über die Beleg-Aktion `'Aufteilen …'`. Im Dialog wählen Sie,
-  wie viele Teile mit welcher Menge entstehen und ob Sie sie gleich jemandem geben
-  (`'Mitarbeiter wählen'`) oder die Verteilung der Automatik überlassen (`'Ohne Zuweisung'`).
-  Es entstehen **eigenständige Teil-Belege** mit den Nummern `'WE-… (1)'`, `'WE-… (2)'` usw.; sie
-  stehen in dieser Liste eingerückt unter dem Original, das als `'Aufgeteilt'` mit dem Chip
-  `'n Teile'` zurückbleibt und selbst nicht mehr bearbeitet wird.
+- **Einen großen Beleg auf mehrere Personen bringen** – über die Beleg-Aktion `'Aufteilen …'`. Der
+  Dialog `'Beleg aufteilen · <WE>'` fragt zuerst **`'Wie wird gearbeitet?'`**:
+  - **`'Gemeinsam bearbeiten'`** (vorausgewählt) – „Alle Beteiligten sehen den ganzen Beleg und
+    arbeiten ihn zusammen ab. Der erste Mitarbeiter bekommt den Beleg in seinen Karren.“ Haken Sie
+    mindestens **zwei** Mitarbeitende an – in der Reihenfolge Ihres Anklickens; die erste Person
+    trägt `'Karren'` und wird Inhaber –, geben Sie den Pflicht-`'Grund'` an und bestätigen Sie mit
+    **`'Gemeinsam zuweisen'`**. Es bleibt **ein** Beleg: Er liegt im Bündel des Inhabers, alle
+    anderen sind Helfer und sehen ihn in ihrer App unter `'Geteilt mit dir'`; im Board ist er golden
+    markiert (Kapitel B3; Ablauf aus Sicht der Mitarbeitenden in Kapitel A7).
+  - **`'In Teil-Belege aufteilen'`** – der bisherige Weg: Sie wählen, wie viele Teile mit welcher
+    Menge entstehen und ob Sie sie gleich jemandem geben (`'Mitarbeiter wählen'`) oder die
+    Verteilung der Automatik überlassen (`'Ohne Zuweisung'`). Es entstehen **eigenständige
+    Teil-Belege** mit den Nummern `'WE-… (1)'`, `'WE-… (2)'` usw.; sie stehen in dieser Liste
+    eingerückt unter dem Original, das als `'Aufgeteilt'` mit dem Chip `'n Teile'` zurückbleibt und
+    selbst nicht mehr bearbeitet wird.
+
+  Beides geht nur bei einem Beleg, der frei im Pool oder geparkt ist und noch niemandem zugeteilt
+  wurde; ein geparkter Beleg wird dabei freigegeben. Die Mitarbeitenden können einen Beleg außerdem
+  selbst untereinander teilen (Kapitel A7) – dafür brauchen sie keinen Eingriff von Ihnen.
 - **Warum weicht die Menge eines Teils von meiner Eingabe ab?** – Eine Größenzeile (EAN + Größe)
   wird nie zerrissen, sonst müssten zwei Personen dieselbe Kiste anfassen. Ihre Mengen sind
   deshalb Ziele; die Summe über alle Teile ist immer die volle Belegmenge.

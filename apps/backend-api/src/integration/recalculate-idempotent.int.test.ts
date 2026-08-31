@@ -34,7 +34,13 @@ const SHIFT_NOW = new Date(`${todayMidnightUtc().toISOString().slice(0, 10)}T06:
 // recalculate() materialises each active employee's shift from their weeklyPattern and
 // DELETES any shift for a pattern-less day, so a raw shift.create alone yields no capacity.
 // The seed therefore sets a full working week (mirrors the me-next-bundle/board convention).
-const WORK_DAY = { working: true, start: '08:00', end: '16:00', breakMinutes: 30, partTimePct: 100 };
+const WORK_DAY = {
+  working: true,
+  start: '08:00',
+  end: '16:00',
+  breakMinutes: 30,
+  partTimePct: 100,
+};
 const WORKING_WEEK = {
   sun: WORK_DAY,
   mon: WORK_DAY,
@@ -55,7 +61,13 @@ async function seed(): Promise<{ employeeId: string; caseIds: string[] }> {
   // löscht sonst die manuell angelegte Schicht (bekanntes Verhalten, s. board.int).
   const work = { working: true, start: '06:00', end: '14:00', breakMinutes: 0, partTimePct: 100 };
   const weeklyPattern = {
-    mon: work, tue: work, wed: work, thu: work, fri: work, sat: work, sun: work,
+    mon: work,
+    tue: work,
+    wed: work,
+    thu: work,
+    fri: work,
+    sat: work,
+    sun: work,
   };
   const emp = await prisma.user.create({
     data: { employeeNo: 'E100', displayName: 'Anna Beispiel', weeklyPattern },
@@ -153,7 +165,9 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
 
   it('leaves in_progress / non-ready cases untouched on recalc', async () => {
     // Mark one already-assigned case as in-flight; recalc must not steal it back.
-    const inFlight = await prisma.goodsReceiptCase.findFirstOrThrow({ where: { status: 'assigned' } });
+    const inFlight = await prisma.goodsReceiptCase.findFirstOrThrow({
+      where: { status: 'assigned' },
+    });
     const keptBundleId = inFlight.assignedBundleId;
     await prisma.goodsReceiptCase.update({
       where: { id: inFlight.id },
@@ -169,6 +183,78 @@ describe('recalculate idempotency (§8.3 Neu berechnen)', () => {
     // Its bundle/item must survive (not deleted by the cleanup).
     const item = await prisma.assignmentItem.findFirst({ where: { caseId: inFlight.id } });
     expect(item).not.toBeNull();
+  });
+
+  it('löst Beteiligungen auf, wenn Neu berechnen einen Beleg aus dem Karren nimmt (§5.5)', async () => {
+    // Frischer Pool-Beleg wird engine-geplant (createdBy system, assigned).
+    // E100 gilt nach dem Vortest als busy (sein Bündel überlebt wegen des
+    // in_progress-Belegs) — die Automatik beplant nur FREIE Mitarbeitende,
+    // also bekommt ein frischer E102 mit Wochenplan das Starter-Pack.
+    const owner = await prisma.user.create({
+      data: {
+        employeeNo: 'E102',
+        displayName: 'Clara Beispiel',
+        weeklyPattern: WORKING_WEEK,
+      },
+    });
+    const helper = await prisma.user.create({
+      data: { employeeNo: 'E101', displayName: 'Ben Beispiel' },
+    });
+    const loc = await prisma.location.findFirstOrThrow({ where: { code: 'R27' } });
+    const day = todayMidnightUtc();
+    const fresh = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: 'recalc-dissolve',
+        weBelegNo: 'WE-RECALC-900',
+        bookingDate: day,
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 7,
+        totalQuantity: 20,
+        status: 'ready',
+        effortPoints: 10,
+        estimatedMinutes: 20,
+      },
+    });
+    await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
+    const planted = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: fresh.id } });
+    expect(planted.status).toBe('assigned');
+
+    // … trägt eine aktive Zusammenarbeit (Inhaber + Helfer angenommen) …
+    await prisma.caseParticipant.createMany({
+      data: [
+        {
+          caseId: fresh.id,
+          employeeId: owner.id,
+          role: 'inhaber',
+          status: 'angenommen',
+          invitedById: owner.id,
+          invitedByLabel: 'Clara Beispiel',
+          respondedAt: new Date(),
+        },
+        {
+          caseId: fresh.id,
+          employeeId: helper.id,
+          role: 'helfer',
+          status: 'angenommen',
+          invitedById: owner.id,
+          invitedByLabel: 'Clara Beispiel',
+          respondedAt: new Date(),
+        },
+      ],
+    });
+
+    // … und der nächste Lauf revertiert das unberührte System-Pack: die
+    // Beteiligungen dürfen die Neuvergabe nicht überleben (§5.5), sonst behalten
+    // Alt-Beteiligte Sicht- und Schreibrechte auf einen fremden Beleg.
+    await assignment.recalculate(teamlead, undefined, SHIFT_NOW);
+
+    expect(await prisma.caseParticipant.count({ where: { caseId: fresh.id } })).toBe(0);
+    const dissolved = await prisma.workflowEvent.findFirst({
+      where: { entityId: fresh.id, eventType: 'case.collaboration_dissolved' },
+    });
+    expect(dissolved).not.toBeNull();
   });
 });
 
@@ -194,6 +280,7 @@ const DAY = todayMidnightUtc().toISOString().slice(0, 10);
 const RECALC_NOW = new Date(`${DAY}T08:00:00`);
 
 async function resetAll(): Promise<void> {
+  await prisma.caseParticipant.deleteMany();
   await prisma.assignmentItem.deleteMany();
   await prisma.routeStop.deleteMany();
   await prisma.zstRecord.deleteMany();
@@ -217,10 +304,22 @@ async function seedStrandedPool(): Promise<StrandedSeed> {
   // Two employees with a working pattern; recalculate materialises their shift from it
   // (a raw shift.create would be wiped by materializeShiftsForDate when the pattern is null).
   const e1 = await prisma.user.create({
-    data: { employeeNo: 'SP-1', displayName: 'MA SP-1', bereiche: ['Regal'], productivityFactor: 1, weeklyPattern: WORKING_WEEK },
+    data: {
+      employeeNo: 'SP-1',
+      displayName: 'MA SP-1',
+      bereiche: ['Regal'],
+      productivityFactor: 1,
+      weeklyPattern: WORKING_WEEK,
+    },
   });
   await prisma.user.create({
-    data: { employeeNo: 'SP-2', displayName: 'MA SP-2', bereiche: ['Regal'], productivityFactor: 1, weeklyPattern: WORKING_WEEK },
+    data: {
+      employeeNo: 'SP-2',
+      displayName: 'MA SP-2',
+      bereiche: ['Regal'],
+      productivityFactor: 1,
+      weeklyPattern: WORKING_WEEK,
+    },
   });
   const loc = await prisma.location.create({
     data: { code: 'R27', displayName: 'Regal 27', kind: 'regal', sequenceIndex: 27 },
@@ -249,7 +348,9 @@ async function seedStrandedPool(): Promise<StrandedSeed> {
   const poolCaseIds: string[] = [];
   // 3-case CONFIRMED delivery group (shared source key → distributed, not withheld).
   for (let i = 0; i < 3; i += 1) {
-    poolCaseIds.push(await makeCase(i, { deliverySourceGroupKey: 'LS-A', deliverySourceGroupSize: 3 }));
+    poolCaseIds.push(
+      await makeCase(i, { deliverySourceGroupKey: 'LS-A', deliverySourceGroupSize: 3 }),
+    );
   }
   // 12 further plain free cases → 15 free total.
   for (let i = 3; i < 15; i += 1) {
@@ -262,7 +363,13 @@ async function seedStrandedPool(): Promise<StrandedSeed> {
   // in a kept bundle — the residue a status-only workflow transition leaves behind.
   const strandedCaseId = poolCaseIds[5]!;
   const priorBundle = await prisma.assignmentBundle.create({
-    data: { employeeId: e1.id, date: day, status: 'assigned', createdBy: 'system', plannedEffortMinutes: 15 },
+    data: {
+      employeeId: e1.id,
+      date: day,
+      status: 'assigned',
+      createdBy: 'system',
+      plannedEffortMinutes: 15,
+    },
   });
   await prisma.assignmentItem.create({
     data: { bundleId: priorBundle.id, caseId: strandedCaseId, sequence: 0 },

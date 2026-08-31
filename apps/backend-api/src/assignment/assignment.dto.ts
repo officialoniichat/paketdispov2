@@ -4,7 +4,8 @@ import { IsOptional, Matches } from 'class-validator';
 /**
  * Result of POST /api/me/next-bundle — „nächstes Pack anfordern" (Pull-Prinzip).
  * Either the next pack is now active, or `reason` says why not (pack_open |
- * no_shift | capacity_done | shift_ending | pool_empty | skill_tier | continuation).
+ * no_shift | capacity_done | shift_ending | pool_empty | skill_tier |
+ * continuation | shared_case_open).
  *
  * Zwei Wege führen zu `assigned: true`: ist bereits ein Folge-Pack VORGEPLANT,
  * wird es nur freigeschaltet (nichts wird neu geplant, nichts aus dem Pool
@@ -15,17 +16,26 @@ import { IsOptional, Matches } from 'class-validator';
  * hängen an der Teamleitung, und der Mitarbeiter soll deswegen nicht stillstehen.
  * `shift_ending` (Punkt 6) means the remaining time before shift end is too short
  * to finish another cart — nothing is handed out.
+ *
+ * `shared_case_open` (Konzept beleg-zusammenarbeit §5.4): die Admin-Regel „Beim
+ * geteilten Beleg erst mithelfen" ist aktiv und der Anfragende ist an einem noch
+ * offenen geteilten Beleg beteiligt (weder fertig noch in Teamlead-Klärung) —
+ * erst mithelfen, bis alle Positionen geprüft sind.
  */
 export class NextBundleResultDto {
   @ApiProperty() assigned!: boolean;
   @ApiPropertyOptional({
     description:
-      'Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation',
+      'Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation|shared_case_open',
   })
   reason?: string;
   @ApiPropertyOptional({ type: Number, description: 'Belege in the assigned cart' })
   caseCount?: number;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Bereich of the assigned cart' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Bereich of the assigned cart',
+  })
   bereich?: string | null;
 }
 

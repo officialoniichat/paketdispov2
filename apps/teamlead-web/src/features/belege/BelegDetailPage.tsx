@@ -29,11 +29,13 @@ import TableRow from '@mui/material/TableRow';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import GroupsIcon from '@mui/icons-material/Groups';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SendIcon from '@mui/icons-material/Send';
 import {
   CaseStatusChip,
   issueScopeLabels,
+  ltColors,
   problemKindLabels,
   PriorityChip,
   ProblemChip,
@@ -46,19 +48,25 @@ import {
   type BelegDetail,
   type BelegHistoryEntry,
   type BelegIssue,
+  type BelegParticipant,
+  type BelegParticipantRole,
+  type BelegParticipantStatus,
   type BelegPosition,
   type BelegZst,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime, formatMinutes } from '../../lib/format.js';
 import { EFFORT_COMPONENT_LABEL, EFFORT_COMPONENT_ORDER } from '../../lib/effort.js';
 import { CaseActionMenu } from '../../components/CaseActionMenu.js';
+import { ReasonDialog } from '../../components/ReasonDialog.js';
+import { GETEILT_KARTE_SX, geteiltEntfernenAction } from '../../components/GeteiltChip.js';
+import type { PendingAction } from '../board/MitarbeiterBoard.js';
 import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDialog.js';
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { InstructionsDialog } from '../../components/InstructionsDialog.js';
 import { IssueMessageList } from '../../components/IssueMessageList.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplitCase } from '../split/useSplitCase.js';
+import { splitDoneText, useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { ACTOR_LABELS, formatAuditAction } from '../../data/audit.js';
@@ -66,14 +74,7 @@ import { toActorType } from '../../data/narrow.js';
 import { LABEL_PRINT_VARIANT_DISPLAY } from '@paket/domain-types';
 import { LabelPrintVariantIcon } from '@paket/ui';
 
-const TABS = [
-  'Beleg',
-  'Verlauf',
-  'Aufwand',
-  'Abschluss',
-  'Historie',
-  'Priorität',
-];
+const TABS = ['Beleg', 'Verlauf', 'Aufwand', 'Abschluss', 'Historie', 'Priorität'];
 
 export function BelegDetailPage(): JSX.Element {
   const { caseId = '' } = useParams();
@@ -89,9 +90,12 @@ export function BelegDetailPage(): JSX.Element {
     unforwardCase,
     flagAttention,
     unflagAttention,
+    removeParticipant,
   } = useCockpitData();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  // §8.4-Pflichtgrund für „Aus geteiltem Beleg entfernen" (dieselbe Geste wie im Board).
+  const [reasonAction, setReasonAction] = useState<PendingAction | null>(null);
   // Zuweisen/Weiterleiten/Besondere Aufmerksamkeit/Aufteilen/Instruktionen:
   // shared CaseActionMenu custom actions.
   const [assignOpen, setAssignOpen] = useState(false);
@@ -101,7 +105,9 @@ export function BelegDetailPage(): JSX.Element {
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitDone, setSplitDone] = useState<string | null>(null);
   const split = useSplitCase((result) => {
-    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    // Ein Text für beide Dialog-Modi (Aufteilen bzw. Gemeinsam zuweisen); der
+    // Zusatz sagt nur beim Aufteilen, wo die Teile jetzt zu finden sind.
+    setSplitDone(splitDoneText(result, 'Die Teile laufen ab jetzt als eigene Belege.'));
     setSplitOpen(false);
   });
   const employeesQuery = useQuery({
@@ -171,6 +177,11 @@ export function BelegDetailPage(): JSX.Element {
   const effortComponents = c.effortComponents;
   // Instruktions-Loop (04.08.2026): offene Meldungen treiben Banner + Aktion.
   const openIssues = c.issues.filter((i) => i.status === 'open');
+  // Geteilter Beleg (§4): „gemeinsam bearbeitet" ist ein Beleg erst, wenn
+  // mindestens ein HELFER angenommen hat (der Inhaber allein ist keine Teilung).
+  const gemeinsamBearbeitet = c.participants.some(
+    (p) => p.role === 'helfer' && AKTIVE_BETEILIGUNG.includes(p.status),
+  );
 
   const actionCtx: CaseActionCtx = {
     caseId: c.id,
@@ -209,7 +220,12 @@ export function BelegDetailPage(): JSX.Element {
             ))}
             {c.hasOpenIssue && <ProblemChip status="open" size="small" />}
             {c.attentionFlag && (
-              <Chip size="small" color="warning" variant="outlined" label="Besondere Aufmerksamkeit" />
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label="Besondere Aufmerksamkeit"
+              />
             )}
             {c.forwardedTo !== null && (
               <Chip
@@ -217,6 +233,19 @@ export function BelegDetailPage(): JSX.Element {
                 color="secondary"
                 variant="outlined"
                 label={`Weitergeleitet → ${forwardRecipientLabel(c.forwardedTo)}`}
+              />
+            )}
+            {gemeinsamBearbeitet && (
+              <Chip
+                size="small"
+                variant="outlined"
+                icon={<GroupsIcon />}
+                label="Gemeinsam bearbeitet"
+                sx={{
+                  color: ltColors.shared,
+                  borderColor: ltColors.shared,
+                  '& .MuiChip-icon': { color: ltColors.shared },
+                }}
               />
             )}
           </Stack>
@@ -242,9 +271,32 @@ export function BelegDetailPage(): JSX.Element {
         </Stack>
       </Stack>
 
+      {c.participants.length > 0 && (
+        <BeteiligtenPanel
+          participants={c.participants}
+          onEntfernen={(helfer) =>
+            setReasonAction(
+              geteiltEntfernenAction(c.weBelegNo, helfer, (reason) =>
+                removeParticipant.mutate({
+                  caseId: c.id,
+                  employeeNo: helfer.employeeNo,
+                  reason,
+                }),
+              ),
+            )
+          }
+        />
+      )}
+
+      {removeParticipant.isError && (
+        <Alert severity="error" onClose={() => removeParticipant.reset()}>
+          {removeParticipant.error?.message ?? 'Der Helfer konnte nicht entfernt werden.'}
+        </Alert>
+      )}
+
       {splitDone && (
         <Alert severity="success" onClose={() => setSplitDone(null)}>
-          Beleg aufgeteilt: {splitDone}. Die Teile laufen ab jetzt als eigene Belege.
+          {splitDone}
         </Alert>
       )}
 
@@ -399,10 +451,20 @@ export function BelegDetailPage(): JSX.Element {
         pending={split.pending}
         error={split.error}
         onConfirm={split.submit}
+        onModusChange={split.clearError}
         onClose={() => {
           split.clearError();
           setSplitOpen(false);
         }}
+      />
+
+      <ReasonDialog
+        open={reasonAction !== null}
+        title={reasonAction?.title ?? ''}
+        description={reasonAction?.description}
+        suggestions={reasonAction?.suggestions}
+        onConfirm={(reason) => reasonAction?.run(reason)}
+        onClose={() => setReasonAction(null)}
       />
     </Stack>
   );
@@ -440,30 +502,38 @@ function BelegTab({ c }: { c: BelegDetail }): JSX.Element {
           Kopf
         </Typography>
         <FieldGrid
-        rows={[
-          ['WE-Belegnummer', c.weBelegNo],
-          ['Lieferschein', c.deliveryNoteNo ?? '–'],
-          ['Filiale', c.branchNo],
-          ['Buchungsdatum', formatDate(c.bookingDate)],
-          ['Lagerplatz', c.storageCode],
-          ['Shopbereich', c.primaryShopAreaNo ?? '–'],
-          ['Shops', c.shopNos.length > 0 ? c.shopNos.join(', ') : '–'],
-          ['Etage', c.primaryFloor ?? '–'],
-          ['Kartons (Anlieferung)', c.inboundCartonCount === null ? '–' : String(c.inboundCartonCount)],
-          ['Etiketten', c.labelsRequired ? 'ja' : 'nein'],
-          ['Belegmenge', String(c.totalQuantity)],
-          ['Zugeteilt', c.assignedEmployeeName ?? '–'],
-          [
-            'DocuWare',
-            c.docuWareUrl ? (
-              <Link href={c.docuWareUrl} target="_blank" rel="noopener" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-                Langzeitarchiv öffnen <OpenInNewIcon fontSize="inherit" />
-              </Link>
-            ) : (
-              '–'
-            ),
-          ],
-        ]}
+          rows={[
+            ['WE-Belegnummer', c.weBelegNo],
+            ['Lieferschein', c.deliveryNoteNo ?? '–'],
+            ['Filiale', c.branchNo],
+            ['Buchungsdatum', formatDate(c.bookingDate)],
+            ['Lagerplatz', c.storageCode],
+            ['Shopbereich', c.primaryShopAreaNo ?? '–'],
+            ['Shops', c.shopNos.length > 0 ? c.shopNos.join(', ') : '–'],
+            ['Etage', c.primaryFloor ?? '–'],
+            [
+              'Kartons (Anlieferung)',
+              c.inboundCartonCount === null ? '–' : String(c.inboundCartonCount),
+            ],
+            ['Etiketten', c.labelsRequired ? 'ja' : 'nein'],
+            ['Belegmenge', String(c.totalQuantity)],
+            ['Zugeteilt', c.assignedEmployeeName ?? '–'],
+            [
+              'DocuWare',
+              c.docuWareUrl ? (
+                <Link
+                  href={c.docuWareUrl}
+                  target="_blank"
+                  rel="noopener"
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                >
+                  Langzeitarchiv öffnen <OpenInNewIcon fontSize="inherit" />
+                </Link>
+              ) : (
+                '–'
+              ),
+            ],
+          ]}
         />
       </Box>
       <Box>
@@ -483,7 +553,11 @@ function BelegTab({ c }: { c: BelegDetail }): JSX.Element {
 }
 
 /** Kopfzeilen-Zellen der Positionen-Tabelle (sticky, PWA-Vorlage A1). */
-const POSITION_HEAD_CELL = { fontWeight: 700, whiteSpace: 'nowrap', bgcolor: 'background.paper' } as const;
+const POSITION_HEAD_CELL = {
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+  bgcolor: 'background.paper',
+} as const;
 
 /** Ziffern in Zahlenspalten laufen einspurig, sonst wandert das Komma je Zeile (PWA-Vorlage). */
 const NUMERIC_CELL = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' } as const;
@@ -595,7 +669,11 @@ function PositionsSection({
                       alignItems="flex-start"
                     >
                       <Box sx={{ minWidth: 0 }}>
-                        <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          sx={{ flexWrap: 'wrap', gap: 0.75 }}
+                        >
                           <Typography sx={{ fontWeight: 700 }}>
                             {p.supplierArticleNo} · WGR {p.wgr}
                             {p.wgrDescription ? ` ${p.wgrDescription}` : ''} · {p.supplierColor}
@@ -603,10 +681,17 @@ function PositionsSection({
                           </Typography>
                           {p.nosFlag && <Chip size="small" color="success" label="♻️ NOS" />}
                           {!p.nosFlag && warenart && (
-                            <Chip size="small" color="secondary" variant="outlined" label={warenart} />
+                            <Chip
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                              label={warenart}
+                            />
                           )}
                           {/* Ordernummer nur in der Teamlead-UX — zur Fehlerlösung (Nachtrag 15.07.2026). */}
-                          {p.orderNo && <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />}
+                          {p.orderNo && (
+                            <Chip size="small" variant="outlined" label={`Order ${p.orderNo}`} />
+                          )}
                           {/* Etikett-Druckvariante der Position (Kundenfeedback 03.08.2026). */}
                           <Chip
                             size="small"
@@ -629,7 +714,11 @@ function PositionsSection({
                           ))}
                         </Stack>
                         {/* Positions-Kontext (wie PWA): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip. */}
-                        <Stack direction="row" alignItems="center" sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}
+                        >
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {positionMetaText(p)}
                           </Typography>
@@ -650,7 +739,11 @@ function PositionsSection({
                                 key={i.id}
                                 size="small"
                                 color="error"
-                                label={i.description ? `${issueLabel(i)}: ${i.description}` : issueLabel(i)}
+                                label={
+                                  i.description
+                                    ? `${issueLabel(i)}: ${i.description}`
+                                    : issueLabel(i)
+                                }
                               />
                             ))}
                           </Stack>
@@ -669,7 +762,11 @@ function PositionsSection({
                     (i) => i.positionNo === p.positionNo && i.ean === s.ean && i.size === s.size,
                   );
                   return (
-                    <TableRow key={s.id} hover sx={delta !== 0 || hasIssue ? PROBLEM_ROW_SX : undefined}>
+                    <TableRow
+                      key={s.id}
+                      hover
+                      sx={delta !== 0 || hasIssue ? PROBLEM_ROW_SX : undefined}
+                    >
                       <TableCell />
                       <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
@@ -687,7 +784,10 @@ function PositionsSection({
                       </TableCell>
                       <TableCell
                         align="right"
-                        sx={{ ...NUMERIC_CELL, ...(delta !== 0 ? { color: 'error.main', fontWeight: 700 } : {}) }}
+                        sx={{
+                          ...NUMERIC_CELL,
+                          ...(delta !== 0 ? { color: 'error.main', fontWeight: 700 } : {}),
+                        }}
                       >
                         {s.confirmedQuantity ?? '–'}
                       </TableCell>
@@ -696,7 +796,9 @@ function PositionsSection({
                           <Chip
                             size="small"
                             color="warning"
-                            label={delta > 0 ? `+${delta} Mehrmenge` : `−${Math.abs(delta)} Mindermenge`}
+                            label={
+                              delta > 0 ? `+${delta} Mehrmenge` : `−${Math.abs(delta)} Mindermenge`
+                            }
                           />
                         )}
                       </TableCell>
@@ -722,7 +824,8 @@ function HistoryTab({ history }: { history: BelegHistoryEntry[] }): JSX.Element 
           <Box component="span" sx={{ color: 'text.secondary', mr: 1 }}>
             {formatDateTime(e.timestamp)}
           </Box>
-          <strong>{formatAuditAction(e.eventType)}</strong> · {ACTOR_LABELS[toActorType(e.actorType)]}
+          <strong>{formatAuditAction(e.eventType)}</strong> ·{' '}
+          {ACTOR_LABELS[toActorType(e.actorType)]}
           {e.reason ? ` — „${e.reason}"` : ''}
         </Typography>
       ))}
@@ -773,7 +876,9 @@ function AbschlussTab({
         <TableBody>
           {zstRecords.map((z) => (
             <TableRow key={z.id}>
-              <TableCell>{z.completedQuantity < totalQuantity ? 'Teilabschluss' : 'Vollabschluss'}</TableCell>
+              <TableCell>
+                {z.completedQuantity < totalQuantity ? 'Teilabschluss' : 'Vollabschluss'}
+              </TableCell>
               <TableCell align="right">{z.completedQuantity}</TableCell>
               <TableCell align="right">{z.effortPoints}</TableCell>
               <TableCell>{formatDateTime(z.completedAt)}</TableCell>
@@ -791,7 +896,9 @@ const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' 
 
 /** Problemart-Label: Katalog-Snapshot bei manuellen Problemen, sonst die feste Art. */
 function issueLabel(i: BelegIssue): string {
-  return i.kind === 'manual' ? (i.reasonLabel ?? problemKindLabels.manual) : problemKindLabels[i.kind];
+  return i.kind === 'manual'
+    ? (i.reasonLabel ?? problemKindLabels.manual)
+    : problemKindLabels[i.kind];
 }
 
 /** Bezugszeile eines Problems: Position + Ordernummer + optional EAN/Größe (Klärungs-UX). */
@@ -869,8 +976,8 @@ function IssuesTab({
             )}
             {i.correctedVkPrice !== null && (
               <Typography variant="body2">
-                Preis: VK-Etikett {i.expectedVkPrice !== null ? EUR.format(i.expectedVkPrice) : '–'} →
-                Etikettpreis {EUR.format(i.correctedVkPrice)}
+                Preis: VK-Etikett {i.expectedVkPrice !== null ? EUR.format(i.expectedVkPrice) : '–'}{' '}
+                → Etikettpreis {EUR.format(i.correctedVkPrice)}
               </Typography>
             )}
             {i.description && (
@@ -999,5 +1106,83 @@ function Empty({ text }: { text: string }): JSX.Element {
     <Typography color="text.secondary" sx={{ py: 1 }}>
       {text}
     </Typography>
+  );
+}
+
+/** Aktive Beteiligung (§4): nur wer angenommen hat, arbeitet wirklich mit. */
+const AKTIVE_BETEILIGUNG: readonly BelegParticipantStatus[] = ['angenommen', 'teil_erledigt'];
+
+const BETEILIGUNG_ROLLE: Record<BelegParticipantRole, string> = {
+  inhaber: 'Inhaber',
+  helfer: 'Helfer',
+};
+
+const BETEILIGUNG_STATUS: Record<BelegParticipantStatus, string> = {
+  eingeladen: 'Eingeladen',
+  angenommen: 'Arbeitet mit',
+  abgelehnt: 'Abgelehnt',
+  teil_erledigt: 'Teil erledigt',
+  entfernt: 'Entfernt',
+};
+
+/**
+ * Beteiligtenliste des geteilten Belegs (Handbuch B2): Name, Rolle, Stand und
+ * Zeitpunkt — und je aktivem Helfer die Aktion „Aus geteiltem Beleg entfernen"
+ * mit Pflicht-Grund, genau wie im Mitarbeiterboard. Der Inhaber ist hier nicht
+ * entfernbar (Backend 409); dafür gibt es Entziehen und Verschieben. Die Liste
+ * bleibt auch bei fertigen Belegen stehen — so ist später noch sichtbar, dass
+ * zusammengearbeitet wurde.
+ */
+function BeteiligtenPanel({
+  participants,
+  onEntfernen,
+}: {
+  participants: BelegParticipant[];
+  onEntfernen: (helfer: BelegParticipant) => void;
+}): JSX.Element {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, ...GETEILT_KARTE_SX }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+        <GroupsIcon sx={{ fontSize: 18, color: ltColors.shared }} />
+        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+          Beteiligte
+        </Typography>
+      </Stack>
+      <Stack spacing={0.75}>
+        {participants.map((p) => {
+          const aktiv = AKTIVE_BETEILIGUNG.includes(p.status);
+          const zeitpunkt = p.partDoneAt ?? p.respondedAt ?? p.invitedAt;
+          const geprueft = p.confirmedPositionCount;
+          return (
+            <Stack
+              key={p.participantId}
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+            >
+              <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 160 }}>
+                {p.displayName}
+              </Typography>
+              <Chip size="small" variant="outlined" label={BETEILIGUNG_ROLLE[p.role]} />
+              <Typography variant="body2" sx={{ color: aktiv ? 'text.primary' : 'text.disabled' }}>
+                {BETEILIGUNG_STATUS[p.status]}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {formatDateTime(zeitpunkt)}
+                {geprueft > 0
+                  ? ` · ${geprueft} ${geprueft === 1 ? 'Position' : 'Positionen'} geprüft`
+                  : ''}
+              </Typography>
+              {p.role === 'helfer' && aktiv && (
+                <Button size="small" color="error" onClick={() => onEntfernen(p)}>
+                  Aus geteiltem Beleg entfernen
+                </Button>
+              )}
+            </Stack>
+          );
+        })}
+      </Stack>
+    </Paper>
   );
 }

@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type { CaseStatus, LabelPrintVariant } from '@paket/domain-types';
 import {
   caseStatusSchema,
@@ -17,28 +18,46 @@ import { EventLogService } from '../events/event-log.service.js';
 import { LiveStatusService } from '../live/live.module.js';
 import { proratedEffort } from '../modules/completion/completion-logic.js';
 import {
+  completeGateError,
+  partialGateError,
+  type GatePosition,
+} from '../modules/completion/collaboration-gate.js';
+import {
   deriveImplicitProblems,
   describeImplicitProblem,
+  type ImplicitProblem,
   type ReportedSkuState,
 } from '../modules/issue/derive-problems.js';
+import {
+  ACTIVE_PARTICIPANT_STATUSES,
+  dissolveCollaborationTx,
+  isCollaborationActive,
+  recipientsForCase,
+  toCollaborationDto,
+} from '../collaboration/participants.js';
 import type { Principal } from '../auth/rbac.js';
 import { assertCanAccessCase, canAccessCase, CaseAccessDeniedError } from './case-access.policy.js';
 import {
   type CaseAggregateDto,
+  type CaseCollaborationDto,
   type CaseSummaryDto,
   type ClaimWorkstationDto,
   type CompleteDto,
+  type ConfirmPositionDto,
+  type CountSkuLineDto,
   type CurrentBundleDto,
   type IssueSummaryDto,
   type MeWorkstationDto,
   type ParkRemainingDto,
   type ParkRemainingResultDto,
   type PartialCompleteDto,
+  type PositionConfirmResultDto,
   type ReceiptPositionDto,
   type ReopenIssueDto,
   type ReportedProblemDto,
   type SetCollectedDto,
   type SetCollectedResultDto,
+  type SkuCountResultDto,
   type SkuQuantityDto,
   type TodayResponseDto,
   type TransitionResultDto,
@@ -66,6 +85,20 @@ interface CaseOwnership {
   status: CaseStatus;
   version: number;
   ownerEmployeeNo: string | null;
+  /** employeeNos der AKTIVEN Beteiligten (angenommen|teil_erledigt, Konzept §5.1). */
+  participantEmployeeNos: string[];
+}
+
+/**
+ * Effektiver Stand einer Größenzeile für Abschluss/Teilabschluss (Konzept §7):
+ * Body-Wert, wenn der Aufrufer die Zeile angefasst hat, sonst der persistierte
+ * Stand aus dem Zähl-Endpunkt (`confirmedQuantity ?? Soll`, `correctedVkPrice`).
+ */
+interface EffectiveSkuState extends ReportedSkuState {
+  /** true = im Body enthalten — nur diese Zeilen werden beim Abschluss persistiert. */
+  fromBody: boolean;
+  /** true = der Body trug das Feld `correctedVkPrice` explizit. */
+  correctedVkPriceTouched: boolean;
 }
 
 /** A case in one of these is "done" for bundle-completion purposes (§ continuation). */
@@ -107,6 +140,57 @@ function byBundleSequence(
 function startOfDayUtc(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
+
+/**
+ * Row-Umfang der Mitarbeiter-Beleg-Karte (/api/me/today) — geteilt vom eigenen
+ * Bündel und von „Geteilt mit dir" (Konzept §3.5), damit beide Karten identisch
+ * projiziert werden.
+ */
+const TODAY_CASE_INCLUDE = {
+  storageLocation: true,
+  // A1/A3 summary fields: Etiketten (derived) + Mehr-Shop list.
+  workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
+  // Etikett-Druckvariante je Position (Kundenfeedback 03.08.2026): die
+  // Beleg-Karte unter „1 · Ware holen" und das Barcode-Pop-up zeigen daraus,
+  // welche Position ohne Preis zu drucken ist. shopNo → A3 Mehr-Shop-Liste;
+  // catManDate → frühester CatMan-Termin des Belegs. confirmedById → Prüf-
+  // Fortschritt der Zusammenarbeit (Konzept §7, CaseCollaborationDto).
+  positions: {
+    select: {
+      id: true,
+      positionNo: true,
+      orderNo: true,
+      supplierArticleNo: true,
+      supplierColor: true,
+      shopNo: true,
+      catManDate: true,
+      confirmedById: true,
+      instruction: { select: { labelPrintVariant: true } },
+      // Größenzeilen-Anker für die Meldungs-Zuordnung (scope=sku_line).
+      skuLines: { select: { id: true, ean: true, size: true } },
+    },
+    orderBy: { positionNo: 'asc' as const },
+  },
+  // Instruktions-Loop (04.08.2026): Zähler-Badge + Popover der Beleg-
+  // Karte brauchen ALLE Meldungen inkl. Einzel-Status + Instruktion.
+  issues: {
+    orderBy: { reportedAt: 'asc' as const },
+    include: {
+      messages: true,
+      // Standardanweisung der Problemart (Vorlage für den TL-Dialog).
+      reason: { select: { defaultInstruction: true, autoInsert: true } },
+    },
+  },
+  // Die Bündel-Reihenfolge der Engine plus die Pack-Zugehörigkeit (sie
+  // entscheidet, was der MA überhaupt sieht). Prisma kann nicht über eine
+  // To-many-Relation sortieren — deshalb unten in JS.
+  assignmentItems: { select: { sequence: true, packIndex: true } },
+  // Geteilter Beleg: Beteiligte chronologisch, für CaseSummaryDto.collaboration.
+  participants: {
+    orderBy: { invitedAt: 'asc' as const },
+    include: { employee: { select: { employeeNo: true, displayName: true } } },
+  },
+} satisfies Prisma.GoodsReceiptCaseInclude;
 
 /**
  * Employee-facing case access (§14.2 /api/me/*, lifecycle) — strictly scoped to
@@ -162,52 +246,44 @@ export class CasesService {
       include: {
         employee: { select: { displayName: true } },
         routeStops: { orderBy: { sequence: 'asc' } },
-        cases: {
-          include: {
-            storageLocation: true,
-            // A1/A3 summary fields: Etiketten (derived) + Mehr-Shop list.
-            workInstruction: { select: { priceLabelPrintRequired: true, boxLabelRequired: true } },
-            // Etikett-Druckvariante je Position (Kundenfeedback 03.08.2026): die
-            // Beleg-Karte unter „1 · Ware holen" und das Barcode-Pop-up zeigen daraus,
-            // welche Position ohne Preis zu drucken ist. shopNo → A3 Mehr-Shop-Liste;
-            // catManDate → frühester CatMan-Termin des Belegs.
-            positions: {
-              select: {
-                id: true,
-                positionNo: true,
-                orderNo: true,
-                supplierArticleNo: true,
-                supplierColor: true,
-                shopNo: true,
-                catManDate: true,
-                instruction: { select: { labelPrintVariant: true } },
-                // Größenzeilen-Anker für die Meldungs-Zuordnung (scope=sku_line).
-                skuLines: { select: { id: true, ean: true, size: true } },
-              },
-              orderBy: { positionNo: 'asc' },
-            },
-            // Instruktions-Loop (04.08.2026): Zähler-Badge + Popover der Beleg-
-            // Karte brauchen ALLE Meldungen inkl. Einzel-Status + Instruktion.
-            issues: {
-              orderBy: { reportedAt: 'asc' },
-              include: {
-                messages: true,
-                // Standardanweisung der Problemart (Vorlage für den TL-Dialog).
-                reason: { select: { defaultInstruction: true, autoInsert: true } },
-              },
-            },
-            // Die Bündel-Reihenfolge der Engine plus die Pack-Zugehörigkeit (sie
-            // entscheidet, was der MA überhaupt sieht). Prisma kann nicht über eine
-            // To-many-Relation sortieren — deshalb unten in JS.
-            assignmentItems: { select: { sequence: true, packIndex: true } },
-          },
-        },
+        cases: { include: TODAY_CASE_INCLUDE },
       },
     });
 
     const workstation = await this.getMyWorkstation(employee.id);
+
+    // „Geteilt mit dir" (Konzept §3.5): Belege, an denen ich aktiver HELFER bin
+    // (angenommen|teil_erledigt). Sie liegen im Karren des Inhabers — nie im
+    // eigenen Bündel — und erscheinen deshalb auch OHNE eigenes Bündel; fertige
+    // fallen heraus. Ohne carriedOver/packOrdinal: sie gehören keinem Pack an.
+    const sharedRows = await this.prisma.goodsReceiptCase.findMany({
+      where: {
+        status: { notIn: [...TERMINAL_CASE_STATUSES] },
+        participants: {
+          some: {
+            employeeId: employee.id,
+            role: 'helfer',
+            status: { in: [...ACTIVE_PARTICIPANT_STATUSES] },
+          },
+        },
+      },
+      include: {
+        ...TODAY_CASE_INCLUDE,
+        assignedBundle: { select: { employee: { select: { displayName: true } } } },
+      },
+      orderBy: { weBelegNo: 'asc' },
+    });
+    const sharedCases = sharedRows.map((c) =>
+      this.mapSummary(
+        c,
+        c.assignedBundle?.employee?.displayName ?? null,
+        c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
+        toCollaborationDto(c.participants, c.positions),
+      ),
+    );
+
     if (!bundle) {
-      return { date: isoDay(today), bundle: null, pack: null, cases: [], workstation };
+      return { date: isoDay(today), bundle: null, pack: null, cases: [], sharedCases, workstation };
     }
 
     // Pull-Prinzip (single source: `pack-window.ts`): der MA sieht ausschließlich
@@ -246,12 +322,14 @@ export class CasesService {
             c,
             assignedEmployeeName,
             c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
+            toCollaborationDto(c.participants, c.positions),
           ),
           carriedOver: carriedOverIds.has(c.id),
           // Lücken-feste Anzeige-Position („aus Pack n") — wie TodayPackDto.index
           // eine reine Darstellungsgröße, NIE der persistierte packIndex.
           packOrdinal: packOrdinal(packItems, packIndexByCase.get(c.id) ?? bundle.activePackIndex),
         })),
+      sharedCases,
       workstation,
     };
   }
@@ -355,6 +433,12 @@ export class CasesService {
             version: { increment: 1 },
           },
         });
+        // Ende der Zusammenarbeit (§5.5): der Beleg verlässt den Karren des
+        // Inhabers — Beteiligungen auflösen; geprüfte Positionen bleiben geprüft.
+        await dissolveCollaborationTx(tx, caseId, this.events, {
+          actorType: 'employee',
+          actorId: principal.sub,
+        });
         await this.events.append(
           {
             eventType: 'case.parked_by_employee',
@@ -399,7 +483,9 @@ export class CasesService {
     caseId: string,
     dto: SetCollectedDto,
   ): Promise<SetCollectedResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
+    // §5.1: NUR der Inhaber setzt den Ware-holen-Haken — der Beleg liegt
+    // physisch auf SEINEM Karren; Helfer sehen und bearbeiten nur.
+    const owned = await this.requireWorkableCase(principal, caseId, { ownerOnly: true });
     await this.prisma.$transaction(async (tx) => {
       await tx.goodsReceiptCase.update({
         where: { id: owned.id },
@@ -418,6 +504,202 @@ export class CasesService {
       );
     });
     return { caseId: owned.id, collected: dto.collected };
+  }
+
+  /**
+   * Sperrt die Case-Zeile FOR SHARE und prüft dabei `in_progress` — im selben
+   * Statement, damit die Bedingung beim Warten auf eine laufende Abschluss-
+   * Transition (exklusives Zeilen-Lock) NEU ausgewertet wird: committet der
+   * Abschluss zuerst, endet der Arbeitsstand-Schreiber hier als 409, statt auf
+   * einem fertigen Beleg zu landen. Umgekehrt hält das Share-Lock die
+   * Transition auf, bis dieser Schreiber committet ist — ihr In-Tx-Gate (§5.2)
+   * sieht den Haken dann. FOR SHARE statt FOR UPDATE, damit mehrere Beteiligte
+   * gleichzeitig haken und zählen können.
+   */
+  private async lockCaseInProgressTx(
+    tx: Prisma.TransactionClient,
+    caseId: string,
+    conflictMessage: string,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM goods_receipt_cases WHERE id = ${caseId} AND status = 'in_progress' FOR SHARE`;
+    if (rows.length === 0) {
+      throw new ConflictException(conflictMessage);
+    }
+  }
+
+  /**
+   * „Position geprüft" (Konzept §2/§7): der Haken lebt seit 31.08.2026
+   * serverseitig — wer hat welche Position wann geprüft. Gemeinsame Wahrheit für
+   * ALLE Belege, nicht nur geteilte. Wie der Ware-holen-Haken bewusst OHNE
+   * Status-Übergang und OHNE Versions-Inkrement (orthogonaler Arbeitszustand);
+   * `status` der Position wird dabei confirmed/open (Konzept §6).
+   */
+  async confirmPosition(
+    principal: Principal,
+    caseId: string,
+    positionId: string,
+    dto: ConfirmPositionDto,
+  ): Promise<PositionConfirmResultDto> {
+    const owned = await this.requireWorkableCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+    if (owned.status !== 'in_progress') {
+      throw new ConflictException(
+        'Positionen lassen sich nur prüfen, während der Beleg in Bearbeitung ist',
+      );
+    }
+    const position = await this.prisma.receiptPosition.findFirst({
+      where: { id: positionId, caseId: owned.id },
+      select: { id: true, positionNo: true },
+    });
+    if (!position) {
+      throw new NotFoundException(`Position ${positionId} gehört nicht zu Beleg ${caseId}`);
+    }
+    const now = await this.clock.now();
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockCaseInProgressTx(
+        tx,
+        owned.id,
+        'Positionen lassen sich nur prüfen, während der Beleg in Bearbeitung ist',
+      );
+      await tx.receiptPosition.update({
+        where: { id: position.id },
+        data: dto.confirmed
+          ? { confirmedAt: now, confirmedById: employee.id, status: 'confirmed' }
+          : { confirmedAt: null, confirmedById: null, status: 'open' },
+      });
+      await this.events.append(
+        {
+          eventType: 'position.confirmed',
+          entityType: 'GoodsReceiptCase',
+          entityId: owned.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: {
+            positionId: position.id,
+            positionNo: position.positionNo,
+            confirmed: dto.confirmed,
+            employeeNo: employee.employeeNo,
+          },
+        },
+        tx,
+      );
+    });
+    // Live an Inhaber + aktive Beteiligte (§8): die Team-Ansicht lässt das
+    // Kästchen des Handelnden aufleuchten und lädt den Aggregat-Stand nach.
+    this.live.publish({
+      type: 'position.confirmed',
+      recipients: await recipientsForCase(this.prisma, owned.id),
+      caseId: owned.id,
+      status: null,
+      actorEmployeeNo: employee.employeeNo,
+      positionId: position.id,
+      at: now.toISOString(),
+    });
+    return {
+      caseId: owned.id,
+      positionId: position.id,
+      confirmed: dto.confirmed,
+      confirmedBy: dto.confirmed
+        ? { employeeNo: employee.employeeNo, displayName: employee.displayName }
+        : null,
+      confirmedAt: dto.confirmed ? now.toISOString() : null,
+    };
+  }
+
+  /**
+   * Ist-Menge/Preiskorrektur je Größenzeile erfassen (Konzept §2/§7) — pro
+   * Aktion persistiert, damit alle Beteiligten denselben Stand sehen (bisher
+   * reiner Client-Zustand, ging beim Neuladen verloren). `null` setzt den
+   * jeweiligen Wert zurück. Kein Versions-Inkrement (Muster Ware-holen-Haken).
+   */
+  async countSkuLine(
+    principal: Principal,
+    caseId: string,
+    skuLineId: string,
+    dto: CountSkuLineDto,
+  ): Promise<SkuCountResultDto> {
+    const owned = await this.requireWorkableCase(principal, caseId);
+    const employee = await this.resolveEmployee(principal);
+    if (owned.status !== 'in_progress') {
+      throw new ConflictException(
+        'Mengen lassen sich nur erfassen, während der Beleg in Bearbeitung ist',
+      );
+    }
+    if (dto.confirmedQuantity === undefined && dto.correctedVkPrice === undefined) {
+      throw new BadRequestException(
+        'Keine Änderung übergeben – confirmedQuantity oder correctedVkPrice angeben',
+      );
+    }
+    const line = await this.prisma.receiptSkuLine.findFirst({
+      where: { id: skuLineId, position: { caseId: owned.id } },
+      select: {
+        id: true,
+        expectedQuantity: true,
+        confirmedQuantity: true,
+        correctedVkPrice: true,
+        receiptPositionId: true,
+      },
+    });
+    if (!line) {
+      throw new NotFoundException(`Größenzeile ${skuLineId} gehört nicht zu Beleg ${caseId}`);
+    }
+    // Teil-Update: Feld nicht im Body ⇒ persistierten Stand (anderer Beteiligter)
+    // unangetastet lassen; explizites null setzt den Wert zurück.
+    const confirmedQuantity =
+      dto.confirmedQuantity !== undefined ? dto.confirmedQuantity : line.confirmedQuantity;
+    const correctedVkPrice =
+      dto.correctedVkPrice !== undefined ? dto.correctedVkPrice : line.correctedVkPrice;
+    const status =
+      confirmedQuantity === null
+        ? 'open'
+        : confirmedQuantity === line.expectedQuantity
+          ? 'confirmed'
+          : 'deviation';
+    const now = await this.clock.now();
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockCaseInProgressTx(
+        tx,
+        owned.id,
+        'Mengen lassen sich nur erfassen, während der Beleg in Bearbeitung ist',
+      );
+      await tx.receiptSkuLine.update({
+        where: { id: line.id },
+        data: { confirmedQuantity, correctedVkPrice, status },
+      });
+      await this.events.append(
+        {
+          eventType: 'sku.quantity_confirmed',
+          entityType: 'GoodsReceiptCase',
+          entityId: owned.id,
+          actorType: 'employee',
+          actorId: principal.sub,
+          payload: {
+            skuLineId: line.id,
+            confirmedQuantity,
+            correctedVkPrice,
+            employeeNo: employee.employeeNo,
+          },
+        },
+        tx,
+      );
+    });
+    this.live.publish({
+      type: 'sku.counted',
+      recipients: await recipientsForCase(this.prisma, owned.id),
+      caseId: owned.id,
+      status: null,
+      actorEmployeeNo: employee.employeeNo,
+      positionId: line.receiptPositionId,
+      at: now.toISOString(),
+    });
+    return {
+      caseId: owned.id,
+      skuLineId: line.id,
+      confirmedQuantity,
+      correctedVkPrice: correctedVkPrice ?? null,
+      status,
+    };
   }
 
   async getCurrentBundle(principal: Principal): Promise<CurrentBundleDto | null> {
@@ -443,12 +725,22 @@ export class CasesService {
         storageLocation: true,
         workInstruction: true,
         positions: {
-          include: { instruction: true, skuLines: { orderBy: { ean: 'asc' } } },
+          include: {
+            instruction: true,
+            skuLines: { orderBy: { ean: 'asc' } },
+            // „Position geprüft": wer geprüft hat (Initialen-Chip, Konzept §3.6).
+            confirmedBy: { select: { employeeNo: true, displayName: true } },
+          },
           orderBy: { positionNo: 'asc' },
         },
         transportBoxes: { orderBy: { boxNo: 'asc' } },
         assignedBundle: {
           select: { employee: { select: { employeeNo: true, displayName: true } } },
+        },
+        // Geteilter Beleg: Beteiligte für den Zugriff (§5.1) + collaboration-Projektion.
+        participants: {
+          orderBy: { invitedAt: 'asc' },
+          include: { employee: { select: { employeeNo: true, displayName: true } } },
         },
         // Instruktions-Loop (04.08.2026): Meldungen inkl. Verlauf — die PWA zeigt
         // die TL-Hinweis-Blöcke an der betroffenen Position (positionId-Anker).
@@ -465,7 +757,11 @@ export class CasesService {
       throw new NotFoundException(`Case ${caseId} not found`);
     }
     const ownerEmployeeNo = found.assignedBundle?.employee?.employeeNo ?? null;
-    if (!canAccessCase(principal, ownerEmployeeNo)) {
+    // §5.1: sehen darf der Inhaber ODER ein AKTIVER Beteiligter — Eingeladene nicht.
+    const activeParticipantNos = found.participants
+      .filter((p) => (ACTIVE_PARTICIPANT_STATUSES as readonly string[]).includes(p.status))
+      .map((p) => p.employee.employeeNo);
+    if (!canAccessCase(principal, ownerEmployeeNo, activeParticipantNos)) {
       throw new ForbiddenException(`Access to case ${caseId} denied`);
     }
     // Faithful ordered Arbeitsanweisung projection — single source in domain-types
@@ -491,13 +787,21 @@ export class CasesService {
     const prefsByWgr = new Map<string, { preferredSize: string; alternativeSize?: string }[]>();
     for (const pref of prefs) {
       const list = prefsByWgr.get(pref.wgr) ?? [];
-      list.push({ preferredSize: pref.preferredSize, alternativeSize: pref.alternativeSize ?? undefined });
+      list.push({
+        preferredSize: pref.preferredSize,
+        alternativeSize: pref.alternativeSize ?? undefined,
+      });
       prefsByWgr.set(pref.wgr, list);
     }
 
     const issues = found.issues.map((i) => mapIssueSummary(i, found.positions));
     return {
-      case: this.mapSummary(found, found.assignedBundle?.employee?.displayName ?? null, issues),
+      case: this.mapSummary(
+        found,
+        found.assignedBundle?.employee?.displayName ?? null,
+        issues,
+        toCollaborationDto(found.participants, found.positions),
+      ),
       workInstruction: found.workInstruction ? mapWorkInstruction(found.workInstruction) : null,
       positions: found.positions.map((p) => this.mapPosition(p, prefsByWgr)),
       boxTargets: found.transportBoxes.map((b) => mapBoxTarget(b)),
@@ -524,6 +828,8 @@ export class CasesService {
       status: string;
       catMan?: boolean | null;
       catManDate?: Date | null;
+      confirmedAt?: Date | null;
+      confirmedBy?: { employeeNo: string; displayName: string } | null;
       instruction: PositionInstructionRow | null;
       skuLines: SkuLineRow[];
     },
@@ -554,13 +860,15 @@ export class CasesService {
       hShopNo: p.hShopNo,
       floor: p.floor,
       status: p.status,
+      confirmedBy: p.confirmedBy ?? null,
+      confirmedAt: p.confirmedAt ? p.confirmedAt.toISOString() : null,
       instruction: p.instruction ? mapPositionInstruction(p.instruction) : null,
       skuLines: p.skuLines.map((s) => mapSkuLine(s, marks[s.size] ?? null)),
     };
   }
 
   async startPreparation(principal: Principal, caseId: string): Promise<TransitionResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
+    const owned = await this.requireWorkableCase(principal, caseId);
     // problem_resolved → in_progress: derselbe MA setzt nach der Teamlead-Klärung fort.
     const resuming = owned.status === 'problem_resolved';
     const result = await this.workflow.transition({
@@ -576,8 +884,12 @@ export class CasesService {
     return this.finish(principal, result);
   }
 
-  async complete(principal: Principal, caseId: string, dto: CompleteDto = {}): Promise<TransitionResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
+  async complete(
+    principal: Principal,
+    caseId: string,
+    dto: CompleteDto = {},
+  ): Promise<TransitionResultDto> {
+    const owned = await this.requireWorkableCase(principal, caseId);
     const employee = await this.resolveEmployee(principal);
     const caseRow = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
       where: { id: owned.id },
@@ -585,9 +897,18 @@ export class CasesService {
     });
     // Punkt 7 (Kundenfeedback 14.07.2026): Mehr-/Minderlieferung oder Preis-
     // abweichung ist AUTOMATISCH ein Problem und erzwingt den Teilabschluss —
-    // „Beleg erledigt" (voll) ist dann nicht erlaubt.
-    const skuStates = await this.resolveSkuStates(owned.id, dto.skuQuantities ?? []);
-    const implicit = deriveImplicitProblems(skuStates);
+    // „Beleg erledigt" (voll) ist dann nicht erlaubt. Grundlage sind die
+    // GEMISCHTEN Sku-Stände (Body ∪ persistierter Zähl-Stand, Konzept §7);
+    // bereits als Meldung erfasste Abweichungen (Problem-Loop) blockieren den
+    // Abschluss nicht ein zweites Mal — sie hängen am Teamlead, nicht am Zähler.
+    const { effective, fromBody } = await this.resolveEffectiveSkuStates(
+      owned.id,
+      dto.skuQuantities ?? [],
+    );
+    const implicit = await this.withoutReportedProblems(
+      owned.id,
+      deriveImplicitProblems(effective),
+    );
     if (implicit.length > 0) {
       throw new BadRequestException(
         'Beleg hat Mengen-/Preisabweichungen – Teilabschluss verwenden',
@@ -599,21 +920,38 @@ export class CasesService {
     if (openIssues > 0) {
       throw new BadRequestException('Beleg hat offene Probleme – Teilabschluss verwenden');
     }
+    // Fertig-Gate geteilter Belege (§5.2): „Beleg erledigt" erst, wenn ALLE
+    // Positionen geprüft sind. Nicht geteilte Belege behalten das Client-Gate.
+    const collaborationActive = await isCollaborationActive(this.prisma, owned.id);
+    if (collaborationActive) {
+      const gateError = completeGateError(await this.gatePositions(owned.id));
+      if (gateError !== null) throw new BadRequestException(gateError);
+    }
     const result = await this.workflow.transition({
       caseId: owned.id,
       toStatus: 'completed',
       eventType: 'case.completed',
       actor: { actorType: 'employee', actorId: principal.sub },
       expectedVersion: owned.version,
+      // §5.2-Gate NOCHMAL innerhalb der Transitions-Tx: der Vorab-Check oben
+      // liest ohne Lock — nimmt ein Beteiligter GLEICHZEITIG einen Haken
+      // zurück, wartet sein FOR-SHARE-Schreiber auf diese Tx (oder umgekehrt)
+      // und genau einer von beiden verliert sauber mit 409/400.
+      guardInTx: collaborationActive
+        ? async (tx) => {
+            const gateError = completeGateError(await this.gatePositions(owned.id, tx));
+            if (gateError !== null) throw new BadRequestException(gateError);
+          }
+        : undefined,
     });
-    await this.persistSkuConfirmations(skuStates);
-    // §17.1 ZST: digital completion produces the ZST record + KPI basis. Uses the
-    // employee's actual counted quantities when supplied, else the Soll total.
+    await this.persistSkuConfirmations(fromBody);
+    // §17.1 ZST: digital completion produces the ZST record + KPI basis — je
+    // Größenzeile die erfasste Menge, sonst Soll (Konzept §5.3).
     const completedQuantity =
-      skuStates.length > 0
-        ? skuStates.reduce((sum, s) => sum + s.confirmedQuantity, 0)
+      effective.length > 0
+        ? effective.reduce((sum, s) => sum + s.confirmedQuantity, 0)
         : caseRow.totalQuantity;
-    await this.writeZst(principal, owned.id, employee.id, {
+    await this.writeZstForCompletion(principal, owned.id, employee.id, collaborationActive, {
       countedQuantity: completedQuantity,
       caseTotalQuantity: caseRow.totalQuantity,
       caseEffortPoints: caseRow.effortPoints,
@@ -635,19 +973,44 @@ export class CasesService {
     caseId: string,
     dto: PartialCompleteDto,
   ): Promise<TransitionResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
+    const owned = await this.requireWorkableCase(principal, caseId);
     const employee = await this.resolveEmployee(principal);
     const caseRow = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
       where: { id: owned.id },
       select: { totalQuantity: true, effortPoints: true },
     });
-    const skuStates = await this.resolveSkuStates(owned.id, dto.skuQuantities);
-    const implicit = deriveImplicitProblems(skuStates);
+    // Gemischte Sku-Stände (Konzept §7): Body-Zeilen ∪ persistierter Zähl-Stand.
+    const { effective, fromBody } = await this.resolveEffectiveSkuStates(
+      owned.id,
+      dto.skuQuantities,
+    );
+    const implicitAll = deriveImplicitProblems(effective);
+    // Bereits gemeldete Abweichungen (gleiche Größenzeile + Art) werden nicht
+    // erneut angelegt — der Problem-Loop kennt sie schon; sonst erzeugte jeder
+    // weitere Teilabschluss Duplikate derselben Meldung.
+    const implicit = await this.withoutReportedProblems(owned.id, implicitAll);
     const manual = await this.validateManualProblems(owned.id, dto.problems);
     if (implicit.length === 0 && manual.length === 0) {
       throw new BadRequestException(
-        'Teilabschluss braucht mindestens ein Problem – sonst „Beleg erledigt" verwenden',
+        implicitAll.length > 0
+          ? 'Diese Abweichungen sind bereits gemeldet – über „Erneut melden" antworten oder den Beleg abschließen'
+          : 'Teilabschluss braucht mindestens ein Problem – sonst „Beleg erledigt" verwenden',
       );
+    }
+    // Fertig-Gate geteilter Belege (§5.2): jede UNGEPRÜFTE Position muss eine
+    // Problem-Position sein — offene Meldung, manuelle Meldung dieses Bodys oder
+    // implizite Abweichung auf einer ihrer Größenzeilen.
+    const collaborationActive = await isCollaborationActive(this.prisma, owned.id);
+    const problemPositionIds = collaborationActive
+      ? new Set<string>([
+          ...manual.map((p) => p.positionId),
+          ...implicitAll.map((p) => p.positionId),
+          ...(await this.openIssuePositionIds(owned.id)),
+        ])
+      : new Set<string>();
+    if (collaborationActive) {
+      const gateError = partialGateError(await this.gatePositions(owned.id), problemPositionIds);
+      if (gateError !== null) throw new BadRequestException(gateError);
     }
     const result = await this.prisma.$transaction(async (tx) => {
       // Jede Meldung startet ihren eigenen Instruktions-Verlauf: die Erst-Meldung
@@ -704,12 +1067,25 @@ export class CasesService {
           kinds: [...new Set([...manual.map(() => 'manual'), ...implicit.map((p) => p.kind)])],
         },
         expectedVersion: owned.version,
+        // §5.2-Gate NOCHMAL innerhalb der Transitions-Tx (Spiegel von complete):
+        // die Problem-Positionen stammen aus dem Vorab-Read dieses Requests,
+        // die Haken werden unter dem exklusiven Case-Lock frisch gelesen.
+        guardInTx: collaborationActive
+          ? async (guardTx) => {
+              const gateError = partialGateError(
+                await this.gatePositions(owned.id, guardTx),
+                problemPositionIds,
+              );
+              if (gateError !== null) throw new BadRequestException(gateError);
+            }
+          : undefined,
       });
     });
-    await this.persistSkuConfirmations(skuStates);
-    // Partial ZST: prorate the effort by the completed share (§4.6, §15).
-    const completedQuantity = skuStates.reduce((sum, s) => sum + s.confirmedQuantity, 0);
-    await this.writeZst(principal, owned.id, employee.id, {
+    await this.persistSkuConfirmations(fromBody);
+    // Partial ZST: prorate the effort by the completed share (§4.6, §15) — bei
+    // aktiver Zusammenarbeit je Beteiligtem, was ER geprüft hat (§5.3).
+    const completedQuantity = effective.reduce((sum, s) => sum + s.confirmedQuantity, 0);
+    await this.writeZstForCompletion(principal, owned.id, employee.id, collaborationActive, {
       countedQuantity: completedQuantity,
       caseTotalQuantity: caseRow.totalQuantity,
       caseEffortPoints: caseRow.effortPoints,
@@ -730,7 +1106,7 @@ export class CasesService {
     issueId: string,
     dto: ReopenIssueDto,
   ): Promise<TransitionResultDto> {
-    const owned = await this.requireOwnedCase(principal, caseId);
+    const owned = await this.requireWorkableCase(principal, caseId);
     const employee = await this.resolveEmployee(principal);
     const issue = await this.prisma.issue.findFirst({
       where: { id: issueId, caseId: owned.id },
@@ -772,10 +1148,12 @@ export class CasesService {
     if (owned.status === 'issue_open') {
       // Teilzustand: der Beleg ist ohnehin im Problem-Status — nur live nachladen.
       this.live.publish({
+        type: 'case.status',
+        recipients: await recipientsForCase(this.prisma, owned.id),
         caseId: owned.id,
         status: owned.status,
-        eventType: 'issue.reopened',
-        employeeNo: principal.employeeNo ?? null,
+        actorEmployeeNo: principal.employeeNo ?? null,
+        positionId: null,
         at: (await this.clock.now()).toISOString(),
       });
       return { caseId: owned.id, status: owned.status, version: owned.version, eventId: null };
@@ -793,38 +1171,133 @@ export class CasesService {
   }
 
   /**
-   * Löst die gemeldeten SKU-Stände gegen die Beleg-Daten auf (Soll, Etikettpreis).
-   * Unbekannte skuLineIds sind ein Client-Fehler.
+   * Gemischte Sku-Stände für Abschluss/Teilabschluss (Konzept §7): ALLE
+   * Größenzeilen des Belegs — je Zeile zählt der Body-Wert (wenn enthalten),
+   * sonst der persistierte Zähl-Stand (`confirmedQuantity ?? Soll`,
+   * `correctedVkPrice`). Unbekannte skuLineIds im Body sind ein Client-Fehler.
    */
-  private async resolveSkuStates(
+  private async resolveEffectiveSkuStates(
     caseId: string,
     skuQuantities: SkuQuantityDto[],
-  ): Promise<ReportedSkuState[]> {
-    if (skuQuantities.length === 0) return [];
+  ): Promise<{ effective: EffectiveSkuState[]; fromBody: EffectiveSkuState[] }> {
     const lines = await this.prisma.receiptSkuLine.findMany({
       where: { position: { caseId } },
       select: {
         id: true,
         expectedQuantity: true,
+        confirmedQuantity: true,
+        correctedVkPrice: true,
         vkLabelPrice: true,
         receiptPositionId: true,
       },
     });
-    const byId = new Map(lines.map((l) => [l.id, l]));
-    return skuQuantities.map((q) => {
-      const line = byId.get(q.skuLineId);
-      if (!line) {
+    const known = new Set(lines.map((l) => l.id));
+    for (const q of skuQuantities) {
+      if (!known.has(q.skuLineId)) {
         throw new BadRequestException(`Größenzeile ${q.skuLineId} gehört nicht zu diesem Beleg`);
       }
+    }
+    const bodyById = new Map(skuQuantities.map((q) => [q.skuLineId, q]));
+    const effective = lines.map((line): EffectiveSkuState => {
+      const body = bodyById.get(line.id);
+      if (body === undefined) {
+        return {
+          skuLineId: line.id,
+          positionId: line.receiptPositionId,
+          expectedQuantity: line.expectedQuantity,
+          confirmedQuantity: line.confirmedQuantity ?? line.expectedQuantity,
+          vkLabelPrice: line.vkLabelPrice,
+          correctedVkPrice: line.correctedVkPrice,
+          fromBody: false,
+          correctedVkPriceTouched: false,
+        };
+      }
+      const correctedVkPriceTouched = body.correctedVkPrice !== undefined;
       return {
         skuLineId: line.id,
         positionId: line.receiptPositionId,
         expectedQuantity: line.expectedQuantity,
-        confirmedQuantity: q.confirmedQuantity,
+        confirmedQuantity: body.confirmedQuantity,
         vkLabelPrice: line.vkLabelPrice,
-        correctedVkPrice: q.correctedVkPrice ?? null,
+        correctedVkPrice: correctedVkPriceTouched
+          ? (body.correctedVkPrice ?? null)
+          : line.correctedVkPrice,
+        fromBody: true,
+        correctedVkPriceTouched,
       };
     });
+    return { effective, fromBody: effective.filter((s) => s.fromBody) };
+  }
+
+  /**
+   * Filtert implizite Probleme heraus, für die am Beleg bereits eine Meldung
+   * derselben Art auf derselben Größenzeile existiert (offen ODER instruiert):
+   * der Problem-Loop kennt sie — eine persistierte Preiskorrektur darf den
+   * späteren Abschluss nicht für immer blockieren, und wiederholte
+   * Teilabschlüsse dürfen keine Duplikate anlegen.
+   */
+  private async withoutReportedProblems(
+    caseId: string,
+    problems: ImplicitProblem[],
+  ): Promise<ImplicitProblem[]> {
+    if (problems.length === 0) return [];
+    const existing = await this.prisma.issue.findMany({
+      where: {
+        caseId,
+        scope: 'sku_line',
+        kind: { in: ['over_delivery', 'under_delivery', 'price_deviation'] },
+      },
+      select: { scopeId: true, kind: true },
+    });
+    const reported = new Set(existing.map((i) => `${i.kind}:${i.scopeId ?? ''}`));
+    return problems.filter((p) => !reported.has(`${p.kind}:${p.skuLineId}`));
+  }
+
+  /**
+   * Positions-Ausschnitt fürs Fertig-Gate geteilter Belege (§5.2). `db` erlaubt
+   * die Neu-Auswertung INNERHALB der Transitions-Tx (guardInTx): dort ist die
+   * Case-Zeile exklusiv gesperrt und kein Haken-Schreiber mehr unterwegs.
+   */
+  private async gatePositions(
+    caseId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<GatePosition[]> {
+    const rows = await db.receiptPosition.findMany({
+      where: { caseId },
+      orderBy: { positionNo: 'asc' },
+      select: { id: true, positionNo: true, confirmedById: true },
+    });
+    return rows.map((r) => ({
+      positionId: r.id,
+      positionNo: r.positionNo,
+      confirmedById: r.confirmedById,
+    }));
+  }
+
+  /**
+   * Positionen mit OFFENER Meldung (scope position/sku_line, §5.2), aufgelöst
+   * auf die Positions-Id — Größenzeilen-Meldungen zählen auf ihre Position.
+   */
+  private async openIssuePositionIds(caseId: string): Promise<string[]> {
+    const issues = await this.prisma.issue.findMany({
+      where: { caseId, status: 'open', scope: { in: ['position', 'sku_line'] } },
+      select: { scope: true, scopeId: true },
+    });
+    if (issues.length === 0) return [];
+    const skuLineIds = issues
+      .filter((i) => i.scope === 'sku_line' && i.scopeId !== null)
+      .map((i) => i.scopeId as string);
+    const lines =
+      skuLineIds.length > 0
+        ? await this.prisma.receiptSkuLine.findMany({
+            where: { id: { in: skuLineIds } },
+            select: { id: true, receiptPositionId: true },
+          })
+        : [];
+    const positionByLine = new Map(lines.map((l) => [l.id, l.receiptPositionId]));
+    return issues
+      .map((i) => (i.scope === 'position' ? i.scopeId : positionByLine.get(i.scopeId ?? '')))
+      .filter((id): id is string => id != null);
   }
 
   /** Validates the reported problems against the case + active reason catalog. */
@@ -854,8 +1327,12 @@ export class CasesService {
     });
   }
 
-  /** Persists the counted Ist per SKU line (`deviation` when Ist≠Soll). */
-  private async persistSkuConfirmations(skuStates: ReportedSkuState[]): Promise<void> {
+  /**
+   * Persists the counted Ist per TOUCHED SKU line (`deviation` when Ist≠Soll).
+   * Die Preiskorrektur wird nur geschrieben, wenn der Body sie explizit trug —
+   * sonst bleibt der über den Zähl-Endpunkt persistierte Stand unangetastet.
+   */
+  private async persistSkuConfirmations(skuStates: EffectiveSkuState[]): Promise<void> {
     if (skuStates.length === 0) return;
     await this.prisma.$transaction(
       skuStates.map((s) =>
@@ -864,6 +1341,7 @@ export class CasesService {
           data: {
             confirmedQuantity: s.confirmedQuantity,
             status: s.confirmedQuantity === s.expectedQuantity ? 'confirmed' : 'deviation',
+            ...(s.correctedVkPriceTouched ? { correctedVkPrice: s.correctedVkPrice ?? null } : {}),
           },
         }),
       ),
@@ -871,26 +1349,91 @@ export class CasesService {
   }
 
   /**
+   * ZST beim Abschluss/Teilabschluss (Konzept §5.3): ohne aktive Zusammenarbeit
+   * bekommt wie bisher der Abschließende die gesamte gezählte Menge; bei
+   * aktiver Zusammenarbeit wird je Beteiligtem gebucht, was ER geprüft hat —
+   * Summe der Ist-Mengen (erfasste Menge, sonst Soll) über die Positionen mit
+   * seiner `confirmedById`. Positionen ohne Prüfer bucht niemand; „Teilbeleg
+   * erledigt" bucht nichts.
+   */
+  private async writeZstForCompletion(
+    principal: Principal,
+    caseId: string,
+    completingEmployeeId: string,
+    collaborationActive: boolean,
+    zst: { countedQuantity: number; caseTotalQuantity: number; caseEffortPoints: number },
+  ): Promise<void> {
+    if (!collaborationActive) {
+      await this.writeZst(principal, caseId, completingEmployeeId, {
+        ...zst,
+        caseCountedTotal: zst.countedQuantity,
+      });
+      return;
+    }
+    const positions = await this.prisma.receiptPosition.findMany({
+      where: { caseId, confirmedById: { not: null } },
+      select: {
+        confirmedById: true,
+        skuLines: { select: { expectedQuantity: true, confirmedQuantity: true } },
+      },
+    });
+    const countedByEmployee = new Map<string, number>();
+    for (const position of positions) {
+      const employeeId = position.confirmedById;
+      if (employeeId === null) continue;
+      const quantity = position.skuLines.reduce(
+        (sum, line) => sum + (line.confirmedQuantity ?? line.expectedQuantity),
+        0,
+      );
+      countedByEmployee.set(employeeId, (countedByEmployee.get(employeeId) ?? 0) + quantity);
+    }
+    for (const [employeeId, countedQuantity] of countedByEmployee) {
+      await this.writeZst(principal, caseId, employeeId, {
+        ...zst,
+        countedQuantity,
+        caseCountedTotal: zst.countedQuantity,
+      });
+    }
+  }
+
+  /**
    * Persists the ZST completion record + zst.created audit event (§15.1).
-   * Bucht nur das DELTA zum bereits verbuchten Stand des Belegs: nach einem
-   * Teilabschluss (Problem-Loop) zählt der spätere Abschluss desselben Belegs
-   * nur die restliche Menge — keine Doppelzählung in der KPI-Basis.
-   * Idempotent per (case, kumulierte Menge) so a retry does not double-count.
+   * Bucht je (Beleg, Mitarbeiter)-Paar nur das DELTA zum bereits verbuchten
+   * Stand: nach einem Teilabschluss (Problem-Loop) zählt der spätere Abschluss
+   * desselben Belegs nur die restliche Menge — keine Doppelzählung in der
+   * KPI-Basis. Der Mitarbeiter steckt seit der Zusammenarbeit (Konzept §5.3)
+   * mit im Schlüssel, damit Beteiligte eines geteilten Belegs unabhängig
+   * voneinander buchen. Zusätzlich kappt eine BELEG-weite Aggregation das
+   * Delta auf die gezählte Gesamtmenge: wechselt der Buchende zwischen
+   * Teilabschluss und Abschluss (Helfer entfernt, Haken neu gesetzt, Beleg
+   * verschoben), würde das Paar-Delta dieselben Stücke sonst ein zweites Mal
+   * zählen. Idempotent per (case, employee, kumulierte Menge) so a retry does
+   * not double-count.
    */
   private async writeZst(
     principal: Principal,
     caseId: string,
     employeeId: string,
-    zst: { countedQuantity: number; caseTotalQuantity: number; caseEffortPoints: number },
+    zst: {
+      countedQuantity: number;
+      caseCountedTotal: number;
+      caseTotalQuantity: number;
+      caseEffortPoints: number;
+    },
   ): Promise<void> {
-    const idempotencyKey = `zst:${caseId}:${zst.countedQuantity}`;
+    const idempotencyKey = `zst:${caseId}:${employeeId}:${zst.countedQuantity}`;
     const existing = await this.prisma.zstRecord.findUnique({ where: { idempotencyKey } });
     if (existing) return;
-    const booked = await this.prisma.zstRecord.aggregate({
-      where: { caseId },
-      _sum: { completedQuantity: true },
-    });
-    const deltaQuantity = zst.countedQuantity - (booked._sum.completedQuantity ?? 0);
+    const [bookedPair, bookedCase] = await Promise.all([
+      this.prisma.zstRecord.aggregate({
+        where: { caseId, employeeId },
+        _sum: { completedQuantity: true },
+      }),
+      this.prisma.zstRecord.aggregate({ where: { caseId }, _sum: { completedQuantity: true } }),
+    ]);
+    const pairDelta = zst.countedQuantity - (bookedPair._sum.completedQuantity ?? 0);
+    const caseCap = zst.caseCountedTotal - (bookedCase._sum.completedQuantity ?? 0);
+    const deltaQuantity = Math.min(pairDelta, caseCap);
     if (deltaQuantity <= 0) return;
     const effortPoints = proratedEffort(zst.caseTotalQuantity, deltaQuantity, zst.caseEffortPoints);
     await this.prisma.$transaction(async (tx) => {
@@ -970,8 +1513,17 @@ export class CasesService {
     });
   }
 
-  /** Loads a case and enforces §16.1 ownership; foreign cases read as 404. */
-  private async requireOwnedCase(principal: Principal, caseId: string): Promise<CaseOwnership> {
+  /**
+   * Loads a case and enforces §16.1/§5.1: bearbeiten darf der Inhaber ODER ein
+   * AKTIVER Beteiligter des geteilten Belegs (angenommen|teil_erledigt);
+   * `ownerOnly` (Ware-holen-Haken) lässt nur den Inhaber durch. Eingeladene
+   * sehen nichts; fremde Belege lesen sich als 404 (Maskierung).
+   */
+  private async requireWorkableCase(
+    principal: Principal,
+    caseId: string,
+    options: { ownerOnly?: boolean } = {},
+  ): Promise<CaseOwnership> {
     const found = await this.prisma.goodsReceiptCase.findUnique({
       where: { id: caseId },
       select: {
@@ -979,14 +1531,24 @@ export class CasesService {
         status: true,
         version: true,
         assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
+        participants: {
+          where: { status: { in: [...ACTIVE_PARTICIPANT_STATUSES] } },
+          select: { employee: { select: { employeeNo: true } } },
+        },
       },
     });
     if (!found) {
       throw new NotFoundException(`Case ${caseId} not found`);
     }
     const ownerEmployeeNo = found.assignedBundle?.employee?.employeeNo ?? null;
+    const participantEmployeeNos = found.participants.map((p) => p.employee.employeeNo);
     try {
-      assertCanAccessCase(principal, caseId, ownerEmployeeNo);
+      assertCanAccessCase(
+        principal,
+        caseId,
+        ownerEmployeeNo,
+        options.ownerOnly === true ? [] : participantEmployeeNos,
+      );
     } catch (err) {
       if (err instanceof CaseAccessDeniedError) {
         throw new NotFoundException(`Case ${caseId} not found`);
@@ -998,6 +1560,7 @@ export class CasesService {
       status: caseStatusSchema.parse(found.status),
       version: found.version,
       ownerEmployeeNo,
+      participantEmployeeNos,
     };
   }
 
@@ -1065,6 +1628,7 @@ export class CasesService {
     },
     assignedEmployeeName: string | null,
     issues?: IssueSummaryDto[],
+    collaboration?: CaseCollaborationDto | null,
   ): CaseSummaryDto {
     return {
       id: c.id,
@@ -1098,20 +1662,28 @@ export class CasesService {
       attentionNote: c.attentionNote,
       forwardedTo: c.forwardedTo,
       ...(issues !== undefined ? { issues } : {}),
+      // Geteilter Beleg (nur Mitarbeiter-Sichten): null = nie geteilt.
+      ...(collaboration !== undefined ? { collaboration } : {}),
     };
   }
 
-  /** Maps the transition result and broadcasts it on the employee live stream. */
-  private finish(
+  /**
+   * Maps the transition result and broadcasts it on the live stream. Empfänger:
+   * Inhaber + aktive Beteiligte des Belegs (Konzept §8) — der Teamlead-Stream
+   * erhält ohnehin alles.
+   */
+  private async finish(
     principal: Principal,
     result: { caseId: string; status: string; version: number; event: { id: string } | null },
-  ): TransitionResultDto {
+  ): Promise<TransitionResultDto> {
     this.live.publish({
+      type: 'case.status',
+      recipients: await recipientsForCase(this.prisma, result.caseId),
       caseId: result.caseId,
       status: result.status,
-      eventType: result.event ? undefined : 'transition',
-      employeeNo: principal.employeeNo ?? null,
-      at: new Date().toISOString(),
+      actorEmployeeNo: principal.employeeNo ?? null,
+      positionId: null,
+      at: (await this.clock.now()).toISOString(),
     });
     return this.toResult(result);
   }

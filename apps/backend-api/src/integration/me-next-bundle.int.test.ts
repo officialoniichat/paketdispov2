@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PrismaClient } from '@prisma/client';
+import { DEFAULT_RULE_CONFIG, RULE_CONFIG_KEY } from '@paket/domain-types';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
@@ -27,9 +28,20 @@ import { Role, type Principal } from '../auth/rbac.js';
  * than a raw shift.
  */
 const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const owner: Principal = { sub: 'oidc-emp-1', employeeNo: 'E-1', roles: [Role.Employee], claims: {} };
+const owner: Principal = {
+  sub: 'oidc-emp-1',
+  employeeNo: 'E-1',
+  roles: [Role.Employee],
+  claims: {},
+};
 
-const WORK_DAY = { working: true, start: '08:00', end: '16:00', breakMinutes: 30, partTimePct: 100 };
+const WORK_DAY = {
+  working: true,
+  start: '08:00',
+  end: '16:00',
+  breakMinutes: 30,
+  partTimePct: 100,
+};
 const OFF_DAY = { working: false, start: '00:00', end: '00:00', breakMinutes: 0, partTimePct: 0 };
 const WORKING_WEEK = {
   sun: WORK_DAY,
@@ -64,6 +76,7 @@ let cases: CasesService;
 let employeeId: string;
 
 async function reset(readyCount: number): Promise<void> {
+  await prisma.caseParticipant.deleteMany();
   await prisma.assignmentItem.deleteMany();
   await prisma.routeStop.deleteMany();
   await prisma.zstRecord.deleteMany();
@@ -225,9 +238,7 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     expect(after.activePackIndex).toBe(1);
     expect(after.plannedEffortMinutes).toBeGreaterThan(before.plannedEffortMinutes);
     // All new cases share location R1, which the bundle already visits — no duplicate stop.
-    expect(new Set(after.routeStops.map((s) => s.locationCode)).size).toBe(
-      after.routeStops.length,
-    );
+    expect(new Set(after.routeStops.map((s) => s.locationCode)).size).toBe(after.routeStops.length);
 
     // Der Problem-Beleg bleibt bei Pack 1 — keine Umbuchung ins neue Pack.
     const problem = after.items.find((i) => i.caseId === problemItem!.caseId);
@@ -332,5 +343,106 @@ describe('POST /api/me/next-bundle (Pull-on-idle)', () => {
     await prisma.user.update({ where: { id: employeeId }, data: { weeklyPattern: OFF_WEEK } });
     const res = await assignment.assignNextBundle(owner, undefined, PULL_NOW);
     expect(res).toMatchObject({ assigned: false, reason: 'no_shift' });
+  });
+});
+
+describe('Geteilter Beleg — Pull-Gates (Konzept beleg-zusammenarbeit §3.8 + §5.4)', () => {
+  it('eigenes „Teilbeleg erledigt" hebt die Pack-Blockade des geteilten Belegs auf (§3.8)', async () => {
+    await reset(2);
+    expect((await assignment.assignNextBundle(owner, undefined, PULL_NOW)).assigned).toBe(true);
+
+    const bundle = await prisma.assignmentBundle.findFirstOrThrow({ where: { employeeId } });
+    const items = await prisma.assignmentItem.findMany({
+      where: { bundleId: bundle.id },
+      orderBy: { sequence: 'asc' },
+    });
+    const [doneItem, sharedItem] = items;
+    await cases.startPreparation(owner, doneItem!.caseId);
+    await cases.complete(owner, doneItem!.caseId);
+    await cases.startPreparation(owner, sharedItem!.caseId);
+
+    // Ohne eigenes Teil-erledigt blockiert der laufende Beleg das nächste Pack.
+    await addReadyCases(1, 'shared-a');
+    expect(await assignment.assignNextBundle(owner, undefined, PULL_NOW)).toMatchObject({
+      assigned: false,
+      reason: 'pack_open',
+    });
+
+    // Zusammenarbeit: Helfer angenommen, Inhaber-Zeile teil_erledigt (§3.7/§3.8).
+    const helper = await prisma.user.create({
+      data: {
+        employeeNo: 'E-HELP',
+        displayName: 'Hilde Helferin',
+        bereiche: ['Regal'],
+        weeklyPattern: WORKING_WEEK,
+      },
+    });
+    await prisma.caseParticipant.create({
+      data: {
+        caseId: sharedItem!.caseId,
+        employeeId: helper.id,
+        role: 'helfer',
+        status: 'angenommen',
+        invitedByLabel: 'Eins',
+      },
+    });
+    await prisma.caseParticipant.create({
+      data: {
+        caseId: sharedItem!.caseId,
+        employeeId,
+        role: 'inhaber',
+        status: 'teil_erledigt',
+        invitedByLabel: 'Eins',
+        partDoneAt: new Date(),
+      },
+    });
+
+    // Jetzt hält ihn der geteilte Beleg nicht mehr fest — das nächste Pack kommt.
+    expect(await assignment.assignNextBundle(owner, undefined, PULL_NOW)).toMatchObject({
+      assigned: true,
+      caseCount: 1,
+    });
+  });
+
+  it('Admin-Regel §5.4 aktiv: shared_case_open, bis der geteilte Beleg fertig ist', async () => {
+    // Das in Test 1 gezogene Pack abarbeiten — offen bleibt NUR der geteilte Beleg.
+    const bundle = await prisma.assignmentBundle.findFirstOrThrow({
+      where: { employeeId, status: { notIn: ['completed', 'cancelled'] } },
+    });
+    const openItems = await prisma.assignmentItem.findMany({
+      where: { bundleId: bundle.id },
+      include: { case: { select: { status: true } } },
+    });
+    for (const item of openItems.filter((i) => i.case.status === 'assigned')) {
+      await cases.startPreparation(owner, item.caseId);
+      await cases.complete(owner, item.caseId);
+    }
+
+    // Schalter „Beim geteilten Beleg erst mithelfen" aktivieren (rule_config).
+    const config = { ...DEFAULT_RULE_CONFIG, collaboration: { helpBeforeNextBundle: true } };
+    await prisma.appConfig.upsert({
+      where: { key: RULE_CONFIG_KEY },
+      update: { value: config },
+      create: { key: RULE_CONFIG_KEY, value: config },
+    });
+    await addReadyCases(1, 'shared-b');
+
+    // Trotz eigenem teil_erledigt: die Regel hält Inhaber wie Helfer fest (§5.4).
+    expect(await assignment.assignNextBundle(owner, undefined, PULL_NOW)).toMatchObject({
+      assigned: false,
+      reason: 'shared_case_open',
+    });
+
+    // Beleg fertig (alle Positionen geprüft — er hat keine) → Gate offen.
+    const shared = await prisma.caseParticipant.findFirstOrThrow({
+      where: { employeeId, status: 'teil_erledigt' },
+      select: { caseId: true },
+    });
+    await cases.complete(owner, shared.caseId);
+    expect(await assignment.assignNextBundle(owner, undefined, PULL_NOW)).toMatchObject({
+      assigned: true,
+    });
+
+    await prisma.appConfig.deleteMany({ where: { key: RULE_CONFIG_KEY } });
   });
 });

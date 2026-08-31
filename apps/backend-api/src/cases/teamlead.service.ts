@@ -18,6 +18,16 @@ import { recomputeEffort, resequenceItems, resequenceRouteStops } from './bundle
 import { lastPackIndex, packInsertPosition, packMembers } from './pack-window.js';
 import { allocateParts, SplitNotPossibleError } from './case-split.js';
 import {
+  dissolveCollaborationTx,
+  loadCollaborationDto,
+  recipientsForCase,
+} from '../collaboration/participants.js';
+import type {
+  CollaborationResultDto,
+  CreateCollaborationDto,
+  RemoveParticipantDto,
+} from '../collaboration/collaboration.dto.js';
+import {
   type AddToBundleDto,
   type AssignBundleDto,
   type AssignToEmployeeDto,
@@ -79,8 +89,20 @@ export class TeamleadService {
     private readonly live: LiveStatusService,
   ) {}
 
-  park(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
-    return this.transition(caseId, 'parked', 'case.parked', principal, { reason: dto.reason });
+  async park(principal: Principal, caseId: string, dto: ParkDto): Promise<TransitionResultDto> {
+    const result = await this.transition(caseId, 'parked', 'case.parked', principal, {
+      reason: dto.reason,
+    });
+    // §5.5 (defensiv): Parken nimmt den Beleg aus dem Zugriff — bestehende
+    // Beteiligungen werden aufgelöst. Regulär sind sie beim Entziehen aus dem
+    // Bündel bereits weg (ein ready-Beleg trägt normalerweise keine).
+    await this.prisma.$transaction((tx) =>
+      dissolveCollaborationTx(tx, caseId, this.events, {
+        actorType: 'teamlead',
+        actorId: principal.sub,
+      }),
+    );
+    return result;
   }
 
   unpark(principal: Principal, caseId: string): Promise<TransitionResultDto> {
@@ -116,6 +138,11 @@ export class TeamleadService {
       if (updated.count === 0) {
         throw new ConflictException('Case was modified concurrently');
       }
+      // §5.5: Storno löst die Zusammenarbeit auf; geprüfte Positionen bleiben geprüft.
+      await dissolveCollaborationTx(tx, current.id, this.events, {
+        actorType: 'teamlead',
+        actorId: principal.sub,
+      });
 
       const event = await this.events.append(
         {
@@ -607,11 +634,7 @@ export class TeamleadService {
     }
     const theCase = await this.prisma.goodsReceiptCase.findUniqueOrThrow({
       where: { id: caseId },
-      select: {
-        status: true,
-        version: true,
-        assignedBundle: { select: { employee: { select: { employeeNo: true } } } },
-      },
+      select: { status: true, version: true },
     });
 
     const remainingOpen = await this.prisma.$transaction(async (tx) => {
@@ -642,7 +665,8 @@ export class TeamleadService {
 
     // Case-Ableitung (Fachlogik hier, nicht in den UIs): erst wenn ALLE Meldungen
     // instruiert sind, gilt der Beleg als geklärt.
-    const employeeNo = theCase.assignedBundle?.employee?.employeeNo ?? null;
+    // Live-Empfänger: Inhaber + aktive Beteiligte (§8; der TL-Stream erhält alles).
+    const recipients = await recipientsForCase(this.prisma, caseId);
     if (remainingOpen === 0 && theCase.status === 'issue_open') {
       const result = await this.workflow.transition({
         caseId,
@@ -652,10 +676,12 @@ export class TeamleadService {
         payload: { lastInstructedIssueId: issue.id },
       });
       this.live.publish({
+        type: 'case.status',
+        recipients,
         caseId,
         status: result.status,
-        eventType: 'case.problems_resolved',
-        employeeNo,
+        actorEmployeeNo: null,
+        positionId: null,
         at: new Date().toISOString(),
       });
       return {
@@ -668,10 +694,12 @@ export class TeamleadService {
 
     // Teilzustand: Beleg bleibt issue_open, aber beide Apps sollen live nachladen.
     this.live.publish({
+      type: 'case.status',
+      recipients,
       caseId,
       status: theCase.status,
-      eventType: 'issue.instruction_sent',
-      employeeNo,
+      actorEmployeeNo: null,
+      positionId: null,
       at: new Date().toISOString(),
     });
     return { caseId, status: theCase.status, version: theCase.version, eventId: null };
@@ -711,6 +739,12 @@ export class TeamleadService {
         where: { id: dto.caseId },
         data: { status: 'ready', assignedBundleId: null, version: { increment: 1 } },
       });
+      // Ende der Zusammenarbeit (§5.5): der Beleg verlässt den Karren des
+      // Inhabers — Beteiligungen auflösen; geprüfte Positionen bleiben geprüft.
+      await dissolveCollaborationTx(tx, dto.caseId, this.events, {
+        actorType: 'teamlead',
+        actorId: principal.sub,
+      });
 
       const remaining = bundle.items.filter((i) => i.caseId !== dto.caseId).map((i) => i.caseId);
       await resequenceItems(tx, bundleId, remaining);
@@ -748,7 +782,11 @@ export class TeamleadService {
   ): Promise<BundleMutationResultDto> {
     return this.prisma.$transaction(async (tx) => {
       const bundle = await this.loadBundle(tx, bundleId);
-      const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(tx, bundle, dto.caseId);
+      const { plannedEffortMinutes, caseIds } = await this.addCaseToBundleTx(
+        tx,
+        bundle,
+        dto.caseId,
+      );
       const eventId = await this.auditOverride(tx, principal, bundleId, 'add', dto.reason, {
         caseId: dto.caseId,
       });
@@ -799,12 +837,19 @@ export class TeamleadService {
         dto.caseId,
         targetPackIndex,
       );
-      const eventId = await this.auditOverride(tx, principal, bundle.id, 'manual_assign', dto.reason, {
-        caseId: dto.caseId,
-        employeeNo,
-        bundleCreated,
-        newPack: dto.newPack === true,
-      });
+      const eventId = await this.auditOverride(
+        tx,
+        principal,
+        bundle.id,
+        'manual_assign',
+        dto.reason,
+        {
+          caseId: dto.caseId,
+          employeeNo,
+          bundleCreated,
+          newPack: dto.newPack === true,
+        },
+      );
       return {
         bundleId: bundle.id,
         bundleStatus: bundle.status,
@@ -839,11 +884,18 @@ export class TeamleadService {
         bundle,
         dto.caseIds,
       );
-      const eventId = await this.auditOverride(tx, principal, bundle.id, 'manual_assign', dto.reason, {
-        caseIds: dto.caseIds,
-        employeeNo,
-        bundleCreated,
-      });
+      const eventId = await this.auditOverride(
+        tx,
+        principal,
+        bundle.id,
+        'manual_assign',
+        dto.reason,
+        {
+          caseIds: dto.caseIds,
+          employeeNo,
+          bundleCreated,
+        },
+      );
       return {
         bundleId: bundle.id,
         bundleStatus: bundle.status,
@@ -934,7 +986,16 @@ export class TeamleadService {
       } else {
         // Remove from the source bundle first (mirrors withdraw's resequencing).
         await tx.assignmentItem.delete({ where: { id: item.id } });
-        const remaining = sourceBundle.items.filter((i) => i.caseId !== caseId).map((i) => i.caseId);
+        // §5.5: der Beleg wechselt den Karren — die Zusammenarbeit endet.
+        // (Beim Verschieben INNERHALB desselben Bündels bleibt sie bestehen:
+        // der Inhaber ändert sich nicht.)
+        await dissolveCollaborationTx(tx, caseId, this.events, {
+          actorType: 'teamlead',
+          actorId: principal.sub,
+        });
+        const remaining = sourceBundle.items
+          .filter((i) => i.caseId !== caseId)
+          .map((i) => i.caseId);
         await resequenceItems(tx, sourceBundleId, remaining);
         await resequenceRouteStops(tx, sourceBundleId, remaining);
         const sourcePlannedEffortMinutes = await recomputeEffort(tx, remaining);
@@ -963,17 +1024,24 @@ export class TeamleadService {
         }
       }
 
-      const eventId = await this.auditOverride(tx, principal, targetBundle.id, 'moved', dto.reason, {
-        caseId,
-        fromBundleId: sourceBundleId,
-        toEmployeeNo: dto.targetEmployeeNo,
-        bundleCreated,
-        // Dokumentiert das Ziel-Pack für die Nachvollziehbarkeit. Die Zugehörigkeit
-        // SELBST steht in `AssignmentItem.packIndex` (oben geschrieben) — das Event
-        // hält nur fest, wer wann wohin verschoben hat. null = kein Pack-Ziel, der
-        // Beleg ist ans Bündel-Ende gewandert.
-        targetPackIndex: targetPack?.index ?? null,
-      });
+      const eventId = await this.auditOverride(
+        tx,
+        principal,
+        targetBundle.id,
+        'moved',
+        dto.reason,
+        {
+          caseId,
+          fromBundleId: sourceBundleId,
+          toEmployeeNo: dto.targetEmployeeNo,
+          bundleCreated,
+          // Dokumentiert das Ziel-Pack für die Nachvollziehbarkeit. Die Zugehörigkeit
+          // SELBST steht in `AssignmentItem.packIndex` (oben geschrieben) — das Event
+          // hält nur fest, wer wann wohin verschoben hat. null = kein Pack-Ziel, der
+          // Beleg ist ans Bündel-Ende gewandert.
+          targetPackIndex: targetPack?.index ?? null,
+        },
+      );
       return {
         bundleId: targetBundle.id,
         bundleStatus: targetBundle.status,
@@ -1168,6 +1236,13 @@ export class TeamleadService {
         where: { id: source.id },
         data: { status: 'split_container', assignedBundleId: null, version: { increment: 1 } },
       });
+      // §5.5: Aufteilen beendet eine etwaige Zusammenarbeit am Original — der
+      // Container ist terminal und wird nie fertig; ohne Auflösung hielte die
+      // Admin-Regel „erst mithelfen" die Beteiligten für immer fest.
+      await dissolveCollaborationTx(tx, source.id, this.events, {
+        actorType: 'teamlead',
+        actorId: principal.sub,
+      });
 
       // Zuweisung bewusst NACH dem Anlegen und ueber den unveraenderten §8.4-Pfad:
       // „mit Zuweisung" ist damit dieselbe Aufteilung plus ein normaler Zuweisungsschritt.
@@ -1207,6 +1282,227 @@ export class TeamleadService {
         eventId: event.id,
       };
     });
+  }
+
+  /**
+   * „Gemeinsam zuweisen" (Konzept beleg-zusammenarbeit §4/§7): EIN Beleg,
+   * mehrere Bearbeitende — alle sehen alle Positionen. Voraussetzung wie beim
+   * Aufteilen: `ready|parked` und ohne Bündel; ein geparkter Beleg wird dabei
+   * freigegeben. Der ERSTE Mitarbeiter ist Inhaber — der Beleg landet über den
+   * unveränderten §8.4-Pfad in seinem Karren; ALLE Beteiligten starten als
+   * `angenommen` (invitedByLabel „Teamleitung"). Pflicht-Grund, auditiert wie
+   * jede manuelle Zuweisung (`assignment.overridden`).
+   */
+  async createCollaboration(
+    principal: Principal,
+    caseId: string,
+    dto: CreateCollaborationDto,
+    now: Date = new Date(),
+  ): Promise<CollaborationResultDto> {
+    const day = resolveDay(undefined, now);
+    const employeeNos = [...new Set(dto.employeeNos)];
+    if (employeeNos.length < 2) {
+      throw new BadRequestException('Gemeinsam bearbeiten braucht mindestens zwei Mitarbeitende.');
+    }
+    const ownerNo = employeeNos[0]!;
+    await this.prisma.$transaction(async (tx) => {
+      const source = await tx.goodsReceiptCase.findUnique({
+        where: { id: caseId },
+        select: { id: true, status: true, weBelegNo: true, assignedBundleId: true },
+      });
+      if (!source) throw new NotFoundException(`Case ${caseId} not found`);
+      if (source.status !== 'ready' && source.status !== 'parked') {
+        throw new ConflictException(
+          'Gemeinsam zuweisen geht nur bei bereiten oder geparkten Belegen — dieser ist ' +
+            'bereits in Arbeit oder abgeschlossen.',
+        );
+      }
+      if (source.assignedBundleId !== null) {
+        throw new ConflictException(
+          'Der Beleg liegt in einem Bündel. Ziehen Sie ihn erst zurück, dann weisen Sie ihn gemeinsam zu.',
+        );
+      }
+      const users = await tx.user.findMany({
+        where: { employeeNo: { in: employeeNos } },
+        select: { id: true, employeeNo: true, active: true },
+      });
+      const userByNo = new Map(users.map((u) => [u.employeeNo, u]));
+      for (const no of employeeNos) {
+        const user = userByNo.get(no);
+        if (!user) throw new NotFoundException(`Employee ${no} not found`);
+        if (!user.active) throw new ConflictException(`Employee ${no} is inactive`);
+      }
+
+      // Geparkt → freigeben (wie „unpark"), damit der §8.4-Pfad den ready-Beleg übernimmt.
+      if (source.status === 'parked') {
+        assertTransition('parked', 'ready');
+        await tx.goodsReceiptCase.update({
+          where: { id: source.id },
+          data: { status: 'ready', version: { increment: 1 } },
+        });
+        await this.events.append(
+          {
+            eventType: 'case.ready',
+            entityType: 'GoodsReceiptCase',
+            entityId: source.id,
+            actorType: 'teamlead',
+            actorId: principal.sub,
+            payload: { from: 'parked', to: 'ready', via: 'collaboration', reason: dto.reason },
+          },
+          tx,
+        );
+      }
+
+      const { bundle, bundleCreated } = await this.findOrCreateBundleTx(tx, ownerNo, day);
+      await this.addCaseToBundleTx(tx, bundle, source.id);
+
+      // Defensiv: eine frische Teamlead-Zuweisung ersetzt eventuell verbliebene
+      // alte Beteiligungs-Zeilen (regulär sind sie beim Karren-Verlassen weg).
+      await tx.caseParticipant.deleteMany({ where: { caseId: source.id } });
+      for (const no of employeeNos) {
+        const user = userByNo.get(no);
+        if (!user) continue;
+        await tx.caseParticipant.create({
+          data: {
+            caseId: source.id,
+            employeeId: user.id,
+            role: no === ownerNo ? 'inhaber' : 'helfer',
+            status: 'angenommen',
+            invitedById: null,
+            invitedByLabel: 'Teamleitung',
+            invitedAt: now,
+            respondedAt: now,
+          },
+        });
+      }
+
+      await this.events.append(
+        {
+          eventType: 'case.collaboration_started',
+          entityType: 'GoodsReceiptCase',
+          entityId: source.id,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { employeeNos, ownerEmployeeNo: ownerNo, reason: dto.reason },
+        },
+        tx,
+      );
+      await this.auditOverride(tx, principal, bundle.id, 'collaboration_assign', dto.reason, {
+        caseId: source.id,
+        employeeNo: ownerNo,
+        employeeNos,
+        bundleCreated,
+      });
+    });
+
+    // Live an ALLE Beteiligten: neuer Beleg-Status + Zusammenarbeits-Stand (§8).
+    const at = now.toISOString();
+    this.live.publish({
+      type: 'case.status',
+      recipients: employeeNos,
+      caseId,
+      status: 'assigned',
+      actorEmployeeNo: null,
+      positionId: null,
+      at,
+    });
+    this.live.publish({
+      type: 'collaboration.changed',
+      recipients: employeeNos,
+      caseId,
+      status: null,
+      actorEmployeeNo: null,
+      positionId: null,
+      at,
+    });
+    return this.collaborationResult(caseId);
+  }
+
+  /**
+   * „Aus geteiltem Beleg entfernen" (Konzept §4): Helfer → `entfernt` mit
+   * Pflicht-Grund. Der Inhaber ist nicht entfernbar — dafür gibt es
+   * Entziehen/Verschieben (409).
+   */
+  async removeParticipant(
+    principal: Principal,
+    caseId: string,
+    employeeNo: string,
+    dto: RemoveParticipantDto,
+    now: Date = new Date(),
+  ): Promise<CollaborationResultDto> {
+    const participant = await this.prisma.caseParticipant.findFirst({
+      where: { caseId, employee: { employeeNo } },
+      select: { id: true, role: true, status: true },
+    });
+    if (!participant) {
+      throw new NotFoundException(
+        `Mitarbeiter ${employeeNo} ist an Beleg ${caseId} nicht beteiligt`,
+      );
+    }
+    if (participant.role === 'inhaber') {
+      throw new ConflictException(
+        'Der Inhaber kann nicht entfernt werden – dafür Beleg entziehen oder verschieben.',
+      );
+    }
+    if (participant.status === 'entfernt') {
+      throw new ConflictException('Dieser Helfer wurde bereits entfernt');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      // Vorbedingung im Statement statt Stale-Read: ist die Zeile parallel schon
+      // entfernt (oder aufgelöst), wird nichts doppelt protokolliert.
+      const res = await tx.caseParticipant.updateMany({
+        where: { id: participant.id, status: { not: 'entfernt' } },
+        data: {
+          status: 'entfernt',
+          removedAt: now,
+          removedByLabel: principal.displayName ?? 'Teamleitung',
+        },
+      });
+      if (res.count === 0) {
+        throw new ConflictException('Dieser Helfer wurde bereits entfernt');
+      }
+      await this.events.append(
+        {
+          eventType: 'case.collaboration_participant_removed',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseId,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { employeeNo, reason: dto.reason },
+        },
+        tx,
+      );
+    });
+    // Der Entfernte ist kein Empfänger mehr — für den Abschied trotzdem adressieren.
+    const recipients = [
+      ...new Set([...(await recipientsForCase(this.prisma, caseId)), employeeNo]),
+    ];
+    this.live.publish({
+      type: 'collaboration.changed',
+      recipients,
+      caseId,
+      status: null,
+      actorEmployeeNo: null,
+      positionId: null,
+      at: now.toISOString(),
+    });
+    return this.collaborationResult(caseId);
+  }
+
+  /** Frischer Zusammenarbeits-Stand als Antwort der Teamlead-Endpunkte. */
+  private async collaborationResult(caseId: string): Promise<CollaborationResultDto> {
+    const [collaboration, row] = await Promise.all([
+      loadCollaborationDto(this.prisma, caseId),
+      this.prisma.goodsReceiptCase.findUnique({
+        where: { id: caseId },
+        select: { assignedBundle: { select: { employee: { select: { employeeNo: true } } } } },
+      }),
+    ]);
+    return {
+      caseId,
+      ownerEmployeeNo: row?.assignedBundle?.employee?.employeeNo ?? null,
+      participants: collaboration?.participants ?? [],
+    };
   }
 
   private async findOrCreateBundleTx(
@@ -1269,7 +1565,11 @@ export class TeamleadService {
    */
   private async addCaseToBundleTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
+    bundle: {
+      id: string;
+      status: AssignmentStatus;
+      items: { caseId: string; packIndex: number }[];
+    },
     caseId: string,
     targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
@@ -1286,7 +1586,11 @@ export class TeamleadService {
    */
   private async addCasesToBundleTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
+    bundle: {
+      id: string;
+      status: AssignmentStatus;
+      items: { caseId: string; packIndex: number }[];
+    },
     caseIds: string[],
     targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
@@ -1309,7 +1613,11 @@ export class TeamleadService {
       if (!theCase) {
         failedCases.push({ caseId, weBelegNo: null, reason: 'not_found' });
       } else if (theCase.status !== 'ready') {
-        failedCases.push({ caseId, weBelegNo: theCase.weBelegNo, reason: `wrong_status:${theCase.status}` });
+        failedCases.push({
+          caseId,
+          weBelegNo: theCase.weBelegNo,
+          reason: `wrong_status:${theCase.status}`,
+        });
       }
     }
     if (failedCases.length > 0) {
@@ -1332,7 +1640,11 @@ export class TeamleadService {
    */
   private async appendCasesTx(
     tx: PrismaTx,
-    bundle: { id: string; status: AssignmentStatus; items: { caseId: string; packIndex: number }[] },
+    bundle: {
+      id: string;
+      status: AssignmentStatus;
+      items: { caseId: string; packIndex: number }[];
+    },
     caseIds: string[],
     targetPackIndex?: number,
   ): Promise<{ plannedEffortMinutes: number; caseIds: string[] }> {
@@ -1552,16 +1864,21 @@ export class TeamleadService {
     return this.toResult(result);
   }
 
-  private toResult(result: {
+  private async toResult(result: {
     caseId: string;
     status: string;
     version: number;
     event: { id: string } | null;
-  }): TransitionResultDto {
+  }): Promise<TransitionResultDto> {
+    // Empfänger: Inhaber + aktive Beteiligte des Belegs (Konzept §8) — ohne
+    // Bündel und Beteiligte leer, dann lädt nur der Teamlead-Stream nach.
     this.live.publish({
+      type: 'case.status',
+      recipients: await recipientsForCase(this.prisma, result.caseId),
       caseId: result.caseId,
       status: result.status,
-      employeeNo: null,
+      actorEmployeeNo: null,
+      positionId: null,
       at: new Date().toISOString(),
     });
     return {

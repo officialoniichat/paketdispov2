@@ -23,6 +23,9 @@ export const ltColors = {
   success: '#2e7d32',
   info: '#1565c0',
   neutral: '#516170',
+  // Geteilter Beleg (31.08.2026): goldene Kennzeichnung gemeinsam bearbeiteter
+  // Belege in Board, Matrix und Mitarbeiter-App — immer mit Icon + Text (E.6).
+  shared: '#a8842c',
 } as const;
 
 /** 8px-based spacing scale; large targets for gloved warehouse use. */

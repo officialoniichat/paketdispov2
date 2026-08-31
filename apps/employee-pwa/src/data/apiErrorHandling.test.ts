@@ -31,9 +31,27 @@ describe('handleApiResponse', () => {
     unsubscribe();
   });
 
-  it('throws a generic error when the response carries an error payload', () => {
+  it('reicht die deutsche Meldung des Backends durch (409/400 sind fertige Sätze)', () => {
     expect(() =>
-      handleApiResponse({ response: makeResponse(500), error: { message: 'boom' } }),
-    ).toThrow('Die Anfrage an den Server ist fehlgeschlagen.');
+      handleApiResponse({
+        response: makeResponse(409),
+        error: { message: 'Der Beleg ist nicht in Bearbeitung.' },
+      }),
+    ).toThrow('Der Beleg ist nicht in Bearbeitung.');
+  });
+
+  it('verbindet die Liste einer Validierungsantwort zu einer Zeile', () => {
+    expect(() =>
+      handleApiResponse({
+        response: makeResponse(400),
+        error: { message: ['employeeNos darf nicht leer sein', 'reason fehlt'] },
+      }),
+    ).toThrow('employeeNos darf nicht leer sein · reason fehlt');
+  });
+
+  it('throws a generic error when the error payload carries no readable message', () => {
+    expect(() => handleApiResponse({ response: makeResponse(500), error: {} })).toThrow(
+      'Die Anfrage an den Server ist fehlgeschlagen.',
+    );
   });
 });

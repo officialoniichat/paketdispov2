@@ -152,7 +152,9 @@ export class EffortRuleConfigDto {
  */
 export class GroupingRuleConfigDto {
   @ApiProperty() @IsBoolean() enabled!: boolean;
-  @ApiProperty({ description: 'T1: trust the source group key / „X von N" from ProHandel (bestätigt)' })
+  @ApiProperty({
+    description: 'T1: trust the source group key / „X von N" from ProHandel (bestätigt)',
+  })
   @IsBoolean()
   useSourceKey!: boolean;
   @ApiProperty({ description: 'T2: link Belege sharing the same deliveryNoteNo (wahrscheinlich)' })
@@ -172,14 +174,17 @@ export class GroupingRuleConfigDto {
   @IsBoolean()
   runRequiresSameSection!: boolean;
   @ApiProperty({
-    description: 'When false, suspected (T3) groups wait for Teamlead confirm before auto-distribution',
+    description:
+      'When false, suspected (T3) groups wait for Teamlead confirm before auto-distribution',
   })
   @IsBoolean()
   autoDistributeSuspected!: boolean;
 }
 
 export class ShiftEndRuleConfigDto {
-  @ApiProperty({ description: 'Minutes before plannedEnd at which auto-distribution stops (0 = off)' })
+  @ApiProperty({
+    description: 'Minutes before plannedEnd at which auto-distribution stops (0 = off)',
+  })
   @IsInt()
   @Min(0)
   autoCutoffMinutes!: number;
@@ -188,6 +193,20 @@ export class ShiftEndRuleConfigDto {
 /** Prüfstufen-Steuerung (A5): Quelle der Beleg-Prüfstufe (prohandel | dashboard). */
 export class InspectionRuleConfigDto {
   @ApiProperty({ description: 'prohandel | dashboard' }) @IsString() source!: string;
+}
+
+/**
+ * Geteilter Beleg (Konzept beleg-zusammenarbeit §4/§5.4): Schalter „Beim geteilten
+ * Beleg erst mithelfen" — Beteiligte bekommen kein neues Pack (`shared_case_open`),
+ * bis alle Positionen geprüft sind. Spiegel von `collaborationRuleConfigSchema`.
+ */
+export class CollaborationRuleConfigDto {
+  @ApiProperty({
+    description:
+      'Wer an einem geteilten Beleg beteiligt ist, bekommt kein neues Pack, bis alle Positionen geprüft sind',
+  })
+  @IsBoolean()
+  helpBeforeNextBundle!: boolean;
 }
 
 export class LoadPlanRowDto {
@@ -238,6 +257,11 @@ export class RuleConfigDto {
   @ValidateNested()
   @Type(() => InspectionRuleConfigDto)
   inspection!: InspectionRuleConfigDto;
+
+  @ApiProperty({ type: CollaborationRuleConfigDto })
+  @ValidateNested()
+  @Type(() => CollaborationRuleConfigDto)
+  collaboration!: CollaborationRuleConfigDto;
 
   @ApiProperty({ type: [LoadPlanRowDto] })
   @IsArray()

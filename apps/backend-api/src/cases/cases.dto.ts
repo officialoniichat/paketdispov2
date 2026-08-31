@@ -58,6 +58,64 @@ export class LabelPrintPositionDto {
   labelPrintVariant!: string;
 }
 
+// --- Geteilter Beleg (Zusammenarbeit, Konzept beleg-zusammenarbeit §6/§7) ----
+
+/**
+ * Eine Beteiligung an einem geteilten Beleg (CaseParticipant). Die Rolle
+ * unterscheidet Inhaber (Beleg liegt in seinem Karren) und Helfer; der Status
+ * ist der Zustand des BETEILIGTEN, nie des Belegs (Konzept §2).
+ */
+export class CaseParticipantDto {
+  @ApiProperty({ description: 'Id der Beteiligungs-Zeile (CaseParticipant)' })
+  participantId!: string;
+  @ApiProperty() employeeNo!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty({ enum: ['inhaber', 'helfer'], description: 'CaseParticipantRole' })
+  role!: string;
+  @ApiProperty({
+    enum: ['eingeladen', 'angenommen', 'abgelehnt', 'teil_erledigt', 'entfernt'],
+    description: 'CaseParticipantStatus — aktiv sind angenommen und teil_erledigt',
+  })
+  status!: string;
+  @ApiProperty({ description: 'ISO-8601 Zeitpunkt der Einladung' }) invitedAt!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO-8601 Antwortzeitpunkt' })
+  respondedAt!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'ISO-8601 Zeitpunkt von „Teilbeleg erledigt"',
+  })
+  partDoneAt!: string | null;
+  @ApiProperty({
+    description: 'Positionen des Belegs, die DIESER Beteiligte geprüft hat (confirmedById)',
+  })
+  confirmedPositionCount!: number;
+}
+
+/**
+ * Zusammenarbeits-Overlay eines Belegs: Beteiligte + Prüf-Fortschritt. `null`,
+ * solange der Beleg nie geteilt wurde; fertige Belege behalten ihre Beteiligten
+ * („wurde zusammengearbeitet", Konzept §4).
+ */
+export class CaseCollaborationDto {
+  @ApiProperty({ description: 'Anzahl der Positionen des Belegs' }) positionCount!: number;
+  @ApiProperty({ description: 'Davon geprüft (confirmedById gesetzt)' })
+  confirmedPositionCount!: number;
+  @ApiProperty({ type: [CaseParticipantDto], description: 'Alle Beteiligten, chronologisch' })
+  participants!: CaseParticipantDto[];
+}
+
+/** Aktiver Helfer eines geteilten Belegs fürs Mitarbeiterboard (goldene Karte). */
+export class BoardParticipantDto {
+  @ApiProperty() employeeNo!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty({
+    enum: ['angenommen', 'teil_erledigt'],
+    description: 'teil_erledigt wird im Tooltip grau dargestellt',
+  })
+  status!: string;
+}
+
 export class CaseSummaryDto {
   @ApiProperty() id!: string;
   @ApiProperty() weBelegNo!: string;
@@ -80,7 +138,8 @@ export class CaseSummaryDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons',
+    description:
+      'Lagerklasse (LocationKind: regal|palette_*|haengebahn|…) — Quelle der Bereich-Icons',
   })
   storageLocationKind?: string | null;
   @ApiPropertyOptional({
@@ -126,7 +185,11 @@ export class CaseSummaryDto {
     description: 'Shopbereich (Beleg-Kopf) — Anzeige in der Beleg-Übersicht der PWA',
   })
   primaryShopAreaNo!: string | null;
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Kartons der Anlieferung (A6)' })
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Kartons der Anlieferung (A6)',
+  })
   inboundCartonCount!: number | null;
   @ApiProperty({ type: [String], description: 'Intake-Gate: fehlende Pflichtfelder (blocked)' })
   missingFields!: string[];
@@ -175,7 +238,11 @@ export class CaseSummaryDto {
   completedAt!: string | null;
   @ApiProperty({ description: 'TL-Topf (A7): „Besondere Aufmerksamkeit" (Bucherinnen-Inlet)' })
   attentionFlag!: boolean;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Notiz zum Aufmerksamkeitsflag' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Notiz zum Aufmerksamkeitsflag',
+  })
   attentionNote!: string | null;
   @ApiPropertyOptional({
     type: String,
@@ -184,6 +251,15 @@ export class CaseSummaryDto {
       'Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet',
   })
   forwardedTo!: string | null;
+  @ApiPropertyOptional({
+    type: () => CaseCollaborationDto,
+    nullable: true,
+    description:
+      'Geteilter Beleg (Zusammenarbeit): Beteiligte + Prüf-Fortschritt; null, wenn der Beleg nie ' +
+      'geteilt wurde. Von den Mitarbeiter-Sichten (/api/me/today, Aggregat) geliefert; ' +
+      'Teamlead-Listen lassen es weg (dort BoardCaseDto.sharedWith bzw. CaseDetailDto.participants).',
+  })
+  collaboration?: CaseCollaborationDto | null;
   @ApiPropertyOptional({
     type: () => [IssueSummaryDto],
     description:
@@ -319,6 +395,14 @@ export class TodayResponseDto {
       '(Anzeige-Mitnahme). Für kommende Packs vorgeplante Belege sind NICHT enthalten.',
   })
   cases!: CaseSummaryDto[];
+  @ApiProperty({
+    type: [CaseSummaryDto],
+    description:
+      '„Geteilt mit dir" (Konzept §3.5): Belege, an denen der Aufrufer aktiver HELFER ist ' +
+      '(angenommen|teil_erledigt) und die noch nicht fertig sind. Sie liegen im Karren des ' +
+      'Inhabers (assignedEmployeeName), nie im eigenen Bündel — ohne carriedOver/packOrdinal.',
+  })
+  sharedCases!: CaseSummaryDto[];
   @ApiPropertyOptional({
     type: MeWorkstationDto,
     nullable: true,
@@ -340,7 +424,10 @@ export class ClaimWorkstationDto {
  * werden beim nächsten Bündel wieder eingeplant.
  */
 export class ParkRemainingDto {
-  @ApiProperty({ type: [String], description: 'Zu parkende Belege (müssen assigned + im eigenen Bündel sein)' })
+  @ApiProperty({
+    type: [String],
+    description: 'Zu parkende Belege (müssen assigned + im eigenen Bündel sein)',
+  })
   @IsArray()
   @IsString({ each: true })
   caseIds!: string[];
@@ -371,6 +458,66 @@ export class SetCollectedResultDto {
   collected!: boolean;
 }
 
+/**
+ * „Position geprüft" setzen/zurücknehmen (Konzept beleg-zusammenarbeit §2/§7):
+ * seit 31.08.2026 serverseitig persistiert — gemeinsame Wahrheit für alle Belege,
+ * nicht nur geteilte. Kein Status-Übergang, KEIN Versions-Inkrement (Muster
+ * Ware-holen-Haken).
+ */
+export class ConfirmPositionDto {
+  @ApiProperty({ description: 'true = Haken setzen, false = Haken zurücknehmen' })
+  @IsBoolean()
+  confirmed!: boolean;
+}
+
+export class PositionConfirmResultDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty() positionId!: string;
+  @ApiProperty({ description: 'Prüf-Zustand nach dem Aufruf' }) confirmed!: boolean;
+  @ApiPropertyOptional({ type: () => PositionConfirmerDto, nullable: true })
+  confirmedBy!: PositionConfirmerDto | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO-8601 Prüfzeitpunkt' })
+  confirmedAt!: string | null;
+}
+
+/**
+ * Ist-Menge/Preiskorrektur einer Größenzeile erfassen (Konzept §7) — pro Aktion
+ * persistiert, damit alle Beteiligten denselben Stand sehen. Beide Felder sind
+ * Teil-Updates: weggelassen = unangetastet (der Stand anderer Beteiligter
+ * bleibt erhalten), `null` = Wert zurücksetzen. Mindestens ein Feld ist Pflicht.
+ */
+export class CountSkuLineDto {
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description:
+      'Gezählte Ist-Menge; weggelassen = unangetastet, null = Erfassung zurücksetzen (Zeile wieder offen)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  confirmedQuantity?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Korrigierter VK, wenn der Etikettpreis falsch ist; null = Korrektur zurücknehmen',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  correctedVkPrice?: number | null;
+}
+
+export class SkuCountResultDto {
+  @ApiProperty() caseId!: string;
+  @ApiProperty() skuLineId!: string;
+  @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true }) correctedVkPrice!: number | null;
+  @ApiProperty({ description: 'SkuLineStatus nach dem Aufruf: open|confirmed|deviation' })
+  status!: string;
+}
+
 // --- Employee case aggregate (PWA CaseAggregate, §9 work screens) -----------
 
 export class WorkInstructionHeaderDto {
@@ -378,10 +525,20 @@ export class WorkInstructionHeaderDto {
   @ApiProperty() sortByArticleColorSizeRequired!: boolean;
   @ApiProperty({ description: 'CheckMode: quantity_only|percentage_check|full_check' })
   goodsReceiptCheckMode!: string;
-  @ApiPropertyOptional({ type: Number, nullable: true }) goodsReceiptCheckPercentage!: number | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Prüfstufe: none|p10|p20|full (A5)' })
+  @ApiPropertyOptional({ type: Number, nullable: true }) goodsReceiptCheckPercentage!:
+    | number
+    | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Prüfstufe: none|p10|p20|full (A5)',
+  })
   inspectionLevelCode!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Prüfstufen-Label, z. B. "20 %"' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Prüfstufen-Label, z. B. "20 %"',
+  })
   inspectionLevelLabel!: string | null;
   @ApiPropertyOptional({
     type: String,
@@ -401,6 +558,13 @@ export class SkuLineDto {
   @ApiProperty() size!: string;
   @ApiProperty() expectedQuantity!: number;
   @ApiPropertyOptional({ type: Number, nullable: true }) confirmedQuantity!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description:
+      'Vom MA korrigierter VK je Größe (persistiert wie confirmedQuantity, Konzept beleg-zusammenarbeit §6); null = keine Korrektur',
+  })
+  correctedVkPrice!: number | null;
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'EK-Preis (A1)' })
   ekPrice!: number | null;
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'VK-Preis (A1)' })
@@ -458,13 +622,27 @@ export class WorkInstructionPointDto {
   @ApiPropertyOptional({ type: [Number] }) positionNos?: number[];
 }
 
+/** Wer eine Position geprüft hat (Anzeige der Initialen/Namen, Konzept §3.6). */
+export class PositionConfirmerDto {
+  @ApiProperty() employeeNo!: string;
+  @ApiProperty() displayName!: string;
+}
+
 export class ReceiptPositionDto {
   @ApiProperty() id!: string;
   @ApiProperty() positionNo!: number;
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)',
+  })
   wgrDescription!: string | null;
-  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'CatMan-Kennzeichen (Anzeige, A3)',
+  })
   catMan!: boolean | null;
   @ApiPropertyOptional({
     type: String,
@@ -498,6 +676,15 @@ export class ReceiptPositionDto {
   @ApiPropertyOptional({ type: String, nullable: true }) floor!: string | null;
   @ApiProperty({ description: 'PositionStatus: open|confirmed|issue_open|completed' })
   status!: string;
+  @ApiPropertyOptional({
+    type: PositionConfirmerDto,
+    nullable: true,
+    description:
+      '„Position geprüft" — wer geprüft hat (serverseitig, Konzept §2); null = ungeprüft',
+  })
+  confirmedBy!: PositionConfirmerDto | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO-8601 Prüfzeitpunkt' })
+  confirmedAt!: string | null;
   @ApiPropertyOptional({ type: PositionInstructionDto, nullable: true })
   instruction!: PositionInstructionDto | null;
   @ApiProperty({ type: [SkuLineDto] }) skuLines!: SkuLineDto[];
@@ -572,7 +759,8 @@ export class PoolItemDto extends CaseSummaryDto {
   @ApiPropertyOptional({
     type: DeliveryGroupRefDto,
     nullable: true,
-    description: 'Delivery-group context so groups are visible BEFORE distribution; null if standalone',
+    description:
+      'Delivery-group context so groups are visible BEFORE distribution; null if standalone',
   })
   deliveryGroup!: DeliveryGroupRefDto | null;
   @ApiPropertyOptional({
@@ -708,6 +896,13 @@ export class BoardCaseDto {
     description: 'Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone',
   })
   deliveryGroup!: DeliveryGroupRefDto | null;
+  @ApiProperty({
+    type: [BoardParticipantDto],
+    description:
+      'Geteilter Beleg: aktive Helfer (angenommen|teil_erledigt) — leer, wenn nicht geteilt. ' +
+      'Das Board rendert die Karte golden und zeigt „mit <Name>" bzw. „n×" (Konzept §4).',
+  })
+  sharedWith!: BoardParticipantDto[];
 }
 
 /**
@@ -743,7 +938,7 @@ export class BoardRowDto {
   @ApiProperty() employeeName!: string;
   @ApiProperty({
     description:
-      "Skill-Stufe des Mitarbeiters (profi|fortgeschritten|basis|starter|dummy, B5); starter/dummy erhalten nur manuelle Zuteilung.",
+      'Skill-Stufe des Mitarbeiters (profi|fortgeschritten|basis|starter|dummy, B5); starter/dummy erhalten nur manuelle Zuteilung.',
   })
   skillTier!: string;
   @ApiPropertyOptional({
@@ -756,7 +951,8 @@ export class BoardRowDto {
   bundleStatus!: string;
   @ApiProperty() plannedEffortMinutes!: number;
   @ApiProperty({
-    description: 'Σ Teile (totalQuantity) über die zugeteilten Belege — die primäre Last-Anzeige (B3).',
+    description:
+      'Σ Teile (totalQuantity) über die zugeteilten Belege — die primäre Last-Anzeige (B3).',
   })
   plannedTeile!: number;
   @ApiProperty() capacityMinutes!: number;
@@ -850,13 +1046,22 @@ export class PositionDetailDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Ordernummer (ERP-Referenz zur Fehlerlösung durch den Teamlead, Nachtrag 15.07.2026)',
+    description:
+      'Ordernummer (ERP-Referenz zur Fehlerlösung durch den Teamlead, Nachtrag 15.07.2026)',
   })
   orderNo!: string | null;
   @ApiProperty({ description: 'Warengruppe' }) wgr!: string;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'WGR-Klartext, z. B. "D-Bermuda" (A2)',
+  })
   wgrDescription!: string | null;
-  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'CatMan-Kennzeichen (Anzeige, A3)' })
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'CatMan-Kennzeichen (Anzeige, A3)',
+  })
   catMan!: boolean | null;
   @ApiPropertyOptional({
     type: String,
@@ -864,15 +1069,25 @@ export class PositionDetailDto {
     description: 'CatMan-Termin der Position (ISO-Datum) — Positions-Kontext wie in der PWA',
   })
   catManDate!: string | null;
-  @ApiProperty({ description: 'Lieferanten-Artikelnummer (Artikelidentität)' }) supplierArticleNo!: string;
+  @ApiProperty({ description: 'Lieferanten-Artikelnummer (Artikelidentität)' })
+  supplierArticleNo!: string;
   @ApiProperty() supplierColor!: string;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Saison (Positions-Kontext)' })
   season!: string | null;
-  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'NOS (Never Out of Stock) article flag' })
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'NOS (Never Out of Stock) article flag',
+  })
   nosFlag!: boolean | null;
   @ApiProperty({ description: 'Filiale (Positions-Kontext, wie PWA)' }) branchNo!: string;
-  @ApiProperty({ description: 'Shopnummer der Position (Positions-Kontext, wie PWA)' }) shopNo!: string;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Hauptshop-Nummer der Position (HS)' })
+  @ApiProperty({ description: 'Shopnummer der Position (Positions-Kontext, wie PWA)' })
+  shopNo!: string;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Hauptshop-Nummer der Position (HS)',
+  })
   hShopNo!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Etage der Position' })
   floor!: string | null;
@@ -960,9 +1175,17 @@ export class IssueSummaryDto {
     description: 'Positions-Nr, auf die sich das Problem bezieht (aufgelöst aus scopeId)',
   })
   positionNo!: number | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'EAN der betroffenen Größenzeile' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'EAN der betroffenen Größenzeile',
+  })
   ean!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'Größe der betroffenen Größenzeile' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Größe der betroffenen Größenzeile',
+  })
   size!: string | null;
   @ApiPropertyOptional({
     type: String,
@@ -976,7 +1199,8 @@ export class IssueSummaryDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen',
+    description:
+      'Text der JÜNGSTEN Teamlead-Instruktion (Komfortfeld aus dem Verlauf); null solange offen',
   })
   instruction!: string | null;
   @ApiPropertyOptional({
@@ -1038,7 +1262,8 @@ export class CaseDetailDto {
   @ApiProperty({ type: CaseSummaryDto }) case!: CaseSummaryDto;
   @ApiProperty({ description: 'Effort points (Aufwandspunkte)' }) effortPoints!: number;
   @ApiProperty({
-    description: 'true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert',
+    description:
+      'true = Aufwand live aus der Arbeitsanweisung berechnet; false = gespeicherter Schätzwert',
   })
   effortComputed!: boolean;
   @ApiPropertyOptional({
@@ -1065,10 +1290,18 @@ export class CaseDetailDto {
   zstRecords!: ZstSummaryDto[];
   @ApiProperty({ type: [AuditEventDto], description: 'Audit history, newest first' })
   history!: AuditEventDto[];
+  @ApiProperty({
+    type: [CaseParticipantDto],
+    description:
+      'Geteilter Beleg: ALLE Beteiligten (jeder Status, chronologisch) — leer, wenn der Beleg ' +
+      'nie geteilt wurde. Fertige Belege behalten ihre Beteiligten (Konzept §4).',
+  })
+  participants!: CaseParticipantDto[];
   @ApiPropertyOptional({
     type: DeliveryGroupDetailDto,
     nullable: true,
-    description: 'Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone',
+    description:
+      'Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone',
   })
   deliveryGroup!: DeliveryGroupDetailDto | null;
 }
@@ -1076,7 +1309,8 @@ export class CaseDetailDto {
 /** Result of the Tagesabschluss/ZST export (§15.1): completed cases → zst_done + CSV. */
 export class ZstExportResultDto {
   @ApiProperty({ description: 'ISO date YYYY-MM-DD the export ran' }) date!: string;
-  @ApiProperty({ description: 'Number of cases moved completed → zst_done' }) exportedCount!: number;
+  @ApiProperty({ description: 'Number of cases moved completed → zst_done' })
+  exportedCount!: number;
   @ApiProperty({ description: 'RFC 4180 CSV of the exported ZST rows' }) csv!: string;
 }
 
@@ -1199,8 +1433,7 @@ export class PoolQueryDto {
 
   @ApiPropertyOptional({
     enum: ['yes', 'no'],
-    description:
-      'Filter: Sichern — yes = mindestens eine Position verlangt Sicherung, no = keine.',
+    description: 'Filter: Sichern — yes = mindestens eine Position verlangt Sicherung, no = keine.',
   })
   @IsOptional()
   @IsIn(['yes', 'no'])
@@ -1466,7 +1699,13 @@ export class ReportedProblemDto {
  * mindestens ein Problem vorliegen — sonst ist „Beleg erledigt" der richtige Weg.
  */
 export class PartialCompleteDto {
-  @ApiProperty({ type: [SkuQuantityDto], description: 'Gezählte Ist-Mengen aller Größenzeilen' })
+  @ApiProperty({
+    type: [SkuQuantityDto],
+    description:
+      'NUR die vom Aufrufer berührten Größenzeilen — der Server mischt sie mit dem ' +
+      'persistierten Stand (confirmedQuantity/correctedVkPrice aus dem Zähl-Endpunkt); ' +
+      'unberührte Zeilen zählen mit Ist = Soll (Konzept beleg-zusammenarbeit §7).',
+  })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SkuQuantityDto)
@@ -1483,7 +1722,9 @@ export class PartialCompleteDto {
 export class CompleteDto {
   @ApiPropertyOptional({
     type: [SkuQuantityDto],
-    description: 'Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll',
+    description:
+      'NUR die vom Aufrufer berührten Größenzeilen; der Server mischt sie mit dem ' +
+      'persistierten Stand — ohne Angabe gilt der persistierte Wert, sonst Ist = Soll.',
   })
   @IsOptional()
   @IsArray()
@@ -1647,7 +1888,8 @@ export class MoveCaseDto {
 
   @ApiPropertyOptional({
     type: String,
-    description: 'Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day.',
+    description:
+      'Target day YYYY-MM-DD; defaults to today (UTC). The destination Bündel is bound to this day.',
   })
   @IsOptional()
   @IsString()
@@ -1672,7 +1914,11 @@ export class DeliveryGroupEditDto {
 
 /** Result of a delivery-group correction — the locked key (merge) or null (split). */
 export class DeliveryGroupEditResultDto {
-  @ApiPropertyOptional({ type: String, nullable: true, description: 'New `grp:` key on merge; null on split' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'New `grp:` key on merge; null on split',
+  })
   manualGroupKey!: string | null;
   @ApiProperty({ type: [String], description: 'Cases whose grouping was changed' })
   affectedCaseIds!: string[];
@@ -1704,7 +1950,7 @@ export class AddToBundleDto {
 
 /** Body for POST /api/teamlead/bundles/:bundleId/reorder — set the item order. */
 export class ReorderBundleDto {
-  @ApiProperty({ type: [String], description: 'Permutation of the bundle\'s current case ids' })
+  @ApiProperty({ type: [String], description: "Permutation of the bundle's current case ids" })
   @IsArray()
   @IsString({ each: true })
   caseIds!: string[];

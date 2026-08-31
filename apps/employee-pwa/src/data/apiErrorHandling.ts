@@ -14,6 +14,26 @@ import { clearSession } from './session.js';
 
 export class SessionExpiredError extends Error {}
 
+/** Rückfall, wenn der Fehler-Body keine lesbare Meldung trägt. */
+const GENERIC_MESSAGE = 'Die Anfrage an den Server ist fehlgeschlagen.';
+
+/**
+ * Der deutsche Klartext einer abgelehnten Anfrage. Das Backend antwortet als
+ * einzige Fachlogik-Instanz mit fertigen deutschen Sätzen (409 „Der Beleg ist
+ * nicht in Bearbeitung.", 400 „Noch n Positionen ungeprüft – …"); die
+ * Bildschirme zeigen sie unverändert, statt sie hinter einem generischen Satz zu
+ * verstecken (Beleg-Zusammenarbeit 31.08.2026). Nest sendet `message` als String
+ * oder — bei Validierungsfehlern — als Liste.
+ */
+export function apiErrorMessage(error: unknown): string {
+  const raw =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? (error as { message?: unknown }).message
+      : undefined;
+  const message = Array.isArray(raw) ? raw.join(' · ') : raw;
+  return typeof message === 'string' && message.length > 0 ? message : GENERIC_MESSAGE;
+}
+
 interface ApiResult<T> {
   response: Response;
   data?: T;
@@ -26,7 +46,7 @@ export function handleApiResponse<T>(result: ApiResult<T>): T {
     throw new SessionExpiredError('Sitzung abgelaufen');
   }
   if (result.error) {
-    throw new Error('Die Anfrage an den Server ist fehlgeschlagen.');
+    throw new Error(apiErrorMessage(result.error));
   }
   return result.data as T;
 }

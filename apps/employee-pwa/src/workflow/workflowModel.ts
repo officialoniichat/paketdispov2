@@ -1,38 +1,62 @@
 /**
  * Pure per-Beleg workflow model — collapsed PROCESS phase.
  *
- * Reducers return new CaseProgress objects (immutable update) and never touch
- * persistence or version numbers — the repository owns the optimistic-locking
- * bump. The flow is intentionally flat: „Position geprüft" per position
- * (always required, even "Prüfung = Nein" — §G.1; toggleable, D5),
- * Mehr-/Mindermengen per Größe directly on the card (D2), then a clean
- * per-Beleg erledigt → ZST. Printing is upstream (vorgelagert) and Karton
- * öffnen is no work step — neither exists here (C4). Boxing is informational
- * and never gates completion.
+ * Seit der Beleg-Zusammenarbeit (31.08.2026) ist das AGGREGAT die Wahrheit über
+ * den Prüf-Stand: „Position geprüft" steht als `positions[].confirmedBy` am
+ * Server, Ist-Menge und Preiskorrektur als `skuLines[].confirmedQuantity` /
+ * `correctedVkPrice`. Die Funktionen hier lesen deshalb das Aggregat statt eines
+ * lokalen Spiegels; `CaseProgress` trägt nur noch die bis zum Teilabschluss
+ * gesammelten manuellen Meldungen (siehe `domain/types.ts`).
+ *
+ * Der Ablauf bleibt flach: „Position geprüft" je Position (immer nötig, auch bei
+ * „Prüfung = Nein" — §G.1; rücknehmbar, D5), Mehr-/Mindermengen je Größe direkt
+ * an der Karte (D2), dann ein sauberes „Beleg erledigt" → ZST. Drucken ist
+ * vorgelagert und Karton öffnen kein Arbeitsschritt (C4); Boxen ist reine
+ * Information und sperrt nie den Abschluss.
  */
 import type { WorkInstructionHeader } from '@paket/domain-types';
-import type { CaseAggregate, CaseProgress, RecordedProblem } from '../domain/types.js';
+import type {
+  CaseAggregate,
+  CaseParticipant,
+  CaseProgress,
+  PositionView,
+  RecordedProblem,
+  SkuLineView,
+} from '../domain/types.js';
 
-/** Fresh progress for a Beleg at version 0 (persisted before the first action). */
-export function initialProgress(aggregate: CaseAggregate, now: string): CaseProgress {
-  return {
-    caseId: aggregate.caseId,
-    step: 'process',
-    quantityCheckedPositionIds: [],
-    confirmedQuantities: {},
-    correctedVkPrices: {},
-    problems: [],
-    zstDone: false,
-    partial: false,
-    version: 0,
-    updatedAt: now,
-  };
+/** Frischer lokaler Fortschritt eines Belegs: noch keine Meldung gesammelt. */
+export function initialProgress(aggregate: CaseAggregate): CaseProgress {
+  return { caseId: aggregate.caseId, problems: [] };
 }
 
 /** True when a scanned code matches the expected location (case/space-insensitive). */
 export function scanMatches(scanned: string, expected: string): boolean {
   return scanned.trim().toUpperCase() === expected.trim().toUpperCase();
 }
+
+// --- Ableitungen aus dem Aggregat -----------------------------------------
+
+/** Alle Größenzeilen des Belegs — eine Quelle für Mengen, Preise und Summen. */
+function allSkuLines(aggregate: CaseAggregate): SkuLineView[] {
+  return aggregate.positions.flatMap((pos) => pos.skuLines);
+}
+
+/** Ist-Menge einer Größe: die erfasste Zählung, sonst das Soll. */
+export function istMenge(sku: SkuLineView): number {
+  return sku.confirmedQuantity ?? sku.expectedQuantity;
+}
+
+/**
+ * „Berührt" ist eine Größenzeile, die eine Mengenabweichung ODER eine
+ * Preiskorrektur trägt. Nur solche Zeilen gehen in `skuQuantities` (Konzept §7:
+ * der Server mischt sie mit dem persistierten Stand, unberührt zählt Ist = Soll).
+ */
+export function isSkuTouched(sku: SkuLineView): boolean {
+  return istMenge(sku) !== sku.expectedQuantity || sku.correctedVkPrice !== undefined;
+}
+
+/** True, sobald die Position serverseitig als geprüft markiert ist. */
+export const isPositionChecked = (pos: PositionView): boolean => pos.confirmedBy !== undefined;
 
 // --- Guardrails -----------------------------------------------------------
 
@@ -45,28 +69,18 @@ export function requiresQuantityCheck(wi: WorkInstructionHeader): boolean {
   return wi.minimumQuantityCheckAlwaysRequired === true;
 }
 
-export const allQuantitiesChecked = (p: CaseProgress, aggregate: CaseAggregate): boolean =>
-  aggregate.positions.every((pos) => p.quantityCheckedPositionIds.includes(pos.id));
-
-/** True when the Beleg has any local work recorded (drives the in-progress status). */
-export const hasProgress = (p: CaseProgress): boolean =>
-  p.quantityCheckedPositionIds.length > 0 ||
-  Object.keys(p.confirmedQuantities).length > 0 ||
-  Object.keys(p.correctedVkPrices).length > 0 ||
-  p.problems.length > 0;
+/** Jede Position des Belegs ist geprüft — egal von wem (geteilter Beleg §5.2). */
+export const allQuantitiesChecked = (aggregate: CaseAggregate): boolean =>
+  aggregate.positions.every(isPositionChecked);
 
 /**
  * Alle Probleme des Belegs (Kundenfeedback 14.07.2026, Punkt 7): manuell erfasste
- * Positions-Probleme + IMPLIZITE Probleme (Mehr-/Minderlieferung aus
- * `confirmedQuantities`, Preisabweichung aus `correctedVkPrices`). Sobald eines
- * vorliegt, ist „Beleg erledigt" gesperrt und der Teilabschluss der Weg.
+ * Positions-Probleme + IMPLIZITE Probleme (Mehr-/Minderlieferung, Preisabweichung)
+ * aus dem Aggregat. Sobald eines vorliegt, ist „Beleg erledigt" gesperrt und der
+ * Teilabschluss der Weg.
  */
-export function hasAnyProblem(p: CaseProgress): boolean {
-  return (
-    p.problems.length > 0 ||
-    Object.keys(p.confirmedQuantities).length > 0 ||
-    Object.keys(p.correctedVkPrices).length > 0
-  );
+export function hasAnyProblem(p: CaseProgress, aggregate: CaseAggregate): boolean {
+  return p.problems.length > 0 || allSkuLines(aggregate).some(isSkuTouched);
 }
 
 export interface CompletionGate {
@@ -82,65 +96,16 @@ export interface CompletionGate {
  */
 export function canCompleteCase(p: CaseProgress, aggregate: CaseAggregate): CompletionGate {
   const reasons: string[] = [];
-  if (requiresQuantityCheck(aggregate.workInstruction) && !allQuantitiesChecked(p, aggregate)) {
+  if (requiresQuantityCheck(aggregate.workInstruction) && !allQuantitiesChecked(aggregate)) {
     reasons.push('Noch nicht alle Positionen geprüft');
   }
-  if (hasAnyProblem(p)) {
+  if (hasAnyProblem(p, aggregate)) {
     reasons.push('Abweichung/Problem erfasst – nur Teilabschluss möglich');
   }
   return { ok: reasons.length === 0, reasons };
 }
 
 // --- Immutable transitions ------------------------------------------------
-
-/** Toggle „Position geprüft" for one position (D5: un-checkable). */
-export function togglePositionChecked(p: CaseProgress, positionId: string): CaseProgress {
-  const checked = p.quantityCheckedPositionIds.includes(positionId)
-    ? p.quantityCheckedPositionIds.filter((id) => id !== positionId)
-    : [...p.quantityCheckedPositionIds, positionId];
-  return { ...p, quantityCheckedPositionIds: checked };
-}
-
-/**
- * D2 Mehr-/Mindermengen: set the counted Ist-Menge for one Größe (skuLine).
- * A quantity equal to the Soll removes the deviation entry again.
- */
-export function setSkuQuantity(
-  p: CaseProgress,
-  skuLineId: string,
-  quantity: number,
-  expectedQuantity: number,
-): CaseProgress {
-  const next = Math.max(0, quantity);
-  const confirmed = { ...p.confirmedQuantities };
-  if (next === expectedQuantity) {
-    delete confirmed[skuLineId];
-  } else {
-    confirmed[skuLineId] = next;
-  }
-  return { ...p, confirmedQuantities: confirmed };
-}
-
-/**
- * Preisabweichung (Kundenfeedback 14.07.2026, Punkt 4): korrigierter VK je Größe.
- * Ein Preis gleich dem VK-Etikett-Preis (oder ohne Etikettpreis) ist keine
- * Korrektur und wird wieder entfernt. Jede echte Korrektur ist ein implizites
- * Problem (Preisabweichung) und erzwingt den Teilabschluss.
- */
-export function setCorrectedVkPrice(
-  p: CaseProgress,
-  skuLineId: string,
-  price: number | undefined,
-  vkLabelPrice: number | undefined,
-): CaseProgress {
-  const corrected = { ...p.correctedVkPrices };
-  if (price === undefined || price < 0 || price === vkLabelPrice) {
-    delete corrected[skuLineId];
-  } else {
-    corrected[skuLineId] = price;
-  }
-  return { ...p, correctedVkPrices: corrected };
-}
 
 /** Fügt ein manuell erfasstes Problem hinzu (Grund aus dem Katalog). */
 export function addProblem(p: CaseProgress, problem: RecordedProblem): CaseProgress {
@@ -153,22 +118,11 @@ export function removeProblem(p: CaseProgress, problemId: string): CaseProgress 
 }
 
 /**
- * Total Ist-Menge across every Größe (SKU line) in the Beleg: the employee's
- * confirmed count where they touched it (D2 Mehr-/Mindermengen), otherwise the
- * Soll (expected) quantity for that Größe. This is what gets booked as the
- * ZST's `completedQuantity` — never the untouched case-level total, so a
- * recorded deviation is never silently discarded.
+ * Total Ist-Menge across every Größe (SKU line) in the Beleg: die erfasste
+ * Zählung, wo eine vorliegt (D2 Mehr-/Mindermengen), sonst das Soll dieser Größe.
  */
-export function totalConfirmedQuantity(p: CaseProgress, aggregate: CaseAggregate): number {
-  return aggregate.positions.reduce(
-    (sum, pos) =>
-      sum +
-      pos.skuLines.reduce(
-        (posSum, sku) => posSum + (p.confirmedQuantities[sku.id] ?? sku.expectedQuantity),
-        0,
-      ),
-    0,
-  );
+export function totalConfirmedQuantity(aggregate: CaseAggregate): number {
+  return allSkuLines(aggregate).reduce((sum, sku) => sum + istMenge(sku), 0);
 }
 
 /** Eine Größenzeile im Request-Body: Ist-Menge + optional korrigierter VK. */
@@ -179,20 +133,49 @@ export interface SkuQuantityBody {
 }
 
 /**
- * Baut die `skuQuantities` für „Beleg erledigt"/Teilabschluss: für JEDE Größe die
- * gezählte Ist-Menge (Soll wo unberührt) plus eine etwaige Preiskorrektur.
+ * Eigene Sitzungs-Eingabe an einer Größenzeile: Feld weggelassen = nie berührt,
+ * null = zurückgesetzt. Strukturgleich mit `SkuLinePatch` der Datenschicht —
+ * hier eigens deklariert, damit das reine Modell ohne `data/`-Import bleibt.
  */
-export function skuQuantitiesBody(p: CaseProgress, aggregate: CaseAggregate): SkuQuantityBody[] {
-  return aggregate.positions.flatMap((pos) =>
-    pos.skuLines.map((sku) => {
-      const corrected = p.correctedVkPrices[sku.id];
-      return {
-        skuLineId: sku.id,
-        confirmedQuantity: p.confirmedQuantities[sku.id] ?? sku.expectedQuantity,
-        ...(corrected !== undefined ? { correctedVkPrice: corrected } : {}),
+export interface OwnSkuLineInput {
+  confirmedQuantity?: number | null;
+  correctedVkPrice?: number | null;
+}
+
+/**
+ * Baut die `skuQuantities` für „Beleg erledigt"/Teilabschluss: NUR Größenzeilen,
+ * die ICH in dieser Sitzung angefasst habe (`ownInputs`), mit MEINEN zuletzt
+ * eingegebenen Werten über dem Aggregat-Stand — nicht mit dem, was der Cache
+ * gerade zeigt (ein Refetch kann den optimistischen Patch überschrieben haben).
+ * Das Backend mischt den Body mit dem über den Zähl-Endpunkt persistierten
+ * Stand; weggelassene Zeilen bleiben unangetastet. Fremde Zählungen aus dem
+ * geteilten Aggregat dürfen deshalb nicht hinein, sonst überschriebe der
+ * Abschluss den frischeren Stand eines anderen Beteiligten.
+ */
+export function skuQuantitiesBody(
+  aggregate: CaseAggregate,
+  ownInputs: ReadonlyMap<string, OwnSkuLineInput>,
+): SkuQuantityBody[] {
+  return allSkuLines(aggregate)
+    .flatMap((sku) => {
+      const input = ownInputs.get(sku.id);
+      if (!input) return [];
+      const merged: SkuLineView = {
+        ...sku,
+        ...(input.confirmedQuantity !== undefined
+          ? { confirmedQuantity: input.confirmedQuantity ?? undefined }
+          : {}),
+        ...(input.correctedVkPrice !== undefined
+          ? { correctedVkPrice: input.correctedVkPrice ?? undefined }
+          : {}),
       };
-    }),
-  );
+      return isSkuTouched(merged) ? [merged] : [];
+    })
+    .map((sku) => ({
+      skuLineId: sku.id,
+      confirmedQuantity: istMenge(sku),
+      ...(sku.correctedVkPrice !== undefined ? { correctedVkPrice: sku.correctedVkPrice } : {}),
+    }));
 }
 
 /** Eine manuelle Problemmeldung im Request-Body des Teilabschlusses. */
@@ -213,16 +196,51 @@ export function problemsBody(p: CaseProgress): ProblemBody[] {
   }));
 }
 
-export const setZst = (p: CaseProgress): CaseProgress => ({ ...p, zstDone: true });
+// --- Geteilter Beleg (Zusammenarbeit 31.08.2026) ---------------------------
 
-export const completeCase = (p: CaseProgress): CaseProgress => ({
-  ...p,
-  step: 'done',
-  partial: false,
-});
+/**
+ * Aktiv beteiligt sind `angenommen` und `teil_erledigt` (Konzept §6) —
+ * Eingeladene, Abgelehnte und Entfernte arbeiten nicht mit. Reine
+ * Anzeige-Ableitung aus dem Backend-DTO; die Regeln selbst erzwingt der Server.
+ */
+export const isParticipantActive = (participant: CaseParticipant): boolean =>
+  participant.status === 'angenommen' || participant.status === 'teil_erledigt';
 
-export const partialComplete = (p: CaseProgress): CaseProgress => ({
-  ...p,
-  step: 'done',
-  partial: true,
-});
+/** Alle aktiven Beteiligten des Belegs (inkl. mir), in Backend-Reihenfolge. */
+export function activeParticipants(aggregate: CaseAggregate): CaseParticipant[] {
+  return (aggregate.collaboration?.participants ?? []).filter(isParticipantActive);
+}
+
+/** Die aktiven Beteiligten AUSSER mir — sie füllen die „Team-Ansicht". */
+export function otherActiveParticipants(
+  aggregate: CaseAggregate,
+  meineEmployeeNo: string | undefined,
+): CaseParticipant[] {
+  return activeParticipants(aggregate).filter((p) => p.employeeNo !== meineEmployeeNo);
+}
+
+/**
+ * Geteilt ist ein Beleg für mich, sobald mindestens EIN anderer aktiv beteiligt
+ * ist — ob ich Inhaber bin oder selbst helfe, spielt keine Rolle.
+ */
+export const isSharedCase = (
+  aggregate: CaseAggregate,
+  meineEmployeeNo: string | undefined,
+): boolean => otherActiveParticipants(aggregate, meineEmployeeNo).length > 0;
+
+/** Meine eigene Beteiligungs-Zeile (jeden Status), falls es eine gibt. */
+export function myParticipation(
+  aggregate: CaseAggregate,
+  meineEmployeeNo: string | undefined,
+): CaseParticipant | undefined {
+  if (meineEmployeeNo === undefined) return undefined;
+  return aggregate.collaboration?.participants.find((p) => p.employeeNo === meineEmployeeNo);
+}
+
+/** Positionsnummern, die dieser Beteiligte geprüft hat — aufsteigend sortiert. */
+export function checkedPositionNos(aggregate: CaseAggregate, employeeNo: string): number[] {
+  return aggregate.positions
+    .filter((pos) => pos.confirmedBy?.employeeNo === employeeNo)
+    .map((pos) => pos.positionNo)
+    .sort((a, b) => a - b);
+}

@@ -181,6 +181,17 @@ export interface DeliveryGroupRef {
   released: boolean;
 }
 
+/**
+ * Aktiver Helfer eines geteilten Belegs (Konzept beleg-zusammenarbeit §4,
+ * 31.08.2026): `angenommen` arbeitet mit, `teil_erledigt` wird grau gezeigt.
+ * Der Inhaber steht nicht in dieser Liste — sein Bündel trägt die Karte.
+ */
+export interface BoardParticipant {
+  employeeNo: string;
+  displayName: string;
+  status: 'angenommen' | 'teil_erledigt';
+}
+
 /** One case in an employee's bundle, in pickup order (§10.3 board detail). */
 export interface BoardCase {
   caseId: string;
@@ -199,6 +210,11 @@ export interface BoardCase {
   storageCode: string;
   /** Delivery-group context (Teamlead-Anforderung Punkt 1); null if standalone. */
   deliveryGroup?: DeliveryGroupRef | null;
+  /**
+   * Geteilter Beleg: aktive Helfer — leer/fehlend = nicht geteilt. Optional,
+   * damit Test-Fixtures und optimistische Platzhalter schlank bleiben.
+   */
+  sharedWith?: BoardParticipant[];
 }
 
 export interface BoardRow {
@@ -311,4 +327,3 @@ export interface PreviewResult {
   /** Geplante Bündel in Engine-Reihenfolge — Datenquelle der Vorverteilungs-Vorschau. */
   bundles: PreviewBundle[];
 }
-

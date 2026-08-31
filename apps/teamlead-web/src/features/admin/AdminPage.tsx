@@ -195,9 +195,7 @@ export function AdminPage(): JSX.Element {
                   <ShopAreaListField
                     label="Tägliche Verladung — Shopbereiche"
                     value={draft.priority.dailyShopAreas}
-                    onChange={(v) =>
-                      patch('priority', { ...draft.priority, dailyShopAreas: v })
-                    }
+                    onChange={(v) => patch('priority', { ...draft.priority, dailyShopAreas: v })}
                     hint="Shopbereiche mit täglicher Verladung (Stufe 1 der Prio-Leiter, zusammen mit Abschnitt 7/4/8). Belege dieser Shopbereiche werden immer vorgezogen. Verladeplan-Belege sind ab dem Verladetag fällig — ohne Vorlauf."
                   />
                   <Toggle
@@ -209,7 +207,9 @@ export function AdminPage(): JSX.Element {
                   <Toggle
                     label="Manuelle Prio gewinnt"
                     checked={draft.priority.manualPriorityWins}
-                    onChange={(v) => patch('priority', { ...draft.priority, manualPriorityWins: v })}
+                    onChange={(v) =>
+                      patch('priority', { ...draft.priority, manualPriorityWins: v })
+                    }
                     hint="Ein vom Teamlead manuell gesetzter Prio-Beleg schlägt alle Automatikregeln."
                   />
                 </Grid>
@@ -226,38 +226,51 @@ export function AdminPage(): JSX.Element {
                     Teamlead-Entscheidung.
                   </Typography>
                   <Grid>
-                  <Num
-                    label="Starter-Pack min (Teile)"
-                    value={draft.bundle.starterPackMinTeile}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMinTeile: v })}
-                    hint="Bündel werden in Teilen dimensioniert: das Starter-Pack zu Schichtbeginn schließt ab dieser Teilezahl (ca. 200)."
-                  />
-                  <Num
-                    label="Starter-Pack max (Teile)"
-                    value={draft.bundle.starterPackMaxTeile}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMaxTeile: v })}
-                    hint="Obergrenze des Starter-Packs (ca. 250 Teile). Eine Liefergruppe bleibt trotzdem zusammen."
-                  />
-                  <Num
-                    label="Folge-Pack min (Teile)"
-                    value={draft.bundle.followUpPackMinTeile}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, followUpPackMinTeile: v })}
-                    hint="Folge-Packs zieht der Mitarbeiter selbst (Self-Pull); sie schließen ab dieser Teilezahl (ca. 80)."
-                  />
-                  <Num
-                    label="Folge-Pack max (Teile)"
-                    value={draft.bundle.followUpPackMaxTeile}
-                    onChange={(v) => patch('bundle', { ...draft.bundle, followUpPackMaxTeile: v })}
-                    hint="Obergrenze des Folge-Packs (ca. 90 Teile)."
-                  />
-                  <Num
-                    label="Monster-Beleg-Schwelle (Teile)"
-                    value={draft.bundle.largeBelegTeileThreshold}
-                    onChange={(v) =>
-                      patch('bundle', { ...draft.bundle, largeBelegTeileThreshold: v })
-                    }
-                    hint="Belege ab dieser Teilezahl werden NICHT automatisch verteilt, sondern warten auf die manuelle Teamlead-Entscheidung."
-                  />
+                    <Num
+                      label="Starter-Pack min (Teile)"
+                      value={draft.bundle.starterPackMinTeile}
+                      onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMinTeile: v })}
+                      hint="Bündel werden in Teilen dimensioniert: das Starter-Pack zu Schichtbeginn schließt ab dieser Teilezahl (ca. 200)."
+                    />
+                    <Num
+                      label="Starter-Pack max (Teile)"
+                      value={draft.bundle.starterPackMaxTeile}
+                      onChange={(v) => patch('bundle', { ...draft.bundle, starterPackMaxTeile: v })}
+                      hint="Obergrenze des Starter-Packs (ca. 250 Teile). Eine Liefergruppe bleibt trotzdem zusammen."
+                    />
+                    <Num
+                      label="Folge-Pack min (Teile)"
+                      value={draft.bundle.followUpPackMinTeile}
+                      onChange={(v) =>
+                        patch('bundle', { ...draft.bundle, followUpPackMinTeile: v })
+                      }
+                      hint="Folge-Packs zieht der Mitarbeiter selbst (Self-Pull); sie schließen ab dieser Teilezahl (ca. 80)."
+                    />
+                    <Num
+                      label="Folge-Pack max (Teile)"
+                      value={draft.bundle.followUpPackMaxTeile}
+                      onChange={(v) =>
+                        patch('bundle', { ...draft.bundle, followUpPackMaxTeile: v })
+                      }
+                      hint="Obergrenze des Folge-Packs (ca. 90 Teile)."
+                    />
+                    <Num
+                      label="Monster-Beleg-Schwelle (Teile)"
+                      value={draft.bundle.largeBelegTeileThreshold}
+                      onChange={(v) =>
+                        patch('bundle', { ...draft.bundle, largeBelegTeileThreshold: v })
+                      }
+                      hint="Belege ab dieser Teilezahl werden NICHT automatisch verteilt, sondern warten auf die manuelle Teamlead-Entscheidung."
+                    />
+                    {/* Geteilter Beleg (Konzept beleg-zusammenarbeit §4): Pull-Gate-Regel. */}
+                    <Toggle
+                      label="Beim geteilten Beleg erst mithelfen"
+                      checked={draft.collaboration.helpBeforeNextBundle}
+                      onChange={(v) =>
+                        patch('collaboration', { ...draft.collaboration, helpBeforeNextBundle: v })
+                      }
+                      hint="Wer an einem geteilten Beleg beteiligt ist, bekommt kein neues Pack, bis alle Positionen geprüft sind."
+                    />
                   </Grid>
                 </Stack>
               )}
@@ -422,10 +435,15 @@ export function AdminPage(): JSX.Element {
                     werden erkannt und möglichst einem Mitarbeiter zugeteilt. Drei Signale, vom
                     stärksten zum schwächsten:
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" component="ol" sx={{ pl: 3, m: 0 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    component="ol"
+                    sx={{ pl: 3, m: 0 }}
+                  >
                     <li>
-                      <strong>Gleiche Quell-Lieferung</strong> — der Gruppenschlüssel „X von N“
-                      aus ProHandel (bestätigt).
+                      <strong>Gleiche Quell-Lieferung</strong> — der Gruppenschlüssel „X von N“ aus
+                      ProHandel (bestätigt).
                     </li>
                     <li>
                       <strong>Gleiche Lieferscheinnummer</strong> — Belege mit identischer
@@ -477,7 +495,9 @@ export function AdminPage(): JSX.Element {
                     <Toggle
                       label="Lauf nur am selben Tag"
                       checked={draft.grouping.runRequiresSameDay}
-                      onChange={(v) => patch('grouping', { ...draft.grouping, runRequiresSameDay: v })}
+                      onChange={(v) =>
+                        patch('grouping', { ...draft.grouping, runRequiresSameDay: v })
+                      }
                       hint="Verhindert, dass die globale Tagesnummerierung fälschlich zu einer Lieferung zusammenfasst."
                     />
                     <Toggle
@@ -550,7 +570,13 @@ function InfoHint({ text }: { text: string }): JSX.Element {
       <Box
         component="span"
         aria-label="Erklärung"
-        sx={{ cursor: 'help', color: 'text.secondary', fontSize: 16, lineHeight: 1, userSelect: 'none' }}
+        sx={{
+          cursor: 'help',
+          color: 'text.secondary',
+          fontSize: 16,
+          lineHeight: 1,
+          userSelect: 'none',
+        }}
       >
         ⓘ
       </Box>

@@ -9,7 +9,12 @@
  * two test files actually assert against is reproduced here, as a plain
  * literal matching `CaseAggregate` (task-13).
  */
-import type { CaseAggregate } from '../domain/types.js';
+import type {
+  CaseAggregate,
+  CaseCollaboration,
+  CaseParticipant,
+  PositionConfirmer,
+} from '../domain/types.js';
 
 const CASE_ID = 'case-we-3656860';
 const WE_BELEG_NO = '3656860';
@@ -173,4 +178,72 @@ export const exampleAggregate: CaseAggregate = {
   inspectionLevelLabel: undefined,
   inspectionDescription: undefined,
   issues: [],
+  collaboration: null,
 };
+
+// --- Varianten für die Tests der Zusammenarbeit (31.08.2026) ---------------
+//
+// Der Arbeitsstand liegt seit der Beleg-Zusammenarbeit im AGGREGAT (Konzept §2),
+// nicht mehr im lokalen Fortschritt — die Tests bauen ihn deshalb hier auf.
+
+/** Variante, in der die genannten Positionen von `confirmer` geprüft sind. */
+export function withConfirmedPositions(
+  aggregate: CaseAggregate,
+  confirmer: PositionConfirmer,
+  positionIds: readonly string[],
+): CaseAggregate {
+  return {
+    ...aggregate,
+    positions: aggregate.positions.map((pos) =>
+      positionIds.includes(pos.id)
+        ? { ...pos, confirmedBy: confirmer, confirmedAt: '2026-08-31T09:00:00.000Z' }
+        : pos,
+    ),
+  };
+}
+
+/** Variante mit gezählter Ist-Menge (und optional Preiskorrektur) an einer Größe. */
+export function withSkuCount(
+  aggregate: CaseAggregate,
+  skuLineId: string,
+  confirmedQuantity: number | undefined,
+  correctedVkPrice?: number,
+): CaseAggregate {
+  return {
+    ...aggregate,
+    positions: aggregate.positions.map((pos) => ({
+      ...pos,
+      skuLines: pos.skuLines.map((sku) =>
+        sku.id === skuLineId ? { ...sku, confirmedQuantity, correctedVkPrice } : sku,
+      ),
+    })),
+  };
+}
+
+/** Beteiligungs-Zeile (Backend-DTO) mit sprechenden Vorgaben. */
+export function participant(overrides: Partial<CaseParticipant> = {}): CaseParticipant {
+  return {
+    participantId: `part-${overrides.employeeNo ?? 'ma-1'}`,
+    employeeNo: 'ma-1',
+    displayName: 'Anna Berger',
+    role: 'helfer',
+    status: 'angenommen',
+    invitedAt: '2026-08-31T08:00:00.000Z',
+    confirmedPositionCount: 0,
+    ...overrides,
+  };
+}
+
+/** Variante mit aktiver Zusammenarbeit (Beteiligte + Prüf-Fortschritt). */
+export function withCollaboration(
+  aggregate: CaseAggregate,
+  participants: readonly CaseParticipant[],
+  confirmedPositionCount = 0,
+): CaseAggregate {
+  const collaboration: CaseCollaboration = {
+    positionCount: aggregate.positions.length,
+    confirmedPositionCount,
+    participants: [...participants],
+  };
+  return { ...aggregate, collaboration };
+}

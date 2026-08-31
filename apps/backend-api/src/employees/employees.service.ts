@@ -136,7 +136,8 @@ export class EmployeesService {
 
     const employeeNo = dto.employeeNo?.trim() || generateTempEmployeeNo();
     const existing = await this.prisma.user.findUnique({ where: { employeeNo } });
-    if (existing) throw new BadRequestException(`Personalnummer ${employeeNo} ist bereits vergeben`);
+    if (existing)
+      throw new BadRequestException(`Personalnummer ${employeeNo} ist bereits vergeben`);
 
     let weeklyPattern: Prisma.InputJsonValue | undefined;
     if (dto.weeklyPattern) {
@@ -219,7 +220,8 @@ export class EmployeesService {
     if (dto.active !== undefined) data.active = dto.active;
     if (dto.measured !== undefined) data.measured = dto.measured;
     if (dto.bereiche !== undefined) data.bereiche = dto.bereiche;
-    if (dto.overtimeTolerancePct !== undefined) data.overtimeTolerancePct = dto.overtimeTolerancePct;
+    if (dto.overtimeTolerancePct !== undefined)
+      data.overtimeTolerancePct = dto.overtimeTolerancePct;
     if (dto.productivityFactor !== undefined) data.productivityFactor = dto.productivityFactor;
     if (dto.skillTier !== undefined) data.skillTier = parseSkillTier(dto.skillTier, 'profi');
     const workstationId = await this.resolveWorkstationId(dto.workstationId);
@@ -236,7 +238,10 @@ export class EmployeesService {
         if (!parsed.success) {
           throw new BadRequestException({
             message: 'Ungültiges Wochenmuster',
-            issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+            issues: parsed.error.issues.map((i) => ({
+              path: i.path.join('.'),
+              message: i.message,
+            })),
           });
         }
         data.weeklyPattern = parsed.data as unknown as Prisma.InputJsonValue;
@@ -312,8 +317,9 @@ export class EmployeesService {
    * Weg — die Person verschwindet aus Planung und Auswahl, die Historie bleibt lesbar.
    *
    * Löschbar ist damit in der Praxis der versehentlich angelegte Datensatz. Dessen reine
-   * Anzeige-Anhänge (materialisierte Schichten, Abwesenheiten, TL-Nachrichten) räumt das
-   * Löschen mit ab, damit keine verwaisten Zeilen im Kalender stehen bleiben.
+   * Anzeige-Anhänge (materialisierte Schichten, Abwesenheiten, TL-Nachrichten, eigene
+   * Beteiligungen an geteilten Belegen) räumt das Löschen mit ab, damit keine verwaisten
+   * Zeilen im Kalender bzw. an Belegen stehen bleiben.
    */
   async remove(principal: Principal, id: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id } });
@@ -379,6 +385,9 @@ export class EmployeesService {
       await tx.shift.deleteMany({ where: { employeeId: id } });
       await tx.employeeAbsence.deleteMany({ where: { employeeId: id } });
       await tx.teamleadMessage.deleteMany({ where: { employeeId: id } });
+      // Beteiligungen an geteilten Belegen (FK RESTRICT); versendete Einladungen und
+      // geprüfte Positionen bleiben per SET NULL erhalten (Anzeigename ist ein Snapshot).
+      await tx.caseParticipant.deleteMany({ where: { employeeId: id } });
       await tx.user.delete({ where: { id } });
       await this.events.append(
         {
@@ -538,8 +547,7 @@ export class EmployeesService {
           active: shift.active,
         }
       : null;
-    const netCapacityToday =
-      u.active && shift && shift.active ? shift.netCapacityMinutes : 0;
+    const netCapacityToday = u.active && shift && shift.active ? shift.netCapacityMinutes : 0;
     return {
       id: u.id,
       employeeNo: u.employeeNo,

@@ -52,7 +52,12 @@ describe('createOverrideEvent (§8.4 audit)', () => {
 
   it('records a Beleg-Split (aufteilen) as an audited override with a reason', () => {
     const split = createOverrideEvent(
-      { action: 'aufteilen', entityId: 'case-9', reason: 'Großmenge Koffer — auf 3 MA verteilt', actorId: 'tl-1' },
+      {
+        action: 'aufteilen',
+        entityId: 'case-9',
+        reason: 'Großmenge Koffer — auf 3 MA verteilt',
+        actorId: 'tl-1',
+      },
       NOW,
     );
     expect(split.eventType).toBe('assignment.overridden');
@@ -89,6 +94,18 @@ describe('formatAuditAction (§8.4 – human-readable audit feed)', () => {
   it('never renders a raw machine code (no dotted event type leaks through)', () => {
     expect(formatAuditAction('case.cancelled')).toBe('Storniert');
     expect(formatAuditAction('case.cancelled')).not.toContain('.');
+  });
+
+  it('beschriftet die Ereignisse der Zusammenarbeit (geteilter Beleg) deutsch', () => {
+    expect(formatAuditAction('case.collaboration_started')).toBe('Gemeinsam zugewiesen');
+    expect(formatAuditAction('case.collaboration_invited')).toBe('Zur Zusammenarbeit eingeladen');
+    expect(formatAuditAction('case.collaboration_accepted')).toBe('Einladung angenommen');
+    expect(formatAuditAction('case.collaboration_declined')).toBe('Einladung abgelehnt');
+    expect(formatAuditAction('case.collaboration_part_done')).toBe('Teilbeleg erledigt');
+    expect(formatAuditAction('case.collaboration_participant_removed')).toBe(
+      'Aus geteiltem Beleg entfernt',
+    );
+    expect(formatAuditAction('case.collaboration_dissolved')).toBe('Zusammenarbeit beendet');
   });
 });
 

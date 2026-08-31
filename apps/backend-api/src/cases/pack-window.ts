@@ -45,6 +45,12 @@ export interface PackItem {
   caseId: string;
   packIndex: number;
   status: string;
+  /**
+   * Geteilter Beleg (Konzept beleg-zusammenarbeit §3.8): die EIGENE Beteiligung
+   * des Anfragenden ist `teil_erledigt` — sein Anteil ist fertig, die anderen
+   * arbeiten weiter. Der Beleg blockiert den Pack-Wechsel dann nicht mehr.
+   */
+  ownPartDone?: boolean;
 }
 
 /** Fertig für den Mitarbeiter — completed/zst_done/cancelled. */
@@ -66,6 +72,12 @@ export function hasUnresolvedIssue(status: string): boolean {
  * Belege früherer Packs (die Anzeige-Mitnahme) blockieren ebenfalls nie: ihre
  * Ausnahme wurde beim letzten Wechsel bereits gewährt, sie dürfen den Mitarbeiter
  * nicht ein zweites Mal festhalten.
+ *
+ * Dritte Ausnahme (geteilter Beleg, §3.8): ist die EIGENE Beteiligung des
+ * Anfragenden `teil_erledigt`, hält ihn der Beleg nicht fest — sein Anteil ist
+ * erledigt, den Rest arbeiten die anderen Beteiligten ab. Ob er trotzdem
+ * mithelfen muss, entscheidet die Admin-Regel `shared_case_open` — nicht dieses
+ * Fenster.
  */
 export function packAdvanceBlockers(
   items: readonly PackItem[],
@@ -75,7 +87,8 @@ export function packAdvanceBlockers(
     (i) =>
       i.packIndex === activePackIndex &&
       !isTerminalCaseStatus(i.status) &&
-      !hasUnresolvedIssue(i.status),
+      !hasUnresolvedIssue(i.status) &&
+      i.ownPartDone !== true,
   );
 }
 

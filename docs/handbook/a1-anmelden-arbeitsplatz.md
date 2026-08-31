@@ -24,12 +24,14 @@ Der Anmeldebildschirm zeigt die Überschrift **`'Anmeldung'`** mit einem Feld:
 
 ## Was passiert danach
 
-- Du landest auf deinem Startbildschirm. Oben in der Kopfzeile steht dein Name.
+- Du landest auf deinem Startbildschirm. Oben rechts schwebt dein **Profilkreis** mit deinen
+  Initialen; ein Tipp darauf zeigt deinen Namen, deine Mitarbeiternummer und das Menü
+  (`'Zur Teamlead-App'`, `'Nachrichten'`, `'Abmelden'`).
 - Auf dem Startbildschirm steht `'Arbeitsplatz: <Tischname>'` – diesen Tisch hat dir die Teamleitung
   in den Stammdaten zugewiesen; du musst ihn nicht selbst scannen oder eingeben.
 - Deine Anmeldung bleibt bestehen, auch wenn du die App schließt und neu öffnest.
-- Zum Schichtende oder bei Tischwechsel tippst du oben rechts auf **`'Abmelden'`**. Danach siehst du
-  wieder den Anmeldebildschirm.
+- Zum Schichtende oder bei Tischwechsel tippst du oben rechts auf den Profilkreis und dann auf
+  **`'Abmelden'`**. Danach siehst du wieder den Anmeldebildschirm.
 
 ## Häufige Fehler / FAQ
 

@@ -79,13 +79,13 @@ Nach dem Bearbeiten einer `.mmd`-Quelle `./render.sh` neu ausführen und die ge�
 | --- | --- | --- |
 | `c1-system-context.mmd` | **C4 E1 — Kontext** | Das System, seine drei menschlichen Rollen und die externen Systeme (ProHandel ERP, OIDC-Provider). |
 | `c2-container.mmd` | **C4 E2 — Container** | Deploy-/Laufzeit-Einheiten: employee-pwa, teamlead-web, backend-api, PostgreSQL und die geteilten Bibliotheks-Pakete; Protokolle (REST + SSE, SQL, prozessintern). |
-| `c3-backend-components.mmd` | **C4 E3 — Komponenten** | NestJS-Module in backend-api: Cases (Me/Cases/Teamlead), Assignment, Employees, Admin, Problemarten, Prohandel, Dev sowie die Querschnitts-Globals Auth/Prisma/Events/Workflow/Live/Clock. |
+| `c3-backend-components.mmd` | **C4 E3 — Komponenten** | NestJS-Module in backend-api: Cases (Me/Cases/Teamlead — inkl. Server-Haken „Position geprüft“ und Ist-Menge/Preis je Größe), Assignment (inkl. Pull-Gate `shared_case_open`), Employees, Admin, Problemarten, Prohandel, Messages (Teamlead-Nachrichten), Collaboration (geteilter Beleg: Kolleg:innen einladen · Posteingang · „Teilbeleg erledigt“ · Helfer entfernen), Dev sowie die Querschnitts-Globals Auth/Prisma/Events/Workflow/Live (typisierte SSE-Ereignisse an mehrere Empfänger)/Clock. |
 | `c3-engine-components.mmd` | **C4 E3 — Komponenten** | Die pure `@paket/assignment-engine`: `assignWork()`-Orchestrator + Module priority/effort (inkl. effort-factors)/capacity (inkl. shift-import, shift-end)/assignment (bundling, distribute)/grouping/pickup. |
-| `c3-employee-pwa-components.mmd` | **C4 E3 — Komponenten** | employee-pwa: Login, Bündel-Home („Ware holen“/„Bearbeiten“), Beleg-Bearbeitung mit Problem-Dialogen; React-Query-Datenschicht + SSE-Live-Updates (kein Offline-Cache). |
-| `c3-teamlead-components.mmd` | **C4 E3 — Komponenten** | teamlead-web: Features cockpit/ablagen/board/belege/split/admin, der `useCockpitData()`-Store, die Datenschicht und die `caseActions`-Registry. |
+| `c3-employee-pwa-components.mmd` | **C4 E3 — Komponenten** | employee-pwa: Login, Bündel-Home („Ware holen“/„Bearbeiten“, Teilen-Icon je Beleg, Abschnitt „Geteilt mit dir“), Beleg-Bearbeitung mit Problem-Dialogen und „Team-Ansicht“, Beleg teilen (TeilenDialog · EinladungOverlay · Nachrichten-Verlauf · Profilkreis-Badge); React-Query-Datenschicht + typisierte SSE-Live-Updates je Ereignistyp (kein Offline-Cache). |
+| `c3-teamlead-components.mmd` | **C4 E3 — Komponenten** | teamlead-web: Features cockpit/ablagen/board (goldene Karten geteilter Belege + „Aus geteiltem Beleg entfernen“)/belege/split (Modus „Gemeinsam bearbeiten“ vorausgewählt)/admin, der `useCockpitData()`-Store samt `useCockpitLive` (SSE-Consumer), der geteilte `GeteiltChip`, die Datenschicht und die `caseActions`-Registry. |
 | `c4-engine-pipeline.mmd` | **C4 E4 — Code** | Der Datenfluss in `assignWork()`: Skill-Tier-Gate → Schichtende-Cutoff → Anreichern → Ausschluss → Liefergruppen → Monster-Beleg-Prüfung → Kapazität → Starter-Packs → Verteilen → Abholfolge. |
-| `domain-model.mmd` | **Domäne / ER** | Prisma-Entitäten, Relationen und Kardinalitäten; die Trennung Beleg-Kopf vs. Position (Warenbezeichnung/ASN-DESADV); Konfig-Tabellen und das unveränderliche WorkflowEvent-Log. |
-| `type-pipeline.mmd` | **Typen** | Die Typ-Generierungskette: domain-types (Zod) ↔ Prisma ↔ OpenAPI → api-client (generiert). |
+| `domain-model.mmd` | **Domäne / ER** | Prisma-Entitäten, Relationen und Kardinalitäten; die Trennung Beleg-Kopf vs. Position (Warenbezeichnung/ASN-DESADV); Beteiligte je Beleg (`CaseParticipant`) als Overlay des geteilten Belegs, serverseitiger Prüf-Haken je Position; Konfig-Tabellen und das unveränderliche WorkflowEvent-Log. |
+| `type-pipeline.mmd` | **Typen** | Die Typ-Generierungskette: domain-types (Zod) ↔ Prisma ↔ OpenAPI → api-client (generiert) — plus der von Backend und beiden Apps geteilte `liveEventSchema` für den SSE-Kanal. |
 
 ### Notizen je Ebene
 
@@ -101,7 +101,14 @@ Nach dem Bearbeiten einer `.mmd`-Quelle `./render.sh` neu ausführen und die ge�
   Container-Diagramm und werden stattdessen hier vermerkt.
 - **E3 Komponenten.** Vier Komponenten-Sichten — eine je „interessantem“ Container. Die
   Backend-Sicht zeigt den auditierten Schreibpfad (Controller → Service → WorkflowService →
-  EventLogService → Prisma) und den SSE-Lesepfad.
+  EventLogService → Prisma) und den SSE-Lesepfad (seit 31.08.2026 typisierte Ereignisse mit
+  Empfängerliste; das Cockpit hört über `useCockpitLive` mit).
+- **Geteilter Beleg (31.08.2026).** Zusammenarbeit mehrerer Mitarbeitender an EINEM Beleg ist ein
+  Overlay (`CaseParticipant`), kein zweites Bündel und kein neuer Status; Fachregeln (Zugriff,
+  Fertig-Gate, ZST-Anteile, Pull-Gate) liegen ausschließlich im Backend. Die betroffenen
+  Diagramm-Knoten sind mit „(31.08.2026)“ markiert und wurden parallel zur Implementierung aus
+  dem Konzept `docs/concept/beleg-zusammenarbeit-concept.md` beschrieben — bei Abweichungen gilt
+  der Code, die Diagramme sind nachzuziehen.
 - **E4 Code.** Die Engine ist pur und deterministisch (kein IO); die Pipeline-Reihenfolge spiegelt
   `packages/assignment-engine/src/assignment/plan.ts`.
 - **Domäne / ER.** Die Kardinalitäten folgen exakt den Prisma-Relationen. Beachte den

@@ -49,7 +49,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE live status for the caller’s own packages (§16.1)",
+        "summary": "SSE-Live-Ereignisse, die den Aufrufer adressieren (eigene + geteilte Belege, §16.1)",
         "tags": [
           "live"
         ]
@@ -69,7 +69,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE live status for the full operational pool",
+        "summary": "SSE-Live-Ereignisse des gesamten operativen Pools",
         "tags": [
           "live"
         ]
@@ -485,6 +485,118 @@
           }
         ],
         "summary": "Teilabschluss mit gesammelten Problemen (in_progress → issue_open, case.problems_reported); der Beleg bleibt beim selben MA geparkt",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/cases/{caseId}/positions/{positionId}/confirmed": {
+      "post": {
+        "operationId": "CasesController_confirmPosition",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "positionId",
+            "required": true,
+            "in": "path",
+            "description": "ReceiptPosition des Belegs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPositionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionConfirmResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "„Position geprüft\" setzen/zurücknehmen (serverseitig persistiert, Konzept beleg-zusammenarbeit §2/§7). Beleg muss in Bearbeitung sein; kein Versions-Inkrement.",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/cases/{caseId}/sku-lines/{skuLineId}/count": {
+      "post": {
+        "operationId": "CasesController_countSkuLine",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "skuLineId",
+            "required": true,
+            "in": "path",
+            "description": "Größenzeile (ReceiptSkuLine) des Belegs",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountSkuLineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkuCountResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ist-Menge/Preiskorrektur einer Größenzeile erfassen (pro Aktion persistiert, Konzept §7); null setzt den jeweiligen Wert zurück.",
         "tags": [
           "cases"
         ]
@@ -2308,6 +2420,297 @@
         ]
       }
     },
+    "/api/me/colleagues": {
+      "get": {
+        "operationId": "CollaborationController_colleagues",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ColleagueDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aktive Kolleg:innen für „Beleg teilen\" (ohne den Aufrufer; heute im Dienst zuerst, dann Name)",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/cases/{caseId}/invitations": {
+      "post": {
+        "operationId": "CollaborationController_invite",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteParticipantsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCollaborationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Kolleg:innen zum geteilten Beleg einladen (Inhaber oder aktiver Beteiligter; Beleg assigned|in_progress|problem_resolved). Abgelehnte/Entfernte werden erneut eingeladen.",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/invitations/{participantId}/respond": {
+      "post": {
+        "operationId": "CollaborationController_respond",
+        "parameters": [
+          {
+            "name": "participantId",
+            "required": true,
+            "in": "path",
+            "description": "Beteiligungs-Zeile (CaseParticipant) der Einladung",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantStatusResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Einladung annehmen (grüner Haken) oder ablehnen (rotes Kreuz) — nur der Eingeladene, nur aus „eingeladen\"",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/nachrichten": {
+      "get": {
+        "operationId": "CollaborationController_nachrichten",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PosteingangDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Posteingang: erhaltene/gesendete Einladungen (alle Status) + Teamlead-Nachrichten, neueste zuerst; pendingCount = Zahl am Profilkreis",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/cases/{caseId}/part-done": {
+      "post": {
+        "operationId": "CollaborationController_partDone",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantStatusResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "„Teilbeleg erledigt\": eigene Beteiligung angenommen → teil_erledigt (Zustand des Beteiligten — keine Beleg-Änderung, keine ZST-Buchung)",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/collaboration": {
+      "post": {
+        "operationId": "TeamleadCollaborationController_createCollaboration",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id (ready|parked, ohne Bündel)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCollaborationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "„Gemeinsam zuweisen\": Beleg in den Karren des ERSTEN Mitarbeiters (§8.4-Pfad), alle Beteiligten angenommen; ein geparkter Beleg wird dabei freigegeben. Pflicht-Grund.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/cases/{caseId}/participants/{employeeNo}/remove": {
+      "post": {
+        "operationId": "TeamleadCollaborationController_removeParticipant",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "description": "Goods-receipt case id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "employeeNo",
+            "required": true,
+            "in": "path",
+            "description": "Zu entfernender Helfer",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveParticipantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "„Aus geteiltem Beleg entfernen\": Helfer → entfernt (Pflicht-Grund). Der Inhaber ist nicht entfernbar (409) — dafür Entziehen/Verschieben.",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
     "/api/admin/locations": {
       "get": {
         "operationId": "AdminController_locations",
@@ -3598,6 +4001,92 @@
           "labelPrintVariant"
         ]
       },
+      "CaseParticipantDto": {
+        "type": "object",
+        "properties": {
+          "participantId": {
+            "type": "string",
+            "description": "Id der Beteiligungs-Zeile (CaseParticipant)"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "inhaber",
+              "helfer"
+            ],
+            "description": "CaseParticipantRole"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "eingeladen",
+              "angenommen",
+              "abgelehnt",
+              "teil_erledigt",
+              "entfernt"
+            ],
+            "description": "CaseParticipantStatus — aktiv sind angenommen und teil_erledigt"
+          },
+          "invitedAt": {
+            "type": "string",
+            "description": "ISO-8601 Zeitpunkt der Einladung"
+          },
+          "respondedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Antwortzeitpunkt"
+          },
+          "partDoneAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Zeitpunkt von „Teilbeleg erledigt\""
+          },
+          "confirmedPositionCount": {
+            "type": "number",
+            "description": "Positionen des Belegs, die DIESER Beteiligte geprüft hat (confirmedById)"
+          }
+        },
+        "required": [
+          "participantId",
+          "employeeNo",
+          "displayName",
+          "role",
+          "status",
+          "invitedAt",
+          "confirmedPositionCount"
+        ]
+      },
+      "CaseCollaborationDto": {
+        "type": "object",
+        "properties": {
+          "positionCount": {
+            "type": "number",
+            "description": "Anzahl der Positionen des Belegs"
+          },
+          "confirmedPositionCount": {
+            "type": "number",
+            "description": "Davon geprüft (confirmedById gesetzt)"
+          },
+          "participants": {
+            "description": "Alle Beteiligten, chronologisch",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseParticipantDto"
+            }
+          }
+        },
+        "required": [
+          "positionCount",
+          "confirmedPositionCount",
+          "participants"
+        ]
+      },
       "IssueMessageDto": {
         "type": "object",
         "properties": {
@@ -3880,6 +4369,16 @@
             "nullable": true,
             "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
           },
+          "collaboration": {
+            "nullable": true,
+            "description": "Geteilter Beleg (Zusammenarbeit): Beteiligte + Prüf-Fortschritt; null, wenn der Beleg nie geteilt wurde. Von den Mitarbeiter-Sichten (/api/me/today, Aggregat) geliefert; Teamlead-Listen lassen es weg (dort BoardCaseDto.sharedWith bzw. CaseDetailDto.participants).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CaseCollaborationDto"
+              }
+            ]
+          },
           "issues": {
             "description": "ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg.",
             "type": "array",
@@ -3956,6 +4455,13 @@
               "$ref": "#/components/schemas/CaseSummaryDto"
             }
           },
+          "sharedCases": {
+            "description": "„Geteilt mit dir\" (Konzept §3.5): Belege, an denen der Aufrufer aktiver HELFER ist (angenommen|teil_erledigt) und die noch nicht fertig sind. Sie liegen im Karren des Inhabers (assignedEmployeeName), nie im eigenen Bündel — ohne carriedOver/packOrdinal.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseSummaryDto"
+            }
+          },
           "workstation": {
             "nullable": true,
             "description": "Aktuell geclaimter Arbeitsplatz (Tisch) des Mitarbeiters",
@@ -3969,7 +4475,8 @@
         },
         "required": [
           "date",
-          "cases"
+          "cases",
+          "sharedCases"
         ]
       },
       "WorkInstructionHeaderDto": {
@@ -4021,6 +4528,21 @@
           "minimumQuantityCheckAlwaysRequired",
           "boxLabelRequired",
           "zstRequired"
+        ]
+      },
+      "PositionConfirmerDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "displayName"
         ]
       },
       "PositionInstructionDto": {
@@ -4095,6 +4617,11 @@
           "confirmedQuantity": {
             "type": "number",
             "nullable": true
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "Vom MA korrigierter VK je Größe (persistiert wie confirmedQuantity, Konzept beleg-zusammenarbeit §6); null = keine Korrektur"
           },
           "ekPrice": {
             "type": "number",
@@ -4199,6 +4726,21 @@
           "status": {
             "type": "string",
             "description": "PositionStatus: open|confirmed|issue_open|completed"
+          },
+          "confirmedBy": {
+            "nullable": true,
+            "description": "„Position geprüft\" — wer geprüft hat (serverseitig, Konzept §2); null = ungeprüft",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PositionConfirmerDto"
+              }
+            ]
+          },
+          "confirmedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Prüfzeitpunkt"
           },
           "instruction": {
             "nullable": true,
@@ -4382,7 +4924,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation"
+            "description": "Why no cart was assigned: pack_open|no_shift|capacity_done|shift_ending|pool_empty|skill_tier|continuation|shared_case_open"
           },
           "caseCount": {
             "type": "number",
@@ -4543,7 +5085,7 @@
         "type": "object",
         "properties": {
           "skuQuantities": {
-            "description": "Gezählte Ist-Mengen; ohne Angabe gilt Ist=Soll",
+            "description": "NUR die vom Aufrufer berührten Größenzeilen; der Server mischt sie mit dem persistierten Stand — ohne Angabe gilt der persistierte Wert, sonst Ist = Soll.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SkuQuantityDto"
@@ -4580,7 +5122,7 @@
         "type": "object",
         "properties": {
           "skuQuantities": {
-            "description": "Gezählte Ist-Mengen aller Größenzeilen",
+            "description": "NUR die vom Aufrufer berührten Größenzeilen — der Server mischt sie mit dem persistierten Stand (confirmedQuantity/correctedVkPrice aus dem Zähl-Endpunkt); unberührte Zeilen zählen mit Ist = Soll (Konzept beleg-zusammenarbeit §7).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SkuQuantityDto"
@@ -4597,6 +5139,95 @@
         "required": [
           "skuQuantities",
           "problems"
+        ]
+      },
+      "ConfirmPositionDto": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "description": "true = Haken setzen, false = Haken zurücknehmen"
+          }
+        },
+        "required": [
+          "confirmed"
+        ]
+      },
+      "PositionConfirmResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "positionId": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "description": "Prüf-Zustand nach dem Aufruf"
+          },
+          "confirmedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PositionConfirmerDto"
+              }
+            ]
+          },
+          "confirmedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Prüfzeitpunkt"
+          }
+        },
+        "required": [
+          "caseId",
+          "positionId",
+          "confirmed"
+        ]
+      },
+      "CountSkuLineDto": {
+        "type": "object",
+        "properties": {
+          "confirmedQuantity": {
+            "type": "number",
+            "nullable": true,
+            "description": "Gezählte Ist-Menge; weggelassen = unangetastet, null = Erfassung zurücksetzen (Zeile wieder offen)"
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "nullable": true,
+            "description": "Korrigierter VK, wenn der Etikettpreis falsch ist; null = Korrektur zurücknehmen"
+          }
+        }
+      },
+      "SkuCountResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "skuLineId": {
+            "type": "string"
+          },
+          "confirmedQuantity": {
+            "type": "number",
+            "nullable": true
+          },
+          "correctedVkPrice": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "SkuLineStatus nach dem Aufruf: open|confirmed|deviation"
+          }
+        },
+        "required": [
+          "caseId",
+          "skuLineId",
+          "status"
         ]
       },
       "DashboardDto": {
@@ -4692,6 +5323,30 @@
           "released"
         ]
       },
+      "BoardParticipantDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "angenommen",
+              "teil_erledigt"
+            ],
+            "description": "teil_erledigt wird im Tooltip grau dargestellt"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "displayName",
+          "status"
+        ]
+      },
       "BoardCaseDto": {
         "type": "object",
         "properties": {
@@ -4726,6 +5381,13 @@
                 "$ref": "#/components/schemas/DeliveryGroupRefDto"
               }
             ]
+          },
+          "sharedWith": {
+            "description": "Geteilter Beleg: aktive Helfer (angenommen|teil_erledigt) — leer, wenn nicht geteilt. Das Board rendert die Karte golden und zeigt „mit <Name>\" bzw. „n×\" (Konzept §4).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardParticipantDto"
+            }
           }
         },
         "required": [
@@ -4735,7 +5397,8 @@
           "status",
           "totalQuantity",
           "estimatedMinutes",
-          "effortPoints"
+          "effortPoints",
+          "sharedWith"
         ]
       },
       "BoardRouteStopDto": {
@@ -5200,6 +5863,16 @@
             "type": "string",
             "nullable": true,
             "description": "Digitale Ablage (C5): Weiterleitungs-Empfänger (retourenabteilung|lieferscheinbucher); null = nicht weitergeleitet"
+          },
+          "collaboration": {
+            "nullable": true,
+            "description": "Geteilter Beleg (Zusammenarbeit): Beteiligte + Prüf-Fortschritt; null, wenn der Beleg nie geteilt wurde. Von den Mitarbeiter-Sichten (/api/me/today, Aggregat) geliefert; Teamlead-Listen lassen es weg (dort BoardCaseDto.sharedWith bzw. CaseDetailDto.participants).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CaseCollaborationDto"
+              }
+            ]
           },
           "issues": {
             "description": "ALLE Meldungen des Belegs inkl. Einzel-Status + Instruktions-Verlauf (Kundenfeedback 04.08.2026). Vom Mitarbeiter-Tagesbündel und den Teamlead-Problem-Ansichten geliefert; schlanke Listen lassen es weg.",
@@ -5893,6 +6566,13 @@
               "$ref": "#/components/schemas/AuditEventDto"
             }
           },
+          "participants": {
+            "description": "Geteilter Beleg: ALLE Beteiligten (jeder Status, chronologisch) — leer, wenn der Beleg nie geteilt wurde. Fertige Belege behalten ihre Beteiligten (Konzept §4).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseParticipantDto"
+            }
+          },
           "deliveryGroup": {
             "nullable": true,
             "description": "Zugehörige Lieferung (Teamlead-Punkt 1): siblings + who holds them; null if standalone",
@@ -5911,7 +6591,8 @@
           "positions",
           "issues",
           "zstRecords",
-          "history"
+          "history",
+          "participants"
         ]
       },
       "PrioritizeDto": {
@@ -6515,6 +7196,237 @@
           }
         }
       },
+      "ColleagueDto": {
+        "type": "object",
+        "properties": {
+          "employeeNo": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "shiftToday": {
+            "type": "boolean",
+            "description": "true = heute im Dienst (aktive Schicht mit Kapazität)"
+          }
+        },
+        "required": [
+          "employeeNo",
+          "displayName",
+          "shiftToday"
+        ]
+      },
+      "InviteParticipantsDto": {
+        "type": "object",
+        "properties": {
+          "employeeNos": {
+            "description": "employeeNos der Einzuladenden",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "Nachricht an die Eingeladenen (optional, max. 500 Zeichen)"
+          }
+        },
+        "required": [
+          "employeeNos"
+        ]
+      },
+      "RespondInvitationDto": {
+        "type": "object",
+        "properties": {
+          "accept": {
+            "type": "boolean",
+            "description": "true = annehmen (grüner Haken), false = ablehnen (rotes Kreuz)"
+          }
+        },
+        "required": [
+          "accept"
+        ]
+      },
+      "ParticipantStatusResultDto": {
+        "type": "object",
+        "properties": {
+          "participantId": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "employeeNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "eingeladen",
+              "angenommen",
+              "abgelehnt",
+              "teil_erledigt",
+              "entfernt"
+            ],
+            "description": "CaseParticipantStatus nach dem Aufruf"
+          }
+        },
+        "required": [
+          "participantId",
+          "caseId",
+          "employeeNo",
+          "status"
+        ]
+      },
+      "NachrichtDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Beteiligungs-Id (Einladungen) bzw. Nachricht-Id (Teamlead)"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "einladung_erhalten",
+              "einladung_gesendet",
+              "teamlead"
+            ]
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bezugs-Beleg; null bei Teamlead-Nachricht ohne Bezug"
+          },
+          "weBelegNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "WE-Nr des Bezugs-Belegs"
+          },
+          "fromLabel": {
+            "type": "string",
+            "description": "Absender-Anzeige (Einladender, eigener Name oder „Teamleitung\")"
+          },
+          "toLabel": {
+            "type": "string",
+            "description": "Empfänger-Anzeige"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Nachrichtentext; null ohne Text"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO-8601 Zeitpunkt (Einladung bzw. Nachricht)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "offen",
+              "angenommen",
+              "abgelehnt",
+              "entfernt",
+              "gelesen",
+              "ungelesen"
+            ],
+            "description": "Einladungen: offen|angenommen|abgelehnt|entfernt (teil_erledigt zählt als angenommen); Teamlead-Nachrichten: gelesen|ungelesen"
+          },
+          "respondedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO-8601 Antwort- bzw. Gelesen-Zeitpunkt; null solange offen/ungelesen"
+          },
+          "participantId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Beteiligungs-Id für die Antwort-Tasten; null bei Teamlead-Nachrichten"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "fromLabel",
+          "toLabel",
+          "createdAt",
+          "status"
+        ]
+      },
+      "PosteingangDto": {
+        "type": "object",
+        "properties": {
+          "pendingCount": {
+            "type": "number",
+            "description": "Offene Einladungen an mich + ungelesene Teamlead-Nachrichten — die Zahl am Profilkreis"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NachrichtDto"
+            }
+          }
+        },
+        "required": [
+          "pendingCount",
+          "items"
+        ]
+      },
+      "CreateCollaborationDto": {
+        "type": "object",
+        "properties": {
+          "employeeNos": {
+            "description": "Mindestens zwei Mitarbeitende; der ERSTE ist Inhaber (Beleg landet in seinem Karren)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Pflicht-Grund des Eingriffs (§8.4 Audit)"
+          }
+        },
+        "required": [
+          "employeeNos",
+          "reason"
+        ]
+      },
+      "CollaborationResultDto": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "ownerEmployeeNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "employeeNo des Inhabers (Mitarbeiter des Bündels); null ohne Bündel"
+          },
+          "participants": {
+            "description": "Alle Beteiligten, chronologisch",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseParticipantDto"
+            }
+          }
+        },
+        "required": [
+          "caseId",
+          "participants"
+        ]
+      },
+      "RemoveParticipantDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Pflicht-Grund („Aus geteiltem Beleg entfernen\")"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "LocationDto": {
         "type": "object",
         "properties": {
@@ -6801,6 +7713,18 @@
           "source"
         ]
       },
+      "CollaborationRuleConfigDto": {
+        "type": "object",
+        "properties": {
+          "helpBeforeNextBundle": {
+            "type": "boolean",
+            "description": "Wer an einem geteilten Beleg beteiligt ist, bekommt kein neues Pack, bis alle Positionen geprüft sind"
+          }
+        },
+        "required": [
+          "helpBeforeNextBundle"
+        ]
+      },
       "LoadPlanRowDto": {
         "type": "object",
         "properties": {
@@ -6858,6 +7782,9 @@
           "inspection": {
             "$ref": "#/components/schemas/InspectionRuleConfigDto"
           },
+          "collaboration": {
+            "$ref": "#/components/schemas/CollaborationRuleConfigDto"
+          },
           "loadPlan": {
             "type": "array",
             "items": {
@@ -6872,6 +7799,7 @@
           "grouping",
           "shiftEnd",
           "inspection",
+          "collaboration",
           "loadPlan"
         ]
       },

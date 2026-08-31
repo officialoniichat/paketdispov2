@@ -48,6 +48,7 @@ import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -56,17 +57,20 @@ import CelebrationOutlinedIcon from '@mui/icons-material/CelebrationOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CheckroomOutlinedIcon from '@mui/icons-material/CheckroomOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import GroupsIcon from '@mui/icons-material/Groups';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import IosShareIcon from '@mui/icons-material/IosShare';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import {
   LABEL_PRINT_VARIANT_DISPLAY,
   summarizeLabelPrintVariants,
   type LabelPrintVariant,
 } from '@paket/domain-types';
-import { CaseCardSkeleton, LabelPrintVariantIcon, TouchButton } from '@paket/ui';
+import { CaseCardSkeleton, LabelPrintVariantIcon, TouchButton, ltColors } from '@paket/ui';
 import { IssueBadge } from '../components/IssueBadge.js';
 import { CatManChip } from '../components/CatManChip.js';
 import { Code128Barcode } from '../components/Code128Barcode.js';
+import { TeilenDialog } from '../components/TeilenDialog.js';
 import type { components } from '@paket/api-client';
 import { SessionExpiredError } from '../data/apiErrorHandling.js';
 import { getSession } from '../data/session.js';
@@ -141,6 +145,9 @@ const PULL_REASON_MSG: Record<string, string> = {
   no_shift: 'Heute keine Schicht eingeplant.',
   skill_tier: 'Belege werden dir von der Teamleitung zugeteilt.',
   continuation: 'Erst den offenen mehrtägigen Beleg fertigstellen.',
+  // Admin-Regel „Beim geteilten Beleg erst mithelfen" (Zusammenarbeit §5.4):
+  // gilt für Inhaber UND Helfer, solange am geteilten Beleg Positionen offen sind.
+  shared_case_open: 'Erst den geteilten Beleg zu Ende bringen – es sind noch Positionen offen.',
   error: 'Konnte nicht laden – bitte später erneut.',
 };
 
@@ -183,6 +190,60 @@ export function isCaseClosed(status: string): boolean {
 function isCaseParked(status: string): boolean {
   return status === 'issue_open';
 }
+
+/**
+ * Teilen-Symbol nur an Belegen, die das Backend zum Einladen zulässt
+ * (`assigned|in_progress|problem_resolved`, Zusammenarbeit §7) — ein rot
+ * geparkter Problemfall (issue_open) trägt keins (A7). Reine Sichtbarkeits-
+ * Spiegelung; die Regel selbst erzwingt der Server (409).
+ */
+function istTeilbar(status: string): boolean {
+  return status === 'assigned' || status === 'in_progress' || status === 'problem_resolved';
+}
+
+/** Anzeige-Daten der goldenen „geteilt"-Kennzeichnung einer Beleg-Karte. */
+export interface GeteiltInfo {
+  /** `'Geteilt mit <Name>'` bei genau einer anderen Person, sonst `'Geteilt · <n> Personen'`. */
+  label: string;
+  /** Geprüfte Positionen (alle Beteiligten zusammen). */
+  geprueft: number;
+  /** Positionen des Belegs gesamt. */
+  gesamt: number;
+}
+
+/**
+ * Geteilter Beleg (Zusammenarbeit 31.08.2026): golden markiert wird eine Karte
+ * erst, wenn neben MIR mindestens ein weiterer AKTIVER Beteiligter existiert —
+ * aktiv sind `angenommen` und `teil_erledigt` (Konzept §6); bloß Eingeladene
+ * oder Abgelehnte teilen (noch) nichts. Reine Anzeige-Ableitung aus dem
+ * Backend-DTO, keine eigene Fachlogik.
+ */
+export function geteiltInfo(
+  beleg: Pick<CaseSummaryDto, 'collaboration'>,
+  meineEmployeeNo: string | undefined,
+): GeteiltInfo | null {
+  const collab = beleg.collaboration;
+  if (collab === undefined || collab === null) return null;
+  const aktive = collab.participants.filter(
+    (p) => p.status === 'angenommen' || p.status === 'teil_erledigt',
+  );
+  const andere = aktive.filter((p) => p.employeeNo !== meineEmployeeNo);
+  const erste = andere[0];
+  if (erste === undefined) return null;
+  const label =
+    andere.length === 1
+      ? `Geteilt mit ${erste.displayName}`
+      : `Geteilt · ${aktive.length} Personen`;
+  return { label, geprueft: collab.confirmedPositionCount, gesamt: collab.positionCount };
+}
+
+/** Goldene Kennzeichnung (ltColors.shared) — nie Farbe allein: immer GroupsIcon + Text (E.6). */
+const GETEILT_CHIP_SX = {
+  bgcolor: ltColors.shared,
+  color: 'common.white',
+  fontWeight: 700,
+  '& .MuiChip-icon': { color: 'inherit' },
+} as const;
 
 /**
  * Eine Meldung wartet auf die Teamleitung, solange ihr Einzel-Status `open` ist
@@ -469,12 +530,18 @@ export function BundleHomeScreen(): JSX.Element {
   // Punkt 3 / Nachtrag 15.07.2026: welcher Beleg seine WE-Nr als Code-128 im
   // Pop-up (Modal) zeigt — kein neuer Tab/Fenster, kein QR.
   const [barcodeCaseId, setBarcodeCaseId] = useState<string | undefined>(undefined);
+  // Beleg-Zusammenarbeit (31.08.2026): welcher Beleg gerade den „Beleg teilen"-
+  // Dialog zeigt (Teilen-Symbol in der Ware-holen-Zeile).
+  const [teilenCaseId, setTeilenCaseId] = useState<string | undefined>(undefined);
 
   const bundle = data?.bundle;
   // `cases` sind bereits pack-gefiltert (Backend): aktives Pack + mitgenommene
   // Problem-Belege früherer Packs. Vorgeplante Folge-Packs kommen gar nicht erst
   // hier an — die UI hat dazu nichts zu entscheiden.
   const cases = data?.cases ?? [];
+  // „Geteilt mit dir" (Zusammenarbeit §3.5): Belege, an denen ich als HELFER
+  // beteiligt bin — sie liegen im Karren des Inhabers, nie im eigenen Bündel.
+  const sharedCases = data?.sharedCases ?? [];
   const pack = data?.pack ?? null;
   // Auch die Trennung aktiv/Mitnahme entscheidet das BACKEND (`carriedOver` je
   // Beleg, single source: pack-window). `pack.index` ist eine lücken-feste
@@ -540,9 +607,7 @@ export function BundleHomeScreen(): JSX.Element {
   };
 
   // B4 Parkposition: the Belege of not-yet-fetched stops go back to the pool.
-  const uncollectedCaseIds = stops
-    .filter((s) => !collectedIds.has(s.id))
-    .flatMap((s) => s.caseIds);
+  const uncollectedCaseIds = stops.filter((s) => !collectedIds.has(s.id)).flatMap((s) => s.caseIds);
 
   const handlePark = async (): Promise<void> => {
     setParkMsg(undefined);
@@ -594,6 +659,8 @@ export function BundleHomeScreen(): JSX.Element {
   const visibleCases = casesForDisplay(cases);
   // Nachtrag 15.07.2026: der Beleg, dessen WE-Nr aktuell im Barcode-Pop-up steht.
   const barcodeCase = cases.find((c) => c.id === barcodeCaseId);
+  // Der Beleg, dessen „Beleg teilen"-Dialog gerade offen ist (Zusammenarbeit).
+  const teilenBeleg = cases.find((c) => c.id === teilenCaseId);
   // „Alles fertig" ignoriert geparkte Problemfälle: die warten auf den Teamlead,
   // der MA kann sie nicht weiter bearbeiten (Kundenfeedback 14.07.2026, Punkt 10).
   // Genau das ist auch die Bedingung, unter der das Backend das nächste Pack
@@ -698,6 +765,9 @@ export function BundleHomeScreen(): JSX.Element {
                   const stopBelege = stop.caseIds
                     .map((id) => cases.find((c) => c.id === id))
                     .filter((c): c is NonNullable<typeof c> => Boolean(c));
+                  // `deriveStops` baut EINEN Container je Beleg — am (einzigen)
+                  // Beleg des Stops hängt das Teilen-Symbol (Zusammenarbeit §3.1).
+                  const ersterBeleg = stopBelege[0];
                   return (
                     <Paper
                       key={stop.id}
@@ -763,11 +833,29 @@ export function BundleHomeScreen(): JSX.Element {
                           ))}
                         </Stack>
                       </Box>
-                      <Chip
-                        size="small"
-                        color={isDone ? 'success' : 'default'}
-                        label={isDone ? 'geholt' : 'offen'}
-                      />
+                      {/* Rechte Spalte: Teilen-Symbol OBEN, Status-Chip darunter
+                          (Zusammenarbeit 31.08.2026). Chip-Text „geholt"/„offen"
+                          bleibt unverändert — die E2E-Helfer ankern darauf. */}
+                      <Stack spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
+                        {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
+                          <IconButton
+                            aria-label="Beleg teilen"
+                            onClick={(event) => {
+                              // Der Klick liegt in der abhakbaren Stop-Zeile —
+                              // er darf den Stop nicht auf „geholt" togglen.
+                              event.stopPropagation();
+                              setTeilenCaseId(ersterBeleg.id);
+                            }}
+                          >
+                            <IosShareIcon fontSize="small" />
+                          </IconButton>
+                        ) : null}
+                        <Chip
+                          size="small"
+                          color={isDone ? 'success' : 'default'}
+                          label={isDone ? 'geholt' : 'offen'}
+                        />
+                      </Stack>
                     </Paper>
                   );
                 })}
@@ -800,14 +888,15 @@ export function BundleHomeScreen(): JSX.Element {
                     color="text.secondary"
                     sx={{ ml: 1 }}
                   >
-                    {packCases.filter((c) => closedIds.has(c.id)).length}/{packCases.length} erledigt
+                    {packCases.filter((c) => closedIds.has(c.id)).length}/{packCases.length}{' '}
+                    erledigt
                   </Typography>
                 ) : null}
               </Typography>
               {!collectComplete && cases.length > 0 ? (
                 <Alert severity="info" sx={{ mb: 1 }}>
-                  Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger
-                  Reihenfolge starten.
+                  Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
+                  starten.
                 </Alert>
               ) : null}
 
@@ -826,6 +915,8 @@ export function BundleHomeScreen(): JSX.Element {
                   // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
                   const startable = isBelegStartable(b.id);
                   const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+                  // Goldene Kennzeichnung des geteilten Belegs (Zusammenarbeit).
+                  const geteilt = geteiltInfo(b, session?.employeeNo);
                   return (
                     <Paper
                       key={b.id}
@@ -839,6 +930,9 @@ export function BundleHomeScreen(): JSX.Element {
                         cursor: startable ? 'pointer' : 'not-allowed',
                         opacity: isBelegStartable(b.id) ? 1 : 0.5,
                         ...tint,
+                        // Goldene Linie des geteilten Belegs — nie Farbe allein:
+                        // dazu kommen GroupsIcon + Text im Karteninhalt.
+                        ...(geteilt ? { borderLeft: `4px solid ${ltColors.shared}` } : {}),
                       }}
                     >
                       {(b.issues?.length ?? 0) > 0 ? (
@@ -864,6 +958,24 @@ export function BundleHomeScreen(): JSX.Element {
                           ) : null}
                         </Stack>
                         <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                        {geteilt ? (
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{ mt: 0.5, flexWrap: 'wrap' }}
+                          >
+                            <Chip
+                              size="small"
+                              icon={<GroupsIcon />}
+                              label={geteilt.label}
+                              sx={GETEILT_CHIP_SX}
+                            />
+                            <Typography variant="body2" color="text.secondary">
+                              {geteilt.geprueft}/{geteilt.gesamt} geprüft
+                            </Typography>
+                          </Stack>
+                        ) : null}
                         {parked ? (
                           <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
                             Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen
@@ -871,11 +983,7 @@ export function BundleHomeScreen(): JSX.Element {
                           </Typography>
                         ) : null}
                         {resolved ? (
-                          <Typography
-                            variant="body2"
-                            color="success.main"
-                            sx={{ fontWeight: 600 }}
-                          >
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
                             Geklärt – zur Weiterbearbeitung freigegeben.
                           </Typography>
                         ) : null}
@@ -900,6 +1008,74 @@ export function BundleHomeScreen(): JSX.Element {
           )}
         </>
       )}
+
+      {/* „Geteilt mit dir" (Zusammenarbeit §3.5): Belege, an denen ich als
+          HELFER beteiligt bin. Sie liegen im Karren des Inhabers — hier gibt es
+          nichts zu holen, deshalb nie ausgegraut und ohne Holen-Gate. Der
+          Abschnitt erscheint auch ohne eigenes Bündel (Helfer kann leer sein). */}
+      {sharedCases.length > 0 ? (
+        <>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
+            Geteilt mit dir
+          </Typography>
+          <Stack spacing={1}>
+            {sharedCases.map((b) => {
+              const chip = statusChipFor(b.status);
+              const geteilt = geteiltInfo(b, session?.employeeNo);
+              const KategorieIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+              return (
+                <Paper
+                  key={b.id}
+                  variant="outlined"
+                  onClick={() => navigate(caseProcessPath(b.id))}
+                  sx={{
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    borderLeft: `4px solid ${ltColors.shared}`,
+                  }}
+                >
+                  {(b.issues?.length ?? 0) > 0 ? (
+                    <IssueBadge issues={b.issues ?? []} />
+                  ) : (
+                    <KategorieIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mt: 0.5, flexWrap: 'wrap' }}
+                    >
+                      <Chip
+                        size="small"
+                        icon={<GroupsIcon />}
+                        label={
+                          geteilt?.label ??
+                          (b.assignedEmployeeName
+                            ? `Geteilt mit ${b.assignedEmployeeName}`
+                            : 'Geteilt')
+                        }
+                        sx={GETEILT_CHIP_SX}
+                      />
+                      {geteilt ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Box>
+                  <Chip size="small" color={chip.color} label={chip.label} />
+                </Paper>
+              );
+            })}
+          </Stack>
+        </>
+      ) : null}
 
       {/* Pull-Prinzip: „Nächstes Pack anfordern". Ob das geht, entscheidet das
           Backend (`pack-window.ts`) — ist im laufenden Pack noch eigene Arbeit
@@ -963,6 +1139,12 @@ export function BundleHomeScreen(): JSX.Element {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Beleg-Zusammenarbeit (31.08.2026): „Beleg teilen" — Kolleg:innen zum
+          gemeinsamen Bearbeiten dieses Belegs einladen (Konzept §3.1). */}
+      {teilenBeleg !== undefined ? (
+        <TeilenDialog open beleg={teilenBeleg} onClose={() => setTeilenCaseId(undefined)} />
+      ) : null}
     </Box>
   );
 }

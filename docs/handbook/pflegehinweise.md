@@ -43,10 +43,20 @@ anders umgesetzt sind. Dokumentiert ist jeweils das **echte** Verhalten.
    ab und werden über den Tab `'Lagerplätze'` gepflegt, nicht über einen eigenen „Bereiche"-Tab.
    (Kapitel B7)
 
-7. **Mitarbeiter-App: kein Foto-Upload, keine kurzen Meldungen, kein Abmelden-Knopf.** Der
-   Problem-Bildschirm zeigt nur den Text `'Foto: optional'` ohne Upload-Funktion; Rückmeldungen
-   erscheinen als stehende Hinweis-Felder, nicht als aufblinkende Meldungen; ein Abmelden-Knopf ist
-   nicht vorhanden. (Kapitel A6/A7)
+7. **Mitarbeiter-App: kein Foto-Upload, keine kurz aufblinkenden Meldungen, kein Abmelden-Knopf
+   in einer Kopfzeile.** Der Problem-Bildschirm zeigt nur den Text `'Foto: optional'` ohne
+   Upload-Funktion. Rückmeldungen erscheinen als stehende Hinweis-Felder; auch die
+   Einladungs-Benachrichtigung zu einem geteilten Beleg (Kapitel A7) bleibt stehen, bis der
+   Mitarbeiter mit Haken oder Kreuz reagiert – es gibt keine Meldung, die von selbst verschwindet.
+   Eine Kopfzeile gibt es nicht mehr; `'Abmelden'` ist ein Eintrag im Menü des Profilkreises oben
+   rechts (`'Zur Teamlead-App'`, `'Nachrichten'`, `'Abmelden'`). (Kapitel A1/A6/A7/A8)
+
+8. **Geteilter Beleg (Kapitel A7, A2/A3/A5-Ergänzungen, B2/B3/B6/B7) wurde parallel zur
+   Implementierung geschrieben.** Bildschirmtexte und Abläufe stammen aus dem verbindlichen
+   Fachkonzept `docs/concept/beleg-zusammenarbeit-concept.md` (Stand 31.08.2026); nach Abschluss
+   der Implementierung sind diese Kapitel gegen die laufenden Apps gegenzuprüfen (insbesondere
+   Beschriftungen von Dialog, Benachrichtigung, `'Team-Ansicht'`, Kanban-Karte und Admin-Schalter).
+   Mit dem neuen Kapitel A7 ist die FAQ zu **A8** geworden; Verweise wurden angepasst.
 
 ## Browser-Viewer
 

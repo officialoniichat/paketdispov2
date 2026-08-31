@@ -2,6 +2,11 @@
 
 **Status:** umgesetzt (Backend + Cockpit) · Stand 2026-08-10
 **Begleitendes Mockup:** `docs/concept/beleg-split-multi-employee-ux-mockup.html` (UX-Vorlage des Dialogs)
+**Abgrenzung (31.08.2026):** Der Dialog `'Beleg aufteilen'` fragt seit dem Feature „Beleg gemeinsam
+bearbeiten" zuerst `'Wie wird gearbeitet?'` — der **vorausgewählte** Modus `'Gemeinsam bearbeiten'`
+ist EIN Beleg mit mehreren Beteiligten und kein Aufteilen (siehe
+`docs/concept/beleg-zusammenarbeit-concept.md`); der Modus `'In Teil-Belege aufteilen'` ist dieses
+Konzept, unverändert.
 
 ---
 

@@ -226,8 +226,22 @@ export const workflowEventTypeSchema = z.enum([
   // Ware-holen-Haken (B2): MA hat die Ware des Belegs am Lagerplatz geholt
   // (bzw. den Haken wieder entfernt — payload.collected sagt welche Richtung).
   'case.collected',
+  // „Position geprüft" / Ist-Menge je Größe — seit 31.08.2026 serverseitig persistiert
+  // und tatsächlich geschrieben (Payload: positionId/positionNo/confirmed bzw.
+  // skuLineId/confirmedQuantity/correctedVkPrice, jeweils employeeNo).
   'position.confirmed',
   'sku.quantity_confirmed',
+  // Geteilter Beleg (Zusammenarbeit, Konzept beleg-zusammenarbeit §7): Beteiligung
+  // als Overlay — Teamlead weist gemeinsam zu, MA laden ein, Eingeladene antworten,
+  // Beteiligte melden ihren Teil erledigt, Teamlead entfernt Helfer, der Beleg
+  // verlässt den Karren des Inhabers (Beteiligungen aufgelöst).
+  'case.collaboration_started',
+  'case.collaboration_invited',
+  'case.collaboration_accepted',
+  'case.collaboration_declined',
+  'case.collaboration_part_done',
+  'case.collaboration_participant_removed',
+  'case.collaboration_dissolved',
   'issue.created',
   // Instruktions-Loop je Einzel-Meldung (Kundenfeedback 04.08.2026): der Teamlead
   // instruiert jede Meldung einzeln; der MA kann mit einer Rückmeldung wieder öffnen.

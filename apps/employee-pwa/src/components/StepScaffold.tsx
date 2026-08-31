@@ -27,9 +27,22 @@ export interface StepScaffoldProps {
   primary?: PrimaryAction;
   /** Optional secondary action (e.g. Teilabschluss), rendered below the primary. */
   secondary?: PrimaryAction;
+  /**
+   * Bildschirm-Aktionen oben rechts (z. B. der Umschalter „Team-Ansicht") — der
+   * einzige Platz neben dem Titel. Sie halten Abstand zum fixierten Profilkreis
+   * (siehe {@link PROFILE_CIRCLE_GAP}), damit sich beide nie überlagern.
+   */
+  actions?: ReactNode;
   /** When set, a back affordance is shown so the worker can revise within the bundle. */
   onBack?: () => void;
 }
+
+/**
+ * Freiraum rechts für den fixierten Profilkreis (`ProfileMenu`: 40 px Avatar +
+ * 8 px Innenabstand + 8 px Ecke). Ohne ihn läge eine Bildschirm-Aktion unter dem
+ * Kreis und wäre nicht mehr antippbar.
+ */
+const PROFILE_CIRCLE_GAP = '56px';
 
 export function StepScaffold({
   where,
@@ -38,32 +51,36 @@ export function StepScaffold({
   children,
   primary,
   secondary,
+  actions,
   onBack,
 }: StepScaffoldProps): JSX.Element {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%', pb: 18 }}>
-      <Box sx={{ px: 2, pt: 2 }}>
-        {onBack ? (
-          <Button
-            onClick={onBack}
-            size="small"
-            sx={{ ml: -1, mb: 0.5, minWidth: 0 }}
-            aria-label="Zurück"
-          >
-            ‹ Zurück
-          </Button>
-        ) : null}
-        <Typography variant="overline" color="text.secondary" display="block">
-          {where}
-        </Typography>
-        <Typography variant="h1" sx={{ mb: subtitle ? 0.5 : 2 }}>
-          {title}
-        </Typography>
-        {subtitle ? (
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            {subtitle}
+      <Box sx={{ px: 2, pt: 2, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          {onBack ? (
+            <Button
+              onClick={onBack}
+              size="small"
+              sx={{ ml: -1, mb: 0.5, minWidth: 0 }}
+              aria-label="Zurück"
+            >
+              ‹ Zurück
+            </Button>
+          ) : null}
+          <Typography variant="overline" color="text.secondary" display="block">
+            {where}
           </Typography>
-        ) : null}
+          <Typography variant="h1" sx={{ mb: subtitle ? 0.5 : 2 }}>
+            {title}
+          </Typography>
+          {subtitle ? (
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+        {actions ? <Box sx={{ flexShrink: 0, mr: PROFILE_CIRCLE_GAP }}>{actions}</Box> : null}
       </Box>
       <Box sx={{ px: 2, flex: 1 }}>{children}</Box>
       <Stack

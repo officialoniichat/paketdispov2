@@ -26,7 +26,13 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { alpha } from '@mui/material/styles';
-import { assignmentStatusLabels } from '@paket/ui';
+import { assignmentStatusLabels, ltColors } from '@paket/ui';
+import {
+  GeteiltEntfernenMenu,
+  GeteiltHinweis,
+  geteiltEntfernenAction,
+  type GeteiltMenuPosition,
+} from '../../components/GeteiltChip.js';
 import { useCockpitData } from '../../data/store.js';
 import type { BoardCase, BoardRow } from '../../data/types.js';
 import type { PendingAction } from '../board/MitarbeiterBoard.js';
@@ -224,7 +230,12 @@ interface MatrixRowProps {
   /** Drop auf den „+ Nächstes Bündel"-Slot hinter der Trennwand. */
   onNaechstesPack: (row: BoardRow, drag: AblageDrag) => void;
   /** Ablage-Beleg zwischen zwei Belegen einsortieren (Geplant) bzw. Laufend-Frage. */
-  onEinsortieren: (row: BoardRow, ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
+  onEinsortieren: (
+    row: BoardRow,
+    ziel: BoardCase,
+    pos: 'davor' | 'danach',
+    drag: AblageDrag,
+  ) => void;
   /** 3-s-Fokus-Markierung der Zeile (Schnellaktion-Sprung aus dem Cockpit). */
   fokussiert: boolean;
 }
@@ -290,7 +301,11 @@ function MatrixRow({
       requestReason({
         title: `${src.weBelegNo} zu ${row.displayName} verschieben`,
         description: `Der Beleg wird aus dem Bündel von ${src.employeeName} entfernt und ${row.displayName} zugeteilt.`,
-        suggestions: ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+        suggestions: [
+          'Auslastung ausgleichen',
+          'Bereich passt besser',
+          'Auf Wunsch des Mitarbeiters',
+        ],
         optional: true,
         run: (reason) =>
           moveCase.mutate({
@@ -349,6 +364,7 @@ function MatrixRow({
       onDragEnd={onDragEnd}
       dragging={dragging}
       onEinsortieren={(ziel, pos, drag) => onEinsortieren(row, ziel, pos, drag)}
+      requestReason={requestReason}
     />
   );
 
@@ -384,8 +400,7 @@ function MatrixRow({
           outline: action !== null ? '1px dashed' : 'none',
           outlineColor: 'primary.light',
           outlineOffset: -2,
-          bgcolor:
-            over && action !== null ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
+          bgcolor: over && action !== null ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
         },
         // Schnellaktion-Fokus: 3-s-Markierung der betroffenen Zeile.
         fokussiert && FOKUS_MARKIERUNG_SX,
@@ -438,9 +453,7 @@ function MatrixRow({
           // er als Farbband über die Zelle — bedeckt er sie, kommt Pause/Weiter.
           <PauseHandle
             color={
-              row.shiftStart != null
-                ? shiftKindColor(shiftKindOfStart(row.shiftStart))
-                : '#b0bec5'
+              row.shiftStart != null ? shiftKindColor(shiftKindOfStart(row.shiftStart)) : '#b0bec5'
             }
             label={`${row.displayName}: Streifen über die Zelle ziehen für ${row.paused ? 'Weiter' : 'Pause'}`}
             onFire={fireSwipePause}
@@ -656,13 +669,7 @@ function PackBox({
 }
 
 /** Neuer-Slot-Dropzone am Zeilenende: nimmt ready-Ablage-Belege entgegen. */
-function NeuerSlot({
-  aktiv,
-  onDropZiel,
-}: {
-  aktiv: boolean;
-  onDropZiel: () => void;
-}): JSX.Element {
+function NeuerSlot({ aktiv, onDropZiel }: { aktiv: boolean; onDropZiel: () => void }): JSX.Element {
   const [over, setOver] = useState(false);
   return (
     <Box
@@ -695,9 +702,7 @@ function NeuerSlot({
         bgcolor: over && aktiv ? (t) => alpha(t.palette.primary.main, 0.08) : undefined,
       }}
     >
-      <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
-        + Nächstes Pack
-      </Typography>
+      <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>+ Nächstes Pack</Typography>
     </Box>
   );
 }
@@ -711,6 +716,8 @@ interface CaseStripProps {
   dragging: ExperimentDragPayload | null;
   /** Ablage-Beleg genau vor/nach diesem Strich einsortieren. */
   onEinsortieren: (ziel: BoardCase, pos: 'davor' | 'danach', drag: AblageDrag) => void;
+  /** §8.4-ReasonDialog des Parents — fürs Entfernen eines Helfers (Geteilter Beleg). */
+  requestReason: (action: PendingAction) => void;
 }
 
 /**
@@ -727,8 +734,10 @@ function CaseStrip({
   onDragEnd,
   dragging,
   onEinsortieren,
+  requestReason,
 }: CaseStripProps): JSX.Element {
   const navigate = useNavigate();
+  const { removeParticipant } = useCockpitData();
   const style = stripStyle(c.status);
   const color = style?.color ?? groupColor;
   // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen verschieden.
@@ -742,6 +751,11 @@ function CaseStrip({
       ? `abgeschlossen: ${stripStyle(c.status)?.statusLabel ?? c.status}`
       : 'kein Bündel';
   const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
+  // Geteilter Beleg (§4): goldener Strich; im Strich ist kein Platz für ein
+  // Personen-Symbol, deshalb führt hier NUR der Rechtsklick ins Entfernen-Menü.
+  const shared = c.sharedWith ?? [];
+  const istGeteilt = shared.length > 0;
+  const [geteiltMenu, setGeteiltMenu] = useState<GeteiltMenuPosition | null>(null);
   // Einsortieren aus der Ablage: Geplant positionsgenau, Laufend nur mit Frage.
   const [insertPos, setInsertPos] = useState<'davor' | 'danach' | null>(null);
   const sortierbar =
@@ -750,126 +764,187 @@ function CaseStrip({
     itemBundleId != null &&
     (c.status === 'assigned' || LAUFEND_STATUSES.includes(c.status));
   return (
-    // Hover irgendwo auf dem Strich → dieselbe Schnellinfo wie das „!" im Board.
-    <CaseQuickInfoTooltip c={c}>
-      <Box
-        onClick={() => navigate(`/belege/${c.caseId}`)}
-        draggable={draggable}
-        onDragStart={(e) => {
-          if (!draggable) return;
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', c.weBelegNo);
-          // Kein setDragImage: der ganze Strich wird als Geisterbild mitgezogen
-          // (Nutzer-Vorgabe — nicht nur die vier Griff-Punkte).
-          onDragStart({
-            source: 'matrix',
-            caseId: c.caseId,
-            weBelegNo: c.weBelegNo,
-            status: c.status,
-            bundleId: itemBundleId ?? '',
-            employeeId: row.employeeId,
-            employeeName: row.displayName,
-          });
-        }}
-        onDragEnd={onDragEnd}
-        onDragOver={(e) => {
-          if (!sortierbar) return;
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-          const r = e.currentTarget.getBoundingClientRect();
-          setInsertPos(e.clientY < r.top + r.height / 2 ? 'davor' : 'danach');
-        }}
-        onDragLeave={() => setInsertPos(null)}
-        onDrop={(e) => {
-          if (!sortierbar || insertPos === null || !ablageAssignbar(dragging)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          onEinsortieren(c, insertPos, dragging);
-          setInsertPos(null);
-        }}
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          px: 0.5,
-          py: 0.25,
-          borderRadius: 0.5,
-          borderLeft: '3px solid',
-          borderLeftColor: color ?? 'divider',
-          bgcolor: color ? alpha(color, 0.1) : 'action.hover',
-          cursor: 'pointer',
-          // Einfüge-Anzeiger: Linie oben/unten, ohne das Layout zu verschieben.
-          boxShadow: (t) =>
-            insertPos === 'davor'
-              ? `inset 0 2px 0 0 ${t.palette.primary.main}`
-              : insertPos === 'danach'
-                ? `inset 0 -2px 0 0 ${t.palette.primary.main}`
-                : 'none',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
-          {draggable ? (
-            <Box
-              role="button"
-              aria-label={`${c.weBelegNo} aus Bündel ziehen`}
-              onClick={(e) => e.stopPropagation()}
-              sx={{ cursor: 'grab', display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+    <>
+      {/* Hover irgendwo auf dem Strich → dieselbe Schnellinfo wie das „!" im Board. */}
+      <CaseQuickInfoTooltip c={c}>
+        <Box
+          onClick={() => navigate(`/belege/${c.caseId}`)}
+          onContextMenu={
+            istGeteilt
+              ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setGeteiltMenu({ top: e.clientY, left: e.clientX });
+                }
+              : undefined
+          }
+          draggable={draggable}
+          onDragStart={(e) => {
+            if (!draggable) return;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', c.weBelegNo);
+            // Kein setDragImage: der ganze Strich wird als Geisterbild mitgezogen
+            // (Nutzer-Vorgabe — nicht nur die vier Griff-Punkte).
+            onDragStart({
+              source: 'matrix',
+              caseId: c.caseId,
+              weBelegNo: c.weBelegNo,
+              status: c.status,
+              bundleId: itemBundleId ?? '',
+              employeeId: row.employeeId,
+              employeeName: row.displayName,
+            });
+          }}
+          onDragEnd={onDragEnd}
+          onDragOver={(e) => {
+            if (!sortierbar) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            const r = e.currentTarget.getBoundingClientRect();
+            setInsertPos(e.clientY < r.top + r.height / 2 ? 'davor' : 'danach');
+          }}
+          onDragLeave={() => setInsertPos(null)}
+          onDrop={(e) => {
+            if (!sortierbar || insertPos === null || !ablageAssignbar(dragging)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onEinsortieren(c, insertPos, dragging);
+            setInsertPos(null);
+          }}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            px: 0.5,
+            py: 0.25,
+            borderRadius: 0.5,
+            borderLeft: '3px solid',
+            // Geteilter Beleg (§4) golden — schlägt Status- und Lieferungsfarbe;
+            // der Status bleibt über Schriftfarbe/Durchstreichung erkennbar. Der
+            // Rahmen liegt als outline INNEN an, damit die Zeilenhöhe gleich bleibt
+            // (die border-Kurzschreibweisen oben würden sich sonst gegenseitig
+            // überschreiben).
+            borderLeftColor: istGeteilt ? ltColors.shared : (color ?? 'divider'),
+            bgcolor: istGeteilt
+              ? alpha(ltColors.shared, 0.12)
+              : color
+                ? alpha(color, 0.1)
+                : 'action.hover',
+            outline: istGeteilt ? `1px solid ${ltColors.shared}` : 'none',
+            outlineOffset: '-1px',
+            cursor: 'pointer',
+            // Einfüge-Anzeiger: Linie oben/unten, ohne das Layout zu verschieben.
+            boxShadow: (t) =>
+              insertPos === 'davor'
+                ? `inset 0 2px 0 0 ${t.palette.primary.main}`
+                : insertPos === 'danach'
+                  ? `inset 0 -2px 0 0 ${t.palette.primary.main}`
+                  : 'none',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 18 }}>
+            {draggable ? (
+              <Box
+                role="button"
+                aria-label={`${c.weBelegNo} aus Bündel ziehen`}
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  cursor: 'grab',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '&:active': { cursor: 'grabbing' },
+                }}
+              >
+                <DragDots />
+              </Box>
+            ) : (
+              // Frei/Fix: laufende und fertige Arbeit ist unantastbar (§7.1 lässt
+              // `move` nur auf `assigned` zu). Das Schloss steht an der Stelle der
+              // Griff-Punkte, damit „ziehbar" und „gesperrt" auf denselben Blick
+              // unterscheidbar sind.
+              <Box
+                aria-label={`${c.weBelegNo} ist gesperrt (${gesperrtGrund}) — nicht verschiebbar`}
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'not-allowed' }}
+              >
+                <LockOutlinedIcon sx={{ fontSize: 11, color: 'text.disabled' }} />
+              </Box>
+            )}
+            <Typography
+              sx={{
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                color: style?.color,
+                textDecoration: style?.strike ? 'line-through' : 'none',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
             >
-              <DragDots />
-            </Box>
-          ) : (
-            // Frei/Fix: laufende und fertige Arbeit ist unantastbar (§7.1 lässt
-            // `move` nur auf `assigned` zu). Das Schloss steht an der Stelle der
-            // Griff-Punkte, damit „ziehbar" und „gesperrt" auf denselben Blick
-            // unterscheidbar sind.
-            <Box
-              aria-label={`${c.weBelegNo} ist gesperrt (${gesperrtGrund}) — nicht verschiebbar`}
-              sx={{ display: 'flex', alignItems: 'center', cursor: 'not-allowed' }}
+              {c.weBelegNo}
+            </Typography>
+            {style && groupColor && (
+              // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
+              // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
+              <Box
+                aria-hidden
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: groupColor,
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            {istGeteilt && (
+              // Zwischen Belegnummer und „<n> Teile": nur die Anzahl, Namen im Tooltip.
+              <Box sx={{ flexShrink: 0 }}>
+                <GeteiltHinweis sharedWith={shared} dense />
+              </Box>
+            )}
+            <Typography
+              sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}
             >
-              <LockOutlinedIcon sx={{ fontSize: 11, color: 'text.disabled' }} />
-            </Box>
-          )}
-          <Typography
-            sx={{
-              fontSize: '0.66rem',
-              fontWeight: 600,
-              color: style?.color,
-              textDecoration: style?.strike ? 'line-through' : 'none',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {c.weBelegNo}
-          </Typography>
-          {style && groupColor && (
-            // Statusfarbe überschreibt die Lieferungs-Farbe — der Punkt erhält die
-            // Gruppen-Identität trotzdem sichtbar (Nutzer-Vorgabe).
-            <Box
+              {c.totalQuantity} Teile
+            </Typography>
+            <ErrorOutlineIcon
               aria-hidden
-              sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: groupColor, flexShrink: 0 }}
+              sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }}
             />
+          </Box>
+          {group && (
+            <Typography
+              sx={{
+                fontSize: '0.56rem',
+                color: 'text.secondary',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {lieferungSatz(group)}
+            </Typography>
           )}
-          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 'auto', flexShrink: 0 }}>
-            {c.totalQuantity} Teile
-          </Typography>
-          <ErrorOutlineIcon aria-hidden sx={{ fontSize: 11, color: 'text.secondary', flexShrink: 0 }} />
         </Box>
-        {group && (
-          <Typography
-            sx={{
-              fontSize: '0.56rem',
-              color: 'text.secondary',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {lieferungSatz(group)}
-          </Typography>
-        )}
-      </Box>
-    </CaseQuickInfoTooltip>
+      </CaseQuickInfoTooltip>
+      <GeteiltEntfernenMenu
+        position={geteiltMenu}
+        sharedWith={shared}
+        onClose={() => setGeteiltMenu(null)}
+        onWahl={(helfer) => {
+          setGeteiltMenu(null);
+          requestReason(
+            geteiltEntfernenAction(c.weBelegNo, helfer, (reason) =>
+              removeParticipant.mutate({
+                caseId: c.caseId,
+                employeeNo: helfer.employeeNo,
+                reason,
+              }),
+            ),
+          );
+        }}
+      />
+    </>
   );
 }
 
@@ -924,7 +999,9 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
           </Typography>
           {STRIP_LEGEND.map((l) => (
             <Stack key={l.text} direction="row" spacing={0.75} alignItems="center">
-              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: l.color, flexShrink: 0 }} />
+              <Box
+                sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: l.color, flexShrink: 0 }}
+              />
               <Typography
                 variant="caption"
                 sx={{ textDecoration: l.strike ? 'line-through' : 'none' }}
@@ -944,10 +1021,10 @@ export function MatrixInfo({ board }: { board: BoardRow[] }): JSX.Element {
           <Typography variant="caption">
             Ablage → Zeile: zuweisen · Beleg-Strich → anderes Pack (auch beim selben Mitarbeiter):
             umhängen · Beleg-Strich → andere Zeile: ans Bündel-Ende verschieben · Beleg-Strich →
-            Ablagen/rote Zone: entziehen · Hover auf einen Strich: Schnellinfo, Klick:
-            Belegdetails · Farbigen Schicht-Streifen links über die Namenszelle aufziehen, bis er
-            sie bedeckt (oder Wisch über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über
-            den Anschlag hinaus wechselt die Anordnung.
+            Ablagen/rote Zone: entziehen · Hover auf einen Strich: Schnellinfo, Klick: Belegdetails
+            · Farbigen Schicht-Streifen links über die Namenszelle aufziehen, bis er sie bedeckt
+            (oder Wisch über den Namen): Pause/Weiter · Fenster-Grenzen ziehen — über den Anschlag
+            hinaus wechselt die Anordnung.
           </Typography>
           <Typography variant="caption">
             Ein <b>Schloss</b> statt der Griff-Punkte heißt: unantastbar. Sobald der Mitarbeiter
@@ -1032,8 +1109,16 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
             {row.plannedTeile} Teile · {Math.round(row.utilisationPct)} % verplant
             {isManualOnlyTier(row.skillTier) ? ' · nur manuell' : ''}
           </Typography>
-          <RowInfoSection title={`Laufend (${laufend.length})`} cases={laufend} empty="Nichts in Arbeit." />
-          <RowInfoSection title={`Geplant (${geplant.length})`} cases={geplant} empty="Nichts geplant." />
+          <RowInfoSection
+            title={`Laufend (${laufend.length})`}
+            cases={laufend}
+            empty="Nichts in Arbeit."
+          />
+          <RowInfoSection
+            title={`Geplant (${geplant.length})`}
+            cases={geplant}
+            empty="Nichts geplant."
+          />
           {fertig.length > 0 && (
             <RowInfoSection title={`Fertig (${fertig.length})`} cases={fertig} empty="" />
           )}

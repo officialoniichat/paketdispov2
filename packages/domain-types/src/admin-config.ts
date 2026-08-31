@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { idSchema, isoDateSchema } from './primitives.js';
-import { inspectionSourceSchema, sectionCodeSchema } from './enums.js';
+import { inspectionSourceSchema } from './enums.js';
 
 /**
  * §11 Admin / Regelpflege — the one cohesive, structured rule configuration the
@@ -170,6 +170,24 @@ export const inspectionRuleConfigSchema = z.object({
 });
 export type InspectionRuleConfig = z.infer<typeof inspectionRuleConfigSchema>;
 
+/**
+ * Geteilter Beleg (Konzept beleg-zusammenarbeit §4/§5.4, 31.08.2026). Schalter
+ * „Beim geteilten Beleg erst mithelfen": wer an einem geteilten Beleg beteiligt ist,
+ * bekommt kein neues Pack (`shared_case_open`), bis alle Positionen geprüft sind —
+ * für Inhaber und Helfer gleichermaßen, solange der Beleg weder fertig noch beim
+ * Teamlead in Klärung ist. Standard: aus.
+ *
+ * `.default()` auf Feld UND Objekt: eine bereits persistierte rule_config ohne den
+ * Schlüssel parst weiter und erhält den Standard, statt auf DEFAULT_RULE_CONFIG
+ * zurückzufallen und die übrigen Cockpit-Einstellungen zu verlieren.
+ */
+export const collaborationRuleConfigSchema = z
+  .object({
+    helpBeforeNextBundle: z.boolean().default(false),
+  })
+  .default({});
+export type CollaborationRuleConfig = z.infer<typeof collaborationRuleConfigSchema>;
+
 /** One Verladeplan row (read-only in the cockpit). */
 export const loadPlanRowSchema = z.object({
   id: idSchema,
@@ -190,6 +208,7 @@ export const ruleConfigSchema = z.object({
   grouping: groupingRuleConfigSchema,
   shiftEnd: shiftEndRuleConfigSchema,
   inspection: inspectionRuleConfigSchema,
+  collaboration: collaborationRuleConfigSchema,
   loadPlan: z.array(loadPlanRowSchema),
 });
 export type RuleConfig = z.infer<typeof ruleConfigSchema>;
@@ -234,6 +253,10 @@ export const DEFAULT_RULE_CONFIG: RuleConfig = {
   },
   inspection: {
     source: 'prohandel',
+  },
+  // Geteilter Beleg: Standard aus — nach „Teilbeleg erledigt" darf Neues geholt werden.
+  collaboration: {
+    helpBeforeNextBundle: false,
   },
   loadPlan: [
     {

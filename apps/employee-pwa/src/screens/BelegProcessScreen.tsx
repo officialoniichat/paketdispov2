@@ -36,6 +36,14 @@
  * Fertige/gesperrte Belege (completed, zst_done, issue_open, cancelled) öffnen
  * als reine Ansicht (`flow.readOnly`): Hinweis-Banner statt Aktionen, Werte
  * statt Eingabe-Controls — kein Start-Übergang mehr für erledigte Belege.
+ *
+ * Geteilter Beleg (Zusammenarbeit 31.08.2026): Prüf-Haken, Ist-Mengen und
+ * Preiskorrekturen stehen serverseitig am Aggregat — „Position geprüft" trägt
+ * deshalb die Initialen des Prüfers, und der Stand überlebt das Neuladen. Oben
+ * rechts schaltet `'Team-Ansicht'` den Splitscreen ein (links mindestens die
+ * halbe Breite für die eigene Tabelle, rechts der Stand der anderen); unten
+ * heißt die Hauptaktion `'Teilbeleg erledigt'`, solange nicht alle Positionen
+ * geprüft sind.
  */
 import { useState, type JSX } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -54,12 +62,15 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
+import ToggleButton from '@mui/material/ToggleButton';
+import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { SvgIconComponent } from '@mui/icons-material';
 import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
 import CheckIcon from '@mui/icons-material/Check';
+import GroupsIcon from '@mui/icons-material/Groups';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PriceChangeOutlinedIcon from '@mui/icons-material/PriceChangeOutlined';
 import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
@@ -75,17 +86,28 @@ import {
 } from '@paket/domain-types';
 import { CaseCardSkeleton, LabelPrintVariantIcon, touchTarget } from '@paket/ui';
 import { CatManChip } from '../components/CatManChip.js';
+import { initials } from '../components/ProfileMenu.js';
 import { StepScaffold } from '../components/StepScaffold.js';
+import { TeamPane } from '../components/TeamPane.js';
 import { oskProps } from '../components/OnScreenKeyboard.js';
 import { ProblemDialog } from '../components/ProblemDialog.js';
 import { TeilabschlussDialog } from '../components/TeilabschlussDialog.js';
 import { apiBaseUrl } from '../data/api.js';
+import { getSession } from '../data/session.js';
 import { useReferenceDay } from '../data/useMeToday.js';
 import { useReopenIssue } from '../data/useReopenIssue.js';
+import { useTeamGlow } from '../data/useTeamGlow.js';
 import { PositionIssueBlock } from '../components/PositionIssueBlock.js';
 import type { PositionView } from '../domain/types.js';
 import { useCaseFlow } from '../workflow/useCaseFlow.js';
-import { canCompleteCase } from '../workflow/workflowModel.js';
+import {
+  allQuantitiesChecked,
+  canCompleteCase,
+  isSharedCase,
+  isSkuTouched,
+  istMenge,
+  myParticipation,
+} from '../workflow/workflowModel.js';
 import { TAGESSTART } from '../routes/paths.js';
 
 /**
@@ -370,7 +392,9 @@ const PROBLEM_ROW_SX = {
  * weiterhin öffnen und ansehen, aber nicht mehr bearbeiten — vorher stieß der
  * erste Tipper einen illegalen Start-Übergang an (completed → in_progress).
  */
-const READ_ONLY_NOTICE: Partial<Record<CaseStatus, { severity: 'success' | 'warning' | 'info'; text: string }>> = {
+const READ_ONLY_NOTICE: Partial<
+  Record<CaseStatus, { severity: 'success' | 'warning' | 'info'; text: string }>
+> = {
   completed: {
     severity: 'success',
     text: 'Dieser Beleg ist bereits erledigt. Nur Ansicht – Änderungen sind nicht mehr möglich.',
@@ -401,6 +425,11 @@ export function BelegProcessScreen(): JSX.Element {
   const reopenIssue = useReopenIssue(caseId);
   const [partialOpen, setPartialOpen] = useState(false);
   const [problemTarget, setProblemTarget] = useState<PositionView | null>(null);
+  // Geteilter Beleg (31.08.2026): Umschalter „Team-Ansicht" + kurzes Aufleuchten,
+  // wenn ein anderer Beteiligter etwas abhakt.
+  const [teamOpen, setTeamOpen] = useState(false);
+  const glow = useTeamGlow(caseId);
+  const meineEmployeeNo = getSession()?.employeeNo;
 
   if (flow.isError) {
     return (
@@ -435,12 +464,16 @@ export function BelegProcessScreen(): JSX.Element {
   const gate = canCompleteCase(progress, aggregate);
   // Teilabschluss ist nur möglich, wenn mindestens ein Problem vorliegt (das
   // Backend würde sonst ablehnen). Ein Problem = manuell erfasst ODER implizit
-  // (Mengen-/Preisabweichung).
+  // (Mengen-/Preisabweichung, jetzt aus dem Aggregat).
   const problemCount =
     progress.problems.length +
-    Object.keys(progress.confirmedQuantities).length +
-    Object.keys(progress.correctedVkPrices).length;
-  const checked = new Set(progress.quantityCheckedPositionIds);
+    aggregate.positions.flatMap((pos) => pos.skuLines).filter(isSkuTouched).length;
+  // Geteilter Beleg: mindestens ein ANDERER ist aktiv beteiligt. Meine eigene
+  // Beteiligungs-Zeile entscheidet, ob unten „Teilbeleg erledigt" steht.
+  const geteilt = isSharedCase(aggregate, meineEmployeeNo);
+  const meineBeteiligung = myParticipation(aggregate, meineEmployeeNo);
+  const teilErledigt = meineBeteiligung?.status === 'teil_erledigt';
+  const alleGeprueft = allQuantitiesChecked(aggregate);
   const infoPoints = [...aggregate.instructionPoints]
     .filter((p) => !ACTION_POINT_KEYS.has(p.key))
     .sort((a, b) => (POINT_DISPLAY_ORDER[a.key] ?? 99) - (POINT_DISPLAY_ORDER[b.key] ?? 99));
@@ -494,12 +527,44 @@ export function BelegProcessScreen(): JSX.Element {
     }
   };
 
+  /**
+   * Hauptaktion unten: Solange am geteilten Beleg noch Positionen offen sind und
+   * ich aktiv beteiligt bin, melde ich nur MEINEN Anteil („Teilbeleg erledigt",
+   * Konzept §3.7) — der Beleg selbst ändert sich dabei nicht, und ich darf
+   * weiter mithelfen. Sind alle Positionen geprüft (oder ist der Beleg nicht
+   * geteilt), heißt die Aktion wie gewohnt „Beleg erledigt".
+   */
+  const primaryAction =
+    geteilt && !alleGeprueft && meineBeteiligung?.status === 'angenommen'
+      ? {
+          label: 'Teilbeleg erledigt',
+          onClick: () => void flow.partDone(),
+          // Doppeltipp-Schutz: der zweite POST bekäme 409 („bereits erledigt")
+          // und zeigte einen Fehler, obwohl die Meldung erfolgreich war.
+          disabled: flow.partDonePending,
+        }
+      : { label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok };
+
   return (
     <StepScaffold
       where={`Lagerplatz ${aggregate.case.storageLocation?.code ?? '—'}`}
       title={`WE ${aggregate.case.weBelegNo}`}
       onBack={() => navigate(TAGESSTART)}
-      primary={readOnly ? undefined : { label: 'Beleg erledigt', onClick: finish, disabled: !gate.ok }}
+      actions={
+        geteilt ? (
+          <ToggleButton
+            value="team"
+            size="small"
+            selected={teamOpen}
+            onChange={() => setTeamOpen((open) => !open)}
+            sx={{ gap: 0.5, whiteSpace: 'nowrap' }}
+          >
+            <GroupsIcon fontSize="small" />
+            Team-Ansicht
+          </ToggleButton>
+        ) : undefined
+      }
+      primary={readOnly ? undefined : primaryAction}
       secondary={
         readOnly
           ? undefined
@@ -510,544 +575,594 @@ export function BelegProcessScreen(): JSX.Element {
             }
       }
     >
-      <Stack spacing={2}>
-        {readOnlyNotice ? (
-          <Alert severity={readOnlyNotice.severity}>{readOnlyNotice.text}</Alert>
-        ) : null}
-        {/* Kompakte Fakten-Leiste: Warenart · Menge · CatMan-Termin — scanbar,
+      {/* Splitscreen der Team-Ansicht: links die eigene Tabelle (mindestens die
+          halbe Breite), rechts der Stand der anderen Beteiligten (§3.6). */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: 'flex-start',
+          gap: 2,
+        }}
+      >
+        <Stack spacing={2} sx={{ flex: '1 1 50%', minWidth: 0, width: '100%' }}>
+          {readOnlyNotice ? (
+            <Alert severity={readOnlyNotice.severity}>{readOnlyNotice.text}</Alert>
+          ) : null}
+          {/* Kompakte Fakten-Leiste: Warenart · Menge · CatMan-Termin — scanbar,
             ohne Fließtext (Nachtrag 15.07.2026). Der CatMan-Termin ist der vom
             Backend aggregierte früheste Termin des Belegs: er steht hier im Kopf,
             damit man ihn nicht erst in den Positionszeilen suchen muss. Die
             Positions-Chips unten bleiben die Detail-Quelle (welche Position
             wann fällig ist). */}
-        <Stack
-          direction="row"
-          spacing={2.5}
-          alignItems="center"
-          sx={{ flexWrap: 'wrap', rowGap: 1 }}
-        >
-          {c.goodsTypeText ? (
-            <Chip color="secondary" sx={{ fontWeight: 700 }} label={c.goodsTypeText} />
-          ) : null}
-          <Box>
-            <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
-              {c.totalQuantity}
-            </Typography>{' '}
-            <Typography component="span" variant="body2" color="text.secondary">
-              Teile
-            </Typography>
-          </Box>
-          <CatManChip date={c.catManDate} referenceDay={referenceDay} size="medium" />
-        </Stack>
+          <Stack
+            direction="row"
+            spacing={2.5}
+            alignItems="center"
+            sx={{ flexWrap: 'wrap', rowGap: 1 }}
+          >
+            {c.goodsTypeText ? (
+              <Chip color="secondary" sx={{ fontWeight: 700 }} label={c.goodsTypeText} />
+            ) : null}
+            <Box>
+              <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
+                {c.totalQuantity}
+              </Typography>{' '}
+              <Typography component="span" variant="body2" color="text.secondary">
+                Teile
+              </Typography>
+            </Box>
+            <CatManChip date={c.catManDate} referenceDay={referenceDay} size="medium" />
+          </Stack>
 
-        {/* Kundenfeedback 03.08.2026: WELCHE Etikett-Varianten stecken in diesem
+          {/* Kundenfeedback 03.08.2026: WELCHE Etikett-Varianten stecken in diesem
             Beleg? Nur die tatsächlich vorkommenden — ein einheitlicher Beleg zeigt
             genau eine. Dieselbe Zusammenfassung steht unter „1 · Ware holen". */}
-        {belegVariants.length > 0 ? (
-          <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-            <Typography variant="body2" color="text.secondary">
-              Etiketten:
-            </Typography>
-            {belegVariants.map((variant) => (
-              <LabelPrintVariantChip key={variant} variant={variant} />
-            ))}
-          </Stack>
-        ) : null}
+          {belegVariants.length > 0 ? (
+            <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+              <Typography variant="body2" color="text.secondary">
+                Etiketten:
+              </Typography>
+              {belegVariants.map((variant) => (
+                <LabelPrintVariantChip key={variant} variant={variant} />
+              ))}
+            </Stack>
+          ) : null}
 
-        {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
-        {infoPoints.length > 0 ? (
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Arbeitsanweisung
-            </Typography>
-            <Stack spacing={0.75}>
-              {infoPoints.map((point, index) => {
-                const isInspection = point.key === 'goods_receipt_check';
-                return (
-                  <Box key={point.key} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontWeight: 700, minWidth: 22, color: 'text.secondary' }}
-                    >
-                      {index + 1}
-                    </Typography>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Arbeitsanweisung — faithful ordered points minus the upstream/ZST ones. */}
+          {infoPoints.length > 0 ? (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Arbeitsanweisung
+              </Typography>
+              <Stack spacing={0.75}>
+                {infoPoints.map((point, index) => {
+                  const isInspection = point.key === 'goods_receipt_check';
+                  return (
+                    <Box key={point.key} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
                       <Typography
                         variant="body2"
-                        sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}
+                        sx={{ fontWeight: 700, minWidth: 22, color: 'text.secondary' }}
                       >
-                        {point.label}
-                        {isInspection && aggregate.inspectionLevelLabel
-                          ? ` · ${aggregate.inspectionLevelLabel}`
-                          : ''}
-                        {isInspection && aggregate.inspectionDescription ? (
-                          <Tooltip
-                            title={aggregate.inspectionDescription}
-                            arrow
-                            enterTouchDelay={0}
-                            leaveTouchDelay={8000}
-                          >
-                            <InfoOutlinedIcon
-                              fontSize="small"
-                              tabIndex={0}
-                              aria-label={`Was heißt das? ${aggregate.inspectionDescription}`}
-                              sx={{
-                                color: 'text.secondary',
-                                cursor: 'help',
-                                p: '6px',
-                                boxSizing: 'content-box',
-                              }}
-                            />
-                          </Tooltip>
-                        ) : null}
+                        {index + 1}
                       </Typography>
-                      {!(isInspection && aggregate.inspectionLevelLabel === point.value) ? (
-                        <Typography variant="body2" color="text.secondary">
-                          {point.value}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                          {point.label}
+                          {isInspection && aggregate.inspectionLevelLabel
+                            ? ` · ${aggregate.inspectionLevelLabel}`
+                            : ''}
+                          {isInspection && aggregate.inspectionDescription ? (
+                            <Tooltip
+                              title={aggregate.inspectionDescription}
+                              arrow
+                              enterTouchDelay={0}
+                              leaveTouchDelay={8000}
+                            >
+                              <InfoOutlinedIcon
+                                fontSize="small"
+                                tabIndex={0}
+                                aria-label={`Was heißt das? ${aggregate.inspectionDescription}`}
+                                sx={{
+                                  color: 'text.secondary',
+                                  cursor: 'help',
+                                  p: '6px',
+                                  boxSizing: 'content-box',
+                                }}
+                              />
+                            </Tooltip>
+                          ) : null}
                         </Typography>
-                      ) : null}
+                        {!(isInspection && aggregate.inspectionLevelLabel === point.value) ? (
+                          <Typography variant="body2" color="text.secondary">
+                            {point.value}
+                          </Typography>
+                        ) : null}
+                      </Box>
                     </Box>
-                  </Box>
-                );
-              })}
-            </Stack>
-          </Paper>
-        ) : null}
+                  );
+                })}
+              </Stack>
+            </Paper>
+          ) : null}
 
-        <Typography variant="subtitle2">Positionen</Typography>
-        {!readOnly && wi.goodsReceiptCheckMode === 'quantity_only' ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
-            Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".
-          </Typography>
-        ) : null}
-        {!readOnly ? (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-            Dieser Fortschritt geht beim Neuladen der Seite verloren – erst „Beleg erledigt" oder
-            der Teilabschluss sichert ihn dauerhaft.
-          </Typography>
-        ) : null}
-        {/* A1: EINE Tabelle über alle Positionen mit STICKY Kopfzeile (Punkt 3). Die
+          <Typography variant="subtitle2">Positionen</Typography>
+          {!readOnly && wi.goodsReceiptCheckMode === 'quantity_only' ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+              Jede Position prüfen – auch bei Prüfung Wareneingang = „Nein".
+            </Typography>
+          ) : null}
+          {/* A1: EINE Tabelle über alle Positionen mit STICKY Kopfzeile (Punkt 3). Die
             Tabelle scrollt vertikal in ihrem Container; die Spaltenüberschriften
             bleiben oben stehen. EK/VK/VK-Etikett/Etikettpreis stehen rechts. */}
-        <Paper variant="outlined">
-          <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100dvh - 340px)' }}>
-            <Table
-              stickyHeader
-              aria-label="Positionen"
-              sx={{
-                tableLayout: 'fixed',
-                minWidth: 1440,
-                '& .MuiTableCell-root': { fontSize: '1.0625rem', py: 1 },
-              }}
-            >
-              <colgroup>
-                {columns.map((col) => (
-                  <col key={col.key} style={{ width: widthOf(col) }} />
-                ))}
-              </colgroup>
-              <TableHead>
-                <TableRow>
+          <Paper variant="outlined">
+            <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100dvh - 340px)' }}>
+              <Table
+                stickyHeader
+                aria-label="Positionen"
+                sx={{
+                  tableLayout: 'fixed',
+                  minWidth: 1440,
+                  '& .MuiTableCell-root': { fontSize: '1.0625rem', py: 1 },
+                }}
+              >
+                <colgroup>
                   {columns.map((col) => (
-                    <TableCell
-                      key={col.key}
-                      align={col.align}
-                      sx={{ fontWeight: 700, whiteSpace: 'nowrap', bgcolor: 'background.paper' }}
-                    >
-                      {col.label}
-                    </TableCell>
+                    <col key={col.key} style={{ width: widthOf(col) }} />
                   ))}
-                </TableRow>
-              </TableHead>
-              {aggregate.positions.map((pos) => {
-                const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
-                const isChecked = checked.has(pos.id);
-                const flags = FLAG_CHIPS.filter(
-                  (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
-                );
-                const i = pos.instruction;
-                // Nur bei „Etikett mit Preis" steht ein Preis auf dem Etikett, der
-                // gegen den VK-Etikett-Preis zu prüfen wäre.
-                const checksPrintedPrice = printedPriceCheckRequired(i.labelPrintVariant);
-                const manualProblems = manualByPosition.get(pos.id) ?? [];
-                // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
-                // Position") markiert die gesamte Position rot — Kopfzeile und
-                // alle Größenzeilen. Gemeldete Server-Meldungen zählen mit,
-                // solange sie OFFEN sind; instruierte zeigen stattdessen den
-                // grünen TL-Hinweis-Block.
-                const positionIssues = issuesByPosition.get(pos.id) ?? [];
-                const openIssueAtPosition = positionIssues.some((x) => x.status === 'open');
-                const positionWideProblem =
-                  openIssueAtPosition || manualProblems.some((x) => x.skuLineId === undefined);
-                // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
-                // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
-                const metaText = [
-                  pos.hShopNo ? `HS ${pos.hShopNo}` : null,
-                  `Shop ${pos.shopNo}`,
-                  pos.floor ? `Etage ${pos.floor}` : null,
-                  pos.branchNo ? `Filiale ${pos.branchNo}` : null,
-                  c.primaryShopAreaNo ? `Bereich ${c.primaryShopAreaNo}` : null,
-                ]
-                  .filter((part): part is string => part !== null)
-                  .join(' · ');
-                // Preisetikett + Sicherung stehen als Piktogramm-Karten (unten);
-                // hier bleiben nur die textlichen Zusatz-Hinweise.
-                const instructionLines = [
-                  i.onlineHandlingRequired && i.onlineHandlingLocation
-                    ? `Online: ${i.onlineHandlingLocation}`
-                    : null,
-                  i.notes ? `Hinweis: ${i.notes}` : null,
-                ].filter((line): line is string => line !== null);
-                return (
-                  <TableBody key={pos.id}>
-                    <TableRow
-                      sx={positionWideProblem ? PROBLEM_ROW_SX : { bgcolor: 'action.hover' }}
-                    >
-                      <TableCell sx={{ verticalAlign: 'top' }}>
-                        <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.15 }}>
-                          Pos {pos.positionNo}
-                        </Typography>
+                </colgroup>
+                <TableHead>
+                  <TableRow>
+                    {columns.map((col) => (
+                      <TableCell
+                        key={col.key}
+                        align={col.align}
+                        sx={{ fontWeight: 700, whiteSpace: 'nowrap', bgcolor: 'background.paper' }}
+                      >
+                        {col.label}
                       </TableCell>
-                      <TableCell colSpan={columns.length - 1} sx={{ verticalAlign: 'top' }}>
-                        <Stack
-                          direction="row"
-                          spacing={2}
-                          justifyContent="space-between"
-                          alignItems="flex-start"
-                        >
-                          <Box sx={{ minWidth: 0 }}>
-                            <Stack
-                              direction="row"
-                              alignItems="center"
-                              sx={{ flexWrap: 'wrap', gap: 0.75 }}
-                            >
-                              {/* D3: Artikel-Nr. + Farbe in derselben Schriftgröße. */}
-                              <Typography sx={{ fontWeight: 700 }}>
-                                {pos.supplierArticleNo} · {pos.supplierColor}
-                              </Typography>
-                              {pos.nosFlag ? (
-                                <Chip
-                                  size="small"
-                                  color="success"
-                                  icon={<AutorenewOutlinedIcon />}
-                                  label="NOS"
-                                />
-                              ) : null}
-                              {!pos.nosFlag && positionWarenart(pos) ? (
-                                <Chip
-                                  size="small"
-                                  color="secondary"
-                                  variant="outlined"
-                                  label={positionWarenart(pos)}
-                                />
-                              ) : null}
-                              {/* Etikett-Druckvariante DIESER Position — steht vor den
+                    ))}
+                  </TableRow>
+                </TableHead>
+                {aggregate.positions.map((pos) => {
+                  const soll = pos.skuLines.reduce((sum, s) => sum + s.expectedQuantity, 0);
+                  // „Position geprüft" steht serverseitig am Aggregat (Konzept §2).
+                  const isChecked = pos.confirmedBy !== undefined;
+                  const flags = FLAG_CHIPS.filter(
+                    (f) => (pos.instruction as Record<string, unknown>)[f.key] === true,
+                  );
+                  const i = pos.instruction;
+                  // Nur bei „Etikett mit Preis" steht ein Preis auf dem Etikett, der
+                  // gegen den VK-Etikett-Preis zu prüfen wäre.
+                  const checksPrintedPrice = printedPriceCheckRequired(i.labelPrintVariant);
+                  const manualProblems = manualByPosition.get(pos.id) ?? [];
+                  // Punkt 9 (generisch): ein Problem OHNE gewählte Größe („Ganze
+                  // Position") markiert die gesamte Position rot — Kopfzeile und
+                  // alle Größenzeilen. Gemeldete Server-Meldungen zählen mit,
+                  // solange sie OFFEN sind; instruierte zeigen stattdessen den
+                  // grünen TL-Hinweis-Block.
+                  const positionIssues = issuesByPosition.get(pos.id) ?? [];
+                  const openIssueAtPosition = positionIssues.some((x) => x.status === 'open');
+                  const positionWideProblem =
+                    openIssueAtPosition || manualProblems.some((x) => x.skuLineId === undefined);
+                  // Positions-Kontext als horizontale Meta-Zeile unter dem Artikeltitel
+                  // (Nachtrag 15.07.2026): HS · Shop · Etage · Filiale · Bereich, CatMan als Chip.
+                  const metaText = [
+                    pos.hShopNo ? `HS ${pos.hShopNo}` : null,
+                    `Shop ${pos.shopNo}`,
+                    pos.floor ? `Etage ${pos.floor}` : null,
+                    pos.branchNo ? `Filiale ${pos.branchNo}` : null,
+                    c.primaryShopAreaNo ? `Bereich ${c.primaryShopAreaNo}` : null,
+                  ]
+                    .filter((part): part is string => part !== null)
+                    .join(' · ');
+                  // Preisetikett + Sicherung stehen als Piktogramm-Karten (unten);
+                  // hier bleiben nur die textlichen Zusatz-Hinweise.
+                  const instructionLines = [
+                    i.onlineHandlingRequired && i.onlineHandlingLocation
+                      ? `Online: ${i.onlineHandlingLocation}`
+                      : null,
+                    i.notes ? `Hinweis: ${i.notes}` : null,
+                  ].filter((line): line is string => line !== null);
+                  return (
+                    <TableBody key={pos.id}>
+                      <TableRow
+                        sx={positionWideProblem ? PROBLEM_ROW_SX : { bgcolor: 'action.hover' }}
+                      >
+                        <TableCell sx={{ verticalAlign: 'top' }}>
+                          <Typography
+                            sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.15 }}
+                          >
+                            Pos {pos.positionNo}
+                          </Typography>
+                        </TableCell>
+                        <TableCell colSpan={columns.length - 1} sx={{ verticalAlign: 'top' }}>
+                          <Stack
+                            direction="row"
+                            spacing={2}
+                            justifyContent="space-between"
+                            alignItems="flex-start"
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Stack
+                                direction="row"
+                                alignItems="center"
+                                sx={{ flexWrap: 'wrap', gap: 0.75 }}
+                              >
+                                {/* D3: Artikel-Nr. + Farbe in derselben Schriftgröße. */}
+                                <Typography sx={{ fontWeight: 700 }}>
+                                  {pos.supplierArticleNo} · {pos.supplierColor}
+                                </Typography>
+                                {pos.nosFlag ? (
+                                  <Chip
+                                    size="small"
+                                    color="success"
+                                    icon={<AutorenewOutlinedIcon />}
+                                    label="NOS"
+                                  />
+                                ) : null}
+                                {!pos.nosFlag && positionWarenart(pos) ? (
+                                  <Chip
+                                    size="small"
+                                    color="secondary"
+                                    variant="outlined"
+                                    label={positionWarenart(pos)}
+                                  />
+                                ) : null}
+                                {/* Etikett-Druckvariante DIESER Position — steht vor den
                                   übrigen Anweisungs-Chips, weil sie den Druckauftrag steuert. */}
-                              <LabelPrintVariantChip variant={i.labelPrintVariant} />
-                              {flags.map((f) => (
-                                <Chip
-                                  key={f.key}
-                                  size="small"
-                                  color={f.color}
-                                  icon={<f.Icon />}
-                                  label={f.label}
-                                />
-                              ))}
-                            </Stack>
+                                <LabelPrintVariantChip variant={i.labelPrintVariant} />
+                                {flags.map((f) => (
+                                  <Chip
+                                    key={f.key}
+                                    size="small"
+                                    color={f.color}
+                                    icon={<f.Icon />}
+                                    label={f.label}
+                                  />
+                                ))}
+                              </Stack>
 
-                            {/* Warenbezeichnung: WGR mit Klartext (+ Saison). */}
-                            <Typography variant="body2" color="text.secondary">
-                              WGR {pos.wgr}
-                              {WGR_DESCRIPTION.get(pos.wgr)
-                                ? ` ${WGR_DESCRIPTION.get(pos.wgr)}`
-                                : ''}
-                              {pos.season ? ` · Saison ${pos.season}` : ''}
-                            </Typography>
-
-                            {/* Nachtrag 15.07.2026: Positions-Kontext als horizontale
-                                Meta-Zeile — HS · Shop · Etage · Filiale · Bereich, CatMan als Chip. */}
-                            <Stack
-                              direction="row"
-                              alignItems="center"
-                              sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}
-                            >
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {metaText}
+                              {/* Warenbezeichnung: WGR mit Klartext (+ Saison). */}
+                              <Typography variant="body2" color="text.secondary">
+                                WGR {pos.wgr}
+                                {WGR_DESCRIPTION.get(pos.wgr)
+                                  ? ` ${WGR_DESCRIPTION.get(pos.wgr)}`
+                                  : ''}
+                                {pos.season ? ` · Saison ${pos.season}` : ''}
                               </Typography>
-                              {/* CatMan-Chip nur mit echtem Termin-Datum — ein bloßes
+
+                              {/* Nachtrag 15.07.2026: Positions-Kontext als horizontale
+                                Meta-Zeile — HS · Shop · Etage · Filiale · Bereich, CatMan als Chip. */}
+                              <Stack
+                                direction="row"
+                                alignItems="center"
+                                sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.75 }}
+                              >
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {metaText}
+                                </Typography>
+                                {/* CatMan-Chip nur mit echtem Termin-Datum — ein bloßes
                                   Kennzeichen ohne Datum wäre nur Rauschen (Nachtrag
                                   15.07.2026). Überschritten ⇒ rot „überfällig". */}
-                              <CatManChip date={pos.catManDate} referenceDay={referenceDay} />
-                            </Stack>
+                                <CatManChip date={pos.catManDate} referenceDay={referenceDay} />
+                              </Stack>
 
-                            {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
+                              {/* Arbeitsschritt-Piktogramme (AW-Bildsprache): Preisetikett
                                 anbringen + Sichern, groß und wiedererkennbar. Der
                                 Meldungs-Container (PositionIssueBlock) steht in DERSELBEN
                                 Zeile NEBEN den Piktogrammen, nicht darunter
                                 (Nutzer-Vorgabe 04.08.2026). */}
-                            {labelPrintRequired(i.labelPrintVariant) ||
-                            (i.securityRequired && i.securityTypeCode) ||
-                            positionIssues.length > 0 ? (
-                              <Stack
-                                direction="row"
-                                alignItems="flex-start"
-                                sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}
-                              >
-                                {labelPrintRequired(i.labelPrintVariant) ? (
-                                  <WorkStepPictogram
-                                    code={ETIKETT_PICTOGRAM_CODE}
-                                    title={
-                                      printedPriceCheckRequired(i.labelPrintVariant)
-                                        ? 'Preisetikett anbringen'
-                                        : 'Etikett ohne Preis anbringen'
-                                    }
-                                    subtitle={i.priceLabelAttachLocation ?? undefined}
-                                  />
-                                ) : null}
-                                {i.securityRequired && i.securityTypeCode ? (
-                                  <WorkStepPictogram
-                                    code={i.securityTypeCode}
-                                    title={`Sichern: ${PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}`}
-                                    subtitle={i.securityLocation ?? undefined}
-                                  />
-                                ) : null}
-                                <PositionIssueBlock
-                                  issues={positionIssues}
-                                  onReopen={(issueId, text) => reopenIssue.mutate({ issueId, text })}
-                                  reopenPending={reopenIssue.isPending}
-                                />
-                              </Stack>
-                            ) : null}
-
-                            {instructionLines.length > 0 ? (
-                              <Stack
-                                direction="row"
-                                sx={{ mt: 0.5, flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}
-                              >
-                                {instructionLines.map((line) => (
-                                  <Typography key={line} variant="body2" color="text.secondary">
-                                    {line}
-                                  </Typography>
-                                ))}
-                              </Stack>
-                            ) : null}
-
-                            {/* Punkt 9: farbliche Markierung der erfassten manuellen Probleme. */}
-                            {manualProblems.length > 0 ? (
-                              <Stack direction="row" sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}>
-                                {manualProblems.map((problem) => (
-                                  <Chip
-                                    key={problem.id}
-                                    size="small"
-                                    color="error"
-                                    variant="filled"
-                                    label={
-                                      problem.note
-                                        ? `${problem.reasonLabel}: ${problem.note}`
-                                        : problem.reasonLabel
-                                    }
-                                    onDelete={() => flow.removeProblem(problem.id)}
-                                  />
-                                ))}
-                              </Stack>
-                            ) : null}
-
-                          </Box>
-
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ flexShrink: 0 }}
-                          >
-                            <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              Soll gesamt {soll}
-                            </Typography>
-                            {/* Nur-Ansicht: keine Prüf-/Problem-Aktionen an fertigen Belegen. */}
-                            {!readOnly ? (
-                              <>
-                                {isChecked ? (
-                                  <Chip
-                                    color="success"
-                                    icon={<CheckIcon />}
-                                    label="Position geprüft"
-                                    onClick={() => void flow.togglePositionChecked(pos.id)}
-                                    sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
-                                  />
-                                ) : (
-                                  <Button
-                                    variant="contained"
-                                    onClick={() => void flow.togglePositionChecked(pos.id)}
-                                  >
-                                    Position geprüft
-                                  </Button>
-                                )}
-                                <Button
-                                  color="error"
-                                  variant="text"
-                                  onClick={() => setProblemTarget(pos)}
+                              {labelPrintRequired(i.labelPrintVariant) ||
+                              (i.securityRequired && i.securityTypeCode) ||
+                              positionIssues.length > 0 ? (
+                                <Stack
+                                  direction="row"
+                                  alignItems="flex-start"
+                                  sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}
                                 >
-                                  Problem
-                                </Button>
-                              </>
-                            ) : null}
-                          </Stack>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
+                                  {labelPrintRequired(i.labelPrintVariant) ? (
+                                    <WorkStepPictogram
+                                      code={ETIKETT_PICTOGRAM_CODE}
+                                      title={
+                                        printedPriceCheckRequired(i.labelPrintVariant)
+                                          ? 'Preisetikett anbringen'
+                                          : 'Etikett ohne Preis anbringen'
+                                      }
+                                      subtitle={i.priceLabelAttachLocation ?? undefined}
+                                    />
+                                  ) : null}
+                                  {i.securityRequired && i.securityTypeCode ? (
+                                    <WorkStepPictogram
+                                      code={i.securityTypeCode}
+                                      title={`Sichern: ${PICTOGRAM_LABEL[i.securityTypeCode] ?? i.securityTypeCode}`}
+                                      subtitle={i.securityLocation ?? undefined}
+                                    />
+                                  ) : null}
+                                  <PositionIssueBlock
+                                    issues={positionIssues}
+                                    onReopen={(issueId, text) =>
+                                      reopenIssue.mutate({ issueId, text })
+                                    }
+                                    reopenPending={reopenIssue.isPending}
+                                  />
+                                </Stack>
+                              ) : null}
 
-                    {pos.skuLines.map((s) => {
-                      // Nur-Ansicht zeigt die vom Server verbuchte Ist-Menge (wo
-                      // vorhanden) statt des lokalen — dort leeren — Fortschritts.
-                      const ist = readOnly
-                        ? (s.confirmedQuantity ?? s.expectedQuantity)
-                        : (progress.confirmedQuantities[s.id] ?? s.expectedQuantity);
-                      const delta = ist - s.expectedQuantity;
-                      const mark = aggregate.onlineMarks[s.id];
-                      const corrected = progress.correctedVkPrices[s.id];
-                      const hasPriceProblem = corrected !== undefined;
-                      // Punkt 9: Zeile rot bei Mengenabweichung, Preisproblem
-                      // oder gemeldetem Problem — größenspezifisch oder
-                      // positionsweit (ohne Größe gemeldet).
-                      const skuProblem = manualProblems.some((x) => x.skuLineId === s.id);
-                      const rowProblem =
-                        delta !== 0 || hasPriceProblem || skuProblem || positionWideProblem;
-                      return (
-                        <TableRow key={s.id} hover sx={rowProblem ? PROBLEM_ROW_SX : undefined}>
-                          <TableCell />
-                          <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
-                          {hasOnlineMarks ? (
-                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                              {mark ? (
+                              {instructionLines.length > 0 ? (
+                                <Stack
+                                  direction="row"
+                                  sx={{ mt: 0.5, flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}
+                                >
+                                  {instructionLines.map((line) => (
+                                    <Typography key={line} variant="body2" color="text.secondary">
+                                      {line}
+                                    </Typography>
+                                  ))}
+                                </Stack>
+                              ) : null}
+
+                              {/* Punkt 9: farbliche Markierung der erfassten manuellen Probleme. */}
+                              {manualProblems.length > 0 ? (
+                                <Stack
+                                  direction="row"
+                                  sx={{ mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}
+                                >
+                                  {manualProblems.map((problem) => (
+                                    <Chip
+                                      key={problem.id}
+                                      size="small"
+                                      color="error"
+                                      variant="filled"
+                                      label={
+                                        problem.note
+                                          ? `${problem.reasonLabel}: ${problem.note}`
+                                          : problem.reasonLabel
+                                      }
+                                      onDelete={() => flow.removeProblem(problem.id)}
+                                    />
+                                  ))}
+                                </Stack>
+                              ) : null}
+                            </Box>
+
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              sx={{ flexShrink: 0 }}
+                            >
+                              <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                Soll gesamt {soll}
+                              </Typography>
+                              {/* Nur-Ansicht: keine Prüf-/Problem-Aktionen an fertigen Belegen. */}
+                              {!readOnly ? (
+                                <>
+                                  {isChecked ? (
+                                    // Wer geprüft hat, steht als Initialen am Haken
+                                    // (geteilter Beleg §3.6) — voller Name im Tooltip.
+                                    <Tooltip
+                                      title={
+                                        pos.confirmedBy
+                                          ? `Geprüft von ${pos.confirmedBy.displayName}`
+                                          : ''
+                                      }
+                                      arrow
+                                      enterTouchDelay={0}
+                                    >
+                                      <Chip
+                                        color="success"
+                                        icon={pos.confirmedBy ? undefined : <CheckIcon />}
+                                        avatar={
+                                          pos.confirmedBy ? (
+                                            <Avatar
+                                              sx={{ fontSize: '0.75rem', fontWeight: 700 }}
+                                              aria-label={`Geprüft von ${pos.confirmedBy.displayName}`}
+                                            >
+                                              {initials(pos.confirmedBy.displayName)}
+                                            </Avatar>
+                                          ) : undefined
+                                        }
+                                        label="Position geprüft"
+                                        onClick={() => void flow.togglePositionChecked(pos.id)}
+                                        sx={{ height: TOUCH_TARGET_MIN, fontSize: '1rem', px: 0.5 }}
+                                      />
+                                    </Tooltip>
+                                  ) : (
+                                    <Button
+                                      variant="contained"
+                                      onClick={() => void flow.togglePositionChecked(pos.id)}
+                                    >
+                                      Position geprüft
+                                    </Button>
+                                  )}
+                                  <Button
+                                    color="error"
+                                    variant="text"
+                                    onClick={() => setProblemTarget(pos)}
+                                  >
+                                    Problem
+                                  </Button>
+                                </>
+                              ) : null}
+                            </Stack>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+
+                      {pos.skuLines.map((s) => {
+                        // Ist-Menge und Preiskorrektur stehen serverseitig am
+                        // Aggregat — eine Quelle für Bearbeitung UND Nur-Ansicht.
+                        const ist = istMenge(s);
+                        const delta = ist - s.expectedQuantity;
+                        const mark = aggregate.onlineMarks[s.id];
+                        const corrected = s.correctedVkPrice;
+                        const hasPriceProblem = corrected !== undefined;
+                        // Punkt 9: Zeile rot bei Mengenabweichung, Preisproblem
+                        // oder gemeldetem Problem — größenspezifisch oder
+                        // positionsweit (ohne Größe gemeldet).
+                        const skuProblem = manualProblems.some((x) => x.skuLineId === s.id);
+                        const rowProblem =
+                          delta !== 0 || hasPriceProblem || skuProblem || positionWideProblem;
+                        return (
+                          <TableRow key={s.id} hover sx={rowProblem ? PROBLEM_ROW_SX : undefined}>
+                            <TableCell />
+                            <TableCell sx={NUMERIC_CELL}>{s.ean}</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>{s.size}</TableCell>
+                            {hasOnlineMarks ? (
+                              <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                {mark ? (
+                                  <Chip
+                                    size="small"
+                                    color={ONLINE_MARK[mark].color}
+                                    label={ONLINE_MARK[mark].label}
+                                    sx={{
+                                      maxWidth: 'none',
+                                      '& .MuiChip-label': { overflow: 'visible' },
+                                    }}
+                                  />
+                                ) : null}
+                              </TableCell>
+                            ) : null}
+                            <TableCell align="right" sx={NUMERIC_CELL}>
+                              {s.expectedQuantity}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                {!readOnly ? (
+                                  <IconButton
+                                    sx={STEPPER_BUTTON}
+                                    aria-label={`Größe ${s.size}: Menge verringern`}
+                                    onClick={() =>
+                                      void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
+                                    }
+                                  >
+                                    −
+                                  </IconButton>
+                                ) : null}
+                                <Typography
+                                  sx={{
+                                    ...NUMERIC_CELL,
+                                    minWidth: 36,
+                                    fontWeight: 700,
+                                    fontSize: '1.0625rem',
+                                    color: delta !== 0 ? 'error.main' : 'text.primary',
+                                  }}
+                                >
+                                  {ist}
+                                </Typography>
+                                {!readOnly ? (
+                                  <IconButton
+                                    sx={STEPPER_BUTTON}
+                                    aria-label={`Größe ${s.size}: Menge erhöhen`}
+                                    onClick={() =>
+                                      void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
+                                    }
+                                  >
+                                    +
+                                  </IconButton>
+                                ) : null}
+                              </Stack>
+                            </TableCell>
+                            <TableCell>
+                              {delta !== 0 ? (
                                 <Chip
                                   size="small"
-                                  color={ONLINE_MARK[mark].color}
-                                  label={ONLINE_MARK[mark].label}
-                                  sx={{
-                                    maxWidth: 'none',
-                                    '& .MuiChip-label': { overflow: 'visible' },
-                                  }}
+                                  color="warning"
+                                  label={
+                                    delta > 0
+                                      ? `+${delta} Mehrmenge`
+                                      : `−${Math.abs(delta)} Mindermenge`
+                                  }
                                 />
                               ) : null}
                             </TableCell>
-                          ) : null}
-                          <TableCell align="right" sx={NUMERIC_CELL}>
-                            {s.expectedQuantity}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Stack
-                              direction="row"
-                              spacing={0.5}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              {!readOnly ? (
-                                <IconButton
-                                  sx={STEPPER_BUTTON}
-                                  aria-label={`Größe ${s.size}: Menge verringern`}
-                                  onClick={() =>
-                                    void flow.setSkuQuantity(s.id, ist - 1, s.expectedQuantity)
-                                  }
-                                >
-                                  −
-                                </IconButton>
-                              ) : null}
-                              <Typography
-                                sx={{
-                                  ...NUMERIC_CELL,
-                                  minWidth: 36,
-                                  fontWeight: 700,
-                                  fontSize: '1.0625rem',
-                                  color: delta !== 0 ? 'error.main' : 'text.primary',
-                                }}
-                              >
-                                {ist}
-                              </Typography>
-                              {!readOnly ? (
-                                <IconButton
-                                  sx={STEPPER_BUTTON}
-                                  aria-label={`Größe ${s.size}: Menge erhöhen`}
-                                  onClick={() =>
-                                    void flow.setSkuQuantity(s.id, ist + 1, s.expectedQuantity)
-                                  }
-                                >
-                                  +
-                                </IconButton>
-                              ) : null}
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            {delta !== 0 ? (
-                              <Chip
-                                size="small"
-                                color="warning"
-                                label={
-                                  delta > 0
-                                    ? `+${delta} Mehrmenge`
-                                    : `−${Math.abs(delta)} Mindermenge`
-                                }
-                              />
-                            ) : null}
-                          </TableCell>
-                          <TableCell align="right" sx={NUMERIC_CELL}>
-                            {price(s.ekPrice) ?? '—'}
-                          </TableCell>
-                          <TableCell align="right" sx={NUMERIC_CELL}>
-                            {price(s.vkPrice) ?? '—'}
-                          </TableCell>
-                          <TableCell align="right" sx={NUMERIC_CELL}>
-                            {price(s.vkLabelPrice) ?? '—'}
-                          </TableCell>
-                          {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte
+                            <TableCell align="right" sx={NUMERIC_CELL}>
+                              {price(s.ekPrice) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={NUMERIC_CELL}>
+                              {price(s.vkPrice) ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={NUMERIC_CELL}>
+                              {price(s.vkLabelPrice) ?? '—'}
+                            </TableCell>
+                            {/* Punkt 4: Etikettpreis-Eingabe direkt hinter der VK-Etikett-Spalte
                               — nur dort, wo überhaupt ein Preis aufs Etikett gedruckt wird
                               (Kundenfeedback 03.08.2026). Bei DigiTag-/Ohne-Etikett-Positionen
                               gibt es keinen aufgedruckten Preis zu prüfen. */}
-                          {hasPrintedPrices ? (
-                            <TableCell
-                              align="right"
-                              sx={readOnly || !checksPrintedPrice ? NUMERIC_CELL : undefined}
-                            >
-                              {!checksPrintedPrice || readOnly ? (
-                                '—'
-                              ) : (
-                                <EtikettpreisInput
-                                  sizeLabel={s.size}
-                                  corrected={corrected}
-                                  onChange={(value) =>
-                                    flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
-                                  }
-                                />
-                              )}
-                            </TableCell>
-                          ) : null}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                );
-              })}
-            </Table>
-          </TableContainer>
-        </Paper>
+                            {hasPrintedPrices ? (
+                              <TableCell
+                                align="right"
+                                sx={readOnly || !checksPrintedPrice ? NUMERIC_CELL : undefined}
+                              >
+                                {!checksPrintedPrice || readOnly ? (
+                                  '—'
+                                ) : (
+                                  <EtikettpreisInput
+                                    sizeLabel={s.size}
+                                    corrected={corrected}
+                                    onChange={(value) =>
+                                      flow.setCorrectedVkPrice(s.id, value, s.vkLabelPrice)
+                                    }
+                                  />
+                                )}
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  );
+                })}
+              </Table>
+            </TableContainer>
+          </Paper>
 
-        {/* Why the close is blocked, if it is. */}
-        {!readOnly && !gate.ok ? (
-          <Alert severity="info">
-            {gate.reasons.join(' · ')}
-            {problemCount > 0
-              ? ' – über „Teilabschluss (Problem melden)" an die Teamleitung senden.'
-              : ''}
-          </Alert>
-        ) : null}
+          {/* Geteilter Beleg: mein Anteil ist gemeldet, der Beleg läuft weiter. */}
+          {!readOnly && teilErledigt ? (
+            <Alert severity="success">Dein Teil ist erledigt – die anderen arbeiten weiter</Alert>
+          ) : null}
 
-        {/* Die Meldung aus persist.ts ist bereits ein vollständiger deutscher
+          {/* Why the close is blocked, if it is. */}
+          {!readOnly && !gate.ok ? (
+            <Alert severity="info">
+              {gate.reasons.join(' · ')}
+              {problemCount > 0
+                ? ' – über „Teilabschluss (Problem melden)" an die Teamleitung senden.'
+                : ''}
+            </Alert>
+          ) : null}
+
+          {/* Die Meldung aus persist.ts ist bereits ein vollständiger deutscher
             Satz (inkl. etwaigem Retry-Hinweis) — kein Suffix mehr anhängen. */}
-        {flow.actionError ? (
-          <Alert severity="error" onClose={flow.clearActionError}>
-            {flow.actionError}
-          </Alert>
+          {flow.actionError ? (
+            <Alert severity="error" onClose={flow.clearActionError}>
+              {flow.actionError}
+            </Alert>
+          ) : null}
+        </Stack>
+
+        {teamOpen && geteilt ? (
+          <Box
+            sx={{
+              width: { xs: '100%', md: 360 },
+              maxWidth: { md: '50%' },
+              flexShrink: 0,
+              alignSelf: 'stretch',
+            }}
+          >
+            <TeamPane aggregate={aggregate} meineEmployeeNo={meineEmployeeNo} glow={glow} />
+          </Box>
         ) : null}
-      </Stack>
+      </Box>
 
       <ProblemDialog
         open={problemTarget !== null}

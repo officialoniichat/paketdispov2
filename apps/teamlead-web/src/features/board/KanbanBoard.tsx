@@ -30,7 +30,15 @@ import Typography from '@mui/material/Typography';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
-import { assignmentStatusLabels, CaseStatusChip, ProblemChip } from '@paket/ui';
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
+import { assignmentStatusLabels, CaseStatusChip, ltColors, ProblemChip } from '@paket/ui';
+import {
+  GETEILT_KARTE_SX,
+  GeteiltEntfernenMenu,
+  GeteiltHinweis,
+  geteiltEntfernenAction,
+  type GeteiltMenuPosition,
+} from '../../components/GeteiltChip.js';
 import { LieferungChip, buildGroupColorMap } from '../../components/LieferungChip.js';
 import { TierChip, isManualOnlyTier, tierLabel } from '../../components/TierChip.js';
 import { AssignDialog } from '../../components/AssignDialog.js';
@@ -154,59 +162,64 @@ export function KanbanBoard({
         })}
         {tiers.length > 0 && (
           <>
-            <Chip size="small" variant="outlined" label="Filter aufheben" onClick={() => onTiersChange([])} />
+            <Chip
+              size="small"
+              variant="outlined"
+              label="Filter aufheben"
+              onClick={() => onTiersChange([])}
+            />
             <Typography variant="caption" color="text.secondary">
               {visible.length} von {board.length} Mitarbeitern
             </Typography>
           </>
         )}
       </Stack>
-    <Box
-      sx={{
-        display: 'grid',
-        gap: 1.25,
-        alignItems: 'start',
-        gridTemplateColumns: {
-          xs: '1fr',
-          sm: 'repeat(2, minmax(0, 1fr))',
-          md: 'repeat(3, minmax(0, 1fr))',
-          lg: 'repeat(5, minmax(0, 1fr))',
-        },
-        // Kompaktmodus: alle Chips (Status/Tier/Lieferung/Fertig) im Raster verkleinern.
-        '& .MuiChip-sizeSmall': { height: 18 },
-        '& .MuiChip-sizeSmall .MuiChip-label': { fontSize: '0.66rem', px: 0.75 },
-        '& .MuiChip-sizeSmall .MuiChip-icon': { fontSize: '0.85rem' },
-      }}
-    >
-      {visible.map((row) => (
-        <EmployeeCard
-          key={row.employeeId}
-          row={row}
-          dragging={dragging}
-          groupColorById={groupColorById}
-          onDragStart={setDragging}
-          onDragEnd={() => setDragging(null)}
-          requestReason={requestReason}
-        />
-      ))}
-      {/* Entziehen per Drop: erscheint nur, solange ein Beleg gezogen wird, und
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1.25,
+          alignItems: 'start',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(3, minmax(0, 1fr))',
+            lg: 'repeat(5, minmax(0, 1fr))',
+          },
+          // Kompaktmodus: alle Chips (Status/Tier/Lieferung/Fertig) im Raster verkleinern.
+          '& .MuiChip-sizeSmall': { height: 18 },
+          '& .MuiChip-sizeSmall .MuiChip-label': { fontSize: '0.66rem', px: 0.75 },
+          '& .MuiChip-sizeSmall .MuiChip-icon': { fontSize: '0.85rem' },
+        }}
+      >
+        {visible.map((row) => (
+          <EmployeeCard
+            key={row.employeeId}
+            row={row}
+            dragging={dragging}
+            groupColorById={groupColorById}
+            onDragStart={setDragging}
+            onDragEnd={() => setDragging(null)}
+            requestReason={requestReason}
+          />
+        ))}
+        {/* Entziehen per Drop: erscheint nur, solange ein Beleg gezogen wird, und
           mündet im selben §8.4-Dialog wie „Entziehen" in der Listenansicht. */}
-      {dragging && (
-        <TrashDropZone
-          onDrop={() => {
-            const src = dragging;
-            if (!src) return;
-            requestReason({
-              title: `${src.weBelegNo} von ${src.employeeName} entziehen`,
-              description: 'Beleg geht zurück in den Pool.',
-              suggestions: ['Überlastet', 'Falsch zugeteilt', 'Pause/Abwesenheit'],
-              run: (reason) =>
-                withdraw.mutate({ caseId: src.caseId, bundleId: src.bundleId, reason }),
-            });
-          }}
-        />
-      )}
-    </Box>
+        {dragging && (
+          <TrashDropZone
+            onDrop={() => {
+              const src = dragging;
+              if (!src) return;
+              requestReason({
+                title: `${src.weBelegNo} von ${src.employeeName} entziehen`,
+                description: 'Beleg geht zurück in den Pool.',
+                suggestions: ['Überlastet', 'Falsch zugeteilt', 'Pause/Abwesenheit'],
+                run: (reason) =>
+                  withdraw.mutate({ caseId: src.caseId, bundleId: src.bundleId, reason }),
+              });
+            }}
+          />
+        )}
+      </Box>
     </Stack>
   );
 }
@@ -291,7 +304,11 @@ function EmployeeCard({
       requestReason({
         title: `${src.weBelegNo} zu ${row.displayName} verschieben`,
         description: `Der Beleg wird aus dem aktuellen Bündel entfernt und ${row.displayName} zugeteilt.`,
-        suggestions: ['Auslastung ausgleichen', 'Bereich passt besser', 'Auf Wunsch des Mitarbeiters'],
+        suggestions: [
+          'Auslastung ausgleichen',
+          'Bereich passt besser',
+          'Auf Wunsch des Mitarbeiters',
+        ],
         run: (reason) =>
           moveCase.mutate({
             bundleId: src.bundleId,
@@ -342,7 +359,11 @@ function EmployeeCard({
         </Stack>
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
           {row.bundleStatus != null && !row.paused && (
-            <Chip size="small" variant="outlined" label={assignmentStatusLabels[row.bundleStatus]} />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={assignmentStatusLabels[row.bundleStatus]}
+            />
           )}
           {/* Teile-first (B3): Stückzahl primär, Auslastung als Kontext. */}
           {row.cases.length > 0 && (
@@ -366,7 +387,11 @@ function EmployeeCard({
           valid={crossEmployee}
           onDrop={() => handleDrop({ kind: 'zone', phase: 'geplant' })}
         >
-          <Typography variant="caption" color="text.secondary" sx={{ py: 0.75, textAlign: 'center' }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ py: 0.75, textAlign: 'center' }}
+          >
             {crossEmployee ? 'Beleg hierher ziehen' : 'Frei — keine Belege zugewiesen.'}
           </Typography>
         </DropZone>
@@ -400,6 +425,7 @@ function EmployeeCard({
                 groupColor={c.deliveryGroup ? groupColorById.get(c.deliveryGroup.id) : undefined}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
+                requestReason={requestReason}
               />
             ))}
           </DropZone>
@@ -420,6 +446,7 @@ function EmployeeCard({
                 groupColor={c.deliveryGroup ? groupColorById.get(c.deliveryGroup.id) : undefined}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
+                requestReason={requestReason}
                 onDropBefore={
                   sameReorder && dragging?.caseId !== c.caseId
                     ? () => handleDrop({ kind: 'before', caseId: c.caseId })
@@ -447,7 +474,11 @@ function EmployeeCard({
         </Box>
       )}
 
-      <Stack direction="row" spacing={0.75} sx={{ '& .MuiButton-root': { fontSize: '0.7rem', py: 0.125, px: 1 } }}>
+      <Stack
+        direction="row"
+        spacing={0.75}
+        sx={{ '& .MuiButton-root': { fontSize: '0.7rem', py: 0.125, px: 1 } }}
+      >
         <Button size="small" variant="outlined" onClick={() => setAssignOpen(true)}>
           {row.bundleId ? 'Beleg(e) zuweisen' : 'Bündel anlegen'}
         </Button>
@@ -565,6 +596,8 @@ interface CaseCardProps {
   onDragEnd: () => void;
   /** Nur gesetzt, wenn „vor diesen Beleg einsortieren" gerade ein gültiges Ziel ist. */
   onDropBefore?: () => void;
+  /** §8.4-ReasonDialog des Parents — fürs Entfernen eines Helfers (Geteilter Beleg). */
+  requestReason: (a: PendingAction) => void;
 }
 
 function CaseCard({
@@ -576,10 +609,16 @@ function CaseCard({
   onDragStart,
   onDragEnd,
   onDropBefore,
+  requestReason,
 }: CaseCardProps): JSX.Element {
   const navigate = useNavigate();
+  const { removeParticipant } = useCockpitData();
   const rootRef = useRef<HTMLDivElement>(null);
   const [insertBefore, setInsertBefore] = useState(false);
+  // Geteilter Beleg (§4): goldene Karte, Beteiligten-Zeile und Entfernen-Menü.
+  const shared = c.sharedWith ?? [];
+  const istGeteilt = shared.length > 0;
+  const [geteiltMenu, setGeteiltMenu] = useState<GeteiltMenuPosition | null>(null);
   const draggable = phase !== 'fertig' && row.bundleId != null;
 
   return (
@@ -587,6 +626,16 @@ function CaseCard({
       ref={rootRef}
       variant="outlined"
       onClick={() => navigate(`/belege/${c.caseId}`)}
+      onContextMenu={
+        istGeteilt
+          ? (e) => {
+              // Rechtsklick auf die goldene Karte → „Aus geteiltem Beleg entfernen".
+              e.preventDefault();
+              e.stopPropagation();
+              setGeteiltMenu({ top: e.clientY, left: e.clientX });
+            }
+          : undefined
+      }
       onDragOver={
         onDropBefore
           ? (e) => {
@@ -622,10 +671,13 @@ function CaseCard({
         gap: 0.25,
         alignItems: 'flex-start',
         cursor: 'pointer',
-        // Frage 8: Mitglieder derselben Lieferung tragen überall dieselbe Kennfarbe.
-        ...(groupColor
-          ? { borderLeft: `3px solid ${groupColor}`, bgcolor: alpha(groupColor, 0.05) }
-          : {}),
+        // Geteilter Beleg (§4) golden — schlägt die Lieferungs-Kennfarbe (Frage 8);
+        // die Zugehörigkeit bleibt über den LieferungChip sichtbar.
+        ...(istGeteilt
+          ? GETEILT_KARTE_SX
+          : groupColor
+            ? { borderLeft: `3px solid ${groupColor}`, bgcolor: alpha(groupColor, 0.05) }
+            : {}),
         // Einfüge-Marke „vor diesem Beleg" während eines gültigen dragover.
         boxShadow: insertBefore ? (t) => `0 -2px 0 0 ${t.palette.primary.main}` : 'none',
         '&:hover': { borderColor: 'primary.main' },
@@ -676,6 +728,25 @@ function CaseCard({
           <CaseStatusChip status={c.status} size="small" />
           <CaseQuickInfo c={c} />
         </Stack>
+        {istGeteilt && (
+          // Mittig zwischen Belegnummer-Zeile und Teile-Zeile: mit wem geteilt wird
+          // (Konzept §4); das kleine Personen-Icon ist der Touch-Weg zum Menü.
+          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
+            <GeteiltHinweis sharedWith={shared} />
+            <IconButton
+              size="small"
+              aria-label={`${c.weBelegNo}: Aus geteiltem Beleg entfernen`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                setGeteiltMenu({ top: r.bottom, left: r.left });
+              }}
+              sx={{ p: 0.125, color: ltColors.shared }}
+            >
+              <PersonRemoveIcon sx={{ fontSize: 13 }} />
+            </IconButton>
+          </Stack>
+        )}
         {c.deliveryGroup && (
           <Box>
             <LieferungChip group={c.deliveryGroup} identityColor={groupColor} />
@@ -686,6 +757,23 @@ function CaseCard({
           {c.storageCode ? ` · ${c.storageCode}` : ''}
         </Typography>
       </Stack>
+      <GeteiltEntfernenMenu
+        position={geteiltMenu}
+        sharedWith={shared}
+        onClose={() => setGeteiltMenu(null)}
+        onWahl={(helfer) => {
+          setGeteiltMenu(null);
+          requestReason(
+            geteiltEntfernenAction(c.weBelegNo, helfer, (reason) =>
+              removeParticipant.mutate({
+                caseId: c.caseId,
+                employeeNo: helfer.employeeNo,
+                reason,
+              }),
+            ),
+          );
+        }}
+      />
     </Paper>
   );
 }

@@ -60,7 +60,7 @@ import { ForwardDialog, forwardRecipientLabel } from '../../components/ForwardDi
 import { AttentionDialog } from '../../components/AttentionDialog.js';
 import { AssignFromListDialog } from '../belege/AssignFromListDialog.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplitCase } from '../split/useSplitCase.js';
+import { splitDoneText, useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import type { Lane, LaneCard, LaneId } from '../../data/types.js';
@@ -177,7 +177,9 @@ export function AblagenBoard({
   const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
   const [splitDone, setSplitDone] = useState<string | null>(null);
   const split = useSplitCase((result) => {
-    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    // Ein Text für beide Dialog-Modi (Aufteilen bzw. Gemeinsam zuweisen); der
+    // Zusatz sagt nur beim Aufteilen, wo die Teile jetzt zu finden sind.
+    setSplitDone(splitDoneText(result, 'Die Teile laufen ab jetzt als eigene Belege.'));
     setSplitCaseId(null);
   });
   const employeesQuery = useQuery({
@@ -327,7 +329,7 @@ export function AblagenBoard({
 
       {splitDone && (
         <Alert severity="success" onClose={() => setSplitDone(null)}>
-          Beleg aufgeteilt: {splitDone}. Die Teile laufen ab jetzt als eigene Belege.
+          {splitDone}
         </Alert>
       )}
       {/* C1: the strip scrolls horizontally; each lane owns its vertical scroll. */}
@@ -421,6 +423,7 @@ export function AblagenBoard({
         pending={split.pending}
         error={split.error}
         onConfirm={split.submit}
+        onModusChange={split.clearError}
         onClose={() => {
           split.clearError();
           setSplitCaseId(null);
@@ -566,7 +569,12 @@ function LaneColumn({
       }}
     >
       <Stack direction="row" alignItems="center" gap={0.5}>
-        <IconButton size="small" disabled={!canMoveLeft} onClick={() => onMove(-1)} aria-label="Spalte nach links">
+        <IconButton
+          size="small"
+          disabled={!canMoveLeft}
+          onClick={() => onMove(-1)}
+          aria-label="Spalte nach links"
+        >
           <ChevronLeftIcon fontSize="small" />
         </IconButton>
         <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>
@@ -580,7 +588,12 @@ function LaneColumn({
         <IconButton size="small" onClick={onToggleCollapsed} aria-label="Spalte einklappen">
           <UnfoldLessIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
         </IconButton>
-        <IconButton size="small" disabled={!canMoveRight} onClick={() => onMove(1)} aria-label="Spalte nach rechts">
+        <IconButton
+          size="small"
+          disabled={!canMoveRight}
+          onClick={() => onMove(1)}
+          aria-label="Spalte nach rechts"
+        >
           <ChevronRightIcon fontSize="small" />
         </IconButton>
       </Stack>
@@ -701,9 +714,7 @@ function CardIssuesSummary({ issues }: { issues: LaneCard['issues'] }): JSX.Elem
 }
 
 /** Group the Weitergeleitet lane's cards by recipient (stable catalog order). */
-function groupByRecipient(
-  cards: LaneCard[],
-): { key: string; label: string; cards: LaneCard[] }[] {
+function groupByRecipient(cards: LaneCard[]): { key: string; label: string; cards: LaneCard[] }[] {
   const byRecipient = new Map<string, LaneCard[]>();
   for (const card of cards) {
     const key = card.forwardedTo ?? 'unbekannt';

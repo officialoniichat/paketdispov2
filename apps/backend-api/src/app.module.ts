@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { WorkflowModule } from './workflow/workflow.module.js';
 import { LiveModule } from './live/live.module.js';
 import { CasesModule } from './cases/cases.module.js';
+import { CollaborationModule } from './collaboration/collaboration.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { ProblemReasonsModule } from './problem-reasons/problem-reasons.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
@@ -27,6 +28,7 @@ import { DevModule } from './dev/dev.module.js';
     LiveModule,
     WorkflowModule,
     CasesModule,
+    CollaborationModule,
     AdminModule,
     ProblemReasonsModule,
     EmployeesModule,

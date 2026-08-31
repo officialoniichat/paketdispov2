@@ -1,36 +1,41 @@
 /**
  * Binds the pure per-Beleg workflow to the live backend (React Query).
  *
- * The aggregate (`case` + work instruction + positions + box targets) is
- * `data/useCaseAggregate.ts` — the backend's single source of truth, no more
- * Dexie mirror. Case-level milestones (start-preparation/complete/
- * partial-complete/issue) optimistically patch the case's status in the
- * `['me','today']` list cache, await the real POST (`data/persist.ts`), then
- * invalidate the affected queries on success — or roll the optimistic patch
- * back on failure and surface the error (never swallowed, see `actionError`).
+ * Das Aggregat (`case` + Arbeitsanweisung + Positionen) ist
+ * `data/useCaseAggregate.ts` — die einzige Wahrheit des Belegs. Seit der
+ * Beleg-Zusammenarbeit (31.08.2026) gehört dazu auch der ARBEITSSTAND: „Position
+ * geprüft" (`positions[].confirmedBy`) und Ist-Menge/Preiskorrektur je Größe
+ * (`skuLines[].confirmedQuantity/correctedVkPrice`) werden pro Aktion
+ * persistiert — für alle Belege, nicht nur geteilte (Konzept §2: eine Wahrheit
+ * statt zwei Pfade). Der frühere Client-Zustand
+ * (`quantityCheckedPositionIds`/`confirmedQuantities`/`correctedVkPrices`) ist
+ * damit ersatzlos entfallen; er ging beim Neuladen verloren und hätte bei
+ * mehreren Beteiligten zwei Stände erzeugt. Lokal bleibt nur, was es
+ * serverseitig nicht gibt: die bis zum Teilabschluss gesammelten manuellen
+ * Meldungen (`CaseProgress.problems`).
  *
- * TODO(task-13+): "Position geprüft" and per-Größe confirmed quantities
- * (`CaseProgress.quantityCheckedPositionIds` / `confirmedQuantities`) still
- * have no live per-action backend endpoint (no matching path in
- * `packages/api-client/src/generated/schema.ts`) — only the *first* action's
- * implicit start-preparation call is persisted immediately (see
- * `ensureStarted` below). Until the backend adds real per-action persistence,
- * this progress is tracked as client-only React Query cache state under a
- * `['local', 'caseProgress', caseId]` key, seeded from the loaded aggregate,
- * and does not survive a full reload.
+ * Jede Aktion ist optimistisch (Lager-WLAN): der Aggregat-Cache reagiert sofort,
+ * der POST folgt, ein Fehler rollt zurück und erscheint als `actionError` —
+ * nichts wird stillschweigend geschluckt. Die Mengen-Eingabe ist je Größenzeile
+ * um {@link COUNT_DEBOUNCE_MS} entprellt, damit ein gehaltener „+"-Knopf nicht
+ * je Tipp einen Request auslöst.
  *
- * The recorded quantities ARE transferred at the end, though: `complete()`/
- * `partialComplete()` below compute `totalConfirmedQuantity()` (the D2
- * Mehr-/Mindermengen, or the Soll where untouched) and send it as
- * `completedQuantity` on the final POST, so the backend's ZstRecord books the
- * employee's real counted quantity — never silently the untouched case total.
+ * Case-level milestones (start-preparation/complete/partial-complete) patchen
+ * zusätzlich den Status in der `['me','today']`-Liste (siehe `runMilestone`).
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import type { CaseStatus } from '@paket/domain-types';
 import type { components } from '@paket/api-client';
-import { useCaseAggregate } from '../data/useCaseAggregate.js';
+import {
+  caseAggregateKey,
+  useCaseAggregate,
+  type CaseAggregateDto,
+} from '../data/useCaseAggregate.js';
 import { mapCaseAggregate } from '../data/caseAggregateMapper.js';
+import { useConfirmPosition } from '../data/useConfirmPosition.js';
+import { patchSkuLine, useCountSku, type SkuLinePatch } from '../data/useCountSku.js';
+import { usePartDone } from '../data/usePartDone.js';
 import {
   persistComplete,
   persistPartialComplete,
@@ -39,20 +44,16 @@ import {
 import type { CaseAggregate, CaseProgress, RecordedProblem } from '../domain/types.js';
 import {
   addProblem as addProblemTx,
-  completeCase as completeCaseTx,
-  hasProgress,
   initialProgress,
-  partialComplete as partialCompleteTx,
   problemsBody,
   removeProblem as removeProblemTx,
-  setCorrectedVkPrice as setCorrectedVkPriceTx,
-  setSkuQuantity as setSkuQuantityTx,
-  setZst as setZstTx,
   skuQuantitiesBody,
-  togglePositionChecked as togglePositionCheckedTx,
 } from './workflowModel.js';
 
 type TodayResponseDto = components['schemas']['TodayResponseDto'];
+
+/** Entprellung der Mengen-/Preis-Eingabe je Größenzeile (Konzept §3.6). */
+export const COUNT_DEBOUNCE_MS = 400;
 
 /**
  * Nur aus diesen Status heraus darf der Mitarbeiter den Beleg bearbeiten. Alles
@@ -65,8 +66,8 @@ const EDITABLE_STATUSES: readonly CaseStatus[] = ['assigned', 'in_progress', 'pr
 /**
  * Der Start-Übergang (start-preparation) ist nur aus assigned/problem_resolved
  * eine legale Kante. Ein Beleg, der bereits in_progress ist (z. B. nach einem
- * Seiten-Reload, der den lokalen Fortschritt verwirft), braucht KEINEN neuen
- * Start — in_progress → in_progress wäre ebenfalls illegal.
+ * Seiten-Reload), braucht KEINEN neuen Start — in_progress → in_progress wäre
+ * ebenfalls illegal.
  */
 const STARTABLE_STATUSES: readonly CaseStatus[] = ['assigned', 'problem_resolved'];
 
@@ -82,10 +83,11 @@ export interface CaseFlow {
    * Mutationen dieses Hooks sind zusätzlich selbst abgesichert (no-op).
    */
   readOnly: boolean;
-  /** Last failed milestone action's message, or undefined. Never swallowed silently. */
+  /** Last failed action's message, or undefined. Never swallowed silently. */
   actionError?: string;
   clearActionError: () => void;
-  togglePositionChecked: (positionId: string) => void;
+  /** „Position geprüft" setzen/zurücknehmen — serverseitig, für alle sichtbar. */
+  togglePositionChecked: (positionId: string) => Promise<void>;
   setSkuQuantity: (skuLineId: string, quantity: number, expectedQuantity: number) => void;
   /** Preisabweichung (Punkt 4): korrigierter VK je Größe (undefined = keine Korrektur). */
   setCorrectedVkPrice: (
@@ -100,6 +102,10 @@ export interface CaseFlow {
   /** Resolves `true` on success, `false` on a surfaced (non-thrown) failure. */
   complete: () => Promise<boolean>;
   partialComplete: () => Promise<boolean>;
+  /** „Teilbeleg erledigt": die EIGENE Beteiligung ist fertig (geteilter Beleg). */
+  partDone: () => Promise<boolean>;
+  /** True, solange der part-done-POST läuft — sperrt den Knopf gegen Doppeltipp. */
+  partDonePending: boolean;
   refetch: () => void;
 }
 
@@ -109,6 +115,13 @@ function progressQueryKey(caseId: string): readonly [string, string, string] {
   return ['local', 'caseProgress', caseId] as const;
 }
 
+/** Deutscher Fehlertext einer abgelehnten Aktion (Backend-Meldung, sonst generisch). */
+function actionErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.length > 0
+    ? error.message
+    : 'Aktion fehlgeschlagen';
+}
+
 export function useCaseFlow(caseId: string): CaseFlow {
   const queryClient = useQueryClient();
   const aggregateQuery = useCaseAggregate(caseId);
@@ -116,11 +129,14 @@ export function useCaseFlow(caseId: string): CaseFlow {
   const caseStatus = aggregate?.case.status;
   const readOnly = caseStatus !== undefined && !EDITABLE_STATUSES.includes(caseStatus);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
+  const confirmPosition = useConfirmPosition();
+  const countSku = useCountSku();
+  const partDoneMutation = usePartDone();
 
   const key = progressQueryKey(caseId);
   const progressQuery = useQuery({
     queryKey: key,
-    queryFn: () => initialProgress(aggregate as CaseAggregate, new Date().toISOString()),
+    queryFn: () => initialProgress(aggregate as CaseAggregate),
     enabled: aggregate !== undefined,
     staleTime: Infinity,
   });
@@ -158,66 +174,182 @@ export function useCaseFlow(caseId: string): CaseFlow {
         await post();
       } catch (err) {
         if (previousToday) queryClient.setQueryData(TODAY_KEY, previousToday);
-        setActionError(err instanceof Error ? err.message : 'Aktion fehlgeschlagen');
+        setActionError(actionErrorMessage(err));
         // Der lokale Stand kann dem Server hinterherhängen (z. B. Beleg wurde auf
         // einem anderen Gerät abgeschlossen): nach einem abgelehnten Übergang die
         // Wahrheit neu laden, damit die UI in den korrekten (ggf. Nur-Ansicht-)
         // Zustand wechselt statt weitere illegale Aktionen anzubieten.
         void queryClient.invalidateQueries({ queryKey: TODAY_KEY });
-        void queryClient.invalidateQueries({ queryKey: ['me', 'case', caseId, 'aggregate'] });
+        void queryClient.invalidateQueries({ queryKey: caseAggregateKey(caseId) });
         return false;
       }
       setActionError(undefined);
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY });
-      void queryClient.invalidateQueries({ queryKey: ['me', 'case', caseId, 'aggregate'] });
+      void queryClient.invalidateQueries({ queryKey: caseAggregateKey(caseId) });
       return true;
     },
     [queryClient, caseId],
   );
 
   /**
-   * First recorded local action → mark the case in_progress on the backend.
+   * Erste erfasste Aktion → den Beleg auf dem Server in Bearbeitung setzen.
    *
-   * Nur wenn der Beleg-Status den Start-Übergang tatsächlich erlaubt
-   * (assigned/problem_resolved): ein bereits laufender Beleg (in_progress nach
-   * Reload) braucht keinen erneuten Start, und für fertige Belege
-   * (completed/zst_done) würde das Backend mit „Illegal case transition"
-   * ablehnen — genau der Railway-Fehler beim erneuten Öffnen fertiger Belege.
+   * AWAITBAR (31.08.2026): der Prüf-Haken und die Mengen-Erfassung sind jetzt
+   * eigene Endpunkte, die einen Beleg `in_progress` verlangen — sie müssen den
+   * Start also abwarten, sonst antwortet das Backend mit 409. Der laufende
+   * Start wird in einer Ref gemerkt, damit zwei schnelle Tipper nicht zwei
+   * (beim zweiten illegale) Übergänge auslösen; nur ein GESCHEITERTER Start
+   * wird erneut versucht.
    */
-  const ensureStarted = useCallback((): void => {
+  const startRef = useRef<Promise<boolean> | null>(null);
+  const ensureStarted = useCallback(async (): Promise<void> => {
     if (caseStatus === undefined || !STARTABLE_STATUSES.includes(caseStatus)) return;
-    const current = queryClient.getQueryData<CaseProgress>(key);
-    if (!current || hasProgress(current)) return;
-    void runMilestone('in_progress', () => persistStartPreparation(caseId));
-  }, [queryClient, key, runMilestone, caseId, caseStatus]);
+    if (startRef.current === null) {
+      startRef.current = runMilestone('in_progress', () => persistStartPreparation(caseId)).then(
+        (ok) => {
+          if (!ok) startRef.current = null;
+          return ok;
+        },
+      );
+    }
+    await startRef.current;
+  }, [runMilestone, caseId, caseStatus]);
 
   const togglePositionChecked = useCallback(
-    (positionId: string): void => {
-      ensureStarted();
-      applyLocal((p) => togglePositionCheckedTx(p, positionId));
+    async (positionId: string): Promise<void> => {
+      if (readOnly) return;
+      const cached = queryClient.getQueryData<CaseAggregateDto>(caseAggregateKey(caseId));
+      const position = cached?.positions.find((p) => p.id === positionId);
+      if (!position) return;
+      const confirmed = !position.confirmedBy;
+      await ensureStarted();
+      try {
+        await confirmPosition.mutateAsync({ caseId, positionId, confirmed });
+        setActionError(undefined);
+      } catch (err) {
+        setActionError(actionErrorMessage(err));
+      }
     },
-    [applyLocal, ensureStarted],
+    [queryClient, caseId, readOnly, ensureStarted, confirmPosition],
+  );
+
+  /**
+   * Entprellte Zähl-Erfassung je Größenzeile: der Timer trägt den akkumulierten
+   * Patch der EIGENEN Eingaben, und der POST schickt beim Auslaufen genau diesen
+   * Patch — NICHT den neu gelesenen Cache, den ein dazwischen landender Refetch
+   * (onSettled-Invalidierung, SSE-Echo) längst überschrieben haben kann. Nur
+   * berührte Felder gehen in den Request: am geteilten Beleg darf eine
+   * Mengen-Eingabe nicht die Preiskorrektur eines anderen Beteiligten löschen,
+   * die im eigenen Cache noch fehlt (der Zähl-Endpunkt ist ein Teil-Update).
+   * Ein zweiter Tipp auf dieselbe Zeile verlängert den Timer und erweitert den
+   * Patch, statt einen zweiten Request zu erzeugen.
+   */
+  const countTimers = useRef(
+    new Map<string, { patch: SkuLinePatch; timer: ReturnType<typeof setTimeout> }>(),
+  );
+  const flushCount = useCallback(
+    async (skuLineId: string): Promise<void> => {
+      const pending = countTimers.current.get(skuLineId);
+      if (!pending) return;
+      countTimers.current.delete(skuLineId);
+      clearTimeout(pending.timer);
+      await ensureStarted();
+      try {
+        await countSku.mutateAsync({ caseId, skuLineId, ...pending.patch });
+        setActionError(undefined);
+      } catch (err) {
+        setActionError(actionErrorMessage(err));
+      }
+    },
+    [caseId, ensureStarted, countSku],
+  );
+
+  const scheduleCount = useCallback(
+    (skuLineId: string, patch: SkuLinePatch): void => {
+      const pending = countTimers.current.get(skuLineId);
+      if (pending) clearTimeout(pending.timer);
+      countTimers.current.set(skuLineId, {
+        patch: { ...pending?.patch, ...patch },
+        timer: setTimeout(() => void flushCount(skuLineId), COUNT_DEBOUNCE_MS),
+      });
+    },
+    [flushCount],
+  );
+
+  /** Alle offenen Zähl-Timer sofort senden (vor „Beleg erledigt"/Teilabschluss). */
+  const flushAllCounts = useCallback(async (): Promise<void> => {
+    await Promise.all([...countTimers.current.keys()].map((skuLineId) => flushCount(skuLineId)));
+  }, [flushCount]);
+
+  // Beim Verlassen des Bildschirms die letzte Eingabe SOFORT senden — sonst ginge
+  // der zuletzt getippte Wert verloren, obwohl er schon auf dem Schirm steht.
+  //
+  // Der Aufräumer darf NUR beim Aushängen laufen: `flushCount` bekommt bei jedem
+  // Rendern eine neue Identität (React Query gibt je Render ein neues
+  // Mutations-Objekt zurück), stünde es in den Abhängigkeiten, liefe der
+  // Aufräumer bei jedem Rendern — und die Entprellung wäre wirkungslos. Deshalb
+  // hält eine Ref die jeweils aktuelle Funktion.
+  const timers = countTimers.current;
+  const flushRef = useRef(flushCount);
+  useEffect(() => {
+    flushRef.current = flushCount;
+  }, [flushCount]);
+  useEffect(
+    () => () => {
+      // Schnappschuss der Keys: der Flush räumt seinen Map-Eintrag selbst ab.
+      for (const skuLineId of [...timers.keys()]) {
+        void flushRef.current(skuLineId);
+      }
+    },
+    [timers],
+  );
+
+  /**
+   * MEINE Sitzungs-Eingaben je Größenzeile (letzter Wert je Feld, über Flushes
+   * hinweg). Nur diese Zeilen gehen mit genau diesen Werten in die
+   * `skuQuantities` des (Teil-)Abschlusses — fremde Zeilen bleiben draußen und
+   * Cache-Echos (ein Refetch kann den optimistischen Patch überschrieben haben)
+   * verfälschen den Body nicht.
+   */
+  const ownInputs = useRef(new Map<string, SkuLinePatch>());
+
+  /** Optimistischer Zeilen-Patch + entprellter Flush GENAU dieses Patches. */
+  const applyCountPatch = useCallback(
+    (skuLineId: string, patch: SkuLinePatch): void => {
+      // Ein laufender Refetch darf den optimistischen Patch nicht überschreiben
+      // (wie im onMutate von useCountSku, nur ohne dessen await).
+      void queryClient.cancelQueries({ queryKey: caseAggregateKey(caseId) });
+      patchSkuLine(queryClient, caseId, skuLineId, patch);
+      ownInputs.current.set(skuLineId, { ...ownInputs.current.get(skuLineId), ...patch });
+      scheduleCount(skuLineId, patch);
+    },
+    [queryClient, caseId, scheduleCount],
   );
 
   const setSkuQuantity = useCallback(
     (skuLineId: string, quantity: number, expectedQuantity: number): void => {
-      ensureStarted();
-      applyLocal((p) => setSkuQuantityTx(p, skuLineId, quantity, expectedQuantity));
+      if (readOnly) return;
+      const next = Math.max(0, quantity);
+      // Ist = Soll ⇒ Erfassung zurücksetzen: die Zeile ist dann wieder unberührt
+      // und geht mit dem Soll in Abschluss/ZST ein (Konzept §7).
+      applyCountPatch(skuLineId, { confirmedQuantity: next === expectedQuantity ? null : next });
     },
-    [applyLocal, ensureStarted],
+    [readOnly, applyCountPatch],
   );
 
   const setCorrectedVkPrice = useCallback(
     (skuLineId: string, price: number | undefined, vkLabelPrice: number | undefined): void => {
-      ensureStarted();
-      applyLocal((p) => setCorrectedVkPriceTx(p, skuLineId, price, vkLabelPrice));
+      if (readOnly) return;
+      // Ein Preis gleich dem VK-Etikett-Preis (oder keiner) ist keine Korrektur.
+      const corrected = price === undefined || price < 0 || price === vkLabelPrice ? null : price;
+      applyCountPatch(skuLineId, { correctedVkPrice: corrected });
     },
-    [applyLocal, ensureStarted],
+    [readOnly, applyCountPatch],
   );
 
   const addProblem = useCallback(
     (problem: RecordedProblem): void => {
-      ensureStarted();
+      void ensureStarted();
       applyLocal((p) => addProblemTx(p, problem));
     },
     [applyLocal, ensureStarted],
@@ -232,23 +364,34 @@ export function useCaseFlow(caseId: string): CaseFlow {
 
   const complete = useCallback(async (): Promise<boolean> => {
     if (!progress || !aggregate || readOnly) return false;
-    const body = skuQuantitiesBody(progress, aggregate);
-    const ok = await runMilestone('completed', () => persistComplete(caseId, body));
-    if (ok) applyLocal((p) => completeCaseTx(setZstTx(p)));
-    return ok;
-  }, [runMilestone, applyLocal, caseId, progress, aggregate, readOnly]);
+    // Eine gerade getippte/zurückgesetzte Zeile hängt sonst noch im Timer: erst
+    // senden, dann abschließen — sonst lehnt der Server mit einer Abweichung ab,
+    // die der Bildschirm gar nicht mehr zeigt.
+    await flushAllCounts();
+    const body = skuQuantitiesBody(aggregate, ownInputs.current);
+    return runMilestone('completed', () => persistComplete(caseId, body));
+  }, [runMilestone, flushAllCounts, caseId, progress, aggregate, readOnly]);
 
   const partialComplete = useCallback(async (): Promise<boolean> => {
     if (!progress || !aggregate || readOnly) return false;
-    const skuBody = skuQuantitiesBody(progress, aggregate);
+    await flushAllCounts();
+    const skuBody = skuQuantitiesBody(aggregate, ownInputs.current);
     const probBody = problemsBody(progress);
     // Der Beleg bleibt beim selben MA rot geparkt (issue_open), bis der Teamlead klärt.
-    const ok = await runMilestone('issue_open', () =>
-      persistPartialComplete(caseId, skuBody, probBody),
-    );
-    if (ok) applyLocal((p) => partialCompleteTx(setZstTx(p)));
-    return ok;
-  }, [runMilestone, applyLocal, caseId, progress, aggregate, readOnly]);
+    return runMilestone('issue_open', () => persistPartialComplete(caseId, skuBody, probBody));
+  }, [runMilestone, flushAllCounts, caseId, progress, aggregate, readOnly]);
+
+  const partDone = useCallback(async (): Promise<boolean> => {
+    if (readOnly) return false;
+    try {
+      await partDoneMutation.mutateAsync({ caseId });
+      setActionError(undefined);
+      return true;
+    } catch (err) {
+      setActionError(actionErrorMessage(err));
+      return false;
+    }
+  }, [caseId, readOnly, partDoneMutation]);
 
   return {
     loading: aggregateQuery.isLoading || (aggregate !== undefined && progressQuery.isLoading),
@@ -266,6 +409,8 @@ export function useCaseFlow(caseId: string): CaseFlow {
     removeProblem,
     complete,
     partialComplete,
+    partDone,
+    partDonePending: partDoneMutation.isPending,
     refetch: () => void aggregateQuery.refetch(),
   };
 }

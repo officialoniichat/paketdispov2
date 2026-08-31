@@ -4,30 +4,38 @@
 %% Quelle der Wahrheit via React Query plus SSE-Live-Update-Kanal — die früheren Dexie-Module db/
 %% (Offline-first-Cache), events/ (lokales Audit-Log) sowie seed/sync/repository sind
 %% entfernt (Tasks 10–13). Task 15 ergänzte useLiveUpdates() (GET /api/me/stream, SSE).
+%% Stand 31.08.2026 — „Beleg teilen & gemeinsam bearbeiten" (Konzept docs/concept/beleg-zusammenarbeit-concept.md):
+%% TeilenDialog, EinladungOverlay, NachrichtenScreen/-Panel, TeamPane, ProfileMenu-Badge, die neuen data/-Hooks
+%% und die je Ereignistyp registrierten Live-Handler sind gegen den Code verifiziert (Stand 31.08.2026).
 flowchart TB
     classDef screen fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef hook fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef logic fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
     classDef ext fill:#23272f,stroke:#7c8696,color:#cbd2dd;
 
-    api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* · /api/issues · /static/pictograms/* · SSE /api/me/stream"]:::ext
+    api["backend-api<br/>/api/auth/login · /api/me/today · /aggregate · next-bundle · park<br/>/api/cases/:id/* (start · collected · positions/:pid/confirmed · sku-lines/:sid/count · complete · partial-complete)<br/>/api/me/colleagues · /api/me/cases/:id/invitations · /api/me/invitations/:id/respond · /api/me/nachrichten · /api/me/cases/:id/part-done<br/>/api/me/messages · /api/problem-reasons · /static/pictograms/* · SSE /api/me/stream (benannte Events je Typ)"]:::ext
 
     subgraph pwa["Container employee-pwa"]
         direction TB
         subgraph screens["screens/ + components/ (Router: routes/paths.ts, App durch Session geschützt)"]
             login["LoginScreen<br/><i>nur Mitarbeiternummer (kein PIN) → POST /api/auth/login</i>"]:::screen
-            home["BundleHomeScreen<br/><i>/ — zeigt NUR das aktive Pack (Pull-Prinzip; Sichtbarkeit UND Aktiv/Mitnahme-Trennung entscheidet das Backend — carriedOver/packOrdinal je Beleg, die App vergleicht keine packIndexe) plus mitgenommene Problem-Belege früherer Packs („aus Pack n“); alle Zähler laufen aufs aktive Pack;<br/>Ware holen inline (je Beleg Kopf-Infos inkl. CatMan-Termin + Barcode-Pop-up) + Bearbeiten (frei wählbar) + Rest parken; Problemfall rot geparkt / grün geklärt;<br/>Anzeige-Sortierung displayRank — BEIDE Abschnitte gleich, Engine-Reihenfolge bleibt Grundlage: alle Meldungen instruiert → ganz OBEN, noch offene Meldung → ganz UNTEN, sonst unverändert;<br/>Meldungs-Badge „nx“ (IssueBadge, components/) statt Symbol — rot/grün/zweigeteilt, Tap/Hover-Popover mit allen Meldungen + Instruktionstext</i>"]:::screen
+            home["BundleHomeScreen<br/><i>/ — zeigt NUR das aktive Pack (Pull-Prinzip; Sichtbarkeit UND Aktiv/Mitnahme-Trennung entscheidet das Backend — carriedOver/packOrdinal je Beleg, die App vergleicht keine packIndexe) plus mitgenommene Problem-Belege früherer Packs („aus Pack n“); alle Zähler laufen aufs aktive Pack;<br/>Ware holen inline (je Beleg Kopf-Infos inkl. CatMan-Termin + Barcode-Pop-up) + Bearbeiten (frei wählbar) + Rest parken; Problemfall rot geparkt / grün geklärt;<br/>Anzeige-Sortierung displayRank — BEIDE Abschnitte gleich, Engine-Reihenfolge bleibt Grundlage: alle Meldungen instruiert → ganz OBEN, noch offene Meldung → ganz UNTEN, sonst unverändert;<br/>Meldungs-Badge „nx“ (IssueBadge, components/) statt Symbol — rot/grün/zweigeteilt, Tap/Hover-Popover mit allen Meldungen + Instruktionstext;<br/>geteilter Beleg (31.08.2026): Teilen-Icon (IosShare, aria „Beleg teilen“) je Beleg unter „1 · Ware holen“ oben rechts über dem Status-Chip offen/geholt → TeilenDialog ·<br/>unter „2 · Bearbeiten“ goldene Linie + Chip „Geteilt mit &lt;Name&gt;“ / „Geteilt · n Personen“ + „k/n geprüft“ · Abschnitt „Geteilt mit dir“ (today.sharedCases — ich bin Helfer, Ware holt der Inhaber) ·<br/>Pull-Grund shared_case_open: „Erst den geteilten Beleg zu Ende bringen – es sind noch Positionen offen.“</i>"]:::screen
             barcode["Code128Barcode (components/)<br/><i>WE-Nr als Code-128-SVG im Pop-up (Dialog) — Encoder: domain/code128.ts (pur)</i>"]:::logic
             catManChip["CatManChip (components/)<br/><i>CatMan-Termin als Chip (Kalender-Icon + „CatMan &lt;Datum&gt;“, überschritten rot „überfällig“) — Vergleich gegen den Bezugstag: domain/catMan.ts (pur). Anzeige, KEIN Prioritätstreiber</i>"]:::logic
-            process["BelegProcessScreen<br/><i>/case/:id — Beleg-Kopf mit aggregiertem CatMan-Termin; sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis mit € + Komma; Problem markiert Größe/ganze POS rot —<br/>auch OFFENE Server-Meldungen färben ihre Position komplett rot;<br/>TL-Hinweis-Block NEBEN den AW-Piktogrammen (PositionIssueBlock, components/): NUR die aktuellste Nachricht<br/>(bei instruierten Meldungen die TL-Instruktion — voller Verlauf nur in der Teamlead-UX) +<br/>„Erneut melden / Rückfrage“ (Pflichttext) → data/useReopenIssue.ts (POST /api/me/cases/:id/issues/:issueId/reopen)</i>"]:::screen
+            process["BelegProcessScreen<br/><i>/case/:id — Beleg-Kopf mit aggregiertem CatMan-Termin; sticky Positions-Tabelle; Kopfzelle stapelt HS/Shop/CatMan/Etage/Filiale/Shopbereich; Etikettpreis mit € + Komma; Problem markiert Größe/ganze POS rot —<br/>auch OFFENE Server-Meldungen färben ihre Position komplett rot;<br/>TL-Hinweis-Block NEBEN den AW-Piktogrammen (PositionIssueBlock, components/): NUR die aktuellste Nachricht<br/>(bei instruierten Meldungen die TL-Instruktion — voller Verlauf nur in der Teamlead-UX) +<br/>„Erneut melden / Rückfrage“ (Pflichttext) → data/useReopenIssue.ts (POST /api/me/cases/:id/issues/:issueId/reopen);<br/>geteilter Beleg (31.08.2026): „Position geprüft“ trägt die Initialen des Prüfers (Server-Haken positions[].confirmedBy — kein „geht beim Neuladen verloren“ mehr) ·<br/>StepScaffold-Action oben rechts „Team-Ansicht“ (ToggleButton, nur bei aktiver Zusammenarbeit) → Splitscreen: links eigene Tabelle ≥ 50 %, rechts TeamPane ·<br/>Bottom-Bar: aktiver Beteiligter + nicht alle geprüft → „Teilbeleg erledigt“; danach „Dein Teil ist erledigt – die anderen arbeiten weiter“ + „Beleg erledigt“ (bis alle geprüft gesperrt);<br/>alle geprüft → „Beleg erledigt“; „Teilabschluss (Problem melden)“ unverändert</i>"]:::screen
             osk["OnScreenKeyboard (components/, App-mounted)<br/><i>aufklappbare digitale Tastatur für data-osk-Felder; nur Touch, blendet bei Hardware-Tastatur aus</i>"]:::logic
-            msgBanner["NachrichtenBanner (components/, App-mounted)<br/><i>Teamlead-Nachricht unter dem Header: anzeigen + „Gelesen“ quittieren<br/>(data/useNachrichten.ts: GET /api/me/messages · POST :id/read, Polling 15 s)</i>"]:::logic
+            msgBanner["NachrichtenBanner (components/, App-mounted)<br/><i>Teamlead-Nachricht unter dem Header: anzeigen + „Gelesen“ quittieren</i>"]:::logic
+            profile["ProfileMenu (components/, App-mounted)<br/><i>Profilkreis oben rechts (fixed): Initialen-Avatar mit Badge = pendingCount (offene Einladungen + ungelesene Teamlead-Nachrichten) ·<br/>Menü: Name + Mitarbeiternummer · „Zur Teamlead-App“ · „Nachrichten“ (→ /nachrichten) · „Abmelden“ (logout) (31.08.2026)</i>"]:::logic
+            teilenDlg["TeilenDialog (components/)<br/><i>„Beleg teilen“: Liste aktiver Kolleg:innen (Checkbox links · Initialen · Name · „heute im Dienst“), bereits Beteiligte/Eingeladene markiert und gesperrt,<br/>„Nachricht (optional)“, Aktion „Einladen“ (mit Zähler); Einladen darf der Inhaber und jeder aktive Beteiligte (31.08.2026)</i>"]:::screen
+            einladung["EinladungOverlay (components/, App-mounted)<br/><i>Bildschirm-Benachrichtigung unter dem Profilkreis: älteste offene Einladung — „&lt;Name&gt; lädt dich ein, WE &lt;Nr&gt; gemeinsam zu bearbeiten“ + Nachricht,<br/>runde Tasten grüner Haken links / rotes Kreuz rechts → respond; bleibt stehen, bis reagiert wird (kein Web-Push: nur solange die App offen ist)</i>"]:::logic
+            nachrichten["NachrichtenScreen + NachrichtenPanel (screens/)<br/><i>/nachrichten — ab Breite md Splitscreen: links die Übersicht (BundleHomeScreen), rechts schmal der Verlauf; Handy: nur der Verlauf mit Zurück ·<br/>Einträge: Einladungen erhalten (offen → Haken/Kreuz · angenommen · abgelehnt · entfernt), gesendete Einladungen mit Reaktion, Teamlead-Nachrichten mit „Gelesen“</i>"]:::screen
+            teamPane["TeamPane (components/: Kästchen-Raster inline · ParticipantDetail)<br/><i>„Team-Ansicht“ im Beleg-Bildschirm: 1 anderer Beteiligter → Detail (Name, Status „hilft“ / „Teil erledigt“ grau / „Inhaber“, Fortschrittsbalken geprüft/gesamt, geprüfte Positionsnummern);<br/>mehrere → Kästchen-Raster (Initialen, Name, %-Balken, grau bei teil_erledigt), Antippen → Einzelansicht → „Zurück zur Übersicht“;<br/>Kästchen leuchtet ~1,5 s auf, wenn der andere gerade etwas getan hat (useTeamGlow) (31.08.2026)</i>"]:::logic
             problemDlg["ProblemDialog<br/><i>Problem je Position/Größe (Katalog-Grund, lokal gesammelt)</i>"]:::screen
             teilDlg["TeilabschlussDialog<br/><i>Zusammenfassung aller Probleme → an Teamleitung</i>"]:::screen
         end
         subgraph wf["workflow/ (reine Logik + der einzige Live-Daten-Hook)"]
-            useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked · setSkuQuantity · setCorrectedVkPrice · addProblem/removeProblem · complete · partialComplete</i>"]:::hook
-            model["workflowModel.ts<br/><i>Guards: canCompleteCase (Problem sperrt) · hasAnyProblem · skuQuantitiesBody · problemsBody</i>"]:::logic
+            useCaseFlow["useCaseFlow()<br/><i>togglePositionChecked (await ensureStarted → POST positions/:id/confirmed, optimistischer Patch des Aggregat-Caches, Rollback + actionError) ·<br/>setSkuQuantity / setCorrectedVkPrice (POST sku-lines/:id/count, debounce 400 ms je Zeile: akkumulierter Patch am Timer + cancelQueries — der Flush sendet als Teil-Update NUR die berührten Felder, nie den re-gelesenen Cache) ·<br/>partDone (POST part-done, partDonePending sperrt den Knopf) · addProblem/removeProblem (lokal bis zum Teilabschluss) ·<br/>complete · partialComplete (flushen zuerst alle offenen Zähl-Timer) (31.08.2026)</i>"]:::hook
+            model["workflowModel.ts<br/><i>Guards auf dem Aggregat = Server-Wahrheit (positions[].confirmedBy, skuLines[].confirmedQuantity/correctedVkPrice):<br/>allQuantitiesChecked · hasAnyProblem · canCompleteCase (Problem sperrt) · skuQuantitiesBody (nur SELBST berührte Zeilen mit den eigenen Sitzungs-Eingaben — fremde Zählungen bleiben draußen) · problemsBody;<br/>CaseProgress lokal nur noch problems — quantityCheckedPositionIds/confirmedQuantities/correctedVkPrices/step/partial/zstDone sind entfallen</i>"]:::logic
         end
         subgraph data["data/ (React Query — das Backend ist die einzige Quelle der Wahrheit)"]
             apiClient["api.ts → @paket/api-client<br/><i>getApiClient() — frischer Client je Aufruf, aktuelles Session-Token</i>"]:::logic
@@ -38,13 +46,37 @@ flowchart TB
             mapper["caseAggregateMapper.ts<br/><i>CaseAggregateDto → CaseAggregate (domain/types.ts)</i>"]:::logic
             persist["persist.ts<br/><i>persistStartPreparation/Complete/PartialComplete — einfacher POST, wirft bei Fehler</i>"]:::logic
             focus["useFocusRefresh.ts<br/><i>invalidateQueries(['me','today']) bei Fenster-Fokus</i>"]:::hook
-            live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — bei Message: invalidateQueries(['me','today'])</i>"]:::hook
+            tlMsgs["useNachrichten.ts<br/><i>useUngeleseneNachrichten (GET /api/me/messages, Polling 15 s) · useNachrichtGelesen (POST :id/read) — Teamlead-Nachrichten</i>"]:::hook
+            colleagues["useColleagues()<br/><i>GET /api/me/colleagues — Liste für den TeilenDialog (31.08.2026)</i>"]:::hook
+            invitations["useInvitations()<br/><i>POST /api/me/cases/:id/invitations (einladen) · POST /api/me/invitations/:id/respond (annehmen/ablehnen) —<br/>invalidiert ['me','nachrichten'] + ['me','today'] (31.08.2026)</i>"]:::hook
+            posteingang["usePosteingang()<br/><i>GET /api/me/nachrichten — queryKey ['me','nachrichten','posteingang'], Polling 15 s (Einladungen sind immer persistiert; Live beschleunigt nur) (31.08.2026)</i>"]:::hook
+            serverHaken["useConfirmPosition() · useCountSku() · usePartDone()<br/><i>POST /api/cases/:id/positions/:pid/confirmed · POST /api/cases/:id/sku-lines/:sid/count · POST /api/me/cases/:id/part-done (31.08.2026)</i>"]:::hook
+            glow["useTeamGlow(caseId)<br/><i>Glow-Zustand im Query-Cache ['local','glow',caseId] → Map employeeNo→lokale Empfangszeit (Aufleuchten ~1,5 s ab Eintreffen — bewusst NICHT das Server-Feld „at“, weil Tablet- und Serveruhr auseinanderlaufen) (31.08.2026)</i>"]:::hook
+            live["useLiveUpdates.ts<br/><i>EventSource /api/me/stream?token= — addEventListener je Typ aus liveEventTypeSchema (benannte SSE-Events; onmessage empfing sie nie — behoben 31.08.2026):<br/>case.status → ['me','today'] + ['me','case'] · position.confirmed / sku.counted → ['me','case',caseId,'aggregate'] + today + Glow(caseId, actorEmployeeNo, at) ·<br/>collaboration.invited / collaboration.changed → today + case + ['me','nachrichten']</i>"]:::hook
         end
     end
 
     login --> auth
     auth --> apiClient
     home --> meToday
+    home --> teilenDlg
+    teilenDlg --> colleagues
+    teilenDlg --> invitations
+    profile --> posteingang
+    profile -->|"„Nachrichten“ → /nachrichten"| nachrichten
+    einladung --> posteingang
+    einladung --> invitations
+    nachrichten -->|"Übersicht links (ab md)"| home
+    nachrichten --> posteingang
+    nachrichten --> invitations
+    nachrichten -->|"„Gelesen“"| tlMsgs
+    msgBanner --> tlMsgs
+    process --> teamPane
+    teamPane --> glow
+    live --> glow
+    live --> posteingang
+    live --> caseAgg
+    useCaseFlow --> serverHaken
     home --> barcode
     home --> catManChip
     catManChip --> meToday
@@ -64,6 +96,11 @@ flowchart TB
     caseAgg --> apiClient
     meToday --> apiClient
     persist --> apiClient
+    tlMsgs --> apiClient
+    colleagues --> apiClient
+    invitations --> apiClient
+    posteingang --> apiClient
+    serverHaken --> apiClient
     focus --> meToday
     live --> meToday
     live -->|"SSE (JWT als Query-Param)"| api

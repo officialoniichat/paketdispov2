@@ -139,7 +139,9 @@ describe('assignment (§8.3 + §17.1 Zuteilung)', () => {
     expect(bundles).toBe(result.bundleCount);
 
     const created = await prisma.workflowEvent.count({ where: { eventType: 'bundle.created' } });
-    const assignedEv = await prisma.workflowEvent.count({ where: { eventType: 'bundle.assigned' } });
+    const assignedEv = await prisma.workflowEvent.count({
+      where: { eventType: 'bundle.assigned' },
+    });
     expect(created).toBe(result.bundleCount);
     expect(assignedEv).toBe(result.bundleCount);
 
@@ -250,9 +252,7 @@ describe('Problem-Loop (Kundenfeedback 14.07.2026 + §17.1 Problemfall)', () => 
         { skuLineId: skuM!.id, confirmedQuantity: 9 },
         { skuLineId: skuL!.id, confirmedQuantity: 8, correctedVkPrice: 14.99 },
       ],
-      problems: [
-        { positionId: position.id, reasonId: 'pr_wrong_color', note: 'Farbe weicht ab' },
-      ],
+      problems: [{ positionId: position.id, reasonId: 'pr_wrong_color', note: 'Farbe weicht ab' }],
     });
 
     let row = await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: owned.id } });
@@ -359,6 +359,139 @@ describe('Problem-Loop (Kundenfeedback 14.07.2026 + §17.1 Problemfall)', () => 
     expect(zstRecords.map((z) => z.completedQuantity)).toEqual([17, 3]);
 
     expect((await events.verifyIntegrity()).ok).toBe(true);
+  });
+
+  it('ZST kappt beleg-weit: Prüferwechsel nach Teilabschluss bucht nicht doppelt (§5.3)', async () => {
+    // Geteilter Beleg, 2 Positionen à 10 Stück: Inhaber E100 prüft Position 1,
+    // Helfer E101 Position 2. Nach dem Teilabschluss (je 10 gebucht) entfernt
+    // der Teamlead den Helfer — der spätere Abschluss durch E100 darf die vom
+    // Helfer geprüften 10 Stück NICHT ein zweites Mal in die KPI-Basis buchen.
+    const emp = await prisma.user.findUniqueOrThrow({ where: { employeeNo: 'E100' } });
+    const helper = await prisma.user.upsert({
+      where: { employeeNo: 'E101' },
+      update: {},
+      create: { employeeNo: 'E101', displayName: 'Ben Beispiel' },
+    });
+    const helperPrincipal: Principal = {
+      sub: 'oidc-emp-101',
+      employeeNo: 'E101',
+      roles: [Role.Employee],
+      claims: {},
+    };
+    const loc = await prisma.location.findUniqueOrThrow({ where: { code: 'R27' } });
+    const day = todayMidnightUtc();
+    // Offenes Tages-Bündel wiederverwenden oder anlegen (Muster der Fixture oben) —
+    // der Vortest hat sein Bündel über closeBundleIfDone bereits abgeschlossen.
+    const bundle =
+      (await prisma.assignmentBundle.findFirst({
+        where: { employeeId: emp.id, date: day, status: { notIn: ['completed', 'cancelled'] } },
+      })) ??
+      (await prisma.assignmentBundle.create({
+        data: { employeeId: emp.id, date: day, status: 'assigned', createdBy: 'system' },
+      }));
+    const gcase = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: 'itest-zst-cap',
+        weBelegNo: 'WE-ZSTCAP-1',
+        bookingDate: day,
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 7,
+        totalQuantity: 20,
+        status: 'assigned',
+        effortPoints: 10,
+        estimatedMinutes: 20,
+        assignedBundleId: bundle.id,
+        positions: {
+          create: [
+            {
+              positionNo: 1,
+              wgr: '218110',
+              supplierArticleNo: 'ART-CAP-1',
+              supplierColor: 'schwarz',
+              branchNo: '1',
+              shopNo: '0034',
+              skuLines: {
+                create: [
+                  { ean: '4000000000101', size: 'M', expectedQuantity: 10, vkLabelPrice: 19.99 },
+                ],
+              },
+            },
+            {
+              positionNo: 2,
+              wgr: '218110',
+              supplierArticleNo: 'ART-CAP-2',
+              supplierColor: 'weiss',
+              branchNo: '1',
+              shopNo: '0034',
+              skuLines: {
+                create: [
+                  { ean: '4000000000102', size: 'L', expectedQuantity: 10, vkLabelPrice: 19.99 },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      include: {
+        positions: { orderBy: { positionNo: 'asc' }, include: { skuLines: true } },
+      },
+    });
+    const [p1, p2] = gcase.positions;
+    await prisma.caseParticipant.createMany({
+      data: [
+        {
+          caseId: gcase.id,
+          employeeId: emp.id,
+          role: 'inhaber',
+          status: 'angenommen',
+          invitedById: emp.id,
+          invitedByLabel: 'Anna Beispiel',
+          respondedAt: new Date(),
+        },
+        {
+          caseId: gcase.id,
+          employeeId: helper.id,
+          role: 'helfer',
+          status: 'angenommen',
+          invitedById: emp.id,
+          invitedByLabel: 'Anna Beispiel',
+          respondedAt: new Date(),
+        },
+      ],
+    });
+
+    await cases.startPreparation(employee, gcase.id);
+    await cases.confirmPosition(employee, gcase.id, p1!.id, { confirmed: true });
+    await cases.confirmPosition(helperPrincipal, gcase.id, p2!.id, { confirmed: true });
+
+    // Teilabschluss mit manuellem Problem: je Prüfer werden SEINE 10 gebucht.
+    await cases.partialComplete(employee, gcase.id, {
+      skuQuantities: [
+        { skuLineId: p1!.skuLines[0]!.id, confirmedQuantity: 10 },
+        { skuLineId: p2!.skuLines[0]!.id, confirmedQuantity: 10 },
+      ],
+      problems: [{ positionId: p1!.id, reasonId: 'pr_wrong_color', note: 'Farbe weicht ab' }],
+    });
+    const partialRecords = await prisma.zstRecord.findMany({ where: { caseId: gcase.id } });
+    expect(partialRecords.map((z) => z.completedQuantity).sort()).toEqual([10, 10]);
+
+    // Prüferwechsel: Teamlead entfernt den Helfer, Problem wird geklärt,
+    // der Inhaber schließt allein ab (Zusammenarbeit nicht mehr aktiv).
+    await teamleadSvc.removeParticipant(teamlead, gcase.id, 'E101', { reason: 'Schichtende' });
+    const issue = await prisma.issue.findFirstOrThrow({ where: { caseId: gcase.id } });
+    await teamleadSvc.sendInstruction(teamlead, gcase.id, issue.id, {
+      text: 'Mit Filiale geklärt — so übernehmen.',
+    });
+    await cases.startPreparation(employee, gcase.id);
+    await cases.complete(employee, gcase.id, {});
+
+    // Beleg-weite Kappung: 20 gezählte Stück ⇒ exakt 20 in der KPI-Basis,
+    // kein dritter Datensatz über das Paar-Delta des Inhabers.
+    const zstRecords = await prisma.zstRecord.findMany({ where: { caseId: gcase.id } });
+    expect(zstRecords).toHaveLength(2);
+    expect(zstRecords.reduce((sum, z) => sum + z.completedQuantity, 0)).toBe(20);
   });
 
   it('Teilabschluss OHNE Probleme wird abgelehnt (Beleg erledigt ist der richtige Weg)', async () => {

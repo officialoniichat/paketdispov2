@@ -20,7 +20,8 @@ andere Bündelgrößen …).
 ## Die Tabs im Überblick
 
 Reihenfolge: `'Priorität'`, `'Bündel'`, `'Aufwand'`, `'Lieferungen'`, `'Verladeplan'`,
-`'Lagerplätze'`, `'Mitarbeiter'`, `'Schichtplan'`, `'Integrationen'`, `'Schichtende'`.
+`'Lagerplätze'`, `'Mitarbeiter'`, `'Schichtplan'`, `'Integrationen'`, `'Schichtende'`,
+`'Problemarten'`.
 
 ### `'Priorität'` – die Prio-Leiter
 
@@ -38,7 +39,7 @@ Hier steht, was die Automatik zuerst zuteilt. Die Leiter (oberste passende Stufe
 `'FIFO aktiv'`: „bei gleicher Priorität wird der älteste Beleg zuerst zugeteilt." `'Manuelle Prio
 gewinnt'`: „Ein vom Teamlead manuell gesetzter Prio-Beleg schlägt alle Automatikregeln."
 
-### `'Bündel'` – Teile-Größen
+### `'Bündel'` – Teile-Größen und geteilte Belege
 
 Legt die Bündelgrößen in **Teilen** fest: `'Starter-Pack min (Teile)'`, `'Starter-Pack max
 (Teile)'`, `'Folge-Pack min (Teile)'`, `'Folge-Pack max (Teile)'` sowie die
@@ -47,6 +48,18 @@ sondern warten auf die manuelle Teamlead-Entscheidung." (Groß-Belege, Kapitel B
 setzt im Cockpit den roten Chip `'Monster'` (Digitale Ablagen + Belege-Tabelle) und bedient dort den
 Filter `'Monster'`. Ändern Sie den Wert, ändern sich Chip, Filter und Verteilung gemeinsam — es gibt
 nur diese eine Grenze.
+
+Außerdem steht hier der Schalter **`'Beim geteilten Beleg erst mithelfen'`** – „Wer an einem
+geteilten Beleg beteiligt ist, bekommt kein neues Pack, bis alle Positionen geprüft sind."
+Standard: **aus**.
+
+- **Aus:** Wer seinen Anteil an einem geteilten Beleg mit `'Teilbeleg erledigt'` gemeldet hat und
+  sonst nichts Offenes im laufenden Pack hat, darf sich mit `'Nächstes Pack anfordern'` neue Arbeit
+  holen – der geteilte Beleg hält ihn nicht auf.
+- **An:** Inhaber wie Helfer bekommen beim Anfordern die Meldung `'Erst den geteilten Beleg zu Ende
+  bringen – es sind noch Positionen offen.'`, solange der geteilte Beleg weder fertig ist noch mit
+  Problemen bei Ihnen in Klärung liegt. Auch die Automatik gibt diesen Personen kein neues
+  Starter-Pack, bis der Beleg durch ist (Kapitel A7/A8).
 
 ### `'Aufwand'` – Kalibrierung
 

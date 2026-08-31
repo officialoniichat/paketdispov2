@@ -16,7 +16,8 @@
 - [A4 – Positionen abarbeiten](./a4-positionen.md)
 - [A5 – Beleg erledigt vs. Teilabschluss](./a5-erledigt-teilabschluss.md)
 - [A6 – Problem melden](./a6-problem-melden.md)
-- [A7 – Häufige Situationen & FAQ](./a7-faq.md)
+- [A7 – Beleg teilen & gemeinsam bearbeiten](./a7-beleg-teilen.md)
+- [A8 – Häufige Situationen & FAQ](./a8-faq.md)
 
 ## Teil B – Teamlead (Cockpit)
 

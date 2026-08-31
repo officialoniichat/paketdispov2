@@ -1,9 +1,14 @@
 /**
- * Beleg aufteilen (§8.4 manueller Eingriff).
+ * Beleg aufteilen (§8.4 manueller Eingriff) — zwei Wege, einen großen Beleg auf mehrere
+ * Personen zu bringen (Konzept beleg-zusammenarbeit §4, 31.08.2026). Ganz oben steht
+ * darum die Frage „Wie wird gearbeitet?":
  *
- * Der Teamlead zerlegt einen zu großen Beleg in echte Teil-Belege und entscheidet dabei
- * nur zwei Dinge: wie viele Teile mit welcher Menge — und ob er sie gleich jemandem gibt
- * oder die Automatik verteilen lässt.
+ * - `'Gemeinsam bearbeiten'` (VORAUSGEWÄHLT): der Beleg bleibt EIN Beleg. Er wandert in
+ *   den Karren des zuerst angehakten Mitarbeiters, alle Angehakten sehen ihn vollständig
+ *   und arbeiten ihn zusammen ab — es entstehen KEINE Teil-Belege.
+ * - `'In Teil-Belege aufteilen'`: der bisherige Weg. Der Teamlead zerlegt den Beleg in
+ *   echte Teil-Belege und entscheidet dabei nur zwei Dinge: wie viele Teile mit welcher
+ *   Menge — und ob er sie gleich jemandem gibt oder die Automatik verteilen lässt.
  *
  * „Ohne Zuweisung" ist der Normalfall für Monster-Belege: die Teile landen als bereite
  * Belege im Topf und werden beim nächsten Starter-Pack bzw. Self-Pull regulär verteilt.
@@ -17,6 +22,7 @@ import { useEffect, useMemo, useState, type JSX } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -24,6 +30,9 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
@@ -33,6 +42,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import GroupsIcon from '@mui/icons-material/Groups';
 import { isValidReason, MIN_REASON_LENGTH } from '../../data/audit.js';
 import { formatMinutes } from '../../lib/format.js';
 import {
@@ -61,12 +71,22 @@ export interface SplitDialogEmployee {
   ceilingMinutes: number;
 }
 
-/** Was der Dialog nach oben meldet: Mengen, optionale Personen, Grund. */
-export interface SplitSubmit {
-  caseId: string;
-  parts: { quantity: number; employeeNo?: string }[];
-  reason: string;
-}
+/** Wie gearbeitet wird — die oberste Entscheidung des Dialogs (Konzept §4). */
+export type SplitModus = 'gemeinsam' | 'aufteilen';
+
+/**
+ * Was der Dialog nach oben meldet — je Modus ein anderer Auftrag ans Backend:
+ * `'gemeinsam'` macht aus EINEM Beleg einen geteilten Beleg (der erste Mitarbeiter wird
+ * Inhaber und bekommt ihn in seinen Karren), `'aufteilen'` legt echte Teil-Belege an.
+ */
+export type SplitSubmit =
+  | { mode: 'gemeinsam'; caseId: string; employeeNos: string[]; reason: string }
+  | {
+      mode: 'aufteilen';
+      caseId: string;
+      parts: { quantity: number; employeeNo?: string }[];
+      reason: string;
+    };
 
 export interface SplitDialogProps {
   open: boolean;
@@ -78,6 +98,8 @@ export interface SplitDialogProps {
   error?: string | null;
   onConfirm: (input: SplitSubmit) => void;
   onClose: () => void;
+  /** Feuert beim Wechsel von „Wie wird gearbeitet?" — Aufrufer räumen damit z. B. die Backend-Fehlermeldung ab. */
+  onModusChange?: (modus: SplitModus) => void;
 }
 
 /** Wer die Teile bekommt. */
@@ -120,19 +142,30 @@ export function SplitDialog({
   error = null,
   onConfirm,
   onClose,
+  onModusChange,
 }: SplitDialogProps): JSX.Element | null {
+  const [modus, setModus] = useState<SplitModus>('gemeinsam');
   const [handover, setHandover] = useState<Handover>('automatik');
   const [rows, setRows] = useState<Row[]>([]);
+  // Gemeinsam bearbeiten: Auswahl in KLICKREIHENFOLGE — der erste bekommt den Karren.
+  const [gemeinsamIds, setGemeinsamIds] = useState<string[]>([]);
   const [reason, setReason] = useState('');
 
-  // Neu aufsetzen, sobald ein anderer Beleg geöffnet wird (oder die MA-Liste eintrifft).
+  // Neu aufsetzen, sobald der Dialog geöffnet oder ein ANDERER Beleg gewählt wird.
+  // Der Modus fällt dabei immer auf 'gemeinsam' zurück (Konzept §4: vorausgewählt).
+  // Bewusst an die Beleg-ID statt an Objekt-Identitäten gekoppelt: Live-Auffrischungen
+  // (SSE → invalidateQueries) liefern bei offenem Dialog neue beleg-/employees-Objekte
+  // und dürfen laufende Eingaben (Modus, Auswahl, Grund) nicht verwerfen.
   useEffect(() => {
     if (open && beleg) {
+      setModus('gemeinsam');
       setHandover('automatik');
       setRows(initialRows(beleg, employees));
+      setGemeinsamIds([]);
       setReason('');
     }
-  }, [open, beleg, employees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, beleg?.caseId]);
 
   const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
@@ -149,12 +182,15 @@ export function SplitDialog({
   // Ein Beleg wird VOLLSTÄNDIG aufgeteilt: ein Rest hätte danach keinen Träger mehr,
   // weil das Original nur noch die Klammer über seinen Teilen ist.
   const canConfirm =
-    validation.isValid &&
-    validation.isComplete &&
-    allChosen &&
-    !hasDuplicate &&
-    reasonOk &&
-    !pending;
+    modus === 'gemeinsam'
+      ? // Gemeinsam: mindestens zwei Beteiligte (Backend: ArrayMinSize 2) + Pflicht-Grund.
+        gemeinsamIds.length >= 2 && reasonOk && !pending
+      : validation.isValid &&
+        validation.isComplete &&
+        allChosen &&
+        !hasDuplicate &&
+        reasonOk &&
+        !pending;
 
   if (!beleg) return null;
 
@@ -180,9 +216,26 @@ export function SplitDialog({
     );
   };
 
+  /** An-/Abhaken; die Reihenfolge des Anhakens entscheidet, wer den Karren bekommt. */
+  const toggleGemeinsam = (id: string): void => {
+    setGemeinsamIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const inhaberName = employeeById.get(gemeinsamIds[0] ?? '')?.name ?? '';
+
   const handleConfirm = (): void => {
     if (!canConfirm) return;
+    if (modus === 'gemeinsam') {
+      onConfirm({
+        mode: 'gemeinsam',
+        caseId: beleg.caseId,
+        reason: reason.trim(),
+        // Reihenfolge = Klickreihenfolge; der erste Mitarbeiter wird Inhaber (Karren).
+        employeeNos: gemeinsamIds.map((id) => employeeById.get(id)?.employeeNo ?? ''),
+      });
+      return;
+    }
     onConfirm({
+      mode: 'aufteilen',
       caseId: beleg.caseId,
       reason: reason.trim(),
       parts: rows.map((r) => {
@@ -208,160 +261,260 @@ export function SplitDialog({
         </Typography>
       </DialogTitle>
       <DialogContent>
-        <Stack direction="row" spacing={3} flexWrap="wrap" sx={{ mt: 1.5, mb: 2 }}>
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontWeight: 700, display: 'block' }}
-            >
-              Wer bekommt die Teile?
-            </Typography>
-            <ToggleButtonGroup
-              size="small"
-              exclusive
-              value={handover}
-              onChange={(_e, v) => v && setHandover(v as Handover)}
-              aria-label="Wer bekommt die Teile"
-            >
-              <ToggleButton value="automatik">Ohne Zuweisung</ToggleButton>
-              <ToggleButton value="mitarbeiter">Mitarbeiter wählen</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontWeight: 700, display: 'block' }}
-            >
-              Anzahl Teile
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              {[2, 3, 4, 5].map((n) => (
-                <Button
-                  key={n}
-                  size="small"
-                  variant={rows.length === n ? 'contained' : 'outlined'}
-                  onClick={() => reSuggest(n)}
-                  sx={{ minWidth: 38 }}
-                >
-                  {n}
-                </Button>
-              ))}
-            </Stack>
-          </Box>
-        </Stack>
-
-        <Alert severity="info" sx={{ mb: 2 }}>
-          {handover === 'automatik'
-            ? 'Die Teile gehen als eigenständige Belege in den Topf — die Automatik verteilt sie beim nächsten Pack. Liegt jeder Teil unter der Monster-Schwelle, wird er wieder automatisch zugeteilt.'
-            : 'Die Teile werden direkt den gewählten Mitarbeitern zugeteilt. Es entstehen dieselben eigenständigen Teil-Belege wie ohne Zuweisung — nur eben schon vergeben.'}
-        </Alert>
-
-        <Box sx={{ mb: 2 }}>
-          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-            <Typography variant="body2">Verteilt</Typography>
-            <Typography variant="body2">
-              <strong>{validation.assignedQuantity.toLocaleString('de-DE')}</strong> /{' '}
-              {beleg.totalQuantity.toLocaleString('de-DE')} Teile · Rest{' '}
-              <strong>{validation.remaining.toLocaleString('de-DE')}</strong>
-            </Typography>
-          </Stack>
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(100, assignedPct)}
-            color={barColor}
-            sx={{ height: 12, borderRadius: 6 }}
-          />
-          {validation.overAssigned ? (
-            <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
-              Summe übersteigt die Belegmenge — bitte korrigieren.
-            </Typography>
-          ) : validation.isComplete ? (
-            <Typography variant="caption" color="success.main" sx={{ fontWeight: 700 }}>
-              ✓ Die Teile decken den ganzen Beleg ab.
-            </Typography>
-          ) : (
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              Noch {validation.remaining.toLocaleString('de-DE')} Teile offen — der Beleg wird
-              vollständig aufgeteilt.
-            </Typography>
-          )}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Größenzeilen werden nie zerrissen: die tatsächlichen Mengen können darum leicht von
-            den Wunschmengen abweichen.
+        <Box sx={{ mt: 1.5, mb: 2 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontWeight: 700, display: 'block' }}
+          >
+            Wie wird gearbeitet?
           </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={modus}
+            onChange={(_e, v) => {
+              if (!v) return;
+              setModus(v as SplitModus);
+              onModusChange?.(v as SplitModus);
+            }}
+            aria-label="Wie wird gearbeitet"
+          >
+            <ToggleButton value="gemeinsam">Gemeinsam bearbeiten</ToggleButton>
+            <ToggleButton value="aufteilen">In Teil-Belege aufteilen</ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
-        <Stack spacing={1.5}>
-          {rows.map((row, index) => {
-            const shareMinutes =
-              totalQuantity > 0 ? (estimatedMinutes * row.quantity) / totalQuantity : 0;
-            const ceiling = employeeById.get(row.employeeId)?.ceilingMinutes ?? 0;
-            const fit = needsPeople && row.employeeId ? fitForShare(shareMinutes, ceiling) : null;
-            return (
-              <Stack key={index} direction="row" spacing={1.5} alignItems="center">
-                <Chip size="small" label={`Teil ${index + 1}`} sx={{ minWidth: 72 }} />
-                {needsPeople && (
-                  <TextField
-                    select
-                    size="small"
-                    label="Mitarbeiter"
-                    value={row.employeeId}
-                    onChange={(e) => setRow(index, { employeeId: e.target.value })}
-                    sx={{ minWidth: 220 }}
-                  >
-                    {employees.map((e) => (
-                      <MenuItem
-                        key={e.id}
-                        value={e.id}
-                        disabled={usedIds.has(e.id) && e.id !== row.employeeId}
-                      >
-                        {e.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-                <TextField
-                  size="small"
-                  type="number"
-                  label="Teile"
-                  value={row.quantity}
-                  onChange={(e) => setRow(index, { quantity: Math.max(0, Number(e.target.value)) })}
-                  sx={{ width: 130 }}
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>
-                  ≈ {formatMinutes(shareMinutes)}
-                </Typography>
-                {fit && (
-                  <Chip size="small" color={FIT_META[fit].color} label={FIT_META[fit].label} />
-                )}
-                <Tooltip title="Teil entfernen">
-                  <span>
-                    <IconButton
+        {modus === 'gemeinsam' ? (
+          <>
+            <Alert severity="info" icon={<GroupsIcon />} sx={{ mb: 2 }}>
+              Alle Beteiligten sehen den ganzen Beleg und arbeiten ihn zusammen ab. Der erste
+              Mitarbeiter bekommt den Beleg in seinen Karren.
+            </Alert>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 700, display: 'block' }}
+            >
+              Wer bearbeitet den Beleg gemeinsam?
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Mindestens zwei Mitarbeitende anhaken — die zuerst angehakte Person wird Inhaber.
+            </Typography>
+            <List
+              dense
+              disablePadding
+              sx={{
+                maxHeight: 280,
+                overflowY: 'auto',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+              }}
+            >
+              {employees.map((e) => {
+                const platz = gemeinsamIds.indexOf(e.id);
+                return (
+                  <ListItemButton key={e.id} dense onClick={() => toggleGemeinsam(e.id)}>
+                    <Checkbox
+                      edge="start"
                       size="small"
-                      onClick={() => removeRow(index)}
-                      disabled={rows.length <= 2}
-                      aria-label={`Teil ${index + 1} entfernen`}
+                      tabIndex={-1}
+                      disableRipple
+                      checked={platz >= 0}
+                      inputProps={{ 'aria-label': e.name }}
+                    />
+                    <ListItemText
+                      primary={e.name}
+                      secondary={`${formatMinutes(e.ceilingMinutes)} frei heute`}
+                    />
+                    {platz === 0 && <Chip size="small" color="primary" label="Karren" />}
+                  </ListItemButton>
+                );
+              })}
+            </List>
+            {employees.length === 0 && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                Heute ist niemand mit freier Kapazität eingeteilt.
+              </Alert>
+            )}
+            <Typography
+              variant="caption"
+              color={gemeinsamIds.length >= 2 ? 'success.main' : 'text.secondary'}
+              sx={{ fontWeight: 700, display: 'block', mt: 1 }}
+            >
+              {gemeinsamIds.length === 0
+                ? 'Noch niemand gewählt — mindestens zwei Mitarbeitende anhaken.'
+                : gemeinsamIds.length === 1
+                  ? 'Noch eine Person anhaken — gemeinsam arbeiten mindestens zwei.'
+                  : `${gemeinsamIds.length} Mitarbeitende gewählt — ${inhaberName} bekommt den Karren.`}
+            </Typography>
+          </>
+        ) : (
+          <>
+            <Stack direction="row" spacing={3} flexWrap="wrap" sx={{ mt: 1.5, mb: 2 }}>
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 700, display: 'block' }}
+                >
+                  Wer bekommt die Teile?
+                </Typography>
+                <ToggleButtonGroup
+                  size="small"
+                  exclusive
+                  value={handover}
+                  onChange={(_e, v) => v && setHandover(v as Handover)}
+                  aria-label="Wer bekommt die Teile"
+                >
+                  <ToggleButton value="automatik">Ohne Zuweisung</ToggleButton>
+                  <ToggleButton value="mitarbeiter">Mitarbeiter wählen</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 700, display: 'block' }}
+                >
+                  Anzahl Teile
+                </Typography>
+                <Stack direction="row" spacing={0.5}>
+                  {[2, 3, 4, 5].map((n) => (
+                    <Button
+                      key={n}
+                      size="small"
+                      variant={rows.length === n ? 'contained' : 'outlined'}
+                      onClick={() => reSuggest(n)}
+                      sx={{ minWidth: 38 }}
                     >
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Stack>
-            );
-          })}
-          <Box>
-            <Button size="small" startIcon={<AddIcon />} onClick={addRow}>
-              Teil hinzufügen
-            </Button>
-          </Box>
-        </Stack>
+                      {n}
+                    </Button>
+                  ))}
+                </Stack>
+              </Box>
+            </Stack>
 
-        {hasDuplicate && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            Ein Mitarbeiter steht mehrfach in der Liste.
-          </Alert>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {handover === 'automatik'
+                ? 'Die Teile gehen als eigenständige Belege in den Topf — die Automatik verteilt sie beim nächsten Pack. Liegt jeder Teil unter der Monster-Schwelle, wird er wieder automatisch zugeteilt.'
+                : 'Die Teile werden direkt den gewählten Mitarbeitern zugeteilt. Es entstehen dieselben eigenständigen Teil-Belege wie ohne Zuweisung — nur eben schon vergeben.'}
+            </Alert>
+
+            <Box sx={{ mb: 2 }}>
+              <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                <Typography variant="body2">Verteilt</Typography>
+                <Typography variant="body2">
+                  <strong>{validation.assignedQuantity.toLocaleString('de-DE')}</strong> /{' '}
+                  {beleg.totalQuantity.toLocaleString('de-DE')} Teile · Rest{' '}
+                  <strong>{validation.remaining.toLocaleString('de-DE')}</strong>
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, assignedPct)}
+                color={barColor}
+                sx={{ height: 12, borderRadius: 6 }}
+              />
+              {validation.overAssigned ? (
+                <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+                  Summe übersteigt die Belegmenge — bitte korrigieren.
+                </Typography>
+              ) : validation.isComplete ? (
+                <Typography variant="caption" color="success.main" sx={{ fontWeight: 700 }}>
+                  ✓ Die Teile decken den ganzen Beleg ab.
+                </Typography>
+              ) : (
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Noch {validation.remaining.toLocaleString('de-DE')} Teile offen — der Beleg wird
+                  vollständig aufgeteilt.
+                </Typography>
+              )}
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.5 }}
+              >
+                Größenzeilen werden nie zerrissen: die tatsächlichen Mengen können darum leicht von
+                den Wunschmengen abweichen.
+              </Typography>
+            </Box>
+
+            <Stack spacing={1.5}>
+              {rows.map((row, index) => {
+                const shareMinutes =
+                  totalQuantity > 0 ? (estimatedMinutes * row.quantity) / totalQuantity : 0;
+                const ceiling = employeeById.get(row.employeeId)?.ceilingMinutes ?? 0;
+                const fit =
+                  needsPeople && row.employeeId ? fitForShare(shareMinutes, ceiling) : null;
+                return (
+                  <Stack key={index} direction="row" spacing={1.5} alignItems="center">
+                    <Chip size="small" label={`Teil ${index + 1}`} sx={{ minWidth: 72 }} />
+                    {needsPeople && (
+                      <TextField
+                        select
+                        size="small"
+                        label="Mitarbeiter"
+                        value={row.employeeId}
+                        onChange={(e) => setRow(index, { employeeId: e.target.value })}
+                        sx={{ minWidth: 220 }}
+                      >
+                        {employees.map((e) => (
+                          <MenuItem
+                            key={e.id}
+                            value={e.id}
+                            disabled={usedIds.has(e.id) && e.id !== row.employeeId}
+                          >
+                            {e.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Teile"
+                      value={row.quantity}
+                      onChange={(e) =>
+                        setRow(index, { quantity: Math.max(0, Number(e.target.value)) })
+                      }
+                      sx={{ width: 130 }}
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>
+                      ≈ {formatMinutes(shareMinutes)}
+                    </Typography>
+                    {fit && (
+                      <Chip size="small" color={FIT_META[fit].color} label={FIT_META[fit].label} />
+                    )}
+                    <Tooltip title="Teil entfernen">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => removeRow(index)}
+                          disabled={rows.length <= 2}
+                          aria-label={`Teil ${index + 1} entfernen`}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                );
+              })}
+              <Box>
+                <Button size="small" startIcon={<AddIcon />} onClick={addRow}>
+                  Teil hinzufügen
+                </Button>
+              </Box>
+            </Stack>
+
+            {hasDuplicate && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Ein Mitarbeiter steht mehrfach in der Liste.
+              </Alert>
+            )}
+          </>
         )}
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
@@ -387,11 +540,15 @@ export function SplitDialog({
       <DialogActions>
         <Button onClick={onClose}>Abbrechen</Button>
         <Button variant="contained" onClick={handleConfirm} disabled={!canConfirm}>
-          {pending
-            ? 'Wird aufgeteilt …'
-            : handover === 'automatik'
-              ? `In ${rows.length} Teile aufteilen`
-              : 'Aufteilen und zuweisen'}
+          {modus === 'gemeinsam'
+            ? pending
+              ? 'Wird zugewiesen …'
+              : 'Gemeinsam zuweisen'
+            : pending
+              ? 'Wird aufgeteilt …'
+              : handover === 'automatik'
+                ? `In ${rows.length} Teile aufteilen`
+                : 'Aufteilen und zuweisen'}
         </Button>
       </DialogActions>
     </Dialog>

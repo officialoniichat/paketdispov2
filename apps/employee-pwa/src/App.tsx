@@ -9,15 +9,18 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import { EinladungOverlay } from './components/EinladungOverlay.js';
 import { NachrichtenBanner } from './components/NachrichtenBanner.js';
 import { ProfileMenu } from './components/ProfileMenu.js';
 import { OnScreenKeyboard } from './components/OnScreenKeyboard.js';
 import { getSession, isSessionExpired, onSessionCleared, type Session } from './data/session.js';
 import { useFocusRefresh } from './data/useFocusRefresh.js';
 import { useLiveUpdates } from './data/useLiveUpdates.js';
+import { NACHRICHTEN } from './routes/paths.js';
 import { LoginScreen } from './screens/LoginScreen.js';
 import { BundleHomeScreen } from './screens/BundleHomeScreen.js';
 import { BelegProcessScreen } from './screens/BelegProcessScreen.js';
+import { NachrichtenScreen } from './screens/NachrichtenScreen.js';
 
 export function App(): JSX.Element {
   const [session, setSessionState] = useState<Session | null>(() => {
@@ -61,10 +64,14 @@ export function App(): JSX.Element {
       <ProfileMenu />
       {/* Teamlead-Nachricht (z. B. Vorverteilungs-Eingriff): anzeigen + quittieren. */}
       <NachrichtenBanner />
+      {/* Einladung zum geteilten Beleg (31.08.2026): bleibt stehen, bis der
+          Mitarbeiter mit Haken/Kreuz reagiert — auf jedem Screen sichtbar. */}
+      <EinladungOverlay />
 
       <Routes>
         <Route path="/" element={<BundleHomeScreen />} />
         <Route path="/case/:caseId" element={<BelegProcessScreen />} />
+        <Route path={NACHRICHTEN} element={<NachrichtenScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {/* Punkt 1: aufklappbare digitale Tastatur für Touchscreen-Monitore. */}

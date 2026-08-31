@@ -13,6 +13,29 @@ Zum Überblick über die Mannschaft, bei Engpässen/Überlast und für gezielte 
 
 - Navigationseintrag `'Mitarbeiterboard'`.
 
+## Zwei Ansichten: `'Liste'` und `'Board'`
+
+Oben rechts neben der Überschrift `'Mitarbeiterboard'` schalten Sie zwischen zwei Darstellungen um;
+die Wahl bleibt gespeichert:
+
+- **`'Liste'`** – eine aufklappbare Zeile je Person (die folgenden Abschnitte).
+- **`'Board'`** – das **Kanban-Raster**: je Person eine Karte, auf dem Desktop bis zu fünf Karten
+  nebeneinander. Der Kopf jeder Karte zeigt Name, Skill-Stufe, `'frei'` bzw. den Bündel-Status oder
+  `'Pausiert'`, die Last und offene Probleme. Darunter ist die Karte senkrecht in
+  **`'Laufend (<n>)'`** (was die Person gerade bearbeitet) und **`'Geplant (<n>)'`**
+  (Abholreihenfolge danach) geteilt; erledigte Belege stehen kompakt als Chips hinter
+  `'Fertig (<n>):'`. Leere Bereiche sagen `'Nichts in Arbeit.'` bzw. `'Nichts geplant.'`. Über dem
+  Raster wählen Sie die `'Sortierung'` (`'Standard'`, `'Frei → verplant'`, `'Verplant → frei'`,
+  `'Profi zuerst'`, `'Starter zuerst'`) und filtern hinter `'Erfahrung:'` per Skill-Chips
+  (`'Filter aufheben'` setzt zurück).
+
+Jede **Beleg-Karte** im Raster zeigt die laufende Nummer mit der WE-Nummer, den Status-Chip, die
+Schnellinfo `'!'` (Tooltip mit den Kopf-Infos des Belegs), ggf. die Lieferung und darunter
+`'<n> Teile · <Minuten> · <Lagerplatz>'`. Am Griff (2×2 Punkte) ziehen Sie eine Karte auf eine
+**andere** Person – das ist derselbe Eingriff wie `'Verschieben'` (siehe unten, mit Pflicht-Grund) –
+oder innerhalb der eigenen Karte zwischen den **geplanten** Belegen, um die Reihenfolge zu ändern.
+Alles läuft über dieselben Dialoge wie in der Liste; das Raster ist nur eine andere Oberfläche.
+
 ## Eine Zeile lesen
 
 Jede Person ist eine aufklappbare Zeile. Die Kopfzeile zeigt:
@@ -111,6 +134,31 @@ Feld `'Ziel-Mitarbeiter'` wählen, `'Weiter'` klicken. Anschließend wie gewohnt
 (Pflichtfeld)** angeben und bestätigen. Der Beleg wird in einem Schritt aus dem aktuellen Bündel
 entfernt und dem Bündel der Zielperson zugeteilt (neu angelegt, falls diese noch keins hat).
 
+## Geteilte Belege: goldene Karten und `'Aus geteiltem Beleg entfernen'`
+
+Wird ein Beleg von mehreren Mitarbeitenden **gemeinsam** bearbeitet – die Mitarbeitenden laden sich
+gegenseitig ein (Kapitel A7) oder Sie geben ihn über `'Gemeinsam zuweisen'` mehreren Personen
+(Kapitel B2) –, ist er im Board **golden** hervorgehoben: in der Liste, im Kanban-Raster und im
+Belegstrich der Matrix, jeweils mit goldenem Rahmen und Gruppen-Symbol. Zwischen der WE-Nummer und
+`'<n> Teile'` steht mittig, mit wem:
+
+- **`'mit <Name>'`**, wenn genau eine weitere Person beteiligt ist;
+- **`'<n>×'`** bei mehreren – `<n>` zählt die Helfer, der Inhaber kommt hinzu. Der Tooltip listet
+  alle Helfer mit ihrem Stand (der Inhaber ist die Person, in deren Zeile bzw. Bündel die Karte
+  liegt); wer `'Teilbeleg erledigt'` gemeldet hat, steht grau.
+
+Der Beleg liegt weiterhin **nur im Bündel des Inhabers** – dort sehen Sie die Karte. Die Helfer
+haben ihn nicht im Bündel; bei ihnen zählt er nicht als Last. Fertige Belege behalten ihre
+Beteiligten, sodass auch später sichtbar bleibt, dass zusammengearbeitet wurde.
+
+**Helfer entfernen:** Ein Rechtsklick auf die goldene Karte (oder das kleine Personen-Symbol für
+die Touch-Bedienung) öffnet je Helfer den Eintrag **`'Aus geteiltem Beleg entfernen: <Name>'`**.
+Nach dem Pflicht-Grund (Vorschläge `'Anderweitig gebraucht'`, `'Falsch eingeladen'`,
+`'Schichtende'`) sieht die Person den Beleg nicht mehr; in ihrem Verlauf unter `'Nachrichten'` steht
+die Einladung als entfernt. Bereits geprüfte Positionen bleiben geprüft. Der **Inhaber** lässt sich
+so nicht entfernen – dafür gibt es `'Entziehen'` und `'Verschieben'`; beides beendet die
+Zusammenarbeit für alle Beteiligten, ebenso Stornieren und Parken.
+
 ## Sich selbst zuweisen
 
 Über die Belege-Liste (Kapitel B2, `'Zuweisen'`) steht im Personen-Auswahlfeld ganz oben fett
@@ -128,6 +176,8 @@ Diese Eingriffe verlangen einen **Grund (mindestens 3 Zeichen)** im Dialog `'Gru
   `'Laufweg optimiert'`, `'Prio vorgezogen'`.
 - **Pause/Abwesenheit** – Titel `'<Name>: Pause/Abwesenheit'` bzw. `'<Name>: Pause beenden'`.
   Vorschläge: `'Pause'`, `'Krank'`, `'Andere Aufgabe'`, `'Zurück aus Pause'`.
+- **Aus geteiltem Beleg entfernen** – nur bei goldenen Karten, je Helfer (siehe oben). Vorschläge:
+  `'Anderweitig gebraucht'`, `'Falsch eingeladen'`, `'Schichtende'`.
 
 ## Zusammengehörige Lieferungen
 
@@ -139,6 +189,9 @@ zusammengehörigen Belege möglichst **einer** Person zu (Kapitel B6).
 
 - Zuweisungen/Änderungen erscheinen sofort im Bündel der Person (Mitarbeiter-App) und in der
   Historie des Belegs.
+- Ein entfernter Helfer sieht den Beleg sofort nicht mehr unter `'Geteilt mit dir'`; Entziehen,
+  Verschieben, Stornieren oder Parken eines geteilten Belegs beenden die Zusammenarbeit für alle –
+  geprüfte Positionen bleiben geprüft.
 
 ## Häufige Fehler / FAQ
 
@@ -151,3 +204,9 @@ zusammengehörigen Belege möglichst **einer** Person zu (Kapitel B6).
   bestätigen — es wurde nichts angefasst.
 - **`'Verschieben'` schlägt fehl** – der Beleg ist bereits in Bearbeitung (nicht mehr nur
   zugeteilt); erst wenn die Person noch nicht begonnen hat, kann verschoben werden.
+- **Eine Karte ist golden und zeigt `'3×'`** – neben dem Inhaber helfen drei weitere Personen bei
+  diesem Beleg mit (vier Beteiligte insgesamt); der Tooltip nennt die Helfer mit Namen und Stand.
+  Den Ablauf aus Sicht der Mitarbeitenden beschreibt Kapitel A7.
+- **`'Aus geteiltem Beleg entfernen'` bietet den Inhaber nicht an** – so gewollt: Der Inhaber trägt
+  den Beleg im Bündel. Nutzen Sie `'Entziehen'` oder `'Verschieben'`; damit endet die Zusammenarbeit
+  für alle Beteiligten.

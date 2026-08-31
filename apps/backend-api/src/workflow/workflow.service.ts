@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CaseStatus as PrismaCaseStatus, type WorkflowEvent } from '@prisma/client';
+import { CaseStatus as PrismaCaseStatus, type Prisma, type WorkflowEvent } from '@prisma/client';
 import type { ActorType, CaseStatus, WorkflowEventType } from '@paket/domain-types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventLogService } from '../events/event-log.service.js';
@@ -31,6 +31,14 @@ export interface TransitionInput {
   expectedVersion?: number;
   correlationId?: string;
   idempotencyKey?: string;
+  /**
+   * Wird NACH dem Status-Update in derselben Transaktion aufgerufen — die
+   * Case-Zeile ist dann exklusiv gesperrt, Arbeitsstand-Schreiber mit
+   * FOR-SHARE-Guard (Position prüfen, Menge erfassen) warten bis zum Commit.
+   * Wirft der Guard, rollt die gesamte Transition zurück. Für Abschluss-Gates,
+   * die parallele Schreiber ausschließen müssen (Fertig-Gate §5.2).
+   */
+  guardInTx?: (tx: Prisma.TransactionClient) => Promise<void>;
 }
 
 export interface TransitionResult {
@@ -82,13 +90,15 @@ export class WorkflowService {
         data: {
           status: input.toStatus as PrismaCaseStatus,
           version: { increment: 1 },
-          ...(reachesCompletion && current.completedAt === null
-            ? { completedAt: new Date() }
-            : {}),
+          ...(reachesCompletion && current.completedAt === null ? { completedAt: new Date() } : {}),
         },
       });
       if (updated.count === 0) {
         throw new ConflictException('Case was modified concurrently');
+      }
+
+      if (input.guardInTx) {
+        await input.guardInTx(tx);
       }
 
       let event: WorkflowEvent | null = null;

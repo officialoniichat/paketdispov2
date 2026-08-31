@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag, Prisma } from '@prisma/client';
+import type {
+  AssignmentStatus,
+  CaseStatus,
+  LocationKind,
+  PriorityFlag,
+  Prisma,
+} from '@prisma/client';
 import {
   detectDeliveryGroups,
   indexDeliveryGroups,
@@ -37,14 +43,26 @@ import {
   type PositionDetailDto,
   type SkuLineDto,
 } from './cases.dto.js';
-import { caseLabelPrintVariants, caseSecurityRequired, distinctShopNos, isLabelsRequired,
-  mapDeliveryGroupRef, mapIssueSummary, mapWorkInstruction, wgrDescription,
+import {
+  caseLabelPrintVariants,
+  caseSecurityRequired,
+  distinctShopNos,
+  isLabelsRequired,
+  mapDeliveryGroupRef,
+  mapIssueSummary,
+  mapWorkInstruction,
+  wgrDescription,
   type IssuePositionRef,
 } from './mappers.js';
 import { aggregateKpiTotals } from './kpi-aggregate.js';
 import { caseEffortInclude, resolveCaseEffort } from './case-effort.js';
-import { assignableSearchWhere, rankCaseSearchCandidates, type CaseSearchCandidate } from './case-search.js';
+import {
+  assignableSearchWhere,
+  rankCaseSearchCandidates,
+  type CaseSearchCandidate,
+} from './case-search.js';
 import { loadRuleConfig } from '../config/rule-config.js';
+import { ACTIVE_PARTICIPANT_STATUSES, toCollaborationDto } from '../collaboration/participants.js';
 
 /** Priority flags counted as an "open prio" case in the dashboard tile. */
 const OPEN_PRIORITY_FLAGS: PriorityFlag[] = ['prio', 'catman_due', 'overdue', 'same_day_required'];
@@ -275,7 +293,9 @@ export class TeamleadReadService {
     // deterministic tie-break so pagination never shuffles equal rows.
     const sortDir = query.sortDir ?? 'asc';
     const orderBy: Prisma.GoodsReceiptCaseOrderByWithRelationInput[] = [
-      { [query.sortBy ?? 'bookingDate']: sortDir } as Prisma.GoodsReceiptCaseOrderByWithRelationInput,
+      {
+        [query.sortBy ?? 'bookingDate']: sortDir,
+      } as Prisma.GoodsReceiptCaseOrderByWithRelationInput,
       { weBelegNo: 'asc' },
     ];
 
@@ -709,6 +729,18 @@ export class TeamleadReadService {
                   totalQuantity: true,
                   estimatedMinutes: true,
                   effortPoints: true,
+                  // Geteilter Beleg: aktive Helfer für die goldene Karte (§4).
+                  participants: {
+                    where: {
+                      role: 'helfer',
+                      status: { in: [...ACTIVE_PARTICIPANT_STATUSES] },
+                    },
+                    orderBy: { invitedAt: 'asc' },
+                    select: {
+                      status: true,
+                      employee: { select: { employeeNo: true, displayName: true } },
+                    },
+                  },
                   // Effort-driver relations so each case line shows the SAME live effort
                   // the distribution used (resolveCaseEffort), not a stale stored value.
                   storageLocation: { select: { kind: true } },
@@ -742,7 +774,12 @@ export class TeamleadReadService {
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.shift.findMany({
-        where: { date: day, active: true, netCapacityMinutes: { gt: 0 }, employee: { active: true } },
+        where: {
+          date: day,
+          active: true,
+          netCapacityMinutes: { gt: 0 },
+          employee: { active: true },
+        },
         include: {
           employee: {
             select: { employeeNo: true, displayName: true, bereiche: true, skillTier: true },
@@ -864,6 +901,11 @@ export class TeamleadReadService {
           effortPoints: effort.points,
           // Delivery-group ref is filled in once all board cases are known (below).
           deliveryGroup: null,
+          sharedWith: it.case.participants.map((p) => ({
+            employeeNo: p.employee.employeeNo,
+            displayName: p.employee.displayName,
+            status: p.status,
+          })),
         });
         groupInputs.push({
           id: it.case.id,
@@ -1056,6 +1098,12 @@ export class TeamleadReadService {
           },
         },
         zstRecords: { orderBy: { completedAt: 'asc' } },
+        // Geteilter Beleg: ALLE Beteiligten chronologisch (Chip + Liste, §4) —
+        // fertige Belege behalten sie („wurde zusammengearbeitet").
+        participants: {
+          orderBy: { invitedAt: 'asc' },
+          include: { employee: { select: { employeeNo: true, displayName: true } } },
+        },
       },
     });
     if (!found) {
@@ -1122,6 +1170,7 @@ export class TeamleadReadService {
         source: z.source,
       })),
       history,
+      participants: toCollaborationDto(found.participants, found.positions)?.participants ?? [],
       deliveryGroup: await this.deliveryGroupDetail(found.id),
     };
   }
@@ -1138,7 +1187,10 @@ export class TeamleadReadService {
   private async deliveryGroupUniverse(grouping: GroupingConfig): Promise<{
     groupIdByCaseId: ReadonlyMap<string, string>;
     groupById: ReadonlyMap<string, DeliveryGroup>;
-    casesById: ReadonlyMap<string, { id: string; weBelegNo: string; deliveryNoteNo: string | null }>;
+    casesById: ReadonlyMap<
+      string,
+      { id: string; weBelegNo: string; deliveryNoteNo: string | null }
+    >;
     refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
   }> {
     const rows = await this.prisma.goodsReceiptCase.findMany({
@@ -1261,16 +1313,17 @@ export class TeamleadReadService {
       catMan?: boolean | null;
       catManDate?: Date | null;
       skuLines: Array<{
-      id: string;
-      ean: string;
-      size: string;
-      expectedQuantity: number;
-      confirmedQuantity: number | null;
-      ekPrice: number | null;
-      vkPrice: number | null;
-      vkLabelPrice: number | null;
-      status: string;
-    }>;
+        id: string;
+        ean: string;
+        size: string;
+        expectedQuantity: number;
+        confirmedQuantity: number | null;
+        correctedVkPrice: number | null;
+        ekPrice: number | null;
+        vkPrice: number | null;
+        vkLabelPrice: number | null;
+        status: string;
+      }>;
     },
     primaryShopAreaNo: string | null,
     goodsTypeText: string | null,
@@ -1281,6 +1334,7 @@ export class TeamleadReadService {
       size: s.size,
       expectedQuantity: s.expectedQuantity,
       confirmedQuantity: s.confirmedQuantity,
+      correctedVkPrice: s.correctedVkPrice,
       ekPrice: s.ekPrice,
       vkPrice: s.vkPrice,
       vkLabelPrice: s.vkLabelPrice,
@@ -1323,5 +1377,4 @@ export class TeamleadReadService {
       skuLines,
     };
   }
-
 }

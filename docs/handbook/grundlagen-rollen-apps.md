@@ -12,8 +12,14 @@ unterschiedliche Sichten.
 | **Zweck** | Ware holen, Belege bearbeiten, abschließen, Probleme melden | Überblick, verteilen, eingreifen, Regeln pflegen, Tagesabschluss |
 | **Anmeldung** | Nur die Mitarbeiternummer, ohne PIN | Über den Arbeitsplatz-Login der Teamleitung |
 
-Oben rechts kann jederzeit gewechselt werden: `'Zur Teamlead-App'` (aus der Mitarbeiter-App) bzw.
-`'Zur Mitarbeiter-App'` (aus dem Cockpit).
+Gewechselt werden kann jederzeit: In der Mitarbeiter-App über den **Profilkreis** oben rechts
+(deine Initialen) → `'Zur Teamlead-App'`; im Cockpit unten in der Navigationsleiste über
+`'Zur Mitarbeiter-App'`.
+
+Das Menü des Profilkreises hat drei Einträge (in dieser Reihenfolge): `'Zur Teamlead-App'`,
+**`'Nachrichten'`** – der Verlauf deiner Einladungen zu geteilten Belegen und der Nachrichten der
+Teamleitung (Kapitel A7) – und `'Abmelden'`. Liegt eine offene Einladung oder eine ungelesene
+Nachricht vor, zeigt der Profilkreis eine Zahl.
 
 ## Anmeldung Mitarbeiter-App
 
@@ -33,8 +39,8 @@ Das Cockpit hat links eine feste Navigationsleiste mit der Marke `'L&T Cockpit'`
 | `'Digitale Ablagen'` | B4 |
 | `'Mitarbeiterboard'` | B3 |
 | `'Belege'` | B2 |
-| `'Aufteilungen'` | in B2 / B3 erwähnt |
 | `'Admin & Regeln'` | B7 |
+| `'Experiment DA.M.B'` | Experimentier-Arbeitsfläche (Ablagen + Matrix); ohne eigenes Kapitel |
 
 > Hinweis: Der Menüpunkt heißt `'Tagescockpit'`, die Überschrift auf der Seite selbst lautet
 > `'Heute – Logistik Warenauszeichnung'`. Ebenso: Menüpunkt `'Admin & Regeln'` → Seitenüberschrift
@@ -43,6 +49,9 @@ Das Cockpit hat links eine feste Navigationsleiste mit der Marke `'L&T Cockpit'`
 ## Wer darf was?
 
 - **Mitarbeitende** arbeiten ihr Bündel ab und melden Probleme. Sie können Probleme **nicht selbst
-  auflösen** und Belege **nicht selbst umverteilen** – das macht die Teamleitung.
-- **Die Teamleitung** verteilt, weist zu, entzieht, parkt, priorisiert, klärt Probleme, pflegt die
-  Regeln und macht den Tagesabschluss. Jeder manuelle Eingriff wird mit Grund protokolliert.
+  auflösen** und Belege **nicht selbst umverteilen** – das macht die Teamleitung. Sie können aber
+  Kolleg:innen zu einem Beleg **einladen** (geteilter Beleg, Kapitel A7): Der Beleg bleibt dabei in
+  ihrem Bündel, die Eingeladenen helfen mit und entscheiden selbst, ob sie annehmen.
+- **Die Teamleitung** verteilt, weist zu (auch mehreren Personen gemeinsam), entzieht, parkt,
+  priorisiert, klärt Probleme, nimmt Helfer aus geteilten Belegen, pflegt die Regeln und macht den
+  Tagesabschluss. Jeder manuelle Eingriff wird mit Grund protokolliert.

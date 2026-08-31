@@ -63,8 +63,12 @@ import { AttentionDialog } from '../../components/AttentionDialog.js';
 import type { CaseActionCtx } from '../../actions/caseActions.js';
 import { useCockpitData } from '../../data/store.js';
 import { fetchEmployees } from '../../data/employees.js';
-import { useSplitCase } from '../split/useSplitCase.js';
-import { SplitDialog, type SplitDialogBeleg, type SplitDialogEmployee } from '../split/SplitDialog.js';
+import { splitDoneText, useSplitCase } from '../split/useSplitCase.js';
+import {
+  SplitDialog,
+  type SplitDialogBeleg,
+  type SplitDialogEmployee,
+} from '../split/SplitDialog.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
 
 const SCOPES: BelegeScope[] = ['aktiv', 'abgeschlossen', 'archiv', 'topf', 'alle'];
@@ -292,7 +296,14 @@ export function BelegListPage({
   const [splitCaseId, setSplitCaseId] = useState<string | null>(null);
   const [splitDone, setSplitDone] = useState<string | null>(null);
   const split = useSplitCase((result) => {
-    setSplitDone(`${result.containerWeBelegNo} · ${result.parts.length} Teile`);
+    // Ein Text für beide Dialog-Modi (Aufteilen bzw. Gemeinsam zuweisen); der
+    // Zusatz sagt nur beim Aufteilen, wo die Teile jetzt zu finden sind.
+    setSplitDone(
+      splitDoneText(
+        result,
+        'Die Teile stehen als eigene Belege direkt unter dem Original in dieser Liste.',
+      ),
+    );
     setSplitCaseId(null);
   });
   const employeesQuery = useQuery({
@@ -515,7 +526,11 @@ export function BelegListPage({
               <span>{r.assignedTo}</span>
               {r.bundleQueue && !r.bundleQueue.started && (
                 <Tooltip title="Bündel noch nicht gestartet — der Beleg liegt vorbereitet in der Reihenfolge.">
-                  <Chip size="small" variant="outlined" label={`vorbereitet · Pos ${r.bundleQueue.position}`} />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`vorbereitet · Pos ${r.bundleQueue.position}`}
+                  />
                 </Tooltip>
               )}
             </Stack>
@@ -697,9 +712,7 @@ export function BelegListPage({
           {SCOPES.map((s) => (
             <ToggleButton key={s} value={s}>
               {SCOPE_LABEL[s]}
-              {s === 'topf' && topfCountQuery.data !== undefined
-                ? ` (${topfCountQuery.data})`
-                : ''}
+              {s === 'topf' && topfCountQuery.data !== undefined ? ` (${topfCountQuery.data})` : ''}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
@@ -777,8 +790,7 @@ export function BelegListPage({
 
       {splitDone && (
         <Alert severity="success" onClose={() => setSplitDone(null)}>
-          Beleg aufgeteilt: {splitDone}. Die Teile stehen als eigene Belege direkt unter dem
-          Original in dieser Liste.
+          {splitDone}
         </Alert>
       )}
 
@@ -802,156 +814,172 @@ export function BelegListPage({
       )}
       {scope === 'topf' && (
         <Alert severity="info" variant="outlined">
-          Topf: Belege mit „Besonderer Aufmerksamkeit" (Bucherinnen-Hinweis) sowie blockierte /
-          zu prüfende Belege — hier zuweisen, freigeben oder entlassen.
+          Topf: Belege mit „Besonderer Aufmerksamkeit" (Bucherinnen-Hinweis) sowie blockierte / zu
+          prüfende Belege — hier zuweisen, freigeben oder entlassen.
         </Alert>
       )}
 
       {/* Einklappbare Spaltenfilter (ab „Status" abwärts); jedes Feld setzt einen
           SERVER-Query-Param (A2). Die Volltextsuche sitzt oben als Lupe neben den Scopes. */}
       <Collapse in={filtersOpen} timeout={150}>
-        <Stack direction="row" spacing={1} rowGap={1} flexWrap="wrap" useFlexGap alignItems="center">
-        <TextField
-          size="small"
-          select
-          label="Status"
-          value={filters.status ?? ''}
-          onChange={(e) =>
-            updateFilters({ status: (e.target.value || undefined) as CaseStatus | undefined })
-          }
-          sx={{ minWidth: 150 }}
+        <Stack
+          direction="row"
+          spacing={1}
+          rowGap={1}
+          flexWrap="wrap"
+          useFlexGap
+          alignItems="center"
         >
-          <MenuItem value="">Alle</MenuItem>
-          {STATUS_OPTIONS.map((s) => (
-            <MenuItem key={s} value={s}>
-              {caseStatusMeta[s].label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          size="small"
-          label="Shop"
-          value={filters.shopNo ?? ''}
-          onChange={(e) => updateFilters({ shopNo: e.target.value || undefined })}
-          sx={{ width: 110 }}
-        />
-        <TextField
-          size="small"
-          label="Filiale"
-          value={filters.branchNo ?? ''}
-          onChange={(e) => updateFilters({ branchNo: e.target.value || undefined })}
-          sx={{ width: 110 }}
-        />
-        <TextField
-          size="small"
-          select
-          label="Abschnitt"
-          value={filters.section ?? ''}
-          onChange={(e) =>
-            updateFilters({
-              section: e.target.value === '' ? undefined : (Number(e.target.value) as BelegeFilters['section']),
-            })
-          }
-          sx={{ minWidth: 120 }}
-        >
-          <MenuItem value="">Alle</MenuItem>
-          {SECTION_OPTIONS.map((s) => (
-            <MenuItem key={s} value={s}>
-              {s}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          size="small"
-          select
-          label="Etiketten"
-          value={filters.labels ?? ''}
-          onChange={(e) =>
-            updateFilters({ labels: (e.target.value || undefined) as BelegeFilters['labels'] })
-          }
-          sx={{ minWidth: 120 }}
-        >
-          <MenuItem value="">Alle</MenuItem>
-          <MenuItem value="yes">ja</MenuItem>
-          <MenuItem value="no">nein</MenuItem>
-        </TextField>
-        {/* Digi Tags / Sichern (07.08.2026): dieselbe Positions-Ableitung wie die
+          <TextField
+            size="small"
+            select
+            label="Status"
+            value={filters.status ?? ''}
+            onChange={(e) =>
+              updateFilters({ status: (e.target.value || undefined) as CaseStatus | undefined })
+            }
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            {STATUS_OPTIONS.map((s) => (
+              <MenuItem key={s} value={s}>
+                {caseStatusMeta[s].label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            size="small"
+            label="Shop"
+            value={filters.shopNo ?? ''}
+            onChange={(e) => updateFilters({ shopNo: e.target.value || undefined })}
+            sx={{ width: 110 }}
+          />
+          <TextField
+            size="small"
+            label="Filiale"
+            value={filters.branchNo ?? ''}
+            onChange={(e) => updateFilters({ branchNo: e.target.value || undefined })}
+            sx={{ width: 110 }}
+          />
+          <TextField
+            size="small"
+            select
+            label="Abschnitt"
+            value={filters.section ?? ''}
+            onChange={(e) =>
+              updateFilters({
+                section:
+                  e.target.value === ''
+                    ? undefined
+                    : (Number(e.target.value) as BelegeFilters['section']),
+              })
+            }
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            {SECTION_OPTIONS.map((s) => (
+              <MenuItem key={s} value={s}>
+                {s}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            size="small"
+            select
+            label="Etiketten"
+            value={filters.labels ?? ''}
+            onChange={(e) =>
+              updateFilters({ labels: (e.target.value || undefined) as BelegeFilters['labels'] })
+            }
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="yes">ja</MenuItem>
+            <MenuItem value="no">nein</MenuItem>
+          </TextField>
+          {/* Digi Tags / Sichern (07.08.2026): dieselbe Positions-Ableitung wie die
             Chips auf Karte und Zeile — der Server filtert, nicht die Anzeige. */}
-        <TextField
-          size="small"
-          select
-          label="Digi Tags"
-          value={filters.digiTags ?? ''}
-          onChange={(e) =>
-            updateFilters({ digiTags: (e.target.value || undefined) as BelegeFilters['digiTags'] })
-          }
-          sx={{ minWidth: 130 }}
-        >
-          <MenuItem value="">Alle</MenuItem>
-          <MenuItem value="yes">ja</MenuItem>
-          <MenuItem value="no">nein</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          select
-          label="Sichern"
-          value={filters.security ?? ''}
-          onChange={(e) =>
-            updateFilters({ security: (e.target.value || undefined) as BelegeFilters['security'] })
-          }
-          sx={{ minWidth: 120 }}
-        >
-          <MenuItem value="">Alle</MenuItem>
-          <MenuItem value="yes">ja</MenuItem>
-          <MenuItem value="no">nein</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          select
-          label="Zugeteilt"
-          value={filters.assigned ?? ''}
-          onChange={(e) =>
-            updateFilters({ assigned: (e.target.value || undefined) as BelegeFilters['assigned'] })
-          }
-          sx={{ minWidth: 120 }}
-        >
-          <MenuItem value="">Alle</MenuItem>
-          <MenuItem value="yes">ja</MenuItem>
-          <MenuItem value="no">nein</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          select
-          label="Monster"
-          value={filters.monster ?? ''}
-          onChange={(e) =>
-            updateFilters({ monster: (e.target.value || undefined) as BelegeFilters['monster'] })
-          }
-          sx={{ minWidth: 140 }}
-          helperText="Teile ≥ Schwelle"
-        >
-          <MenuItem value="">Alle</MenuItem>
-          <MenuItem value="yes">nur Monster</MenuItem>
-          <MenuItem value="no">ohne Monster</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          type="date"
-          label="Buchung ab"
-          value={filters.bookingFrom ?? ''}
-          onChange={(e) => updateFilters({ bookingFrom: e.target.value || undefined })}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ width: 160 }}
-        />
-        <TextField
-          size="small"
-          type="date"
-          label="Buchung bis"
-          value={filters.bookingTo ?? ''}
-          onChange={(e) => updateFilters({ bookingTo: e.target.value || undefined })}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ width: 160 }}
-        />
+          <TextField
+            size="small"
+            select
+            label="Digi Tags"
+            value={filters.digiTags ?? ''}
+            onChange={(e) =>
+              updateFilters({
+                digiTags: (e.target.value || undefined) as BelegeFilters['digiTags'],
+              })
+            }
+            sx={{ minWidth: 130 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="yes">ja</MenuItem>
+            <MenuItem value="no">nein</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            select
+            label="Sichern"
+            value={filters.security ?? ''}
+            onChange={(e) =>
+              updateFilters({
+                security: (e.target.value || undefined) as BelegeFilters['security'],
+              })
+            }
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="yes">ja</MenuItem>
+            <MenuItem value="no">nein</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            select
+            label="Zugeteilt"
+            value={filters.assigned ?? ''}
+            onChange={(e) =>
+              updateFilters({
+                assigned: (e.target.value || undefined) as BelegeFilters['assigned'],
+              })
+            }
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="yes">ja</MenuItem>
+            <MenuItem value="no">nein</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            select
+            label="Monster"
+            value={filters.monster ?? ''}
+            onChange={(e) =>
+              updateFilters({ monster: (e.target.value || undefined) as BelegeFilters['monster'] })
+            }
+            sx={{ minWidth: 140 }}
+            helperText="Teile ≥ Schwelle"
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="yes">nur Monster</MenuItem>
+            <MenuItem value="no">ohne Monster</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            type="date"
+            label="Buchung ab"
+            value={filters.bookingFrom ?? ''}
+            onChange={(e) => updateFilters({ bookingFrom: e.target.value || undefined })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ width: 160 }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="Buchung bis"
+            value={filters.bookingTo ?? ''}
+            onChange={(e) => updateFilters({ bookingTo: e.target.value || undefined })}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ width: 160 }}
+          />
         </Stack>
       </Collapse>
 
@@ -966,9 +994,7 @@ export function BelegListPage({
         // die Paginierung bleibt darunter sichtbar.
         <Box
           sx={
-            fill
-              ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }
-              : undefined
+            fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined
           }
         >
           <DataTable
@@ -1046,6 +1072,7 @@ export function BelegListPage({
         pending={split.pending}
         error={split.error}
         onConfirm={split.submit}
+        onModusChange={split.clearError}
         onClose={() => {
           split.clearError();
           setSplitCaseId(null);

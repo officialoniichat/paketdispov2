@@ -83,6 +83,22 @@ describe('packAdvanceBlockers — wann das nächste Pack freigegeben wird', () =
     ];
     expect(packAdvanceBlockers(nachWechsel, 1)).toEqual([]);
   });
+
+  it('geteilter Beleg mit EIGENEM „Teilbeleg erledigt" blockiert nicht (§3.8)', () => {
+    const geteilt: PackItem[] = [
+      { caseId: 'shared', packIndex: 0, status: 'in_progress', ownPartDone: true },
+      item('done', 0, 'completed'),
+    ];
+    expect(packAdvanceBlockers(geteilt, 0)).toEqual([]);
+  });
+
+  it('ohne eigenes „Teilbeleg erledigt" blockiert der geteilte Beleg weiterhin', () => {
+    const geteilt: PackItem[] = [
+      { caseId: 'shared', packIndex: 0, status: 'in_progress', ownPartDone: false },
+      { caseId: 'shared-2', packIndex: 0, status: 'in_progress' },
+    ];
+    expect(packAdvanceBlockers(geteilt, 0).map((i) => i.caseId)).toEqual(['shared', 'shared-2']);
+  });
 });
 
 describe('Pack-Auskünfte', () => {

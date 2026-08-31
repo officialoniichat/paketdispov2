@@ -214,6 +214,25 @@ enum InspectionLevelCode {
   full
 }
 
+// Geteilter Beleg (Zusammenarbeit, Kundenanforderung 31.08.2026): Rolle eines
+// Beteiligten. `inhaber` = der Mitarbeiter, in dessen Bündel der Beleg liegt (holt
+// die Ware); `helfer` = weitere Beteiligte ohne eigenes AssignmentItem.
+enum CaseParticipantRole {
+  inhaber
+  helfer
+}
+
+// Status einer Beteiligung — bewusst KEIN neuer CaseStatus: „mein Teil ist fertig"
+// ist ein Zustand des Beteiligten, nicht des Belegs (Konzept §2). Aktiv sind
+// `angenommen` und `teil_erledigt`; `eingeladen` sieht den Beleg noch nicht.
+enum CaseParticipantStatus {
+  eingeladen
+  angenommen
+  abgelehnt
+  teil_erledigt
+  entfernt
+}
+
 
 // ---------------------------------------------------------------------------
 // Identity & RBAC
@@ -253,6 +272,10 @@ model User {
   zstRecords      ZstRecord[]
   absences        EmployeeAbsence[]
   teamleadMessages TeamleadMessage[]
+  // Geteilter Beleg: eigene Beteiligungen, versendete Einladungen, geprüfte Positionen.
+  caseParticipations  CaseParticipant[] @relation("CaseParticipations")
+  caseInvitationsSent CaseParticipant[] @relation("CaseInvitationsSent")
+  confirmedPositions  ReceiptPosition[] @relation("PositionConfirmer")
 
   @@map("users")
 }
@@ -458,6 +481,9 @@ model GoodsReceiptCase {
   issues          Issue[]
   transportBoxes  TransportBox[]
   zstRecords      ZstRecord[]
+  // Geteilter Beleg: Beteiligte (Inhaber + Helfer) als Overlay — der Beleg liegt
+  // weiterhin in genau EINEM Bündel (Konzept §2).
+  participants    CaseParticipant[]
 
   @@unique([parentCaseId, partNo], name: "case_parent_part")
   @@index([status])
@@ -510,8 +536,14 @@ model ReceiptPosition {
   // CatMan-Termin der Position (Kundenfeedback 14.07.2026, Anzeige in der PWA).
   catManDate         DateTime?      @db.Date
   status             PositionStatus @default(open)
+  // „Position geprüft" lebt seit 31.08.2026 serverseitig (Konzept §2): wer hat wann
+  // geprüft. Gemeinsame Wahrheit für geteilte Belege — gilt für ALLE Belege, nicht
+  // nur geteilte. null = ungeprüft; `status` wird dabei confirmed/open.
+  confirmedAt        DateTime?
+  confirmedById      String?
 
   case        GoodsReceiptCase     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  confirmedBy User?                @relation("PositionConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
   instruction PositionInstruction?
   skuLines    ReceiptSkuLine[]
 
@@ -551,6 +583,9 @@ model ReceiptSkuLine {
   ekPrice           Float?
   vkPrice           Float?
   vkLabelPrice      Float?
+  // Preiskorrektur je Größe, pro Aktion persistiert (wie confirmedQuantity) — bisher
+  // reiner Client-Zustand, seit 31.08.2026 gemeinsame Wahrheit (Konzept §6).
+  correctedVkPrice  Float?
   status            SkuLineStatus @default(open)
 
   position ReceiptPosition @relation(fields: [receiptPositionId], references: [id], onDelete: Cascade)
@@ -558,6 +593,43 @@ model ReceiptSkuLine {
   @@unique([receiptPositionId, ean, size], name: "sku_position_ean_size")
   @@index([receiptPositionId])
   @@map("receipt_sku_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Geteilter Beleg — Beteiligung als Overlay (Konzept beleg-zusammenarbeit §2/§6)
+// ---------------------------------------------------------------------------
+
+// EIN Beleg, mehrere Bearbeitende, alle sehen alle Positionen. Die Beteiligung ist
+// eine zusätzliche Relation Beleg × Mitarbeiter — kein zweites AssignmentItem, kein
+// neuer CaseStatus. Engine, Pack-Fenster, Bündel-Abschluss und Kapazität bleiben
+// unverändert am Inhaber. Die Inhaber-Zeile entsteht beim ersten Einladen (bzw. beim
+// Anlegen durch den Teamlead) mit Status `angenommen` und trägt später dessen
+// `teil_erledigt`. Verlässt der Beleg den Karren des Inhabers, werden die Zeilen
+// gelöscht (case.collaboration_dissolved); geprüfte Positionen bleiben geprüft.
+model CaseParticipant {
+  id             String                @id @default(cuid())
+  caseId         String
+  employeeId     String
+  role           CaseParticipantRole
+  status         CaseParticipantStatus
+  // User.id des Einladenden; null bei Teamlead/System (Teamleads existieren nicht
+  // zwingend als users-Zeile). Der Anzeigename ist deshalb ein Snapshot.
+  invitedById    String?
+  invitedByLabel String
+  message        String?
+  invitedAt      DateTime              @default(now())
+  respondedAt    DateTime?
+  partDoneAt     DateTime?
+  removedAt      DateTime?
+  removedByLabel String?
+
+  case      GoodsReceiptCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  employee  User             @relation("CaseParticipations", fields: [employeeId], references: [id])
+  invitedBy User?            @relation("CaseInvitationsSent", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([caseId, employeeId], name: "participant_case_employee")
+  @@index([employeeId, status])
+  @@map("case_participants")
 }
 
 // ---------------------------------------------------------------------------

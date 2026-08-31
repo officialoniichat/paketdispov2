@@ -75,14 +75,11 @@ import {
   type PaneRect,
   type SplitterSeg,
 } from './experimentLayout.js';
-import {
-  FOKUS_DAUER_MS,
-  leseSchnellaktionFokus,
-  type SchnellaktionFokus,
-} from './fokus.js';
+import { FOKUS_DAUER_MS, leseSchnellaktionFokus, type SchnellaktionFokus } from './fokus.js';
 
 export function ExperimentPage(): JSX.Element {
-  const { board, forwardCase, withdraw, assignToEmployee, moveCase, reorder } = useCockpitData();
+  const { board, forwardCase, withdraw, assignToEmployee, moveCase, reorder, removeParticipant } =
+    useCockpitData();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [dragging, setDragging] = useState<ExperimentDragPayload | null>(null);
   const [forwardCard, setForwardCard] = useState<ForwardRef | null>(null);
@@ -169,7 +166,9 @@ export function ExperimentPage(): JSX.Element {
   };
 
   // Erste fehlgeschlagene DnD-Mutation treibt die Fehler-Snackbar (Board-Muster).
-  const failed = [withdraw, assignToEmployee, moveCase, reorder].find((m) => m.isError);
+  const failed = [withdraw, assignToEmployee, moveCase, reorder, removeParticipant].find(
+    (m) => m.isError,
+  );
 
   // Lieferungs-Farben der Matrix-Striche (das Ablagen-Fenster nutzt seit dem
   // Original-Design-Embed die LieferungChip-Darstellung des Basis-Boards).
@@ -397,11 +396,7 @@ export function ExperimentPage(): JSX.Element {
         </Box>
         {focus === null &&
           splitterSegs(split).map((seg) => (
-            <SplitterBar
-              key={seg.id}
-              seg={seg}
-              onPointerDown={startSegDrag(seg.id, seg.axis)}
-            />
+            <SplitterBar key={seg.id} seg={seg} onPointerDown={startSegDrag(seg.id, seg.axis)} />
           ))}
         {/* Im Matrix-Vollbild sind die Ablagen versteckt — die Pool-Rückgabe
             bleibt als kompakte Leiste erreichbar (gleicher Dialog, gleiche Gründe). */}
@@ -409,9 +404,7 @@ export function ExperimentPage(): JSX.Element {
           <PoolRueckgabeOverlay
             leiste
             dragging={dragging}
-            onPool={(src) =>
-              setPending(buildWithdrawAction(src, (vars) => withdraw.mutate(vars)))
-            }
+            onPool={(src) => setPending(buildWithdrawAction(src, (vars) => withdraw.mutate(vars)))}
           />
         )}
       </Box>
@@ -524,7 +517,12 @@ function Pane({
         <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{title}</Typography>
         {center !== undefined && (
           <Box
-            sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex' }}
+            sx={{
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+            }}
           >
             {center}
           </Box>
@@ -539,7 +537,9 @@ function Pane({
           >
             <ZoomOutIcon sx={{ fontSize: 16 }} />
           </IconButton>
-          <Typography sx={{ fontSize: '0.6rem', color: 'text.secondary', minWidth: 28, textAlign: 'center' }}>
+          <Typography
+            sx={{ fontSize: '0.6rem', color: 'text.secondary', minWidth: 28, textAlign: 'center' }}
+          >
             {Math.round(zoom * 100)} %
           </Typography>
           <IconButton

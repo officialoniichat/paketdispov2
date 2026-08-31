@@ -34,16 +34,29 @@ import {
   type PackItem,
 } from '../cases/pack-window.js';
 import { loadRuleConfig } from '../config/rule-config.js';
+import {
+  ACTIVE_PARTICIPANT_STATUSES,
+  dissolveCollaborationTx,
+} from '../collaboration/participants.js';
 
 type PrismaTx = Prisma.TransactionClient;
 
-/** Bündel-Item → {@link PackItem}. Ohne geladenen Case zählt der Beleg als offen. */
-function toPackItem(item: {
-  caseId: string;
-  packIndex: number;
-  case?: { status: string };
-}): PackItem {
-  return { caseId: item.caseId, packIndex: item.packIndex, status: item.case?.status ?? 'assigned' };
+/**
+ * Bündel-Item → {@link PackItem}. Ohne geladenen Case zählt der Beleg als offen.
+ * `ownPartDoneCaseIds`: Belege, an denen der ANFRAGENDE seine Beteiligung als
+ * `teil_erledigt` gemeldet hat — sie blockieren seinen Pack-Wechsel nicht mehr
+ * (Konzept beleg-zusammenarbeit §3.8).
+ */
+function toPackItem(
+  item: { caseId: string; packIndex: number; case?: { status: string } },
+  ownPartDoneCaseIds: ReadonlySet<string>,
+): PackItem {
+  return {
+    caseId: item.caseId,
+    packIndex: item.packIndex,
+    status: item.case?.status ?? 'assigned',
+    ownPartDone: ownPartDoneCaseIds.has(item.caseId),
+  };
 }
 import { EventLogService } from '../events/event-log.service.js';
 import type { Principal } from '../auth/rbac.js';
@@ -51,6 +64,20 @@ import { toEmployeeShift, toGoodsReceiptCase, toLocationMaster } from './assignm
 import type { NextBundleResultDto, RecalculateResultDto } from './assignment.dto.js';
 
 const POOL_STATUS = 'ready' as const;
+
+/**
+ * Beleg-Status, die eine Beteiligung NICHT mehr festhalten (§5.4): fertig
+ * (completed|zst_done), storniert, beim Teamlead in Klärung (issue_open) oder
+ * terminal aufgeteilt (split_container — der Container selbst wird nie fertig,
+ * case-status.ts führt ihn als terminal).
+ */
+const SETTLED_SHARED_CASE_STATUSES = [
+  'completed',
+  'zst_done',
+  'cancelled',
+  'issue_open',
+  'split_container',
+] as const;
 
 /**
  * Read set for the §E.4 Simulation/Vorschau. Unlike recalculate (which only plans
@@ -128,101 +155,117 @@ export class AssignmentService {
     const continuationEmployeeIds = new Set(
       continuationCases.map((c) => c.assignedBundle?.employeeId).filter((id): id is string => !!id),
     );
+    // Admin-Regel „Beim geteilten Beleg erst mithelfen" (Konzept §5.4): bei
+    // aktivem Schalter bleiben Mitarbeitende mit AKTIVER Beteiligung an einem
+    // offenen geteilten Beleg (weder fertig noch issue_open) außerhalb der
+    // Starter-Pack-Verteilung — wie die Monster-Fortsetzung.
+    if (ruleConfig.collaboration.helpBeforeNextBundle) {
+      const sharedParticipants = await this.prisma.caseParticipant.findMany({
+        where: {
+          status: { in: [...ACTIVE_PARTICIPANT_STATUSES] },
+          case: { status: { notIn: [...SETTLED_SHARED_CASE_STATUSES] } },
+        },
+        select: { employeeId: true },
+      });
+      for (const p of sharedParticipants) continuationEmployeeIds.add(p.employeeId);
+    }
     const shiftRows = allShiftRows.filter((s) => !continuationEmployeeIds.has(s.employee.id));
 
     // ONE transaction: clearing the prior plan, re-reading the freed pool, running
     // the engine, and persisting the new plan all commit (or roll back) together so
     // a failure leaves the previous plan intact (§8.3 "Neu berechnen" must be re-runnable).
     // The callback returns the engine plan + metrics so we never need a post-tx cast.
-    const { plan, durationMs, assignedCaseCount, planCases } = await this.prisma.$transaction(async (tx) => {
-      // 1. Clear the prior plan for this date so the re-insert is clean and idempotent.
-      //    Only revert cases that a PRIOR recalc left in `assigned` — cases an employee
-      //    has already started/completed (in_progress/.../completed) are left alone.
-      await this.clearPriorPlanForDate(tx, dayStart, dayEnd);
+    const { plan, durationMs, assignedCaseCount, planCases } = await this.prisma.$transaction(
+      async (tx) => {
+        // 1. Clear the prior plan for this date so the re-insert is clean and idempotent.
+        //    Only revert cases that a PRIOR recalc left in `assigned` — cases an employee
+        //    has already started/completed (in_progress/.../completed) are left alone.
+        await this.clearPriorPlanForDate(tx, dayStart, dayEnd);
 
-      // 2. Re-read the now-freed `ready` pool inside the transaction (reverted cases
-      //    are back in the pool, in-flight cases are excluded by their status).
-      const casesRows = await tx.goodsReceiptCase.findMany({
-        where: { status: POOL_STATUS },
-        include: caseEffortInclude,
-      });
+        // 2. Re-read the now-freed `ready` pool inside the transaction (reverted cases
+        //    are back in the pool, in-flight cases are excluded by their status).
+        const casesRows = await tx.goodsReceiptCase.findMany({
+          where: { status: POOL_STATUS },
+          include: caseEffortInclude,
+        });
 
-      // 2a. Clear-before-insert (§8.3 idempotency): a case in the freed `ready` pool must
-      //     not still be a member of ANY bundle. A residual AssignmentItem — e.g. left
-      //     behind when a workflow transition put a case back to `ready` (transitions
-      //     only flip the status; they do NOT unlink the bundle
-      //     or drop the item) — would otherwise collide with this plan's freshly created
-      //     item on the @@unique([caseId]) constraint (Prisma P2002) inside persistBundle.
-      //     clearPriorPlanForDate cannot catch it: the owning bundle stays "referenced"
-      //     (and is kept), yet the case is no longer `assigned`. Dropping these stale rows
-      //     before the re-insert makes recalculate fully idempotent and re-runnable.
-      const poolCaseIds = casesRows.map((c) => c.id);
-      if (poolCaseIds.length > 0) {
-        await tx.assignmentItem.deleteMany({ where: { caseId: { in: poolCaseIds } } });
-      }
+        // 2a. Clear-before-insert (§8.3 idempotency): a case in the freed `ready` pool must
+        //     not still be a member of ANY bundle. A residual AssignmentItem — e.g. left
+        //     behind when a workflow transition put a case back to `ready` (transitions
+        //     only flip the status; they do NOT unlink the bundle
+        //     or drop the item) — would otherwise collide with this plan's freshly created
+        //     item on the @@unique([caseId]) constraint (Prisma P2002) inside persistBundle.
+        //     clearPriorPlanForDate cannot catch it: the owning bundle stays "referenced"
+        //     (and is kept), yet the case is no longer `assigned`. Dropping these stale rows
+        //     before the re-insert makes recalculate fully idempotent and re-runnable.
+        const poolCaseIds = casesRows.map((c) => c.id);
+        if (poolCaseIds.length > 0) {
+          await tx.assignmentItem.deleteMany({ where: { caseId: { in: poolCaseIds } } });
+        }
 
-      // Pull-Prinzip: Die Automatik beplant nur FREIE Mitarbeiter. Wer nach dem
-      // Aufräumen noch ein offenes Bündel besitzt (laufendes/angefasstes Pack,
-      // Teamlead-Platzierungen, fertige-aber-nicht-abgeschlossene Arbeit), bekommt
-      // Nachschub AUSSCHLIESSLICH über seinen eigenen Pull — die Engine plant ihm
-      // nichts mehr vor. Vorgeplante Packs gibt es damit nur noch vom Teamlead.
-      const surviving = await tx.assignmentBundle.findMany({
-        where: {
-          date: { gte: dayStart, lte: dayEnd },
-          status: { notIn: ['completed', 'cancelled'] },
-        },
-        select: { employeeId: true },
-      });
-      const busyEmployeeIds = new Set(surviving.map((b) => b.employeeId));
-      const plannableShiftRows = shiftRows.filter((s) => !busyEmployeeIds.has(s.employee.id));
+        // Pull-Prinzip: Die Automatik beplant nur FREIE Mitarbeiter. Wer nach dem
+        // Aufräumen noch ein offenes Bündel besitzt (laufendes/angefasstes Pack,
+        // Teamlead-Platzierungen, fertige-aber-nicht-abgeschlossene Arbeit), bekommt
+        // Nachschub AUSSCHLIESSLICH über seinen eigenen Pull — die Engine plant ihm
+        // nichts mehr vor. Vorgeplante Packs gibt es damit nur noch vom Teamlead.
+        const surviving = await tx.assignmentBundle.findMany({
+          where: {
+            date: { gte: dayStart, lte: dayEnd },
+            status: { notIn: ['completed', 'cancelled'] },
+          },
+          select: { employeeId: true },
+        });
+        const busyEmployeeIds = new Set(surviving.map((b) => b.employeeId));
+        const plannableShiftRows = shiftRows.filter((s) => !busyEmployeeIds.has(s.employee.id));
 
-      const input: EngineInput = {
-        date: day,
-        // Resolve each case's next Verladetag from the live calendar so the engine's
-        // Vorlauf-relative overdue logic (Teamlead-Punkt 4) has a date to compare.
-        cases: applyResolvedLoadPlanDates(
-          casesRows.map(toGoodsReceiptCase),
-          ruleConfig.loadPlan,
-          day,
-        ),
-        shifts: plannableShiftRows.map((s) =>
-          toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier),
-        ),
-        locations: locationRows.map(toLocationMaster),
-        // §8.2 LIVE wiring: for every case that has a work instruction, recompute its
-        // effort from the cockpit-edited parameters (engineConfig.effort) via the pure
-        // computeEffort. Cases without one keep their precomputed estimatedMinutes.
-        effortVectors: buildEffortVectors(casesRows),
-      };
+        const input: EngineInput = {
+          date: day,
+          // Resolve each case's next Verladetag from the live calendar so the engine's
+          // Vorlauf-relative overdue logic (Teamlead-Punkt 4) has a date to compare.
+          cases: applyResolvedLoadPlanDates(
+            casesRows.map(toGoodsReceiptCase),
+            ruleConfig.loadPlan,
+            day,
+          ),
+          shifts: plannableShiftRows.map((s) =>
+            toEmployeeShift(s, s.employee.bereiche, s.employee.skillTier),
+          ),
+          locations: locationRows.map(toLocationMaster),
+          // §8.2 LIVE wiring: for every case that has a work instruction, recompute its
+          // effort from the cockpit-edited parameters (engineConfig.effort) via the pure
+          // computeEffort. Cases without one keep their precomputed estimatedMinutes.
+          effortVectors: buildEffortVectors(casesRows),
+        };
 
-      const t0 = performance.now();
-      // §8.3 + Schichtende-Cutoff (Punkt 5): the engine holds back the last
-      // `autoCutoffMinutes` of each shift from auto-distribution, evaluated against `now`.
-      const computedPlan = assignWork(input, engineConfig, { now: now.toISOString() });
-      const elapsedMs = Math.round(performance.now() - t0);
+        const t0 = performance.now();
+        // §8.3 + Schichtende-Cutoff (Punkt 5): the engine holds back the last
+        // `autoCutoffMinutes` of each shift from auto-distribution, evaluated against `now`.
+        const computedPlan = assignWork(input, engineConfig, { now: now.toISOString() });
+        const elapsedMs = Math.round(performance.now() - t0);
 
-      const seqByBundleId = new Map<string, BundlePickupSequence>(
-        computedPlan.pickupSequences.map((s) => [s.bundleId, s]),
-      );
-
-      let persistedCount = 0;
-      for (const bundle of computedPlan.bundles) {
-        persistedCount += await this.persistBundle(
-          tx,
-          bundle,
-          seqByBundleId.get(bundle.id),
-          principal,
+        const seqByBundleId = new Map<string, BundlePickupSequence>(
+          computedPlan.pickupSequences.map((s) => [s.bundleId, s]),
         );
-      }
 
-      return {
-        plan: computedPlan,
-        durationMs: elapsedMs,
-        assignedCaseCount: persistedCount,
-        // Anzeige-Metadaten für die Bündel-Details des DTO (Pool der tx-Lesung).
-        planCases: input.cases,
-      };
-    });
+        let persistedCount = 0;
+        for (const bundle of computedPlan.bundles) {
+          persistedCount += await this.persistBundle(
+            tx,
+            bundle,
+            seqByBundleId.get(bundle.id),
+            principal,
+          );
+        }
+
+        return {
+          plan: computedPlan,
+          durationMs: elapsedMs,
+          assignedCaseCount: persistedCount,
+          // Anzeige-Metadaten für die Bündel-Details des DTO (Pool der tx-Lesung).
+          planCases: input.cases,
+        };
+      },
+    );
 
     return this.toResultDto(day, plan, assignedCaseCount, durationMs, planCases);
   }
@@ -295,9 +338,32 @@ export class AssignmentService {
       },
     });
     if (openBundleForPack) {
-      const packItems = openBundleForPack.items.map(toPackItem);
+      // Eigene teil_erledigt-Beteiligungen (§3.8): diese Belege halten den
+      // Anfragenden nicht mehr fest — aber NUR, solange die Zusammenarbeit noch
+      // aktiv ist (mind. ein Helfer angenommen|teil_erledigt, Spiegel von
+      // isCollaborationActive). Sonst — Helfer hat abgelehnt/nie geantwortet
+      // oder wurde entfernt — arbeitet niemand mehr am Beleg und das
+      // Pull-Prinzip greift wieder: kein neues Pack am offenen Beleg vorbei.
+      const partDoneRows = await this.prisma.caseParticipant.findMany({
+        where: {
+          employeeId: employee.id,
+          status: 'teil_erledigt',
+          case: {
+            participants: {
+              some: { role: 'helfer', status: { in: [...ACTIVE_PARTICIPANT_STATUSES] } },
+            },
+          },
+        },
+        select: { caseId: true },
+      });
+      const ownPartDoneCaseIds = new Set(partDoneRows.map((r) => r.caseId));
+      const packItems = openBundleForPack.items.map((i) => toPackItem(i, ownPartDoneCaseIds));
       if (packAdvanceBlockers(packItems, openBundleForPack.activePackIndex).length > 0) {
         return { assigned: false, reason: 'pack_open' };
+      }
+      // Admin-Regel §5.4 — geprüft NACH pack_open und VOR activateNextPack.
+      if (await this.sharedCaseGate(ruleConfig, employee.id)) {
+        return { assigned: false, reason: 'shared_case_open' };
       }
       if (hasPlannedFollowUpPack(packItems, openBundleForPack.activePackIndex)) {
         return this.activateNextPack(
@@ -307,6 +373,9 @@ export class AssignmentService {
           principal,
         );
       }
+    } else if (await this.sharedCaseGate(ruleConfig, employee.id)) {
+      // §5.4 gilt ebenso auf dem Pfad ohne offenes Bündel.
+      return { assigned: false, reason: 'shared_case_open' };
     }
 
     await this.materializeShiftsForDate(day, dayStart);
@@ -334,12 +403,19 @@ export class AssignmentService {
     // wall-clock time left until plannedEnd. Once that is 0 the worker is at shift end —
     // they get nothing more so nothing stays open over night.
     const shiftDomain = toEmployeeShift(shift, shift.employee.bereiche, shift.employee.skillTier);
-    const finishableBudget = finishableBudgetMinutes(remainingCapacity, shiftDomain, now.toISOString());
+    const finishableBudget = finishableBudgetMinutes(
+      remainingCapacity,
+      shiftDomain,
+      now.toISOString(),
+    );
     if (finishableBudget <= 0) return { assigned: false, reason: 'shift_ending' };
 
     return this.prisma.$transaction(async (tx) => {
       const [caseRows, locationRows] = await Promise.all([
-        tx.goodsReceiptCase.findMany({ where: { status: POOL_STATUS }, include: caseEffortInclude }),
+        tx.goodsReceiptCase.findMany({
+          where: { status: POOL_STATUS },
+          include: caseEffortInclude,
+        }),
         tx.location.findMany({ where: { active: true } }),
       ]);
       if (caseRows.length === 0) return { assigned: false, reason: 'pool_empty' };
@@ -383,7 +459,10 @@ export class AssignmentService {
         .filter((e) => e.priority.rank > 0)
         // Monster-Belege (C6) sind nie Self-Pull-Ware — manuelle TL-Entscheidung.
         .filter((e) => e.teile < engineConfig.assignment.largeBelegTeileThreshold)
-        .filter((e) => allowedBereiche.size === 0 || (e.bereich != null && allowedBereiche.has(e.bereich)));
+        .filter(
+          (e) =>
+            allowedBereiche.size === 0 || (e.bereich != null && allowedBereiche.has(e.bereich)),
+        );
       if (enriched.length === 0) return { assigned: false, reason: 'pool_empty' };
 
       const ordered = sortByPriority(enriched);
@@ -445,6 +524,26 @@ export class AssignmentService {
       }
       return { assigned: true, caseCount: cart.caseIds.length, bereich: cart.bereich ?? null };
     });
+  }
+
+  /**
+   * Admin-Regel „Beim geteilten Beleg erst mithelfen" (Konzept §5.4): bei
+   * aktivem Schalter bekommt ein Mitarbeiter mit AKTIVER Beteiligung
+   * (angenommen|teil_erledigt) an einem Beleg, der weder fertig
+   * (completed|zst_done|cancelled) noch beim Teamlead in Klärung (issue_open)
+   * ist, kein neues Pack — Inhaber und Helfer gleichermaßen.
+   */
+  private async sharedCaseGate(ruleConfig: RuleConfig, employeeId: string): Promise<boolean> {
+    if (!ruleConfig.collaboration.helpBeforeNextBundle) return false;
+    const open = await this.prisma.caseParticipant.findFirst({
+      where: {
+        employeeId,
+        status: { in: [...ACTIVE_PARTICIPANT_STATUSES] },
+        case: { status: { notIn: [...SETTLED_SHARED_CASE_STATUSES] } },
+      },
+      select: { id: true },
+    });
+    return open !== null;
   }
 
   /**
@@ -710,6 +809,13 @@ export class AssignmentService {
         where: { id: { in: revertCaseIds } },
         data: { assignedBundleId: null, status: POOL_STATUS, version: { increment: 1 } },
       });
+      // §5.5: der Beleg verlässt den Karren — Beteiligungen dürfen die
+      // Neuvergabe nicht überleben, sonst behalten Alt-Beteiligte Sicht- und
+      // Schreibrechte auf einen Beleg, der gleich im Karren eines anderen
+      // Mitarbeiters liegt (Spiegel des Entziehen-Pfads im TeamleadService).
+      for (const caseId of revertCaseIds) {
+        await dissolveCollaborationTx(tx, caseId, this.events, { actorType: 'system' });
+      }
     }
 
     // Bundles that still own an in-flight/completed case (status not `assigned`) must

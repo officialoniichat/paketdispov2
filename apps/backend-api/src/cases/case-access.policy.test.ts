@@ -34,6 +34,22 @@ describe('case access policy (§16.1)', () => {
     expect(canAccessCase(employee, undefined)).toBe(false);
   });
 
+  it('lässt einen AKTIVEN Beteiligten eines geteilten Belegs zugreifen (§5.1)', () => {
+    expect(canAccessCase(otherEmployee, 'E-1', ['E-2'])).toBe(true);
+    expect(() => assertCanAccessCase(otherEmployee, 'case-1', 'E-1', ['E-2'])).not.toThrow();
+  });
+
+  it('wer nicht in der Beteiligten-Menge steht, bleibt draußen — auch mit Beteiligten', () => {
+    const third = principal([Role.Employee], 'E-3');
+    expect(canAccessCase(third, 'E-1', ['E-2'])).toBe(false);
+    // Eingeladene gehören nicht in die Menge — der Aufrufer übergibt nur AKTIVE.
+    expect(canAccessCase(third, null, ['E-2'])).toBe(false);
+  });
+
+  it('Beteiligten-Menge greift auch ohne Inhaber (Beleg gerade ohne Bündel)', () => {
+    expect(canAccessCase(otherEmployee, null, ['E-2'])).toBe(true);
+  });
+
   it('lets teamlead and admin steer the full pool', () => {
     expect(isPoolViewer(teamlead)).toBe(true);
     expect(isPoolViewer(admin)).toBe(true);

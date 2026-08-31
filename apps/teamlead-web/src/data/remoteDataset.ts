@@ -212,6 +212,12 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
     // BoardCaseDto carries no storage code; the board caption hides it when empty.
     storageCode: '',
     deliveryGroup: c.deliveryGroup ?? null,
+    // Geteilter Beleg (§4): aktive Helfer treiben die goldene Kennzeichnung.
+    sharedWith: c.sharedWith.map((p) => ({
+      employeeNo: p.employeeNo,
+      displayName: p.displayName,
+      status: p.status,
+    })),
   };
 }
 

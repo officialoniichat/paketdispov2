@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   casesForDisplay,
   deriveStops,
+  geteiltInfo,
   isCaseClosed,
   stopsForDisplay,
 } from './BundleHomeScreen.js';
@@ -253,5 +254,83 @@ describe('isCaseClosed', () => {
     expect(isCaseClosed('in_progress')).toBe(false);
     expect(isCaseClosed('issue_open')).toBe(false);
     expect(isCaseClosed('problem_resolved')).toBe(false);
+  });
+});
+
+type GeteiltBeleg = Parameters<typeof geteiltInfo>[0];
+
+/**
+ * Beleg mit Beteiligten (Zusammenarbeit 31.08.2026) — nur die Felder, die
+ * `geteiltInfo` liest; die Wahrheit über Status/Zählung liefert das Backend.
+ */
+function geteilterBeleg(
+  participants: Array<{ employeeNo: string; displayName: string; role: string; status: string }>,
+  geprueft = 2,
+  gesamt = 5,
+): GeteiltBeleg {
+  return {
+    collaboration: {
+      positionCount: gesamt,
+      confirmedPositionCount: geprueft,
+      participants: participants.map((p, index) => ({
+        participantId: `p${index}`,
+        invitedAt: '2026-08-31T08:00:00.000Z',
+        confirmedPositionCount: 0,
+        ...p,
+      })),
+    },
+  } as GeteiltBeleg;
+}
+
+describe('geteiltInfo', () => {
+  it('ohne collaboration (nie geteilt) → keine Kennzeichnung', () => {
+    expect(geteiltInfo({ collaboration: null } as GeteiltBeleg, '100')).toBeNull();
+    expect(geteiltInfo({} as GeteiltBeleg, '100')).toBeNull();
+  });
+
+  it('nur Eingeladene/Abgelehnte sind NICHT aktiv → keine Kennzeichnung', () => {
+    const beleg = geteilterBeleg([
+      { employeeNo: '100', displayName: 'Ich', role: 'inhaber', status: 'angenommen' },
+      { employeeNo: '101', displayName: 'Anna Berger', role: 'helfer', status: 'eingeladen' },
+      { employeeNo: '102', displayName: 'Bernd Weiß', role: 'helfer', status: 'abgelehnt' },
+    ]);
+    expect(geteiltInfo(beleg, '100')).toBeNull();
+  });
+
+  it('genau EINE andere aktive Person → „Geteilt mit <Name>" + Fortschritt', () => {
+    const beleg = geteilterBeleg([
+      { employeeNo: '100', displayName: 'Ich', role: 'inhaber', status: 'angenommen' },
+      { employeeNo: '101', displayName: 'Anna Berger', role: 'helfer', status: 'angenommen' },
+    ]);
+    expect(geteiltInfo(beleg, '100')).toEqual({
+      label: 'Geteilt mit Anna Berger',
+      geprueft: 2,
+      gesamt: 5,
+    });
+  });
+
+  it('mehrere andere Aktive → „Geteilt · <n> Personen" (Gesamtzahl der Aktiven)', () => {
+    const beleg = geteilterBeleg([
+      { employeeNo: '100', displayName: 'Ich', role: 'inhaber', status: 'angenommen' },
+      { employeeNo: '101', displayName: 'Anna Berger', role: 'helfer', status: 'angenommen' },
+      { employeeNo: '102', displayName: 'Bernd Weiß', role: 'helfer', status: 'teil_erledigt' },
+    ]);
+    expect(geteiltInfo(beleg, '100')?.label).toBe('Geteilt · 3 Personen');
+  });
+
+  it('teil_erledigt zählt als aktiv (grau, aber weiter beteiligt — §3.7)', () => {
+    const beleg = geteilterBeleg([
+      { employeeNo: '100', displayName: 'Ich', role: 'inhaber', status: 'angenommen' },
+      { employeeNo: '101', displayName: 'Anna Berger', role: 'helfer', status: 'teil_erledigt' },
+    ]);
+    expect(geteiltInfo(beleg, '100')?.label).toBe('Geteilt mit Anna Berger');
+  });
+
+  it('Helfer-Sicht: der Inhaber ist „der andere"', () => {
+    const beleg = geteilterBeleg([
+      { employeeNo: '100', displayName: 'Hakan Yilmaz', role: 'inhaber', status: 'angenommen' },
+      { employeeNo: '200', displayName: 'Ich', role: 'helfer', status: 'angenommen' },
+    ]);
+    expect(geteiltInfo(beleg, '200')?.label).toBe('Geteilt mit Hakan Yilmaz');
   });
 });

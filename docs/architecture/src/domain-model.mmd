@@ -6,6 +6,12 @@
 %% parentCaseId/partNo). Der gesamte Stack rechnet pro Case-Zeile, deshalb laufen Teil-Belege
 %% ueberall als normale Belege mit; das Original bleibt als Klammer im Status split_container
 %% zurueck — nicht zuteilbar, nicht im Pool.
+%% Geteilter Beleg (gemeinsam bearbeitet, 31.08.2026): Zusammenarbeit ist ein OVERLAY aus Beteiligten
+%% je Beleg (CASE_PARTICIPANT: Rolle inhaber|helfer + Status) — kein zweites ASSIGNMENT_ITEM, kein neuer
+%% CaseStatus; der Beleg liegt weiter in GENAU EINEM Buendel (dem des Inhabers). Seitdem sind
+%% „Position geprueft" (RECEIPT_POSITION.confirmedAt/confirmedById) und die Preiskorrektur je Groesse
+%% (RECEIPT_SKU_LINE.correctedVkPrice) serverseitig persistiert — fuer ALLE Belege, nicht nur geteilte.
+%% Konzept: docs/concept/beleg-zusammenarbeit-concept.md.
 erDiagram
     USER ||--o{ USER_ROLE : "hat"
     ROLE ||--o{ USER_ROLE : "gewährt"
@@ -26,6 +32,7 @@ erDiagram
     GOODS_RECEIPT_CASE ||--o{ GOODS_RECEIPT_CASE : "aufgeteilt in Teil-Belege (parentCaseId/partNo)"
     GOODS_RECEIPT_CASE ||--o| WORK_INSTRUCTION_HEADER : "Beleg-Kopf-AW"
     GOODS_RECEIPT_CASE ||--o{ RECEIPT_POSITION : "enthält"
+    USER |o--o{ RECEIPT_POSITION : "hat geprueft (confirmedById, SetNull)"
     RECEIPT_POSITION ||--o| POSITION_INSTRUCTION : "Positions-AW"
     RECEIPT_POSITION ||--o{ RECEIPT_SKU_LINE : "EAN × Größe"
 
@@ -39,6 +46,10 @@ erDiagram
     ASSIGNMENT_ITEM ||--|| GOODS_RECEIPT_CASE : "referenziert"
     ASSIGNMENT_BUNDLE ||--o{ GOODS_RECEIPT_CASE : "zugewiesen (denorm.)"
     ASSIGNMENT_BUNDLE ||--o{ ROUTE_STOP : "Abholroute"
+
+    GOODS_RECEIPT_CASE ||--o{ CASE_PARTICIPANT : "Beteiligte (geteilter Beleg)"
+    USER ||--o{ CASE_PARTICIPANT : "beteiligt als Inhaber/Helfer"
+    USER |o--o{ CASE_PARTICIPANT : "laedt ein (invitedById, null bei Teamleitung)"
 
     USER {
         string id PK
@@ -141,6 +152,8 @@ erDiagram
         string hShopNo "POS: Hauptshop (Anzeige)"
         string orderNo "POS: Ordernummer (ERP-Referenz zur Fehlerlösung)"
         enum status "open|confirmed|issue_open|completed"
+        datetime confirmedAt "Position geprueft: wann (nullable; serverseitig seit 31.08.2026)"
+        string confirmedById FK "Position geprueft: wer (User, SetNull) — Basis fuer Fertig-Gate und ZST-Anteil"
     }
     POSITION_INSTRUCTION {
         string positionId PK "FK→position (1:1)"
@@ -155,7 +168,8 @@ erDiagram
         string ean
         string size
         int expectedQuantity
-        int confirmedQuantity
+        int confirmedQuantity "Ist-Menge, pro Aktion persistiert (null = nicht erfasst)"
+        float correctedVkPrice "Preiskorrektur je Groesse (nullable), pro Aktion persistiert"
         enum status "open|confirmed|deviation"
     }
 
@@ -248,7 +262,7 @@ erDiagram
     }
     APP_CONFIG {
         string key PK "Singleton rule_config"
-        json value "Zod RuleConfig"
+        json value "Zod RuleConfig (inkl. collaboration.helpBeforeNextBundle)"
     }
     LOAD_PLAN_RULE {
         string id PK
@@ -294,3 +308,25 @@ erDiagram
         datetime readAt "null = ungelesen"
     }
     USER ||--o{ TEAMLEAD_MESSAGE : "erhaelt"
+
+    %% Geteilter Beleg (31.08.2026): Beteiligung = Beleg x Mitarbeiter mit Rolle und Status.
+    %% Die Inhaber-Zeile entsteht beim ersten Einladen (bzw. beim Gemeinsam-Zuweisen durch die
+    %% Teamleitung) als `angenommen` und traegt spaeter das `teil_erledigt` des Inhabers; eine
+    %% Zusammenarbeit ist AKTIV, sobald mindestens ein Helfer angenommen|teil_erledigt ist.
+    %% Verlaesst der Beleg den Karren des Inhabers (entziehen/verschieben/stornieren/parken/„Rest parken"),
+    %% werden die Zeilen geloescht (case.collaboration_dissolved); gepruefte Positionen bleiben geprueft.
+    CASE_PARTICIPANT {
+        string id PK
+        string caseId FK "onDelete Cascade"
+        string employeeId FK "UK: caseId+employeeId (participant_case_employee); Index employeeId+status"
+        enum role "inhaber|helfer"
+        enum status "eingeladen|angenommen|abgelehnt|teil_erledigt|entfernt"
+        string invitedById FK "User.id des Einladenden (null bei Teamlead/System, SetNull)"
+        string invitedByLabel "Anzeigename-Snapshot (z. B. Hakan Yilmaz, Teamleitung)"
+        string message "optionale Einladungs-Nachricht"
+        datetime invitedAt
+        datetime respondedAt "angenommen/abgelehnt"
+        datetime partDoneAt "Teilbeleg erledigt"
+        datetime removedAt "durch Teamleitung entfernt"
+        string removedByLabel
+    }

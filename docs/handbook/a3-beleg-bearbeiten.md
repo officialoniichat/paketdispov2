@@ -37,7 +37,14 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
 - optional eine Warenart wie `'Vororder'`, `'Nachorder'`, `'NOS'`, `'Extrabestellung'`;
 - einen Status: `'Offen'`, `'In Arbeit'`, `'Fertig'`, `'Problem gemeldet'` (rot) oder `'Geklärt'`
   (grün). Ein rot geparkter Beleg (`'Problem gemeldet'`) lässt sich nicht öffnen – er wartet auf die
-  Klärung durch die Teamleitung (Kapitel A5).
+  Klärung durch die Teamleitung (Kapitel A5);
+- bei einem **geteilten Beleg** (Kapitel A7) eine **goldene** Markierung mit
+  `'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'` und dem gemeinsamen Fortschritt
+  `'<geprüft>/<gesamt> geprüft'`.
+
+Belege, bei denen **du** als Helfer mitarbeitest, stehen nicht in deiner Bündel-Liste, sondern im
+eigenen Abschnitt **`'Geteilt mit dir'`** darunter. Sie sind nie ausgegraut – die Ware holt der
+Inhaber.
 
 ## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
 
@@ -58,6 +65,11 @@ Trägt der Beleg einen **CatMan-Termin**, steht er daneben als `'CatMan <TT.MM.J
 `'CatMan <TT.MM.JJJJ> · überfällig'`, wenn er schon vorbei ist. Angezeigt wird der **früheste** Termin
 des Belegs, damit du ihn nicht in den Positionszeilen suchen musst; welche Position genau wann fällig
 ist, steht weiterhin an der Position selbst (Kapitel A4).
+
+Bei einem **geteilten Beleg** steht oben rechts zusätzlich der Umschalter **`'Team-Ansicht'`**: Er
+teilt den Bildschirm und zeigt rechts, wie weit die anderen Beteiligten sind. `'Position geprüft'`
+trägt dann die Initialen der Person, die geprüft hat, und der Hauptknopf unten heißt zunächst
+`'Teilbeleg erledigt'` (Kapitel A7).
 
 ## Die Arbeitsanweisung Schritt für Schritt
 

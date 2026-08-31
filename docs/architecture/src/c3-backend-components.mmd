@@ -1,6 +1,13 @@
 %% C4 Ebene 3 — Komponenten: backend-api (NestJS auf Fastify)
 %% Verifiziert gegen apps/backend-api/src/* (app.module.ts, cases/, assignment/, employees/,
-%% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, clock/, dev/, health/, openapi/).
+%% admin/, prohandel/, workflow/, events/, live/, auth/, prisma/, clock/, dev/, health/, openapi/,
+%% messages/, collaboration/).
+%% Stand 31.08.2026 — „Beleg gemeinsam bearbeiten" (geteilter Beleg, Konzept
+%% docs/concept/beleg-zusammenarbeit-concept.md): CollaborationModule, Server-Haken „Position geprüft",
+%% typisierter Live-Kanal (LiveEvent aus @paket/domain-types, mehrere Empfänger) und das Pull-Gate
+%% shared_case_open. Endpunkt-Verteilung gegen den Code geprüft: das CollaborationModule stellt ZWEI
+%% Controller — CollaborationController (api/me, Rolle Mitarbeiter) und TeamleadCollaborationController
+%% (api/teamlead, Rolle Teamleitung/Admin, Fachlogik im TeamleadService des CasesModule).
 flowchart TB
     classDef ctrl fill:#16314a,stroke:#56b6ff,color:#eef1f6;
     classDef svc fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
@@ -22,32 +29,32 @@ flowchart TB
             prisma["PrismaService<br/><i>@Global, $transaction</i>"]:::cross
             events["EventLogService<br/><i>append() · SHA256-Hash-Kette</i>"]:::cross
             workflow["WorkflowService<br/><i>§7.1-Zustandsmaschine transition()</i>"]:::cross
-            live["LiveStatusService + LiveController<br/><i>SSE: /api/me/stream, /api/teamlead/stream</i>"]:::cross
+            live["LiveStatusService + LiveController<br/><i>SSE: /api/me/stream (Filter: recipients enthält meine employeeNo) · /api/teamlead/stream (erhält alles) ·<br/>LiveEvent aus @paket/domain-types (liveEventSchema): type · recipients[] · caseId · status · actorEmployeeNo · positionId · at ·<br/>SSE-event-Name = type — case.status · position.confirmed · sku.counted · collaboration.invited · collaboration.changed (31.08.2026);<br/>Empfänger = Inhaber + aktive Beteiligte (participants.ts recipientsForCase), bei Einladungen der Eingeladene</i>"]:::cross
             clock["ClockService<br/><i>@Global now(): Dev-Zeit-Override<br/>(AppConfig) oder Systemzeit</i>"]:::cross
         end
 
         subgraph cases["CasesModule"]
-            meCtrl["MeController<br/>POST /api/me/cases/:id/issues/:issueId/reopen (Rückmeldung→wieder offen)<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle<br/>· POST park (B4) · POST workstation (A2)"]:::ctrl
-            casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation (auch resume)<br/>· complete (skuQuantities) · partial-complete (Probleme→issue_open, Erst-Meldung = 1. Verlaufs-Eintrag)"]:::ctrl
+            meCtrl["MeController<br/>POST /api/me/cases/:id/issues/:issueId/reopen (Rückmeldung→wieder offen)<br/>GET /api/me/today · current-bundle<br/>· cases/:id/aggregate · POST next-bundle (Grund u. a. shared_case_open bei aktiver Regel „Beim geteilten Beleg erst mithelfen“)<br/>· POST park (B4) · POST workstation (A2)"]:::ctrl
+            casesCtrl["CasesController<br/>POST /api/cases/:id/start-preparation (auch resume) · POST /api/cases/:id/collected (Ware-holen-Haken — NUR der Inhaber, auch am geteilten Beleg)<br/>· complete (skuQuantities = nur die berührten Größenzeilen, der Server mischt mit dem persistierten Stand) · partial-complete (Probleme→issue_open, Erst-Meldung = 1. Verlaufs-Eintrag)<br/>· POST /api/cases/:id/positions/:positionId/confirmed („Position geprüft“ setzen/zurücknehmen — serverseitig, Beleg in_progress, kein Versions-Inkrement)<br/>· POST /api/cases/:id/sku-lines/:skuLineId/count (Ist-Menge + Preiskorrektur je Größe, pro Aktion persistiert; null = zurücksetzen) (31.08.2026)"]:::ctrl
             tlCtrl["TeamleadController<br/>/api/teamlead/* cases · bundles · dashboards<br/>· GET ablagen (§10.2 vollständiger Pool für die Digitalen Ablagen, ohne Paging)<br/>· assignments/recalculate|preview|export-zst<br/>· cases/:id/return-to-bucher|complete-intake (Intake-Gate D1)<br/>· cases/:id/issues/:issueId/instruction (Instruktion je Meldung; alle instruiert→problem_resolved)<br/>· delivery-groups/merge|split|release (D2)<br/>· cases/:id/split (Beleg → echte Teil-Belege, optional je Teil ein Mitarbeiter)<br/>· cases/lookup (WE-Nr) · cases/search (Suche+Browse im Zuweisen-Flow A1/A2/B1) · cases/:id/flag-attention|unflag-attention<br/>· cases/:id/forward|unforward<br/>· bundles/:id/withdraw|add|reorder|pause|resume · employees/:no/assign<br/>· employees/:no/assign-bundle (A1/A2) · bundles/:id/cases/:caseId/move (B2, optional targetPackIndex)"]:::ctrl
-            casesSvc["CasesService<br/><i>getToday (pack-gefiltert) · aggregate · start · complete<br/>· parkRemaining · claimWorkstation</i>"]:::svc
-            packWin["pack-window.ts<br/><i>Pack-Fachlogik (rein, single source, PERSISTIERT in AssignmentItem.packIndex):<br/>packWindow (aktives Pack + Anzeige-Mitnahme) · packAdvanceBlockers (Belege mit offenem Problem blockieren NICHT)<br/>· packMembers/packInsertPosition (Ziel-Pack auflösen + hinter dessen letztes Mitglied einsortieren)</i>"]:::svc
-            tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>assignToEmployee (newPack = vorgeplantes nächstes Pack im Tages-Bündel, NIE ein Zweit-Bündel)/assignBundleToEmployee (find-or-create) ·<br/>moveCase (B2: anderer MA ODER — mit targetPackIndex — anderes Pack DESSELBEN Bündels;<br/>§7.1-Guard wie withdraw: nur `assigned`, laufende/fertige Arbeit bleibt liegen;<br/>Pack-Ziel → packIndex wird GESCHRIEBEN (nicht nur auditiert) + Einsortieren hinter das letzte Pack-Mitglied,<br/>Resequence Items/Route-Stops)</i>"]:::svc
-            tlRead["TeamleadReadService<br/><i>dashboard · board (Packs aus dem persistierten AssignmentItem.packIndex gruppiert — je Pack sein Index<br/>und ob es beim MA gerade aktiv ist · Schichtfenster · Abwesenheit je Zeile) · capacity · kpis · pool (Server-Filter/-Sortierung/-Paging) ·<br/>ablagen (§10.2 VOLLSTÄNDIGER steuerbarer Pool, OHNE Paging — ABLAGEN_WHERE: ready|parked|issue_open + weitergeleitet;<br/>einzige Quelle der Ablagen-Zugehörigkeit) · lookup · search (gerankt, nur zuweisbare) · detail ·<br/>Kachel-/Zeilen-Aggregate je Beleg für Pool UND Suche (cases/mappers.ts): vorkommende Etikett-Druckvarianten<br/>+ „mind. eine Position braucht Sicherung“ — belegweit hier gerechnet, die UIs zeigen nur (07.08.2026);<br/>dazu die Server-Filter digiTags/security über `positions.some|none`</i>"]:::svc
+            casesSvc["CasesService<br/><i>getToday (pack-gefiltert; + sharedCases = Belege, bei denen ich aktiver Helfer bin; CaseSummary.collaboration mit Beteiligten + geprüft-Zählern) · aggregate (confirmedBy je Position, correctedVkPrice je Größe) · start · complete<br/>· confirmPosition · countSkuLine (Audit position.confirmed / sku.quantity_confirmed + Live an Inhaber + Beteiligte) · parkRemaining (löst die Zusammenarbeit auf) · claimWorkstation ·<br/>Zugriff §16.1: case-access.policy.ts canAccessCase(principal, Inhaber, aktive Beteiligte) → requireWorkableCase; nur der Inhaber setzt den Ware-holen-Haken (31.08.2026)</i>"]:::svc
+            packWin["pack-window.ts<br/><i>Pack-Fachlogik (rein, single source, PERSISTIERT in AssignmentItem.packIndex):<br/>packWindow (aktives Pack + Anzeige-Mitnahme) · packAdvanceBlockers (Belege mit offenem Problem blockieren NICHT;<br/>ebenso wenig ein geteilter Beleg, dessen eigene Beteiligung teil_erledigt ist — PackItem.ownPartDone, 31.08.2026)<br/>· packMembers/packInsertPosition (Ziel-Pack auflösen + hinter dessen letztes Mitglied einsortieren)</i>"]:::svc
+            tlSvc["TeamleadService<br/><i>park · prioritize · cancel · withdraw · reorder · exportZst ·<br/>createCollaboration (Beleg ready|parked ohne Bündel → Karren des ersten MA, Beteiligungen angenommen, invitedByLabel „Teamleitung“, Audit case.collaboration_started) ·<br/>removeParticipant (Helfer → entfernt mit Pflicht-Grund; Inhaber → 409) · withdraw/moveCase/cancel/park lösen eine Zusammenarbeit auf (dissolveCollaborationTx, 31.08.2026) ·<br/>assignToEmployee (newPack = vorgeplantes nächstes Pack im Tages-Bündel, NIE ein Zweit-Bündel)/assignBundleToEmployee (find-or-create) ·<br/>moveCase (B2: anderer MA ODER — mit targetPackIndex — anderes Pack DESSELBEN Bündels;<br/>§7.1-Guard wie withdraw: nur `assigned`, laufende/fertige Arbeit bleibt liegen;<br/>Pack-Ziel → packIndex wird GESCHRIEBEN (nicht nur auditiert) + Einsortieren hinter das letzte Pack-Mitglied,<br/>Resequence Items/Route-Stops)</i>"]:::svc
+            tlRead["TeamleadReadService<br/><i>dashboard · board (Packs aus dem persistierten AssignmentItem.packIndex gruppiert — je Pack sein Index<br/>und ob es beim MA gerade aktiv ist · Schichtfenster · Abwesenheit je Zeile) · capacity · kpis · pool (Server-Filter/-Sortierung/-Paging) ·<br/>ablagen (§10.2 VOLLSTÄNDIGER steuerbarer Pool, OHNE Paging — ABLAGEN_WHERE: ready|parked|issue_open + weitergeleitet;<br/>einzige Quelle der Ablagen-Zugehörigkeit) · lookup · search (gerankt, nur zuweisbare) · detail ·<br/>Kachel-/Zeilen-Aggregate je Beleg für Pool UND Suche (cases/mappers.ts): vorkommende Etikett-Druckvarianten<br/>+ „mind. eine Position braucht Sicherung“ — belegweit hier gerechnet, die UIs zeigen nur (07.08.2026);<br/>dazu die Server-Filter digiTags/security über `positions.some|none` ·<br/>board: BoardCaseDto.sharedWith (aktive Helfer mit Status) · detail: participants (alle Status, chronologisch) — Basis der goldenen Karten (31.08.2026)</i>"]:::svc
         end
 
         subgraph assignment["AssignmentModule"]
-            asgSvc["AssignmentService<br/><i>recalculate() beplant nur FREIE Mitarbeiter — wer ein offenes Bündel hat, bekommt Nachschub NUR über den Pull;<br/>räumt nur ENGINE-Platzierungen ab (createdBy=teamlead bleibt stehen), das angefasste bzw. selbst gezogene<br/>AKTIVE Pack ist gesperrt — nur ein unberührtes Starter-Pack wird umgeplant;<br/>Ein-offenes-Bündel hart per Unique-Index one_open_bundle_per_employee_day · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen<br/>(Pack-Guard und Extend teilen EIN Bündel-Objekt — nie ein Create daneben)</i>"]:::svc
+            asgSvc["AssignmentService<br/><i>recalculate() beplant nur FREIE Mitarbeiter — wer ein offenes Bündel hat, bekommt Nachschub NUR über den Pull;<br/>räumt nur ENGINE-Platzierungen ab (createdBy=teamlead bleibt stehen), das angefasste bzw. selbst gezogene<br/>AKTIVE Pack ist gesperrt — nur ein unberührtes Starter-Pack wird umgeplant;<br/>Ein-offenes-Bündel hart per Unique-Index one_open_bundle_per_employee_day · preview()<br/>· assignNextBundle() = nächstes Pack: vorgeplantes freischalten, sonst aus dem Pool ziehen<br/>(Pack-Guard und Extend teilen EIN Bündel-Objekt — nie ein Create daneben) ·<br/>Pull-Gate shared_case_open (31.08.2026): bei Regel collaboration.helpBeforeNextBundle kein neues Pack, solange der Anfragende eine aktive Beteiligung<br/>an einem Beleg hat, der weder terminal noch issue_open ist — geprüft nach pack_open und VOR activateNextPack, ebenso ohne offenes Bündel;<br/>recalculate() nimmt solche Mitarbeitende bei aktiver Regel aus der Starter-Pack-Verteilung (wie die Monster-Fortsetzung)</i>"]:::svc
         end
 
         subgraph empl["EmployeesModule"]
             emplCtrl["EmployeesController<br/>/api/admin/employees (GET·POST·PATCH·DELETE)<br/>· PATCH :id (inkl. displayName umbenennen) · DELETE :id (Schutz: aktive Schicht/Bündel/laufende Belege/Historie ⇒ 409 + Verweis auf Deaktivieren)<br/>· employees/workstations (GET)<br/>· employees/absences (GET·POST·DELETE — Schichtplan-Kalender: Krank/Urlaub)"]:::ctrl
-            emplSvc["EmployeesService<br/><i>list · get · create · updateProfile (skillTier · Workstation)<br/>· materializeShift · listAbsences · createAbsence · deleteAbsence</i>"]:::svc
+            emplSvc["EmployeesService<br/><i>list · get · create · updateProfile (skillTier · Workstation)<br/>· materializeShift · listAbsences · createAbsence · deleteAbsence<br/>· remove (Löschschutz; räumt die Beteiligungen des Nutzers an geteilten Belegen ab)</i>"]:::svc
         end
 
         subgraph adminMod["AdminModule"]
             adminCtrl["AdminController<br/>/api/admin/locations · /api/admin/rules<br/>· catalogs/wgr · catalogs/inspection-levels<br/>· online-size-preferences (GET·POST·upload)"]:::ctrl
-            adminSvc["AdminService<br/><i>RuleConfig (Singleton AppConfig) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
+            adminSvc["AdminService<br/><i>RuleConfig (Singleton AppConfig; inkl. collaboration.helpBeforeNextBundle, Zod-Default false) · Lagerplätze<br/>· Mock-ERP-Kataloge (WGR · Prüfstufen · Online-Größen)</i>"]:::svc
         end
 
         subgraph problemMod["ProblemReasonsModule"]
@@ -66,21 +73,32 @@ flowchart TB
             msgsSvc["MessagesService<br/><i>TeamleadMessage (employeeId · caseId? · text · readAt) — §16.1 self-scoped</i>"]:::svc
         end
 
+        subgraph collab["CollaborationModule (31.08.2026 — geteilter Beleg)"]
+            collabCtrl["CollaborationController<br/><i>@Controller(„api/me“) · Rolle Mitarbeiter</i><br/>GET /api/me/colleagues (aktive Kolleg:innen ohne mich · shiftToday, heute im Dienst zuerst)<br/>· POST /api/me/cases/:caseId/invitations (Einladen — Inhaber oder aktiver Beteiligter; legt die Inhaber-Zeile an, Helfer → eingeladen)<br/>· POST /api/me/invitations/:participantId/respond (annehmen/ablehnen — nur der Eingeladene)<br/>· GET /api/me/nachrichten (Posteingang: Einladungen erhalten/gesendet + Teamlead-Nachrichten, pendingCount)<br/>· POST /api/me/cases/:caseId/part-done („Teilbeleg erledigt“ — eigene Beteiligung → teil_erledigt, bucht nichts)"]:::ctrl
+            tlCollabCtrl["TeamleadCollaborationController<br/><i>@Controller(„api/teamlead“) · Rolle Teamleitung/Admin — Fachlogik im TeamleadService,<br/>weil dort die §8.4-Bündel-Mechanik und das Auflösen beim Entziehen leben</i><br/>POST /api/teamlead/cases/:caseId/collaboration (Gemeinsam zuweisen: ≥ 2 Mitarbeiter, der erste bekommt den Beleg in den Karren,<br/>alle Beteiligungen angenommen, ein geparkter Beleg wird freigegeben — Pflicht-Grund)<br/>· POST /api/teamlead/cases/:caseId/participants/:employeeNo/remove (Helfer entfernen, Pflicht-Grund; Inhaber → 409)"]:::ctrl
+            collabSvc["CollaborationService<br/><i>Beteiligungen (CaseParticipant) als Overlay — kein zweites AssignmentItem, kein neuer CaseStatus; abgelehnt/entfernt → erneut einladbar ·<br/>Audit case.collaboration_invited/_accepted/_declined/_part_done/_participant_removed ·<br/>Live collaboration.invited (an die Eingeladenen) · collaboration.changed (an Inhaber + Beteiligte, beim Entfernen inkl. dem Entfernten)</i>"]:::svc
+            participants["participants.ts<br/><i>reine Prisma-Hilfsfunktionen ohne DI: activeParticipantEmployeeNos · recipientsForCase (Inhaber + aktive Beteiligte = SSE-Empfänger) ·<br/>isCollaborationActive (≥ 1 Helfer angenommen|teil_erledigt) · dissolveCollaborationTx (case.collaboration_dissolved)</i>"]:::svc
+        end
+
         subgraph devMod["DevModule (per Env geschaltet: DEV_PANEL, 404 in Prod)"]
             devCtrl["DevController<br/>GET /api/dev/scenarios · POST scenarios/:key/load<br/>· POST scenarios/reset · POST/DELETE time-override<br/>· POST materialize-shifts<br/><i>@Roles(Admin) + DevPanelGuard</i>"]:::ctrl
             scenSvc["ScenarioService<br/><i>Katalog + loadScenario (reset + seed)<br/>src/dev/scenarios/: typisierte Registry B1–B15<br/>(15 Szenarien, definitions/* + CSV-Fixture),<br/>Schicht-Fenster gestern…+13 Tage (Mo–Fr) statt nur Seed-Tag,<br/>Volumen typical/peak/masse (171/315/650 Belege),<br/>auch von prisma/seed.ts + Int-Tests genutzt</i>"]:::svc
         end
 
         subgraph dom["Fachliche Kerne (src/modules/*)"]
-            mods["completion · issue/derive-problems (implizite Probleme)<br/>· print · transport · reporting (CSV)"]:::svc
+            mods["completion (inkl. collaboration-gate.ts, rein: „Beleg erledigt“ = alle Positionen geprüft;<br/>Teilabschluss = jede ungeprüfte Position ist eine Problem-Position — offene Meldung, manuelle Meldung oder implizite Abweichung) ·<br/>ZST je Beteiligtem: Summe der Ist-Mengen SEINER geprüften Positionen, Idempotenzschlüssel zst:&lt;caseId&gt;:&lt;employeeId&gt;:&lt;Menge&gt;, Delta je Paar (31.08.2026)<br/>· issue/derive-problems (implizite Probleme) · print · transport · reporting (CSV)"]:::svc
         end
     end
 
     pwa -->|"REST + SSE"| meCtrl
-    pwa --> casesCtrl
+    pwa -->|"Start · Position geprüft · Ist-Menge/Preis · Abschluss"| casesCtrl
+    pwa -->|"Beleg teilen · Einladungen · Nachrichten · Teilbeleg erledigt"| collabCtrl
+    pwa -->|"Teamlead-Nachrichten lesen · „Gelesen“"| msgsCtrl
     pwa -->|"Problemarten (aktiv)"| prCtrl
     pwa -->|"Piktogramme"| pictoCtrl
     web -->|"REST + SSE"| tlCtrl
+    web -->|"Gemeinsam zuweisen · Helfer aus geteiltem Beleg entfernen"| tlCollabCtrl
+    web -->|"Nachricht senden · Lesestatus"| msgsCtrl
     web --> emplCtrl
     web --> adminCtrl
     web -->|"Problemarten-Katalog"| prCtrl
@@ -88,6 +106,10 @@ flowchart TB
 
     meCtrl --> casesSvc
     casesCtrl --> casesSvc
+    collabCtrl --> collabSvc
+    tlCollabCtrl --> tlSvc
+    tlCollabCtrl --> clock
+    msgsCtrl --> msgsSvc
     tlCtrl --> tlSvc
     tlCtrl --> tlRead
     tlCtrl --> asgSvc
@@ -96,6 +118,11 @@ flowchart TB
     adminCtrl --> adminSvc
     prCtrl --> prSvc
     casesSvc --> prSvc
+    casesSvc -->|"Fertig-Gate + ZST-Anteile"| mods
+    casesSvc -->|"Inhaber + aktive Beteiligte (Zugriff · Live-Empfänger)"| participants
+    tlSvc -->|"Zusammenarbeit auflösen"| participants
+    collabSvc --> participants
+    asgSvc -. "Pull-Gate: aktive Beteiligung an offenem geteilten Beleg?" .-> participants
     casesSvc -->|"was der MA sehen darf"| packWin
     asgSvc -->|"Pull-Guard: nächstes Pack frei?"| packWin
     tlSvc -->|"Ziel-Pack beim Umhängen"| packWin
@@ -105,6 +132,7 @@ flowchart TB
     tlCtrl --> clock
     meCtrl --> clock
     casesSvc -->|"EINE Uhr: Tages- und Zeitstempel"| clock
+    collabSvc --> clock
     phCtrl --> clock
     devCtrl --> clock
 
@@ -113,6 +141,8 @@ flowchart TB
     workflow --> events
     casesSvc --> live
     tlSvc --> live
+    collabSvc --> live
+    collabSvc --> events
     asgSvc --> enginePkg
     asgSvc --> events
     phSvc --> events
@@ -123,6 +153,9 @@ flowchart TB
     casesSvc --> prisma
     tlSvc --> prisma
     tlRead --> prisma
+    collabSvc -->|"Posteingang liest teamleadMessage direkt (kein MessagesService)"| prisma
+    participants --> prisma
+    msgsSvc --> prisma
     asgSvc --> prisma
     emplSvc --> prisma
     adminSvc --> prisma
@@ -133,5 +166,3 @@ flowchart TB
     scenSvc --> prisma
     clock --> prisma
     prisma --> db
-
-    msgsCtrl --> msgsSvc

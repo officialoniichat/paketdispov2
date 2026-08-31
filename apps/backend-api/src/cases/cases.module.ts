@@ -13,5 +13,8 @@ import { TeamleadController } from './teamlead.controller.js';
   imports: [WorkflowModule, AssignmentModule],
   controllers: [MeController, CasesController, TeamleadController],
   providers: [CasesService, TeamleadService, TeamleadReadService],
+  // TeamleadService auch fürs Zusammenarbeits-Modul (Gemeinsam zuweisen /
+  // Helfer entfernen laufen über dieselbe §8.4-Bündel-Mechanik).
+  exports: [TeamleadService],
 })
 export class CasesModule {}

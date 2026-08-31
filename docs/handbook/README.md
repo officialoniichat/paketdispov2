@@ -27,14 +27,15 @@ kleinste Arbeitseinheit, die eine Person abholt und bearbeitet. Das System verte
 | Mitarbeitende am Tisch | **Mitarbeiter-App** (Handy/Tablet) | `'L&T Warenauszeichnung'` |
 | Teamleitung | **Teamlead-Cockpit** (Desktop) | `'Teamlead-Dashboard'` |
 
-Zwischen den Apps kann man wechseln: In der Mitarbeiter-App oben rechts über `'Zur Teamlead-App'`,
-im Cockpit oben rechts über `'Zur Mitarbeiter-App'`.
+Zwischen den Apps kann man wechseln: In der Mitarbeiter-App über den Profilkreis oben rechts →
+`'Zur Teamlead-App'`, im Cockpit unten in der Navigationsleiste über `'Zur Mitarbeiter-App'`.
 
 ## Aufbau dieses Handbuchs
 
 - **Grundlagen** — Vokabular, das große Bild und die Rollen. Erst hier lesen.
-- **Teil A – Mitarbeiter** — der komplette Ablauf am Tisch, von der Anmeldung bis zum Abschluss.
-  Geschrieben in Du-Form.
+- **Teil A – Mitarbeiter** — der komplette Ablauf am Tisch, von der Anmeldung bis zum Abschluss,
+  einschließlich des gemeinsamen Bearbeitens eines Belegs mit Kolleg:innen (A7). Geschrieben in
+  Du-Form.
 - **Teil B – Teamlead** — das komplette Cockpit: Überblick, Belege, Board, Ablage, Probleme,
   Eingangssteuerung, Regeln und die empfohlene Tagesroutine.
 

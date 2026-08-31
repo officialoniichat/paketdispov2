@@ -13,7 +13,9 @@
  * `LoginScreen` — the same mechanism a 401 session-expiry uses.
  */
 import { useState, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
@@ -24,10 +26,13 @@ import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import LogoutIcon from '@mui/icons-material/Logout';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { touchTarget } from '@paket/ui';
 import { TEAMLEAD_APP_URL } from '../config/appLinks.js';
 import { logout } from '../data/auth.js';
 import { getSession } from '../data/session.js';
+import { usePosteingang } from '../data/usePosteingang.js';
+import { NACHRICHTEN } from '../routes/paths.js';
 
 /** Abstand zur Ecke; auf installierten PWAs zusätzlich um den Notch versetzt. */
 const INSET_TOP = 'calc(8px + env(safe-area-inset-top, 0px))';
@@ -41,8 +46,10 @@ const INSET_RIGHT = 'calc(8px + env(safe-area-inset-right, 0px))';
  */
 const MENU_ITEM_SX = { minHeight: { xs: touchTarget.min, sm: touchTarget.min } } as const;
 
-/** "Anna Müller" → "AM"; a single-word name yields its first letter alone. */
-function initials(displayName: string): string {
+/** "Anna Müller" → "AM"; a single-word name yields its first letter alone.
+ *  Exportiert: dieselben Initialen zeigt auch die Kolleg:innen-Liste im
+ *  TeilenDialog (Beleg-Zusammenarbeit 31.08.2026). */
+export function initials(displayName: string): string {
   const words = displayName.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '?';
   const first = words.at(0) ?? '';
@@ -52,7 +59,12 @@ function initials(displayName: string): string {
 
 export function ProfileMenu(): JSX.Element | null {
   const session = getSession();
+  const navigate = useNavigate();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  // Zahl am Profilkreis (Beleg-Zusammenarbeit 31.08.2026): offene Einladungen
+  // an mich + ungelesene Teamlead-Nachrichten — gezählt vom Backend.
+  const posteingang = usePosteingang();
+  const pendingCount = posteingang.data?.pendingCount ?? 0;
 
   // Ohne Session (Login-Screen) erscheint gar nichts — kein leerer Kreis.
   if (!session) return null;
@@ -77,17 +89,24 @@ export function ProfileMenu(): JSX.Element | null {
           '&:hover': { bgcolor: 'background.paper' },
         }}
       >
-        <Avatar
-          sx={{
-            width: 40,
-            height: 40,
-            fontSize: '0.9rem',
-            fontWeight: 700,
-            bgcolor: 'primary.main',
-          }}
+        <Badge
+          badgeContent={pendingCount}
+          color="error"
+          overlap="circular"
+          invisible={pendingCount === 0}
         >
-          {initials(session.displayName)}
-        </Avatar>
+          <Avatar
+            sx={{
+              width: 40,
+              height: 40,
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              bgcolor: 'primary.main',
+            }}
+          >
+            {initials(session.displayName)}
+          </Avatar>
+        </Badge>
       </IconButton>
 
       <Menu
@@ -116,6 +135,18 @@ export function ProfileMenu(): JSX.Element | null {
             <DesktopWindowsIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Zur Teamlead-App</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            navigate(NACHRICHTEN);
+          }}
+          sx={MENU_ITEM_SX}
+        >
+          <ListItemIcon>
+            <MailOutlineIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Nachrichten</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {

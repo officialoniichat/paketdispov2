@@ -16,6 +16,11 @@ markiert sind **und keine Abweichung/kein Problem** vorliegt. Sonst steht oben `
 (z. B. `'Noch nicht alle Positionen geprüft'`). Liegt ein Problem vor (auch eine automatische
 Mengen- oder Preisabweichung, Kapitel A4), bleibt nur der **`'Teilabschluss (Problem melden)'`**.
 
+Bei einem **geteilten Beleg** (Kapitel A7) zählen die Haken **aller** Beteiligten: `'Beleg erledigt'`
+ist erst möglich, wenn jede Position geprüft ist – egal von wem. Solange das nicht der Fall ist,
+heißt dein Hauptknopf `'Teilbeleg erledigt'`; damit meldest du nur deinen Anteil, der Beleg bleibt
+offen. Ein Teilabschluss geht dort nur, wenn jede noch ungeprüfte Position ein Problem hat.
+
 ## Beleg ganz abschließen
 
 1. Alle Positionen geprüft, keine Abweichung, kein Problem.
@@ -72,8 +77,8 @@ flowchart TD
 - **`'Teilabschluss (Problem melden)'`**: die Probleme sind bei der Teamleitung, der Beleg bleibt rot
   geparkt bei dir, bis geklärt ist.
 - Sind **alle** Belege deines Bündels geschlossen (fertig oder rot geparkt), zeigt der
-  Startbildschirm `'Bündel fertig'` und den Knopf `'Nächstes Bündel holen'` bzw.
-  `'Weiteres Bündel anfordern'` (siehe Kapitel A2/A7).
+  Startbildschirm `'Bündel fertig'` und den Knopf `'Nächstes Pack holen'` bzw.
+  `'Nächstes Pack anfordern'` (siehe Kapitel A2/A8).
 
 ## Häufige Fehler / FAQ
 

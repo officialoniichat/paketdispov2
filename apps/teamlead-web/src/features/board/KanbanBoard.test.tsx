@@ -3,12 +3,16 @@
  * fremder Mitarbeiter → moveCase, gleiche Person → reorder. Der Store ist
  * gemockt (Muster wie AssignDialog.test), gezogen wird über die nativen
  * HTML5-Drag-Events mit einem dataTransfer-Stub.
+ *
+ * Dazu die goldene Karte des geteilten Belegs (Konzept beleg-zusammenarbeit §4):
+ * Beteiligten-Zeile, Tooltip mit dem Stand und „Aus geteiltem Beleg entfernen"
+ * über denselben Pflichtgrund-Fluss.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, createQueryClient } from '@paket/ui';
-import type { BoardCase, BoardRow } from '../../data/types.js';
+import type { BoardCase, BoardParticipant, BoardRow } from '../../data/types.js';
 import type { PendingAction } from './MitarbeiterBoard.js';
 import { KanbanBoard } from './KanbanBoard.js';
 import { GROUP_IDENTITY_COLORS, buildGroupColorMap } from '../../components/LieferungChip.js';
@@ -21,6 +25,7 @@ const mocks = vi.hoisted(() => {
     assignBundle: mutation(),
     pauseResume: mutation(),
     withdraw: mutation(),
+    removeParticipant: mutation(),
   };
 });
 
@@ -28,7 +33,11 @@ vi.mock('../../data/store.js', () => ({
   useCockpitData: () => mocks,
 }));
 
-function bc(caseId: string, status: BoardCase['status']): BoardCase {
+function bc(
+  caseId: string,
+  status: BoardCase['status'],
+  sharedWith: BoardParticipant[] = [],
+): BoardCase {
   return {
     caseId,
     weBelegNo: `WE-${caseId}`,
@@ -38,8 +47,21 @@ function bc(caseId: string, status: BoardCase['status']): BoardCase {
     effortPoints: 3,
     storageCode: 'R13',
     deliveryGroup: null,
+    sharedWith,
   };
 }
+
+/** Geteilter Beleg: ein Helfer (→ „mit <Name>") bzw. zwei (→ „2×"). */
+const CARLA: BoardParticipant = {
+  employeeNo: 'ma-3',
+  displayName: 'Carla Ruiz',
+  status: 'angenommen',
+};
+const DENIZ: BoardParticipant = {
+  employeeNo: 'ma-4',
+  displayName: 'Deniz Yilmaz',
+  status: 'teil_erledigt',
+};
 
 function row(partial: Partial<BoardRow> & Pick<BoardRow, 'employeeId' | 'displayName'>): BoardRow {
   return {
@@ -65,7 +87,11 @@ const BOARD: BoardRow[] = [
     bundleId: 'b-1',
     bundleStatus: 'active',
     plannedTeile: 30,
-    cases: [bc('k1', 'in_progress'), bc('k2', 'assigned'), bc('k3', 'assigned')],
+    cases: [
+      bc('k1', 'in_progress'),
+      bc('k2', 'assigned', [CARLA]),
+      bc('k3', 'assigned', [CARLA, DENIZ]),
+    ],
   }),
   row({ employeeId: 'ma-2', displayName: 'Ben' }),
 ];
@@ -98,6 +124,7 @@ beforeEach(() => {
   mocks.moveCase.mutate.mockClear();
   mocks.reorder.mutate.mockClear();
   mocks.withdraw.mutate.mockClear();
+  mocks.removeParticipant.mutate.mockClear();
 });
 
 describe('KanbanBoard', () => {
@@ -175,6 +202,49 @@ describe('KanbanBoard', () => {
       bundleId: 'b-1',
       reason: 'Überlastet',
     });
+  });
+});
+
+describe('KanbanBoard — geteilter Beleg', () => {
+  it('nennt zwischen Belegnummer und Teile-Zeile, mit wem gearbeitet wird', () => {
+    renderBoard();
+    // Genau ein Helfer → Name im Klartext; mehrere → Anzahl.
+    expect(screen.getByText('mit Carla Ruiz')).toBeTruthy();
+    expect(screen.getByText('2×')).toBeTruthy();
+    // Nicht geteilte Belege bekommen weder Hinweis noch Entfernen-Symbol.
+    expect(screen.queryByLabelText('WE-k1: Aus geteiltem Beleg entfernen')).toBeNull();
+    expect(screen.getByLabelText('WE-k2: Aus geteiltem Beleg entfernen')).toBeTruthy();
+  });
+
+  it('der Tooltip listet die Beteiligten mit ihrem Stand', async () => {
+    renderBoard();
+    fireEvent.mouseOver(screen.getByText('2×'));
+    expect(await screen.findByText('Carla Ruiz — hilft')).toBeTruthy();
+    expect(screen.getByText('Deniz Yilmaz — Teil erledigt')).toBeTruthy();
+  });
+
+  it('das Personen-Symbol führt über den Pflichtgrund zum Entfernen des Helfers', () => {
+    const { requestReason } = renderBoard();
+    fireEvent.click(screen.getByLabelText('WE-k2: Aus geteiltem Beleg entfernen'));
+    fireEvent.click(screen.getByText('Aus geteiltem Beleg entfernen: Carla Ruiz'));
+
+    expect(requestReason).toHaveBeenCalledTimes(1);
+    const action = requestReason.mock.calls[0]![0] as PendingAction;
+    expect(action.title).toBe('Aus geteiltem Beleg entfernen: Carla Ruiz');
+    expect(action.suggestions).toContain('Schichtende');
+    action.run('Schichtende');
+    expect(mocks.removeParticipant.mutate).toHaveBeenCalledWith({
+      caseId: 'k2',
+      employeeNo: 'ma-3',
+      reason: 'Schichtende',
+    });
+  });
+
+  it('Rechtsklick auf die goldene Karte öffnet dasselbe Menü', () => {
+    renderBoard();
+    fireEvent.contextMenu(screen.getByText('3. WE-k3'));
+    expect(screen.getByText('Aus geteiltem Beleg entfernen: Carla Ruiz')).toBeTruthy();
+    expect(screen.getByText('Aus geteiltem Beleg entfernen: Deniz Yilmaz')).toBeTruthy();
   });
 });
 

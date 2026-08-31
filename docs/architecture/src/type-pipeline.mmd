@@ -2,13 +2,20 @@
 %% Verifiziert: packages/domain-types (zod), apps/backend-api/src/openapi/generate.ts (Preview-Modus),
 %% apps/backend-api/src/swagger.ts (@nestjs/swagger), package.json-Skripte (openapi:generate),
 %% packages/api-client (openapi-typescript -> src/generated/schema.ts, openapi-fetch, openapi-drift.test.ts).
+%% Stand 31.08.2026: der SSE-Live-Kanal ist typisiert — liveEventSchema/liveEventTypeSchema in
+%% packages/domain-types/src/live.ts (Export über index.ts), geteilt von backend-api (LiveModule publish/stream),
+%% employee-pwa (useLiveUpdates: addEventListener je Typ) und teamlead-web (useCockpitLive). SSE ist NICHT Teil
+%% der OpenAPI-Spezifikation — der Zod-Schema-Import ist die einzige Typ-Klammer; gegen den Code
+%% verifiziert (Stand 31.08.2026).
 flowchart LR
     classDef src fill:#143a35,stroke:#2dd4a7,color:#eef1f6;
     classDef gen fill:#1d222c,stroke:#8b7cf6,color:#eef1f6;
     classDef artifact fill:#3a2b2b,stroke:#f5b955,color:#eef1f6;
     classDef consumer fill:#16314a,stroke:#56b6ff,color:#eef1f6;
 
-    zod["@paket/domain-types<br/><b>Zod-Schemas — Single Source of Truth</b><br/><i>Enums · RuleConfig · Case-/Position-/SKU-Schemas</i>"]:::src
+    zod["@paket/domain-types<br/><b>Zod-Schemas — Single Source of Truth</b><br/><i>Enums (inkl. workflowEventTypeSchema mit case.collaboration_*) · RuleConfig (inkl. collaboration.helpBeforeNextBundle) · Case-/Position-/SKU-Schemas</i>"]:::src
+    liveSchema["liveEventSchema · liveEventTypeSchema<br/><i>domain-types/src/live.ts (31.08.2026): type (case.status · position.confirmed · sku.counted · collaboration.invited · collaboration.changed)<br/>· recipients[] (employeeNos) · caseId · status · actorEmployeeNo · positionId · at</i>"]:::src
+    liveSvc["backend-api LiveModule<br/><i>LiveStatusService.publish(LiveEvent) · SSE-event-Name = type<br/>/api/me/stream filtert recipients · /api/teamlead/stream erhält alles</i>"]:::consumer
     prismaSchema["prisma/schema.prisma<br/><i>DB-Modelle</i>"]:::src
 
     prismaGen["prisma generate"]:::gen
@@ -37,3 +44,9 @@ flowchart LR
     client --> web
     openapiJson -. "verglichen durch" .-> drift
     schemaTs -. "verglichen durch" .-> drift
+    zod --> liveSchema
+    liveSchema -->|"typisiert publish()/stream()"| liveSvc
+    liveSchema -->|"liveEventTypeSchema.options → addEventListener je Typ (useLiveUpdates)"| pwa
+    liveSchema -->|"liveEventTypeSchema.options → useCockpitLive"| web
+    liveSvc -. "SSE (außerhalb der OpenAPI-Spezifikation)" .-> pwa
+    liveSvc -. "SSE" .-> web

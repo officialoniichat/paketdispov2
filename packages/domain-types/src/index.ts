@@ -18,6 +18,7 @@ export * from './transport.js';
 export * from './issues.js';
 export * from './zst.js';
 export * from './events.js';
+export * from './live.js';
 export * from './effort.js';
 export * from './print.js';
 export * from './reporting.js';

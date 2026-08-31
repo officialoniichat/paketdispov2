@@ -59,9 +59,12 @@ Belegnummern (Kapitel B7).
 
 Sehr große Belege (ab der eingestellten Teile-Schwelle, Admin-Tab `'Bündel'`) werden **nicht
 automatisch** verteilt, sondern warten auf Ihre **manuelle Entscheidung** im Pool. Sie weisen sie
-gezielt zu (Kapitel B3) oder teilen sie über die Beleg-Aktion `'Aufteilen …'` auf mehrere Personen
-auf. Hängt jemand noch an einem solchen großen Beleg (Teilabschluss offen), bekommt die Person am
-Folgetag kein neues Starter-Pack, bis der große Beleg fertig ist.
+gezielt zu (Kapitel B3) oder öffnen die Beleg-Aktion `'Aufteilen …'`: Vorausgewählt ist dort
+**`'Gemeinsam bearbeiten'`** – mehrere Personen arbeiten **denselben** Beleg zusammen ab, die zuerst
+gewählte bekommt ihn in ihren Karren (Kapitel B2/B3, Ablauf für die Mitarbeitenden in Kapitel A7);
+alternativ zerlegt **`'In Teil-Belege aufteilen'`** ihn in eigenständige Teil-Belege. Hängt jemand
+noch an einem solchen großen Beleg (Teilabschluss offen), bekommt die Person am Folgetag kein neues
+Starter-Pack, bis der große Beleg fertig ist.
 
 ## Was passiert danach
 
