@@ -1214,7 +1214,44 @@
             "bearer": []
           }
         ],
-        "summary": "D2 „trotzdem bearbeiten\": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben)",
+        "summary": "D2 „In den Pool\": zurückgehaltene Belege einer unvollständigen Lieferung freigeben (je Beleg)",
+        "tags": [
+          "teamlead"
+        ]
+      }
+    },
+    "/api/teamlead/delivery-groups/hold": {
+      "post": {
+        "operationId": "TeamleadController_holdDeliveryCases",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryGroupReleaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryGroupReleaseResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "D2 „Zurückhalten\": Freigabe zurücknehmen — der Beleg wartet wieder auf die Lieferung",
         "tags": [
           "teamlead"
         ]
@@ -4676,9 +4713,9 @@
             "type": "boolean",
             "description": "Teamlead-locked (frozen against re-detection)"
           },
-          "released": {
-            "type": "boolean",
-            "description": "D2 „trotzdem bearbeiten\": TL hat die unvollständige Lieferung freigegeben"
+          "releasedCount": {
+            "type": "number",
+            "description": "D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool\")"
           }
         },
         "required": [
@@ -4689,7 +4726,7 @@
           "presentSize",
           "missingCount",
           "locked",
-          "released"
+          "releasedCount"
         ]
       },
       "BoardCaseDto": {
@@ -5243,6 +5280,10 @@
               }
             ]
           },
+          "deliveryPoolHold": {
+            "type": "boolean",
+            "description": "D2: dieser Beleg wird wegen unvollständiger Lieferung zurückgehalten und ist NICHT im Pool (Engine-Entscheidung withheldCaseIds; per Rechtsklick „In den Pool\" aufhebbar)"
+          },
           "bereich": {
             "type": "string",
             "nullable": true,
@@ -5291,6 +5332,7 @@
           "effortPoints",
           "isMonster",
           "partCount",
+          "deliveryPoolHold",
           "labelPrintVariants",
           "securityRequired"
         ]
@@ -5782,9 +5824,9 @@
             "type": "boolean",
             "description": "Teamlead-locked (frozen against re-detection)"
           },
-          "released": {
-            "type": "boolean",
-            "description": "D2 „trotzdem bearbeiten\": TL hat die unvollständige Lieferung freigegeben"
+          "releasedCount": {
+            "type": "number",
+            "description": "D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool\")"
           },
           "members": {
             "description": "All siblings, by weBelegNo",
@@ -5802,7 +5844,7 @@
           "presentSize",
           "missingCount",
           "locked",
-          "released",
+          "releasedCount",
           "members"
         ]
       },

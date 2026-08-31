@@ -162,6 +162,11 @@ export interface BelegRow {
   bereich: string | null;
   /** „Gehört zusammen"-Lieferung; null für Einzel-Belege (A1). */
   deliveryGroup: DeliveryGroupRef | null;
+  /**
+   * D2: Die Engine hält diesen Beleg zurück, weil seine Lieferung unvollständig ist —
+   * er ist NICHT im Pool. Serverseitig aus `withheldCaseIds` berechnet, nie hier.
+   */
+  deliveryPoolHold: boolean;
   /** Bündel-Position für „vorbereitet · Pos n" (A5); null ohne Bündel. */
   bundleQueue: BundleQueueRef | null;
   /** C5 Digitale Ablage: Weiterleitungs-Empfänger; null = nicht weitergeleitet. */
@@ -422,12 +427,23 @@ export async function splitDeliveryGroup(caseIds: string[]): Promise<void> {
   unwrap(result, 'Auftrennen der Lieferung');
 }
 
-/** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben). */
-export async function releaseDeliveryGroup(caseIds: string[]): Promise<void> {
+/**
+ * D2 „In den Pool": zurückgehaltene Belege einer unvollständigen Lieferung freigeben.
+ * Wirkt JE BELEG — die übrigen Mitglieder warten weiter. Grund optional.
+ */
+export async function releaseDeliveryGroup(caseIds: string[], reason?: string): Promise<void> {
   const result = await api.POST('/api/teamlead/delivery-groups/release', {
-    body: { caseIds },
+    body: { caseIds, ...(reason ? { reason } : {}) },
   });
-  unwrap(result, 'Freigeben der Lieferung');
+  unwrap(result, 'In den Pool geben');
+}
+
+/** D2 „Zurückhalten": Freigabe zurücknehmen — der Beleg wartet wieder auf seine Lieferung. */
+export async function holdDeliveryCases(caseIds: string[], reason?: string): Promise<void> {
+  const result = await api.POST('/api/teamlead/delivery-groups/hold', {
+    body: { caseIds, ...(reason ? { reason } : {}) },
+  });
+  unwrap(result, 'Zurückhalten');
 }
 
 /**
@@ -729,6 +745,7 @@ function toBelegRow(item: PoolItemDto): BelegRow {
     forwardedTo: item.forwardedTo ?? null,
     issues: (item.issues ?? []).map(toBelegIssue),
     deliveryGroup: item.deliveryGroup ? toDeliveryGroupRef(item.deliveryGroup) : null,
+    deliveryPoolHold: item.deliveryPoolHold,
     bundleQueue: item.bundleQueue
       ? {
           bundleId: item.bundleQueue.bundleId,
@@ -808,7 +825,7 @@ function toDeliveryGroupRef(dto: DeliveryGroupRefDto): DeliveryGroupRef {
     expectedSize: dto.expectedSize ?? null,
     missingCount: dto.missingCount,
     locked: dto.locked,
-    released: dto.released,
+    releasedCount: dto.releasedCount,
   };
 }
 

@@ -445,8 +445,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben) */
+        /** D2 „In den Pool": zurückgehaltene Belege einer unvollständigen Lieferung freigeben (je Beleg) */
         post: operations["TeamleadController_releaseDeliveryGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teamlead/delivery-groups/hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** D2 „Zurückhalten": Freigabe zurücknehmen — der Beleg wartet wieder auf die Lieferung */
+        post: operations["TeamleadController_holdDeliveryCases"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1695,8 +1712,8 @@ export interface components {
             missingCount: number;
             /** @description Teamlead-locked (frozen against re-detection) */
             locked: boolean;
-            /** @description D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben */
-            released: boolean;
+            /** @description D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool") */
+            releasedCount: number;
         };
         BoardCaseDto: {
             id: string;
@@ -1877,6 +1894,8 @@ export interface components {
             partCount: number;
             /** @description Delivery-group context so groups are visible BEFORE distribution; null if standalone */
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
+            /** @description D2: dieser Beleg wird wegen unvollständiger Lieferung zurückgehalten und ist NICHT im Pool (Engine-Entscheidung withheldCaseIds; per Rechtsklick „In den Pool" aufhebbar) */
+            deliveryPoolHold: boolean;
             /** @description Beleg's fixed Bereich (Hängebahn|Palette|Regal), derived from the Lagerplatz kind; null for non-pickup kinds. */
             bereich?: string | null;
             /** @description A5: Position des Belegs in seinem Bündel („vorbereitet · Pos n"); null wenn nicht gebündelt */
@@ -2043,8 +2062,8 @@ export interface components {
             missingCount: number;
             /** @description Teamlead-locked (frozen against re-detection) */
             locked: boolean;
-            /** @description D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben */
-            released: boolean;
+            /** @description D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool") */
+            releasedCount: number;
             /** @description All siblings, by weBelegNo */
             members: components["schemas"]["DeliveryGroupMemberDto"][];
         };
@@ -3352,6 +3371,29 @@ export interface operations {
         };
     };
     TeamleadController_releaseDeliveryGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliveryGroupReleaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryGroupReleaseResultDto"];
+                };
+            };
+        };
+    };
+    TeamleadController_holdDeliveryCases: {
         parameters: {
             query?: never;
             header?: never;

@@ -65,7 +65,7 @@ const GROUP: BoardCase['deliveryGroup'] = {
   expectedSize: 3,
   missingCount: 1,
   locked: false,
-  released: false,
+  releasedCount: 0,
 };
 
 /**

@@ -232,9 +232,10 @@ export class DeliveryGroupRefDto {
   missingCount!: number;
   @ApiProperty({ description: 'Teamlead-locked (frozen against re-detection)' }) locked!: boolean;
   @ApiProperty({
-    description: 'D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben',
+    description:
+      'D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool")',
   })
-  released!: boolean;
+  releasedCount!: number;
 }
 
 /** One sibling Beleg of a delivery group, with who currently holds it (Detail panel). */
@@ -575,6 +576,12 @@ export class PoolItemDto extends CaseSummaryDto {
     description: 'Delivery-group context so groups are visible BEFORE distribution; null if standalone',
   })
   deliveryGroup!: DeliveryGroupRefDto | null;
+  @ApiProperty({
+    description:
+      'D2: dieser Beleg wird wegen unvollständiger Lieferung zurückgehalten und ist NICHT im Pool ' +
+      '(Engine-Entscheidung withheldCaseIds; per Rechtsklick „In den Pool" aufhebbar)',
+  })
+  deliveryPoolHold!: boolean;
   @ApiPropertyOptional({
     type: String,
     nullable: true,

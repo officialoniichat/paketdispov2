@@ -6,7 +6,7 @@
  * row-virtualizes large pools via @tanstack/react-virtual. The table state is
  * lifted to the caller so it can be persisted as a saved view.
  */
-import { useRef, type JSX } from 'react';
+import { useRef, type JSX, type MouseEvent as ReactMouseEvent } from 'react';
 import type { SxProps, Theme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -79,6 +79,11 @@ export interface DataTableProps<T> {
    */
   getRowSx?: (row: T, index: number) => RowSx | undefined;
   /**
+   * Rechtsklick auf eine Zeile (Kontextmenü). Der Aufrufer entscheidet, ob er das
+   * Browser-Menü unterdrückt — die Tabelle reicht das Ereignis nur durch.
+   */
+  onRowContextMenu?: (row: T, event: ReactMouseEvent) => void;
+  /**
    * Kompakte Dichte (Beleg-Liste): engere Zellen, kleinere Schrift, 20px-Chips —
    * damit alle Spalten ohne Horizontal-Scroll auf den Screen passen.
    */
@@ -108,6 +113,7 @@ export function DataTable<T>({
   rowHeight = 44,
   serverMode = false,
   getRowSx,
+  onRowContextMenu,
   dense = false,
   onHideColumn,
 }: DataTableProps<T>): JSX.Element {
@@ -238,6 +244,9 @@ export function DataTable<T>({
               key={row.id}
               hover
               onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+              onContextMenu={
+                onRowContextMenu ? (e) => onRowContextMenu(row.original, e) : undefined
+              }
               sx={[
                 { cursor: onRowClick ? 'pointer' : 'default' },
                 getRowSx?.(row.original, row.index) ?? false,

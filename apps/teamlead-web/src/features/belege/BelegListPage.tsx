@@ -49,7 +49,6 @@ import {
   type BelegeScope,
   type BelegeSortField,
   type BelegeViewState,
-  type BelegRow,
 } from '../../data/belege.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { BELEGE_VIEW_KEY, loadViewState, saveViewState } from '../../lib/viewState.js';
@@ -66,6 +65,8 @@ import { fetchEmployees } from '../../data/employees.js';
 import { useSplitCase } from '../split/useSplitCase.js';
 import { SplitDialog, type SplitDialogBeleg, type SplitDialogEmployee } from '../split/SplitDialog.js';
 import { AssignFromListDialog } from './AssignFromListDialog.js';
+import { mitAusstehendenBelegen, type BelegListRow } from './lieferungZeilen.js';
+import { LieferungPoolMenu, type LieferungPoolAnchor } from './LieferungPoolMenu.js';
 
 const SCOPES: BelegeScope[] = ['aktiv', 'abgeschlossen', 'archiv', 'topf', 'alle'];
 
@@ -205,6 +206,10 @@ export function BelegListPage({
   });
   const rows = query.data?.rows ?? [];
   const total = query.data?.total ?? 0;
+  // D2: die Lieferung steht VOLLSTÄNDIG in der Liste — gebuchte Belege als echte
+  // Zeilen, noch ausstehende als Platzhalter direkt dahinter.
+  const tableRows = useMemo(() => mitAusstehendenBelegen(rows), [rows]);
+  const [poolMenu, setPoolMenu] = useState<LieferungPoolAnchor | null>(null);
 
   // Topf badge count — always visible so the pot never goes unnoticed (A7).
   const topfCountQuery = useQuery<number, Error>({
@@ -330,27 +335,32 @@ export function BelegListPage({
   const groupColorById = useMemo(
     () =>
       buildGroupColorMap(
-        rows.map((r) =>
+        tableRows.map((r) =>
           r.deliveryGroup && r.deliveryGroup.presentSize >= 2 ? r.deliveryGroup.id : null,
         ),
       ),
-    [rows],
+    [tableRows],
   );
 
   // Frage 8: zusammenhängende Gruppen-Zeilen (der Server liefert Mitglieder adjazent)
   // werden als Block markiert — farbige Kante + dezenter Tint in der Kennfarbe. Ein
   // einzeln sichtbares Mitglied (Rest außerhalb von Filter/Seite) bekommt nur die Kante.
-  const groupRowSx = (r: BelegRow, index: number) => {
+  const groupRowSx = (r: BelegListRow, index: number) => {
     const group = r.deliveryGroup;
     if (!group || group.presentSize < 2) return undefined;
     const color = groupColorById.get(group.id);
     if (!color) return undefined;
     const inBlock =
-      rows[index - 1]?.deliveryGroup?.id === group.id ||
-      rows[index + 1]?.deliveryGroup?.id === group.id;
+      tableRows[index - 1]?.deliveryGroup?.id === group.id ||
+      tableRows[index + 1]?.deliveryGroup?.id === group.id;
     return {
       '& > td:first-of-type': { borderLeft: `3px solid ${color}` },
       ...(inBlock ? { backgroundColor: alpha(color, 0.05) } : {}),
+      // Noch nicht gebuchte Belege sind grau — sie existieren nur als Lücke der
+      // Lieferung, es gibt zu ihnen weder Daten noch eine Aktion.
+      ...(r.ausstehend
+        ? { color: 'text.disabled', fontStyle: 'italic', cursor: 'default' }
+        : {}),
     };
   };
 
@@ -369,8 +379,8 @@ export function BelegListPage({
     filters.bookingTo,
   ].filter((v) => v !== undefined && v !== '').length;
 
-  const columns = useMemo<ColumnDef<BelegRow>[]>(() => {
-    const defs: ColumnDef<BelegRow>[] = [
+  const columns = useMemo<ColumnDef<BelegListRow>[]>(() => {
+    const defs: ColumnDef<BelegListRow>[] = [
       {
         accessorKey: 'weBelegNo',
         header: 'WE-Beleg',
@@ -405,12 +415,34 @@ export function BelegListPage({
         id: 'status',
         header: 'Status',
         accessorFn: (r) => r.status,
-        cell: (ctx) => (
-          <Stack direction="row" gap={0.5} alignItems="center">
-            <Chip size="small" label={PHASE_LABEL[casePhase(ctx.row.original.status)]} />
-            <CaseStatusChip status={ctx.row.original.status} size="small" />
-          </Stack>
-        ),
+        cell: (ctx) => {
+          const r = ctx.row.original;
+          // D2: Belege einer unvollständigen Lieferung sind NICHT im Pool. Zwei
+          // Lagen unterscheiden: noch gar nicht gebucht (Platzhalter) vs. gebucht,
+          // aber von der Engine zurückgehalten.
+          if (r.ausstehend) {
+            return (
+              <Stack direction="row" gap={0.5} alignItems="center">
+                <Chip size="small" label="nicht im Pool" />
+                <Chip size="small" variant="outlined" label="Ausstehend" />
+              </Stack>
+            );
+          }
+          if (r.deliveryPoolHold) {
+            return (
+              <Stack direction="row" gap={0.5} alignItems="center">
+                <Chip size="small" label="nicht im Pool" />
+                <Chip size="small" color="warning" label="Zurückgehalten" />
+              </Stack>
+            );
+          }
+          return (
+            <Stack direction="row" gap={0.5} alignItems="center">
+              <Chip size="small" label={PHASE_LABEL[casePhase(r.status)]} />
+              <CaseStatusChip status={r.status} size="small" />
+            </Stack>
+          );
+        },
       },
       {
         id: 'primaryShopNo',
@@ -972,7 +1004,7 @@ export function BelegListPage({
           }
         >
           <DataTable
-            data={rows}
+            data={tableRows}
             columns={columns}
             serverMode
             dense
@@ -986,7 +1018,14 @@ export function BelegListPage({
               setPage(1);
             }}
             getRowId={(r) => r.id}
-            onRowClick={(r) => navigate(`/belege/${r.id}`)}
+            onRowClick={(r) => {
+              // Platzhalter haben keinen Beleg, den man öffnen könnte.
+              if (!r.ausstehend) navigate(`/belege/${r.id}`);
+            }}
+            onRowContextMenu={(r, e) => {
+              e.preventDefault();
+              setPoolMenu({ mouseX: e.clientX, mouseY: e.clientY, row: r });
+            }}
             maxHeight={fill ? undefined : 560}
             fillHeight={fill}
             emptyText="Keine Belege in diesem Scope."
@@ -1003,6 +1042,8 @@ export function BelegListPage({
           />
         </Box>
       )}
+
+      <LieferungPoolMenu anchor={poolMenu} onClose={() => setPoolMenu(null)} />
 
       <AssignFromListDialog
         open={assignBeleg !== null}

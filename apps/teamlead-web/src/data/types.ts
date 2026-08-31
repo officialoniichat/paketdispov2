@@ -177,8 +177,8 @@ export interface DeliveryGroupRef {
   expectedSize?: number | null;
   missingCount: number;
   locked: boolean;
-  /** D2 „trotzdem bearbeiten": TL hat die unvollständige Lieferung freigegeben. */
-  released: boolean;
+  /** D2: Anzahl Mitglieder, die der TL einzeln in den Pool gegeben hat („In den Pool"). */
+  releasedCount: number;
 }
 
 /** One case in an employee's bundle, in pickup order (§10.3 board detail). */

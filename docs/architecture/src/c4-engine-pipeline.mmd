@@ -16,7 +16,7 @@ flowchart TB
     exclude{"3 · AUSSCHLUSS<br/>rank === 0 ?"}:::branch
     excluded["unassigned[]<br/><i>reason = excluded</i>"]:::out
 
-    grouping["4 · LIEFERGRUPPEN — detectDeliveryGroups() → withheldCaseIds()<br/><i>gleicher Lieferschein / fortlaufende WE-Beleg-Folge (Pkt 1);<br/>ZURÜCKHALTEN: suspected (T3) + unvollständige „X von N“-Gruppen,<br/>außer released/locked → reason = delivery_unconfirmed</i>"]:::step
+    grouping["4 · LIEFERGRUPPEN — detectDeliveryGroups() → withheldCaseIds()<br/><i>gleicher Lieferschein / fortlaufende WE-Beleg-Folge (Pkt 1);<br/>ZURÜCKHALTEN: suspected (T3) + unvollständige „X von N“-Gruppen (locked nie);<br/>Freigabe JE BELEG (releasedCaseIds) → reason = delivery_unconfirmed</i>"]:::step
     withheld["unassigned[]<br/><i>reason = delivery_unconfirmed<br/>(wartet auf TL-Bestätigung/Freigabe)</i>"]:::out
     monster{"5 · MONSTER-BELEG<br/>teile ≥ largeBelegTeileThreshold ?"}:::branch
     large["unassigned[]<br/><i>reason = large_beleg<br/>(manuelle TL-Entscheidung, C6)</i>"]:::out

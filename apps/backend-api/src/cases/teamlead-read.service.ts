@@ -3,6 +3,7 @@ import type { AssignmentStatus, CaseStatus, LocationKind, PriorityFlag, Prisma }
 import {
   detectDeliveryGroups,
   indexDeliveryGroups,
+  withheldCaseIds,
   type DeliveryGroup,
   type GroupingConfig,
 } from '@paket/assignment-engine';
@@ -132,6 +133,8 @@ type PoolRow = Prisma.GoodsReceiptCaseGetPayload<{ include: typeof poolItemInclu
 /** Nur der Lieferungs-Ausschnitt des Universums, den die Pool-Projektion braucht. */
 interface DeliveryGroupRefLookup {
   refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
+  /** D2: hält die Engine diesen Beleg wegen unvollständiger Lieferung im Pool zurück? */
+  poolHoldFor: (caseId: string) => boolean;
 }
 
 /**
@@ -439,6 +442,7 @@ export class TeamleadReadService {
         partNo: c.partNo,
         partCount: c._count.partCases,
         deliveryGroup: universe.refFor(c.id),
+        deliveryPoolHold: universe.poolHoldFor(c.id),
         bereich: c.storageLocation
           ? (bereichFromLocationKind(c.storageLocation.kind as LocationKind) ?? null)
           : null,
@@ -1140,6 +1144,8 @@ export class TeamleadReadService {
     groupById: ReadonlyMap<string, DeliveryGroup>;
     casesById: ReadonlyMap<string, { id: string; weBelegNo: string; deliveryNoteNo: string | null }>;
     refFor: (caseId: string) => ReturnType<typeof mapDeliveryGroupRef> | null;
+    /** D2: hält die Engine diesen Beleg wegen unvollständiger Lieferung im Pool zurück? */
+    poolHoldFor: (caseId: string) => boolean;
   }> {
     const rows = await this.prisma.goodsReceiptCase.findMany({
       select: {
@@ -1174,7 +1180,12 @@ export class TeamleadReadService {
       const group = groupById.get(groupIdByCaseId.get(caseId) ?? '');
       return group ? mapDeliveryGroupRef(group, casesById) : null;
     };
-    return { groupIdByCaseId, groupById, casesById, refFor };
+    // D2: WER wirklich zurückgehalten wird, entscheidet die Engine — nicht die UI.
+    // Dieselbe Funktion, die auch die Verteilung benutzt (plan.ts), damit Liste und
+    // Automatik nie auseinanderlaufen.
+    const withheld = withheldCaseIds([...groupById.values()], grouping);
+    const poolHoldFor = (caseId: string) => withheld.has(caseId);
+    return { groupIdByCaseId, groupById, casesById, refFor, poolHoldFor };
   }
 
   /**
