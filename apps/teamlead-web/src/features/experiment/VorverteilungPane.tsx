@@ -17,7 +17,7 @@
  * dazu der geteilte Automatik-Schalter des Tagescockpits.
  *
  * Starterbündel-Ansicht (rechteckiger Knopf unten, ersetzt den früheren
- * Vorschau-Hinweis): NUR Arbeiter, deren Schicht in der nächsten Stunde
+ * Vorschau-Hinweis): NUR Arbeiter, deren Schicht im eingestellten VORLAUF
  * beginnt und die noch keine Belege haben — ohne Haupt-Titel, Sperre,
  * Automatik-Schalter und Anzahl-Zahnrad. „Vorschlag ansehen" packt je
  * Kandidat das Starterbündel (Engine-Dry-Run) als ORANGEN Container; per
@@ -27,6 +27,13 @@
  * erstellen": der Vorschlag wird ohne Klick generiert (läuft auch im
  * Hintergrund); jede Generierung meldet sich im Schnellaktionen-Popout
  * (starterStatus.ts).
+ *
+ * Der Vorlauf (Starter-Zahnrad, Voreinstellung 1 Stunde) ist EIN Fenster für
+ * beides: Er entscheidet, wer hier als Starter auftaucht, und damit zugleich,
+ * wann „Automatisch erstellen" losläuft — zwei getrennte Fenster gäbe es sonst
+ * zu erklären. Entweder ein Wert für alle oder, per Schalter aufgeteilt, je
+ * Schichttyp (Früh/Spät); der Schichttyp-Wert schlägt den gemeinsamen. Die
+ * Einstellung liegt wie die übrigen im View-State (localStorage).
  */
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -57,7 +64,12 @@ import { alpha } from '@mui/material/styles';
 import { ltColors } from '@paket/ui';
 import { isManualOnlyTier } from '../../components/TierChip.js';
 import { fetchEmployees, type EmployeeListItem } from '../../data/employees.js';
-import { SHIFT_MODEL_COLORS, type ShiftModelName } from '../../lib/schichtFarben.js';
+import {
+  SHIFT_MODEL_COLORS,
+  shiftKindOfStart,
+  type ShiftKind,
+  type ShiftModelName,
+} from '../../lib/schichtFarben.js';
 import { modelOfDay } from '../admin/SchichtplanTab.js';
 import { useCockpitData } from '../../data/store.js';
 import type { BoardCase, PreviewBundle } from '../../data/types.js';
@@ -81,6 +93,55 @@ interface VorverteilungSettings {
   starterAuto: boolean;
   /** Starterbündel: Vorschlag automatisch erstellen (ohne „Vorschlag ansehen"). */
   starterAutoErstellen: boolean;
+  /**
+   * Vorlauf in Stunden: so lange VOR Schichtbeginn gilt jemand als Starter —
+   * das Fenster bestimmt zugleich, wann „Automatisch erstellen" den Vorschlag
+   * baut. Gilt für alle Schichttypen, solange `starterVorlaufJeSchicht` leer ist.
+   */
+  starterVorlaufStunden: number;
+  /**
+   * Abweichender Vorlauf je Schichttyp. Leer = der globale Wert gilt überall;
+   * gefüllt = die Werte hier schlagen ihn (Früh darf anders vorlaufen als Spät).
+   */
+  starterVorlaufJeSchicht: Partial<Record<ShiftKind, number>>;
+}
+
+/** Wählbare Vorlaufzeiten in Stunden. */
+const STARTER_VORLAUF_OPTIONEN = [1, 2, 3, 4, 6, 8, 12] as const;
+
+/** Die arbeitenden Schichttypen — „Frei" hat keinen Schichtstart. */
+const STARTER_SCHICHTTYPEN: readonly { kind: ShiftKind; label: ShiftModelName }[] = [
+  { kind: 'frueh', label: 'Frühschicht' },
+  { kind: 'spaet', label: 'Spätschicht' },
+];
+
+const stundenLabel = (h: number): string => (h === 1 ? '1 Stunde' : `${h} Stunden`);
+
+/** Jeden Schichttyp auf denselben Vorlauf setzen (Startwert der Aufteilung). */
+function vorlaufJeSchichtAus(stunden: number): Partial<Record<ShiftKind, number>> {
+  const out: Partial<Record<ShiftKind, number>> = {};
+  for (const t of STARTER_SCHICHTTYPEN) out[t.kind] = stunden;
+  return out;
+}
+
+/** Vorlauf für EINEN Schichtstart: der Schichttyp-Wert schlägt den globalen. */
+function vorlaufStundenFuer(s: VorverteilungSettings, startIso: string): number {
+  return s.starterVorlaufJeSchicht[shiftKindOfStart(startIso)] ?? s.starterVorlaufStunden;
+}
+
+/**
+ * Fenster-Text für Überschrift und Leerzustand: „in der nächsten Stunde",
+ * „in den nächsten 3 Stunden" — oder, wenn die Schichttypen verschieden
+ * eingestellt sind, der neutrale Verweis auf den jeweiligen Vorlauf.
+ */
+function starterVorlaufText(s: VorverteilungSettings): string {
+  const werte = [
+    ...new Set(
+      STARTER_SCHICHTTYPEN.map((t) => s.starterVorlaufJeSchicht[t.kind] ?? s.starterVorlaufStunden),
+    ),
+  ];
+  if (werte.length > 1) return 'im Vorlauf der jeweiligen Schicht';
+  return werte[0] === 1 ? 'in der nächsten Stunde' : `in den nächsten ${werte[0]} Stunden`;
 }
 
 function sanitizeSettings(raw: Partial<VorverteilungSettings> | null): VorverteilungSettings {
@@ -88,11 +149,24 @@ function sanitizeSettings(raw: Partial<VorverteilungSettings> | null): Vorvertei
     typeof raw?.count === 'number' && Number.isFinite(raw.count)
       ? Math.min(6, Math.max(1, Math.round(raw.count)))
       : 3;
+  const stunden = (wert: unknown, fallback: number): number =>
+    typeof wert === 'number' && Number.isFinite(wert)
+      ? Math.min(24, Math.max(1, Math.round(wert)))
+      : fallback;
+  const starterVorlaufStunden = stunden(raw?.starterVorlaufStunden, 1);
+  // Nur gesetzte Schichttypen übernehmen — fehlt einer, gilt für ihn der globale Wert.
+  const starterVorlaufJeSchicht: Partial<Record<ShiftKind, number>> = {};
+  for (const t of STARTER_SCHICHTTYPEN) {
+    const wert = raw?.starterVorlaufJeSchicht?.[t.kind];
+    if (wert !== undefined) starterVorlaufJeSchicht[t.kind] = stunden(wert, starterVorlaufStunden);
+  }
   return {
     count,
     locked: raw?.locked === true,
     starterAuto: raw?.starterAuto === true,
     starterAutoErstellen: raw?.starterAutoErstellen === true,
+    starterVorlaufStunden,
+    starterVorlaufJeSchicht,
   };
 }
 
@@ -404,21 +478,31 @@ export function VorverteilungPane({
     return () => window.clearInterval(t);
   }, [ansicht, settings.starterAutoErstellen]);
 
-  // Wer braucht als Nächstes ein Starterbündel? Schichtstart in der nächsten
-  // Stunde (10-Min-Nachlauf für die Übernahme), noch OHNE Belege — nicht die,
-  // die bereits arbeiten; Manuell-only-Kräfte packt die Engine nie.
+  // Wer braucht als Nächstes ein Starterbündel? Schichtstart im eingestellten
+  // Vorlauf (10-Min-Nachlauf für die Übernahme), noch OHNE Belege — nicht die,
+  // die bereits arbeiten; Manuell-only-Kräfte packt die Engine nie. Der Vorlauf
+  // kommt je Schichttyp aus den Starter-Einstellungen (Zahnrad).
   const starterKandidaten = useMemo(
     () =>
       board.filter((r) => {
         if ((r.absence ?? null) !== null || isManualOnlyTier(r.skillTier)) return false;
         if (r.shiftStart == null || r.cases.length > 0) return false;
         const start = Date.parse(r.shiftStart);
-        return start > jetzt - 10 * 60_000 && start - jetzt <= 60 * 60_000;
+        const fenster = vorlaufStundenFuer(settings, r.shiftStart) * 60 * 60_000;
+        return start > jetzt - 10 * 60_000 && start - jetzt <= fenster;
       }),
-    [board, jetzt],
+    [board, jetzt, settings],
   );
 
-  // „Automatisch erstellen": sobald jemand in der nächsten Stunde startet,
+  // Fenster-Text für Überschrift und Leerzustand — folgt derselben Einstellung.
+  const vorlaufFensterText = starterVorlaufText(settings);
+  // Die Aufteilung je Schichttyp ist aktiv, sobald mindestens ein Typ einen
+  // eigenen Wert trägt — dafür braucht es kein zusätzliches Schalter-Feld.
+  const vorlaufJeSchichtAktiv = STARTER_SCHICHTTYPEN.some(
+    (t) => settings.starterVorlaufJeSchicht[t.kind] !== undefined,
+  );
+
+  // „Automatisch erstellen": sobald jemand im eingestellten Vorlauf startet,
   // wird der Vorschlag ohne Klick generiert (läuft auch außerhalb der Ansicht).
   useEffect(() => {
     if (!settings.starterAutoErstellen || starterVorschlagAktiv) return;
@@ -541,7 +625,7 @@ export function VorverteilungPane({
             <ArrowBackIcon sx={{ fontSize: 18 }} />
           </IconButton>
           <Typography sx={{ fontWeight: 800, fontSize: '0.85rem' }}>
-            Starterbündel — Schichtstart in der nächsten Stunde
+            Starterbündel — Schichtstart {vorlaufFensterText}
           </Typography>
           <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Button
@@ -556,7 +640,7 @@ export function VorverteilungPane({
             >
               Vorschlag ansehen
             </Button>
-            <Tooltip title="Starterbündel einstellen (Übernahme)">
+            <Tooltip title="Starterbündel einstellen (Übernahme und Vorlauf)">
               <IconButton
                 size="small"
                 aria-label="Starterbündel einstellen"
@@ -595,7 +679,7 @@ export function VorverteilungPane({
                 <Typography
                   sx={{ color: 'text.secondary', fontSize: '0.78rem', flex: 1, minWidth: 220 }}
                 >
-                  Kein Schichtstart in der nächsten Stunde — gerade braucht niemand ein
+                  Kein Schichtstart {vorlaufFensterText} — gerade braucht niemand ein
                   Starterbündel.
                 </Typography>
                 <Button
@@ -1222,7 +1306,7 @@ export function VorverteilungPane({
         </Stack>
       </Popover>
 
-      {/* Einstellungen der Starterbündel-Karte: nur die Übernahme-Art. */}
+      {/* Einstellungen der Starterbündel-Karte: Übernahme-Art + Vorlauf. */}
       <Popover
         open={starterGearAnchor !== null}
         anchorEl={starterGearAnchor}
@@ -1254,10 +1338,76 @@ export function VorverteilungPane({
             }
             label="Automatisch erstellen"
           />
+
+          {/* Vorlauf: wie lange VOR Schichtbeginn das Bündel vorgebaut wird.
+              Entweder ein Wert für alle — oder je Schichttyp aufgeteilt; dann
+              tritt der einzelne Wert an die Stelle des gemeinsamen. */}
+          {!vorlaufJeSchichtAktiv && (
+            <TextField
+              select
+              size="small"
+              label="Vorlauf vor Schichtbeginn"
+              value={settings.starterVorlaufStunden}
+              onChange={(e) =>
+                saveSettings({ ...settings, starterVorlaufStunden: Number(e.target.value) })
+              }
+            >
+              {STARTER_VORLAUF_OPTIONEN.map((h) => (
+                <MenuItem key={h} value={h}>
+                  {stundenLabel(h)}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={vorlaufJeSchichtAktiv}
+                onChange={(e) =>
+                  saveSettings({
+                    ...settings,
+                    starterVorlaufJeSchicht: e.target.checked
+                      ? vorlaufJeSchichtAus(settings.starterVorlaufStunden)
+                      : {},
+                  })
+                }
+              />
+            }
+            label="Vorlauf je Schichttyp"
+          />
+          {vorlaufJeSchichtAktiv &&
+            STARTER_SCHICHTTYPEN.map((t) => (
+              <TextField
+                key={t.kind}
+                select
+                size="small"
+                label={t.label}
+                value={settings.starterVorlaufJeSchicht[t.kind] ?? settings.starterVorlaufStunden}
+                onChange={(e) =>
+                  saveSettings({
+                    ...settings,
+                    starterVorlaufJeSchicht: {
+                      ...settings.starterVorlaufJeSchicht,
+                      [t.kind]: Number(e.target.value),
+                    },
+                  })
+                }
+              >
+                {STARTER_VORLAUF_OPTIONEN.map((h) => (
+                  <MenuItem key={h} value={h}>
+                    {stundenLabel(h)}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ))}
+
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             Übernehmen aus: Vorschläge erscheinen orange und müssen einzeln per Klick übernommen
             werden; an: Übernahme ohne Klick. Erstellen an: der Vorschlag wird automatisch
-            generiert, sobald jemand in der nächsten Stunde startet (auch im Hintergrund).
+            generiert, sobald jemand im eingestellten Vorlauf startet (auch im Hintergrund).
+            Der Vorlauf bestimmt zugleich, wer in dieser Ansicht überhaupt auftaucht — mit
+            „Vorlauf je Schichttyp" darf die Frühschicht früher vorbauen als die Spätschicht.
             Die echte Zuweisung erfolgt stets exakt zum Schichtbeginn.
           </Typography>
         </Stack>
