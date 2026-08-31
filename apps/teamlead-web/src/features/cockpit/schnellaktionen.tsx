@@ -126,7 +126,7 @@ export function useSchnellaktionen(): DecisionItem[] {
     for (const lane of lanes) {
       for (const card of lane.cards) {
         const dg = card.deliveryGroup;
-        if (dg && dg.missingCount > 0 && !dg.released && !dg.locked) {
+        if (dg && dg.missingCount > 0 && dg.releasedCount < dg.presentSize && !dg.locked) {
           seen.add(dg.id);
           caseIds.push(card.caseId);
         }

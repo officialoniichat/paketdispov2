@@ -539,9 +539,10 @@ export class TeamleadService {
   }
 
   /**
-   * Lieferungs-Pool-Hold (D2) „trotzdem bearbeiten": eine unvollständige Lieferung
-   * („X von N") explizit freigeben — alle Mitglieder erhalten das Release-Flag und
-   * verteilen sich wieder, obwohl noch Belege der Lieferung fehlen.
+   * Lieferungs-Pool-Hold (D2) „In den Pool": einen zurückgehaltenen Beleg einer
+   * unvollständigen Lieferung explizit freigeben. Die Freigabe wirkt JE BELEG —
+   * die übrigen Mitglieder warten weiter, bis sie ebenfalls freigegeben werden
+   * oder die Lieferung vollständig ist. Gegenstück: {@link holdDeliveryCases}.
    */
   async releaseDeliveryGroup(
     principal: Principal,
@@ -564,6 +565,44 @@ export class TeamleadService {
       await this.events.append(
         {
           eventType: 'case.delivery_group_released',
+          entityType: 'GoodsReceiptCase',
+          entityId: caseIds[0]!,
+          actorType: 'teamlead',
+          actorId: principal.sub,
+          payload: { caseIds, reason: dto.reason },
+        },
+        tx,
+      );
+    });
+    return { affectedCaseIds: caseIds };
+  }
+
+  /**
+   * Gegenstück zu {@link releaseDeliveryGroup}: „Zurückhalten" nimmt die Freigabe
+   * eines Belegs zurück. Er verlässt den Pool wieder, sobald seine Lieferung noch
+   * unvollständig ist — die Engine entscheidet, dieser Aufruf setzt nur das Flag.
+   */
+  async holdDeliveryCases(
+    principal: Principal,
+    dto: { caseIds: string[]; reason?: string },
+  ): Promise<{ affectedCaseIds: string[] }> {
+    const caseIds = [...new Set(dto.caseIds)];
+    if (caseIds.length === 0) throw new BadRequestException('Keine Belege angegeben.');
+    const found = await this.prisma.goodsReceiptCase.findMany({
+      where: { id: { in: caseIds } },
+      select: { id: true },
+    });
+    if (found.length !== caseIds.length) {
+      throw new NotFoundException('Mindestens ein Beleg wurde nicht gefunden.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.goodsReceiptCase.updateMany({
+        where: { id: { in: caseIds } },
+        data: { deliveryGroupReleased: false, version: { increment: 1 } },
+      });
+      await this.events.append(
+        {
+          eventType: 'case.delivery_group_held',
           entityType: 'GoodsReceiptCase',
           entityId: caseIds[0]!,
           actorType: 'teamlead',

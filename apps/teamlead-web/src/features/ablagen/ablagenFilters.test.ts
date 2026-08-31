@@ -139,7 +139,7 @@ describe('cardMatchesFilter', () => {
         presentSize: 3,
         missingCount: 0,
         locked: false,
-        released: false,
+        releasedCount: 0,
       },
     });
     const single = makeCard({ deliveryGroup: null });

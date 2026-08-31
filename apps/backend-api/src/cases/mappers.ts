@@ -53,7 +53,7 @@ export function mapDeliveryGroupRef(
     expectedSize: group.expectedSize ?? null,
     missingCount,
     locked: group.locked,
-    released: group.released,
+    releasedCount: group.releasedCaseIds.length,
   };
 }
 

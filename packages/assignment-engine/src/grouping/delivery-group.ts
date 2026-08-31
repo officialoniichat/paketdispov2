@@ -94,8 +94,12 @@ export interface DeliveryGroup {
   presentSize: number;
   /** True for Teamlead-confirmed/merged groups — frozen against re-detection. */
   locked: boolean;
-  /** D2: true wenn ALLE anwesenden Mitglieder TL-freigegeben sind („trotzdem bearbeiten"). */
-  released: boolean;
+  /**
+   * D2: Mitglieder, die der Teamlead EINZELN in den Pool gegeben hat („In den Pool").
+   * Die Freigabe wirkt je Beleg — ein freigegebener Beleg verteilt sich, seine noch
+   * nicht freigegebenen Geschwister warten weiter.
+   */
+  releasedCaseIds: Id[];
 }
 
 /** Reverse lookups built from groups. */
@@ -142,7 +146,9 @@ function buildGroup(
     .map((i) => cases[i]!.deliverySourceGroupSize ?? null)
     .filter((n): n is number => typeof n === 'number' && n > 0);
   const expectedSize = expected.length > 0 ? Math.max(...expected) : undefined;
-  const released = indices.every((i) => cases[i]!.deliveryGroupReleased === true);
+  const releasedCaseIds = sorted
+    .filter((s) => cases[s.i]!.deliveryGroupReleased === true)
+    .map((s) => s.id);
   return {
     id: idOverride ?? `dg-${sorted[0]!.num ?? sorted[0]!.id}`,
     caseIds: sorted.map((s) => s.id),
@@ -151,7 +157,7 @@ function buildGroup(
     expectedSize,
     presentSize: sorted.length,
     locked,
-    released,
+    releasedCaseIds,
   };
 }
 
@@ -323,9 +329,12 @@ export function indexDeliveryGroups(groups: readonly DeliveryGroup[]): DeliveryG
  *   - members of suspected (T3-only) groups when `autoDistributeSuspected` is off —
  *     they wait in the pool for a Teamlead confirm;
  *   - D2 Lieferungs-Pool-Hold: members of an UNVOLLSTÄNDIGEN Gruppe („X von N" mit
- *     presentSize < N) — ALLE Mitglieder warten, bis jedes gebucht ist ODER der
- *     Teamlead explizit freigibt („trotzdem bearbeiten", `released`). TL-gelockte
- *     (manuell bestätigte) Gruppen gelten als freigegeben.
+ *     presentSize < N) warten, bis jedes Mitglied gebucht ist. TL-gelockte (manuell
+ *     bestätigte) Gruppen halten nie.
+ *
+ * Die TL-Freigabe wirkt JE BELEG (`releasedCaseIds`, Rechtsklick → „In den Pool"):
+ * ein freigegebener Beleg verteilt sich sofort, seine Geschwister warten weiter, bis
+ * sie ebenfalls freigegeben oder die Lieferung vollständig wird.
  */
 export function withheldCaseIds(
   groups: readonly DeliveryGroup[],
@@ -333,12 +342,14 @@ export function withheldCaseIds(
 ): Set<Id> {
   const withheld = new Set<Id>();
   for (const group of groups) {
-    if (group.released || group.locked) continue;
+    if (group.locked) continue;
     const suspectedHold = !config.autoDistributeSuspected && group.confidence === 'suspected';
     const incompleteHold =
       group.expectedSize !== undefined && group.presentSize < group.expectedSize;
-    if (suspectedHold || incompleteHold) {
-      for (const caseId of group.caseIds) withheld.add(caseId);
+    if (!suspectedHold && !incompleteHold) continue;
+    const released = new Set(group.releasedCaseIds);
+    for (const caseId of group.caseIds) {
+      if (!released.has(caseId)) withheld.add(caseId);
     }
   }
   return withheld;

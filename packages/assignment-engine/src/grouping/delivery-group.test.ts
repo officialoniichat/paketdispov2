@@ -235,7 +235,7 @@ describe('withheldCaseIds — Lieferungs-Pool-Hold für unvollständige Gruppen 
     expect(withheldCaseIds(groups, cfg()).size).toBe(0);
   });
 
-  it('a single released member is not enough — the whole group stays held', () => {
+  it('die Freigabe wirkt JE BELEG — „a" geht in den Pool, „b" wartet weiter', () => {
     const groups = detectDeliveryGroups([
       input('a', '100', {
         deliverySourceGroupKey: 'K',
@@ -244,7 +244,7 @@ describe('withheldCaseIds — Lieferungs-Pool-Hold für unvollständige Gruppen 
       }),
       input('b', '101', { deliverySourceGroupKey: 'K', deliverySourceGroupSize: 3 }),
     ]);
-    expect([...withheldCaseIds(groups, cfg())].sort()).toEqual(['a', 'b']);
+    expect([...withheldCaseIds(groups, cfg())]).toEqual(['b']);
   });
 
   it('a TL-locked (manually merged) group is never held back', () => {

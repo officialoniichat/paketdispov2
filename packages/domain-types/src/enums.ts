@@ -280,6 +280,7 @@ export const workflowEventTypeSchema = z.enum([
   'case.returned_to_bucher',
   'case.intake_released',
   'case.delivery_group_released',
+  'case.delivery_group_held',
   'case.attention_flagged',
   'case.attention_cleared',
   'case.forwarded',

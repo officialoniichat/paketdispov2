@@ -166,7 +166,7 @@ export class TeamleadController {
   @Post('delivery-groups/release')
   @ApiOperation({
     summary:
-      'D2 „trotzdem bearbeiten": unvollständige Lieferung explizit freigeben (Pool-Hold aufheben)',
+      'D2 „In den Pool": zurückgehaltene Belege einer unvollständigen Lieferung freigeben (je Beleg)',
   })
   @ApiOkResponse({ type: DeliveryGroupReleaseResultDto })
   releaseDeliveryGroup(
@@ -174,6 +174,18 @@ export class TeamleadController {
     @Body() dto: DeliveryGroupReleaseDto,
   ): Promise<DeliveryGroupReleaseResultDto> {
     return this.teamlead.releaseDeliveryGroup(principal, dto);
+  }
+
+  @Post('delivery-groups/hold')
+  @ApiOperation({
+    summary: 'D2 „Zurückhalten": Freigabe zurücknehmen — der Beleg wartet wieder auf die Lieferung',
+  })
+  @ApiOkResponse({ type: DeliveryGroupReleaseResultDto })
+  holdDeliveryCases(
+    @CurrentUser() principal: Principal,
+    @Body() dto: DeliveryGroupReleaseDto,
+  ): Promise<DeliveryGroupReleaseResultDto> {
+    return this.teamlead.holdDeliveryCases(principal, dto);
   }
 
   @Post('cases/:caseId/return-to-bucher')

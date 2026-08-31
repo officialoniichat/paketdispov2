@@ -72,16 +72,17 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
         {group.locked && <LockIcon fontSize="small" color="action" />}
       </Stack>
 
-      {missing > 0 && !group.released && (
+      {missing > 0 && group.releasedCount < group.presentSize && (
         <Alert severity="warning" variant="outlined" sx={{ mb: 1.5 }}>
           {group.presentSize} von {group.expectedSize} Belegen da — {missing} noch nicht gebucht.
-          Die Belege warten im Pool, bis die Lieferung vollständig ist (oder du sie freigibst).
+          Die {group.presentSize - group.releasedCount} noch nicht freigegebenen Belege werden
+          zurückgehalten und sind nicht im Pool.
         </Alert>
       )}
-      {group.released && (
+      {group.releasedCount > 0 && (
         <Alert severity="info" variant="outlined" sx={{ mb: 1.5 }}>
-          Trotz {missing > 0 ? `${missing} fehlender Belege ` : ''}freigegeben — die Lieferung
-          wird verteilt, Nachzügler laufen normal ein.
+          {group.releasedCount} von {group.presentSize} Belegen in den Pool gegeben — sie werden
+          verteilt, Nachzügler laufen normal ein.
         </Alert>
       )}
 
@@ -135,7 +136,7 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
             Lieferung bestätigen
           </Button>
         )}
-        {missing > 0 && !group.released && (
+        {missing > 0 && group.releasedCount < group.presentSize && (
           <Button
             variant="contained"
             color="warning"
@@ -143,7 +144,7 @@ export function DeliveryGroupPanel({ caseId, group }: DeliveryGroupPanelProps): 
             disabled={busy}
             onClick={() => release.mutate()}
           >
-            Trotzdem bearbeiten
+            Alle in den Pool
           </Button>
         )}
         <Button variant="outlined" size="small" color="warning" disabled={busy} onClick={() => split.mutate()}>
