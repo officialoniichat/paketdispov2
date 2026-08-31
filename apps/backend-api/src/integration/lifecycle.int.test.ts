@@ -494,6 +494,25 @@ describe('Problem-Loop (Kundenfeedback 14.07.2026 + §17.1 Problemfall)', () => 
     expect(zstRecords.reduce((sum, z) => sum + z.completedQuantity, 0)).toBe(20);
   });
 
+  it('Zähl-Endpunkt: Teil-Updates lassen das jeweils andere Feld unangetastet (§7)', async () => {
+    const { caseId, skuMId } = await seedAssignedCaseWithPositions('WE-COUNT-1');
+    await cases.startPreparation(employee, caseId);
+
+    // Nur Menge: eine (fremde) Preiskorrektur bliebe unangetastet.
+    await cases.countSkuLine(employee, caseId, skuMId, { confirmedQuantity: 9 });
+    // Nur Preis: die erfasste Menge bleibt stehen.
+    await cases.countSkuLine(employee, caseId, skuMId, { correctedVkPrice: 14.99 });
+    const line = await prisma.receiptSkuLine.findUniqueOrThrow({ where: { id: skuMId } });
+    expect(line.confirmedQuantity).toBe(9);
+    expect(line.correctedVkPrice).toBe(14.99);
+    expect(line.status).toBe('deviation'); // 9 von 12 = Abweichung, vom Preis unberührt
+
+    // Leerer Body ist kein gültiges Teil-Update.
+    await expect(cases.countSkuLine(employee, caseId, skuMId, {})).rejects.toThrowError(
+      /Keine Änderung/,
+    );
+  });
+
   it('Teilabschluss OHNE Probleme wird abgelehnt (Beleg erledigt ist der richtige Weg)', async () => {
     const { caseId } = await seedAssignedCaseWithPositions('WE-PROBLEM-2');
     await cases.startPreparation(employee, caseId);
