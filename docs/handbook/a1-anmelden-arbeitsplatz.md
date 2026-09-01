@@ -30,6 +30,10 @@ Der Anmeldebildschirm zeigt die Überschrift **`'Anmeldung'`** mit einem Feld:
 - Auf dem Startbildschirm steht `'Arbeitsplatz: <Tischname>'` – diesen Tisch hat dir die Teamleitung
   in den Stammdaten zugewiesen; du musst ihn nicht selbst scannen oder eingeben.
 - Deine Anmeldung bleibt bestehen, auch wenn du die App schließt und neu öffnest.
+- Jedes Fenster hat seine EIGENE Anmeldung: Wer die App in einem zweiten Fenster mit einer anderen
+  Mitarbeiternummer öffnet, arbeitet dort unter diesem Konto weiter — das erste Fenster bleibt
+  angemeldet, wie es war. Ein frisch geöffnetes Fenster übernimmt die zuletzt genutzte Anmeldung
+  des Geräts.
 - Zum Schichtende oder bei Tischwechsel tippst du oben rechts auf den Profilkreis und dann auf
   **`'Abmelden'`**. Danach siehst du wieder den Anmeldebildschirm.
 

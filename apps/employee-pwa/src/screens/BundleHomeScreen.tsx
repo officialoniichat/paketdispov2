@@ -59,7 +59,7 @@ import CheckroomOutlinedIcon from '@mui/icons-material/CheckroomOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import GroupsIcon from '@mui/icons-material/Groups';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import IosShareIcon from '@mui/icons-material/IosShare';
+import { TeilenIcon } from '../components/TeilenIcon.js';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import {
   LABEL_PRINT_VARIANT_DISPLAY,
@@ -779,6 +779,8 @@ export function BundleHomeScreen(): JSX.Element {
                         alignItems: 'center',
                         gap: 1.5,
                         cursor: 'pointer',
+                        // Bezugsrahmen für den Teilen-Knopf oben rechts.
+                        position: 'relative',
                         borderColor: isDone ? 'success.main' : 'divider',
                         bgcolor: isDone ? 'action.hover' : 'background.paper',
                       }}
@@ -833,29 +835,43 @@ export function BundleHomeScreen(): JSX.Element {
                           ))}
                         </Stack>
                       </Box>
-                      {/* Rechte Spalte: Teilen-Symbol OBEN, Status-Chip darunter
-                          (Zusammenarbeit 31.08.2026). Chip-Text „geholt"/„offen"
-                          bleibt unverändert — die E2E-Helfer ankern darauf. */}
-                      <Stack spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
-                        {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
-                          <IconButton
-                            aria-label="Beleg teilen"
-                            onClick={(event) => {
-                              // Der Klick liegt in der abhakbaren Stop-Zeile —
-                              // er darf den Stop nicht auf „geholt" togglen.
-                              event.stopPropagation();
-                              setTeilenCaseId(ersterBeleg.id);
-                            }}
-                          >
-                            <IosShareIcon fontSize="small" />
-                          </IconButton>
-                        ) : null}
-                        <Chip
+                      {/* Rechte Spalte: NUR der Status-Chip — er bleibt damit
+                          vertikal mittig zur Karte (Kundenwunsch 01.09.2026).
+                          Chip-Text „geholt"/„offen" bleibt unverändert — die
+                          E2E-Helfer ankern darauf. Das Teilen-Symbol sitzt als
+                          runder Knopf oben rechts in der Karte. */}
+                      <Chip
+                        size="small"
+                        color={isDone ? 'success' : 'default'}
+                        label={isDone ? 'geholt' : 'offen'}
+                        sx={{ flexShrink: 0 }}
+                      />
+                      {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
+                        <IconButton
+                          aria-label="Beleg teilen"
                           size="small"
-                          color={isDone ? 'success' : 'default'}
-                          label={isDone ? 'geholt' : 'offen'}
-                        />
-                      </Stack>
+                          onClick={(event) => {
+                            // Der Klick liegt in der abhakbaren Stop-Zeile —
+                            // er darf den Stop nicht auf „geholt" togglen.
+                            event.stopPropagation();
+                            setTeilenCaseId(ersterBeleg.id);
+                          }}
+                          sx={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            width: 32,
+                            height: 32,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'background.paper',
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                          }}
+                        >
+                          <TeilenIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      ) : null}
                     </Paper>
                   );
                 })}

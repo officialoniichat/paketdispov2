@@ -5,11 +5,17 @@ import { getSession } from './session.js';
 
 async function makeToken(claims: Record<string, unknown>, expiresIn = '1h'): Promise<string> {
   const { privateKey } = await generateKeyPair('RS256');
-  return new SignJWT(claims).setProtectedHeader({ alg: 'RS256' }).setExpirationTime(expiresIn).sign(privateKey);
+  return new SignJWT(claims)
+    .setProtectedHeader({ alg: 'RS256' })
+    .setExpirationTime(expiresIn)
+    .sign(privateKey);
 }
 
 describe('auth', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it('logs in, decodes the token and persists the session', async () => {
