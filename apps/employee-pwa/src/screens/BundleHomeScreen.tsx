@@ -710,6 +710,76 @@ export function BundleHomeScreen(): JSX.Element {
         </Typography>
       ) : null}
 
+      {/* „Geteilt mit dir" (Zusammenarbeit §3.5): Belege, an denen ich als
+          HELFER beteiligt bin — sie stehen GANZ OBEN (Kundenwunsch 01.09.2026),
+          denn geteilte Arbeit ist das Dringlichste auf dem Bildschirm. Sie liegen
+          im Karren des Inhabers: nichts zu holen, nie ausgegraut, ohne Holen-Gate;
+          fertige Belege liefert der Server gar nicht erst mit (TERMINAL_CASE_STATUSES),
+          der Abschnitt erscheint auch ohne eigenes Bündel. */}
+      {sharedCases.length > 0 ? (
+        <>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Geteilt mit dir
+          </Typography>
+          <Stack spacing={1}>
+            {sharedCases.map((b) => {
+              const chip = statusChipFor(b.status);
+              const geteilt = geteiltInfo(b, session?.employeeNo);
+              const KategorieIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+              return (
+                <Paper
+                  key={b.id}
+                  variant="outlined"
+                  onClick={() => navigate(caseProcessPath(b.id))}
+                  sx={{
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    borderLeft: `4px solid ${ltColors.shared}`,
+                  }}
+                >
+                  {(b.issues?.length ?? 0) > 0 ? (
+                    <IssueBadge issues={b.issues ?? []} />
+                  ) : (
+                    <KategorieIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mt: 0.5, flexWrap: 'wrap' }}
+                    >
+                      <Chip
+                        size="small"
+                        icon={<GroupsIcon />}
+                        label={
+                          geteilt?.label ??
+                          (b.assignedEmployeeName
+                            ? `Geteilt mit ${b.assignedEmployeeName}`
+                            : 'Geteilt')
+                        }
+                        sx={GETEILT_CHIP_SX}
+                      />
+                      {geteilt ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Box>
+                  <Chip size="small" color={chip.color} label={chip.label} />
+                </Paper>
+              );
+            })}
+          </Stack>
+        </>
+      ) : null}
+
       {!bundle ? (
         <Alert severity="info">
           Kein Bündel zugeteilt. Du kannst unten selbst ein Bündel anfordern oder dich an den
@@ -779,8 +849,6 @@ export function BundleHomeScreen(): JSX.Element {
                         alignItems: 'center',
                         gap: 1.5,
                         cursor: 'pointer',
-                        // Bezugsrahmen für den Teilen-Knopf oben rechts.
-                        position: 'relative',
                         borderColor: isDone ? 'success.main' : 'divider',
                         bgcolor: isDone ? 'action.hover' : 'background.paper',
                       }}
@@ -835,43 +903,42 @@ export function BundleHomeScreen(): JSX.Element {
                           ))}
                         </Stack>
                       </Box>
-                      {/* Rechte Spalte: NUR der Status-Chip — er bleibt damit
-                          vertikal mittig zur Karte (Kundenwunsch 01.09.2026).
-                          Chip-Text „geholt"/„offen" bleibt unverändert — die
-                          E2E-Helfer ankern darauf. Das Teilen-Symbol sitzt als
-                          runder Knopf oben rechts in der Karte. */}
-                      <Chip
-                        size="small"
-                        color={isDone ? 'success' : 'default'}
-                        label={isDone ? 'geholt' : 'offen'}
-                        sx={{ flexShrink: 0 }}
-                      />
-                      {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
-                        <IconButton
-                          aria-label="Beleg teilen"
+                      {/* Rechte Spalte: runder Teilen-Knopf ÜBER dem Status-Chip
+                          (Kundenwunsch 01.09.2026); die Spalte als Ganzes steht
+                          vertikal mittig in der Karte. Chip-Text „geholt"/„offen"
+                          bleibt unverändert — die E2E-Helfer ankern darauf.
+                          Fertige Belege stehen hier gar nicht mehr, und
+                          `istTeilbar` schließt sie zusätzlich aus: ein
+                          abgearbeiteter Beleg lässt sich nicht mehr teilen. */}
+                      <Stack spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
+                        {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
+                          <IconButton
+                            aria-label="Beleg teilen"
+                            size="small"
+                            onClick={(event) => {
+                              // Der Klick liegt in der abhakbaren Stop-Zeile —
+                              // er darf den Stop nicht auf „geholt" togglen.
+                              event.stopPropagation();
+                              setTeilenCaseId(ersterBeleg.id);
+                            }}
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              color: 'text.secondary',
+                              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                            }}
+                          >
+                            <TeilenIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        ) : null}
+                        <Chip
                           size="small"
-                          onClick={(event) => {
-                            // Der Klick liegt in der abhakbaren Stop-Zeile —
-                            // er darf den Stop nicht auf „geholt" togglen.
-                            event.stopPropagation();
-                            setTeilenCaseId(ersterBeleg.id);
-                          }}
-                          sx={{
-                            position: 'absolute',
-                            top: 4,
-                            right: 4,
-                            width: 32,
-                            height: 32,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            bgcolor: 'background.paper',
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                          }}
-                        >
-                          <TeilenIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      ) : null}
+                          color={isDone ? 'success' : 'default'}
+                          label={isDone ? 'geholt' : 'offen'}
+                        />
+                      </Stack>
                     </Paper>
                   );
                 })}
@@ -1024,74 +1091,6 @@ export function BundleHomeScreen(): JSX.Element {
           )}
         </>
       )}
-
-      {/* „Geteilt mit dir" (Zusammenarbeit §3.5): Belege, an denen ich als
-          HELFER beteiligt bin. Sie liegen im Karren des Inhabers — hier gibt es
-          nichts zu holen, deshalb nie ausgegraut und ohne Holen-Gate. Der
-          Abschnitt erscheint auch ohne eigenes Bündel (Helfer kann leer sein). */}
-      {sharedCases.length > 0 ? (
-        <>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
-            Geteilt mit dir
-          </Typography>
-          <Stack spacing={1}>
-            {sharedCases.map((b) => {
-              const chip = statusChipFor(b.status);
-              const geteilt = geteiltInfo(b, session?.employeeNo);
-              const KategorieIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
-              return (
-                <Paper
-                  key={b.id}
-                  variant="outlined"
-                  onClick={() => navigate(caseProcessPath(b.id))}
-                  sx={{
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: 'pointer',
-                    borderLeft: `4px solid ${ltColors.shared}`,
-                  }}
-                >
-                  {(b.issues?.length ?? 0) > 0 ? (
-                    <IssueBadge issues={b.issues ?? []} />
-                  ) : (
-                    <KategorieIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
-                  )}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      alignItems="center"
-                      sx={{ mt: 0.5, flexWrap: 'wrap' }}
-                    >
-                      <Chip
-                        size="small"
-                        icon={<GroupsIcon />}
-                        label={
-                          geteilt?.label ??
-                          (b.assignedEmployeeName
-                            ? `Geteilt mit ${b.assignedEmployeeName}`
-                            : 'Geteilt')
-                        }
-                        sx={GETEILT_CHIP_SX}
-                      />
-                      {geteilt ? (
-                        <Typography variant="body2" color="text.secondary">
-                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
-                        </Typography>
-                      ) : null}
-                    </Stack>
-                  </Box>
-                  <Chip size="small" color={chip.color} label={chip.label} />
-                </Paper>
-              );
-            })}
-          </Stack>
-        </>
-      ) : null}
 
       {/* Pull-Prinzip: „Nächstes Pack anfordern". Ob das geht, entscheidet das
           Backend (`pack-window.ts`) — ist im laufenden Pack noch eigene Arbeit

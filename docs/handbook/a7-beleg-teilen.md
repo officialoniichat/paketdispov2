@@ -36,14 +36,15 @@ Im geteilten Beleg gibt es zwei Rollen:
 - **Inhaber** – die Person, in deren Bündel der Beleg liegt. Sie holt die Ware und hakt den
   Lagerplatz-Stop ab (Kapitel A2).
 - **Helfer** – alle Eingeladenen, die angenommen haben. Der Beleg liegt **nicht** in ihrem Bündel;
-  sie finden ihn unter `'2 · Bearbeiten'` im eigenen Abschnitt **`'Geteilt mit dir'`**.
+  sie finden ihn **ganz oben** auf dem Startbildschirm im eigenen Abschnitt
+  **`'Geteilt mit dir'`** – noch vor `'1 · Ware holen'`.
 
 ## Kolleg:innen einladen (`'Beleg teilen'`)
 
-1. Unter `'1 · Ware holen'` trägt jeder Beleg **oben rechts in der Ecke** einen runden Knopf mit dem
-   **Teilen-Symbol** (Kasten mit Pfeil nach oben, `'Beleg teilen'`); der Status-Chip `'offen'` /
-   `'geholt'` steht davon unabhängig mittig am rechten Rand. Tippe den Knopf an; der Stop wird
-   dadurch **nicht** abgehakt.
+1. Unter `'1 · Ware holen'` trägt jeder Beleg am rechten Rand einen runden Knopf mit dem
+   **Teilen-Symbol** (Kasten mit Pfeil nach oben, `'Beleg teilen'`) – direkt **über** dem Status-Chip
+   `'offen'` / `'geholt'`. Tippe den Knopf an; der Stop wird dadurch **nicht** abgehakt.
+   Ist ein Beleg fertig, verschwindet er aus der Liste – teilen lässt er sich dann nicht mehr.
 2. Es öffnet sich **`'Beleg teilen'`**: eine Liste aller aktiven Kolleg:innen mit einem Haken links,
    den Initialen, dem Namen und – wer heute eingeteilt ist – dem Zusatz `'heute im Dienst'`. Wer
    schon beteiligt oder eingeladen ist, ist markiert und lässt sich nicht erneut anhaken.
@@ -68,9 +69,9 @@ Die Benachrichtigung **bleibt stehen, bis du reagierst** – nichts blinkt kurz 
 Liegen mehrere Einladungen vor, siehst du zuerst die älteste; die nächste folgt, sobald du geantwortet
 hast.
 
-- **Haken – annehmen:** Der Beleg erscheint bei dir unter `'2 · Bearbeiten'` im Abschnitt
-  `'Geteilt mit dir'`. Du kannst ihn sofort öffnen. Die Ware holt der Inhaber – du musst nichts
-  abholen.
+- **Haken – annehmen:** Der Beleg erscheint bei dir **ganz oben** auf dem Startbildschirm im
+  Abschnitt `'Geteilt mit dir'`. Du kannst ihn sofort öffnen. Die Ware holt der Inhaber – du musst
+  nichts abholen. Ist der Beleg fertig, verschwindet der Abschnitt wieder.
 - **Kreuz – ablehnen:** Du wirst nicht weiter behelligt. Die Einladung bleibt nur in deinem Verlauf
   unter `'Nachrichten'` stehen. Der Inhaber kann dich später erneut einladen.
 
