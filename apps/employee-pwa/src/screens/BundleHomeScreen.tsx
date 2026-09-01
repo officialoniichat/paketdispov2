@@ -672,6 +672,9 @@ export function BundleHomeScreen(): JSX.Element {
   // Solange Problemfälle/Geklärte übrig sind — auch mitgenommene aus früheren
   // Packs — bleiben die Abschnitte stehen, sonst verlöre der MA sie aus dem Blick.
   const allClosed = cases.length > 0 && cases.every((c) => isCaseClosed(c.status));
+  // „2 · Bearbeiten" zeigt eigene UND geteilte Belege. Deshalb haengt der
+  // Abschnitt nicht mehr am eigenen Bündel: wer nur mithilft, sieht ihn auch.
+  const bearbeitenSichtbar = (Boolean(bundle) && !allClosed) || sharedCases.length > 0;
 
   // Punkt 4: keine erzwungene Sequenz mehr — jeder GEHOLTE Beleg ist direkt
   // startbar. Nur das Holen selbst gated noch: ein Beleg, dessen Lagerplatz-Stop
@@ -708,76 +711,6 @@ export function BundleHomeScreen(): JSX.Element {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {packLabel}
         </Typography>
-      ) : null}
-
-      {/* „Geteilt mit dir" (Zusammenarbeit §3.5): Belege, an denen ich als
-          HELFER beteiligt bin — sie stehen GANZ OBEN (Kundenwunsch 01.09.2026),
-          denn geteilte Arbeit ist das Dringlichste auf dem Bildschirm. Sie liegen
-          im Karren des Inhabers: nichts zu holen, nie ausgegraut, ohne Holen-Gate;
-          fertige Belege liefert der Server gar nicht erst mit (TERMINAL_CASE_STATUSES),
-          der Abschnitt erscheint auch ohne eigenes Bündel. */}
-      {sharedCases.length > 0 ? (
-        <>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            Geteilt mit dir
-          </Typography>
-          <Stack spacing={1}>
-            {sharedCases.map((b) => {
-              const chip = statusChipFor(b.status);
-              const geteilt = geteiltInfo(b, session?.employeeNo);
-              const KategorieIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
-              return (
-                <Paper
-                  key={b.id}
-                  variant="outlined"
-                  onClick={() => navigate(caseProcessPath(b.id))}
-                  sx={{
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    cursor: 'pointer',
-                    borderLeft: `4px solid ${ltColors.shared}`,
-                  }}
-                >
-                  {(b.issues?.length ?? 0) > 0 ? (
-                    <IssueBadge issues={b.issues ?? []} />
-                  ) : (
-                    <KategorieIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
-                  )}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      alignItems="center"
-                      sx={{ mt: 0.5, flexWrap: 'wrap' }}
-                    >
-                      <Chip
-                        size="small"
-                        icon={<GroupsIcon />}
-                        label={
-                          geteilt?.label ??
-                          (b.assignedEmployeeName
-                            ? `Geteilt mit ${b.assignedEmployeeName}`
-                            : 'Geteilt')
-                        }
-                        sx={GETEILT_CHIP_SX}
-                      />
-                      {geteilt ? (
-                        <Typography variant="body2" color="text.secondary">
-                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
-                        </Typography>
-                      ) : null}
-                    </Stack>
-                  </Box>
-                  <Chip size="small" color={chip.color} label={chip.label} />
-                </Paper>
-              );
-            })}
-          </Stack>
-        </>
       ) : null}
 
       {!bundle ? (
@@ -965,141 +898,199 @@ export function BundleHomeScreen(): JSX.Element {
                     : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
                 </Button>
               ) : null}
-
-              {/* 2 · Bearbeiten — the worker freely picks which fetched Beleg first
-                  (Punkt 4: no forced sequence; only not-yet-fetched Belege stay greyed).
-                  Fertige Belege sind ausgeblendet; der Zähler nimmt sie weiter mit. */}
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
-                2 · Bearbeiten
-                {packCases.length > 0 ? (
-                  /* Zähler des AKTIVEN Packs — mitgenommene Belege früherer Packs
-                     zählen dort weiter, nicht hier. */
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ ml: 1 }}
-                  >
-                    {packCases.filter((c) => closedIds.has(c.id)).length}/{packCases.length}{' '}
-                    erledigt
-                  </Typography>
-                ) : null}
-              </Typography>
-              {!collectComplete && cases.length > 0 ? (
-                <Alert severity="info" sx={{ mb: 1 }}>
-                  Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
-                  starten.
-                </Alert>
-              ) : null}
-
-              <Stack spacing={1}>
-                {visibleCases.map((b) => {
-                  const chip = statusChipFor(b.status);
-                  const parked = isCaseParked(b.status);
-                  const resolved = b.status === 'problem_resolved';
-                  // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
-                  const tint = parked
-                    ? { bgcolor: 'rgba(211, 47, 47, 0.08)', borderColor: 'error.light' }
-                    : resolved
-                      ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
-                      : {};
-                  // Antippbar, sobald die Ware geholt ist — geparkte Problemfälle
-                  // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
-                  const startable = isBelegStartable(b.id);
-                  const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
-                  // Goldene Kennzeichnung des geteilten Belegs (Zusammenarbeit).
-                  const geteilt = geteiltInfo(b, session?.employeeNo);
-                  return (
-                    <Paper
-                      key={b.id}
-                      variant="outlined"
-                      onClick={() => openBeleg(b.id)}
-                      sx={{
-                        p: 1.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        cursor: startable ? 'pointer' : 'not-allowed',
-                        opacity: isBelegStartable(b.id) ? 1 : 0.5,
-                        ...tint,
-                        // Goldene Linie des geteilten Belegs — nie Farbe allein:
-                        // dazu kommen GroupsIcon + Text im Karteninhalt.
-                        ...(geteilt ? { borderLeft: `4px solid ${ltColors.shared}` } : {}),
-                      }}
-                    >
-                      {(b.issues?.length ?? 0) > 0 ? (
-                        /* Zähler-Badge statt Symbol (04.08.2026): „nx" = Anzahl der
-                           Meldungen; Tap/Hover öffnet das Meldungs-Popover. */
-                        <IssueBadge issues={b.issues ?? []} />
-                      ) : (
-                        <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
-                      )}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                          {/* Anzeige-Mitnahme: der Beleg stammt aus einem früheren
-                              Pack und wird nur weiter angezeigt, damit du ihn nach
-                              der Klärung abschließen kannst. Gezählt wird er dort. */}
-                          {carriedOverIds.has(b.id) ? (
-                            <Chip
-                              size="small"
-                              variant="outlined"
-                              label={`aus Pack ${b.packOrdinal ?? 1}`}
-                            />
-                          ) : null}
-                        </Stack>
-                        <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                        {geteilt ? (
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ mt: 0.5, flexWrap: 'wrap' }}
-                          >
-                            <Chip
-                              size="small"
-                              icon={<GroupsIcon />}
-                              label={geteilt.label}
-                              sx={GETEILT_CHIP_SX}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              {geteilt.geprueft}/{geteilt.gesamt} geprüft
-                            </Typography>
-                          </Stack>
-                        ) : null}
-                        {parked ? (
-                          <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                            Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen
-                            zeigt die Meldungen und TL-Hinweise.
-                          </Typography>
-                        ) : null}
-                        {resolved ? (
-                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                            Geklärt – zur Weiterbearbeitung freigegeben.
-                          </Typography>
-                        ) : null}
-                      </Box>
-                      {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
-                      {b.goodsType ? (
-                        <Chip size="small" variant="outlined" label={b.goodsType} />
-                      ) : null}
-                      <Chip size="small" color={chip.color} label={chip.label} />
-                    </Paper>
-                  );
-                })}
-              </Stack>
-
-              {cases.length === 0 ? (
-                <Alert severity="info">
-                  Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege
-                  hier.
-                </Alert>
-              ) : null}
             </>
           )}
         </>
       )}
+
+      {/* Sichtbar, solange es etwas zu bearbeiten gibt: eigenes offenes Pack ODER
+          ein geteilter Beleg — auch ohne eigenes Bündel und nach dem eigenen Pack. */}
+      {bearbeitenSichtbar ? (
+        <>
+          {/* 2 · Bearbeiten — the worker freely picks which fetched Beleg first
+              (Punkt 4: no forced sequence; only not-yet-fetched Belege stay greyed).
+              Fertige Belege sind ausgeblendet; der Zähler nimmt sie weiter mit.
+              GANZ OBEN stehen die Belege, an denen ich als HELFER beteiligt bin
+              (Zusammenarbeit §3.5, Kundenwunsch 01.09.2026): geteilte Arbeit ist das
+              Dringlichste. Sie liegen im Karren des Inhabers — nichts zu holen, nie
+              ausgegraut, ohne Holen-Gate; fertige Belege liefert der Server gar nicht
+              erst mit. Der Abschnitt erscheint auch ohne eigenes Bündel. */}
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, mt: 2 }}>
+            2 · Bearbeiten
+            {packCases.length > 0 ? (
+              /* Zähler des AKTIVEN Packs — mitgenommene Belege früherer Packs
+                 zählen dort weiter, nicht hier. */
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                {packCases.filter((c) => closedIds.has(c.id)).length}/{packCases.length} erledigt
+              </Typography>
+            ) : null}
+          </Typography>
+          {!collectComplete && cases.length > 0 ? (
+            <Alert severity="info" sx={{ mb: 1 }}>
+              Ausgegraute Belege erst holen — geholte Belege kannst du in beliebiger Reihenfolge
+              starten.
+            </Alert>
+          ) : null}
+
+          <Stack spacing={1}>
+            {sharedCases.map((b) => {
+              const chip = statusChipFor(b.status);
+              const geteilt = geteiltInfo(b, session?.employeeNo);
+              const KategorieIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+              return (
+                <Paper
+                  key={b.id}
+                  variant="outlined"
+                  onClick={() => navigate(caseProcessPath(b.id))}
+                  sx={{
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    borderLeft: `4px solid ${ltColors.shared}`,
+                  }}
+                >
+                  {(b.issues?.length ?? 0) > 0 ? (
+                    <IssueBadge issues={b.issues ?? []} />
+                  ) : (
+                    <KategorieIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mt: 0.5, flexWrap: 'wrap' }}
+                    >
+                      <Chip
+                        size="small"
+                        icon={<GroupsIcon />}
+                        label={
+                          geteilt?.label ??
+                          (b.assignedEmployeeName
+                            ? `Geteilt mit ${b.assignedEmployeeName}`
+                            : 'Geteilt')
+                        }
+                        sx={GETEILT_CHIP_SX}
+                      />
+                      {geteilt ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Box>
+                  <Chip size="small" color={chip.color} label={chip.label} />
+                </Paper>
+              );
+            })}
+            {visibleCases.map((b) => {
+              const chip = statusChipFor(b.status);
+              const parked = isCaseParked(b.status);
+              const resolved = b.status === 'problem_resolved';
+              // Punkt 10: rot geparkter Problemfall (gesperrt) / grün geklärt (freigegeben).
+              const tint = parked
+                ? { bgcolor: 'rgba(211, 47, 47, 0.08)', borderColor: 'error.light' }
+                : resolved
+                  ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderColor: 'success.light' }
+                  : {};
+              // Antippbar, sobald die Ware geholt ist — geparkte Problemfälle
+              // öffnen als Nur-Ansicht (TL-Hinweise je Position einsehbar).
+              const startable = isBelegStartable(b.id);
+              const CategoryIcon = ICON[goodsCategoryFor(b.storageLocationKind)];
+              // Goldene Kennzeichnung des geteilten Belegs (Zusammenarbeit).
+              const geteilt = geteiltInfo(b, session?.employeeNo);
+              return (
+                <Paper
+                  key={b.id}
+                  variant="outlined"
+                  onClick={() => openBeleg(b.id)}
+                  sx={{
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: startable ? 'pointer' : 'not-allowed',
+                    opacity: isBelegStartable(b.id) ? 1 : 0.5,
+                    ...tint,
+                    // Goldene Linie des geteilten Belegs — nie Farbe allein:
+                    // dazu kommen GroupsIcon + Text im Karteninhalt.
+                    ...(geteilt ? { borderLeft: `4px solid ${ltColors.shared}` } : {}),
+                  }}
+                >
+                  {(b.issues?.length ?? 0) > 0 ? (
+                    /* Zähler-Badge statt Symbol (04.08.2026): „nx" = Anzahl der
+                           Meldungen; Tap/Hover öffnet das Meldungs-Popover. */
+                    <IssueBadge issues={b.issues ?? []} />
+                  ) : (
+                    <CategoryIcon sx={{ fontSize: 26, color: 'text.secondary' }} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {/* Punkt 2: Anzeige-Reihenfolge WE-Beleg, Filiale, Shopbereich, Etiketten. */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                      {/* Anzeige-Mitnahme: der Beleg stammt aus einem früheren
+                              Pack und wird nur weiter angezeigt, damit du ihn nach
+                              der Klärung abschließen kannst. Gezählt wird er dort. */}
+                      {carriedOverIds.has(b.id) ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`aus Pack ${b.packOrdinal ?? 1}`}
+                        />
+                      ) : null}
+                    </Stack>
+                    <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                    {geteilt ? (
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        sx={{ mt: 0.5, flexWrap: 'wrap' }}
+                      >
+                        <Chip
+                          size="small"
+                          icon={<GroupsIcon />}
+                          label={geteilt.label}
+                          sx={GETEILT_CHIP_SX}
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                          {geteilt.geprueft}/{geteilt.gesamt} geprüft
+                        </Typography>
+                      </Stack>
+                    ) : null}
+                    {parked ? (
+                      <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                        Wartet auf Klärung durch die Teamleitung – nicht bearbeitbar. Antippen zeigt
+                        die Meldungen und TL-Hinweise.
+                      </Typography>
+                    ) : null}
+                    {resolved ? (
+                      <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                        Geklärt – zur Weiterbearbeitung freigegeben.
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+                  {b.goodsType ? (
+                    <Chip size="small" variant="outlined" label={b.goodsType} />
+                  ) : null}
+                  <Chip size="small" color={chip.color} label={chip.label} />
+                </Paper>
+              );
+            })}
+          </Stack>
+
+          {bundle && cases.length === 0 ? (
+            <Alert severity="info">
+              Aktuell keine Zuteilung. Sobald die Teamleitung zuteilt, erscheinen deine Belege hier.
+            </Alert>
+          ) : null}
+        </>
+      ) : null}
 
       {/* Pull-Prinzip: „Nächstes Pack anfordern". Ob das geht, entscheidet das
           Backend (`pack-window.ts`) — ist im laufenden Pack noch eigene Arbeit

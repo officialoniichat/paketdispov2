@@ -157,7 +157,14 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
 
     // All six pool Belege ended up on the board's assigned rows.
     const placed = assigned.flatMap((r) => r.cases.map((c) => c.weBelegNo)).sort();
-    expect(placed).toEqual(['WE-BOARD-0', 'WE-BOARD-100', 'WE-BOARD-200', 'WE-BOARD-300', 'WE-BOARD-400', 'WE-BOARD-500']);
+    expect(placed).toEqual([
+      'WE-BOARD-0',
+      'WE-BOARD-100',
+      'WE-BOARD-200',
+      'WE-BOARD-300',
+      'WE-BOARD-400',
+      'WE-BOARD-500',
+    ]);
 
     // freeCapacityMinutes = Σ capacity − Σ planned (across ALL rows, idle included)
     const totalCap = board.rows.reduce((s, r) => s + r.capacityMinutes, 0);
@@ -187,5 +194,47 @@ describe('board (§10.3 GET /api/teamlead/board)', () => {
     const board = await teamleadSvc.board(DATE);
     const names = board.rows.map((r) => r.employeeName);
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+  });
+
+  /**
+   * Zusammenarbeit §4: ein geteilter Beleg liegt im Bündel des INHABERS. Ohne
+   * eigene Liste käme er in der Zeile des Helfers nirgends vor — die Teamleitung
+   * sähe nicht, woran er gerade wirklich arbeitet. Er darf dort aber weder in
+   * `cases` noch in die Auslastung wandern, sonst zählt die Matrix die Arbeit
+   * doppelt.
+   */
+  it('zeigt den geteilten Beleg auch beim Helfer — als Mithilfe, ohne Doppelzählung', async () => {
+    const vorher = await teamleadSvc.board(DATE);
+    const inhaber = vorher.rows.find((r) => r.bundleId !== null)!;
+    const geteilt = inhaber.cases[0]!;
+    const helfer = await prisma.user.findUniqueOrThrow({
+      where: { employeeNo: IDLE_EMPLOYEE_NO },
+    });
+    await prisma.caseParticipant.create({
+      data: {
+        caseId: geteilt.id,
+        employeeId: helfer.id,
+        role: 'helfer',
+        status: 'angenommen',
+        invitedByLabel: 'Teamleitung',
+      },
+    });
+
+    const board = await teamleadSvc.board(DATE);
+
+    const helferRow = board.rows.find((r) => r.employeeNo === IDLE_EMPLOYEE_NO)!;
+    expect(helferRow.mithilfe.map((c) => c.weBelegNo)).toEqual([geteilt.weBelegNo]);
+    expect(helferRow.mithilfe[0]!.mithilfeFuer).toBe(inhaber.employeeName);
+    // Die Arbeit bleibt beim Inhaber: kein eigener Beleg, keine Teile, kein Pack.
+    expect(helferRow.cases).toEqual([]);
+    expect(helferRow.plannedTeile).toBe(0);
+    expect(helferRow.plannedEffortMinutes).toBe(0);
+    expect(helferRow.packs).toEqual([]);
+
+    const inhaberRow = board.rows.find((r) => r.employeeNo === inhaber.employeeNo)!;
+    expect(inhaberRow.cases.map((c) => c.weBelegNo)).toContain(geteilt.weBelegNo);
+    expect(inhaberRow.cases.find((c) => c.id === geteilt.id)!.mithilfeFuer).toBeNull();
+    expect(inhaberRow.mithilfe).toEqual([]);
+    expect(inhaberRow.plannedTeile).toBe(inhaberRow.cases.reduce((s, c) => s + c.totalQuantity, 0));
   });
 });

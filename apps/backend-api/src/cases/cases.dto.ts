@@ -910,6 +910,16 @@ export class BoardCaseDto {
       'Das Board rendert die Karte golden und zeigt „mit <Name>" bzw. „n×" (Konzept §4).',
   })
   sharedWith!: BoardParticipantDto[];
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'MITHILFE-Doppel (Konzept §4): gesetzt, wenn der Beleg dieser Zeile NICHT gehört, sondern ' +
+      'im Bündel eines Kollegen liegt und der Mitarbeitende dort nur mithilft — Wert = Name des ' +
+      'Inhabers. Auslastung, Teile und Packs der Zeile zählen ihn nicht mit, und verschoben ' +
+      'wird er nur beim Inhaber. Sonst null.',
+  })
+  mithilfeFuer!: string | null;
 }
 
 /**
@@ -986,6 +996,15 @@ export class BoardRowDto {
   })
   absence!: 'krank' | 'urlaub' | null;
   @ApiProperty({ type: [BoardCaseDto] }) cases!: BoardCaseDto[];
+  @ApiProperty({
+    type: [BoardCaseDto],
+    description:
+      'MITHILFE (Zusammenarbeit §4): Belege aus FREMDEN Bündeln, an denen diese Person als ' +
+      'Helfer beteiligt ist. Bewusst getrennt von `cases`: Auslastung, Teile, Packs und die ' +
+      'Abhol-Reihenfolge gehören dem Inhaber — hier steht nur, woran der Helfer mitarbeitet. ' +
+      '`mithilfeFuer` trägt den Namen des Inhabers.',
+  })
+  mithilfe!: BoardCaseDto[];
   @ApiProperty({ type: [BoardRouteStopDto] }) routeStops!: BoardRouteStopDto[];
   @ApiProperty({
     type: [BoardPackDto],

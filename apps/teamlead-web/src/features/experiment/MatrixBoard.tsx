@@ -259,6 +259,10 @@ function MatrixRow({
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
   const packs = derivePacks(row.cases, row.packs);
+  // Mithilfe (§4): Belege aus fremden Bündeln, an denen diese Person mitarbeitet.
+  // Sie gehören in KEIN Pack dieser Zeile — sonst würde die Matrix fremde Arbeit
+  // als eigene Planung ausweisen. Eigener Kasten am Ende der Zeile.
+  const mithilfe = row.mithilfe ?? [];
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
@@ -550,6 +554,12 @@ function MatrixRow({
           </PackBox>
         </Fragment>
       ))}
+      {mithilfe.length > 0 && (
+        <>
+          <Divider orientation="vertical" flexItem />
+          <MithilfeBox cases={mithilfe} stripFor={stripFor} />
+        </>
+      )}
       {absent === null && packs.length > 0 && (
         <>
           <Divider orientation="vertical" flexItem />
@@ -668,6 +678,43 @@ function PackBox({
   );
 }
 
+/**
+ * „Mithilfe": Belege aus FREMDEN Bündeln, an denen dieser Mitarbeiter als Helfer
+ * beteiligt ist (Zusammenarbeit §4). Bewusst ein eigener, goldener Kasten neben
+ * den Packs statt eines Packs: die Planung — Auslastung, Teile, Reihenfolge —
+ * gehört dem Inhaber. Deshalb auch kein Drop-Ziel; hierher zuweisen geht nicht.
+ */
+function MithilfeBox({
+  cases,
+  stripFor,
+}: {
+  cases: readonly BoardCase[];
+  stripFor: (c: BoardCase) => JSX.Element;
+}): JSX.Element {
+  return (
+    <Box
+      data-testid="matrix-mithilfe"
+      sx={{
+        width: 200,
+        flexShrink: 0,
+        border: '1px solid',
+        borderColor: ltColors.shared,
+        borderRadius: 1,
+        bgcolor: alpha(ltColors.shared, 0.06),
+        p: 0.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.375,
+      }}
+    >
+      <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
+        Mithilfe · {cases.length} {cases.length === 1 ? 'Beleg' : 'Belege'}
+      </Typography>
+      {cases.map(stripFor)}
+    </Box>
+  );
+}
+
 /** Neuer-Slot-Dropzone am Zeilenende: nimmt ready-Ablage-Belege entgegen. */
 function NeuerSlot({ aktiv, onDropZiel }: { aktiv: boolean; onDropZiel: () => void }): JSX.Element {
   const [over, setOver] = useState(false);
@@ -742,14 +789,21 @@ function CaseStrip({
   const color = style?.color ?? groupColor;
   // Das Bündel des ITEMS, nicht der Zeile — bei Multi-Bündel-Zeilen verschieden.
   const itemBundleId = c.bundleId ?? row.bundleId;
-  const draggable = c.status === 'assigned' && itemBundleId != null;
-  // Warum gesperrt — laufende Arbeit bzw. Fertiges; ohne Bündel gibt es nichts
-  // zu verschieben. Wandert in die aria-Beschriftung des Schlosses.
-  const gesperrtGrund = LAUFEND_STATUSES.includes(c.status)
-    ? `in Arbeit: ${stripStyle(c.status)?.statusLabel ?? c.status}`
-    : FERTIG_STATUSES.includes(c.status)
-      ? `abgeschlossen: ${stripStyle(c.status)?.statusLabel ?? c.status}`
-      : 'kein Bündel';
+  // Mithilfe (§4): der Beleg liegt im Bündel eines Kollegen und steht hier nur,
+  // damit die Teamleitung sieht, woran diese Person mitarbeitet. Reine Anzeige —
+  // verschoben und einsortiert wird ausschließlich in der Zeile des Inhabers.
+  const mithilfeFuer = c.mithilfeFuer ?? null;
+  const draggable = mithilfeFuer === null && c.status === 'assigned' && itemBundleId != null;
+  // Warum gesperrt — Mithilfe, laufende Arbeit bzw. Fertiges; ohne Bündel gibt es
+  // nichts zu verschieben. Wandert in die aria-Beschriftung des Schlosses.
+  const gesperrtGrund =
+    mithilfeFuer !== null
+      ? `Mithilfe bei ${mithilfeFuer}`
+      : LAUFEND_STATUSES.includes(c.status)
+        ? `in Arbeit: ${stripStyle(c.status)?.statusLabel ?? c.status}`
+        : FERTIG_STATUSES.includes(c.status)
+          ? `abgeschlossen: ${stripStyle(c.status)?.statusLabel ?? c.status}`
+          : 'kein Bündel';
   const group = c.deliveryGroup && c.deliveryGroup.presentSize >= 2 ? c.deliveryGroup : null;
   // Geteilter Beleg (§4): goldener Strich; im Strich ist kein Platz für ein
   // Personen-Symbol, deshalb führt hier NUR der Rechtsklick ins Entfernen-Menü.
@@ -759,6 +813,7 @@ function CaseStrip({
   // Einsortieren aus der Ablage: Geplant positionsgenau, Laufend nur mit Frage.
   const [insertPos, setInsertPos] = useState<'davor' | 'danach' | null>(null);
   const sortierbar =
+    mithilfeFuer === null &&
     (row.absence ?? null) === null &&
     ablageAssignbar(dragging) &&
     itemBundleId != null &&
@@ -896,8 +951,9 @@ function CaseStrip({
                 }}
               />
             )}
-            {istGeteilt && (
+            {istGeteilt && mithilfeFuer === null && (
               // Zwischen Belegnummer und „<n> Teile": nur die Anzahl, Namen im Tooltip.
+              // In der Mithilfe-Spalte weggelassen — dort steht unten der Inhaber.
               <Box sx={{ flexShrink: 0 }}>
                 <GeteiltHinweis sharedWith={shared} dense />
               </Box>
@@ -923,6 +979,22 @@ function CaseStrip({
               }}
             >
               {lieferungSatz(group)}
+            </Typography>
+          )}
+          {mithilfeFuer !== null && (
+            // Ohne Namen wäre in der Mithilfe-Spalte nicht ablesbar, in wessen
+            // Bündel der Beleg liegt — bei mehreren Inhabern erst recht nicht.
+            <Typography
+              sx={{
+                fontSize: '0.56rem',
+                fontWeight: 700,
+                color: ltColors.shared,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              Mithilfe bei {mithilfeFuer}
             </Typography>
           )}
         </Box>
@@ -1079,6 +1151,7 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
   const laufend = row.cases.filter((c) => LAUFEND_STATUSES.includes(c.status));
   const geplant = row.cases.filter((c) => c.status === 'assigned');
   const fertig = row.cases.filter((c) => FERTIG_STATUSES.includes(c.status));
+  const mithilfe = row.mithilfe ?? [];
   return (
     <>
       <IconButton
@@ -1121,6 +1194,10 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
           />
           {fertig.length > 0 && (
             <RowInfoSection title={`Fertig (${fertig.length})`} cases={fertig} empty="" />
+          )}
+          {mithilfe.length > 0 && (
+            // Getrennt von Laufend/Geplant/Fertig: fremde Belege, kein eigenes Pack.
+            <RowInfoSection title={`Mithilfe (${mithilfe.length})`} cases={mithilfe} empty="" />
           )}
         </Stack>
       </Popover>

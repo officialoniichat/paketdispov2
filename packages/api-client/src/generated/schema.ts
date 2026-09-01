@@ -1963,6 +1963,8 @@ export interface components {
             deliveryGroup?: components["schemas"]["DeliveryGroupRefDto"] | null;
             /** @description Geteilter Beleg: aktive Helfer (angenommen|teil_erledigt) — leer, wenn nicht geteilt. Das Board rendert die Karte golden und zeigt „mit <Name>" bzw. „n×" (Konzept §4). */
             sharedWith: components["schemas"]["BoardParticipantDto"][];
+            /** @description MITHILFE-Doppel (Konzept §4): gesetzt, wenn der Beleg dieser Zeile NICHT gehört, sondern im Bündel eines Kollegen liegt und der Mitarbeitende dort nur mithilft — Wert = Name des Inhabers. Auslastung, Teile und Packs der Zeile zählen ihn nicht mit, und verschoben wird er nur beim Inhaber. Sonst null. */
+            mithilfeFuer: string | null;
         };
         BoardRouteStopDto: {
             id: string;
@@ -2004,6 +2006,8 @@ export interface components {
              */
             absence: "krank" | "urlaub" | null;
             cases: components["schemas"]["BoardCaseDto"][];
+            /** @description MITHILFE (Zusammenarbeit §4): Belege aus FREMDEN Bündeln, an denen diese Person als Helfer beteiligt ist. Bewusst getrennt von `cases`: Auslastung, Teile, Packs und die Abhol-Reihenfolge gehören dem Inhaber — hier steht nur, woran der Helfer mitarbeitet. `mithilfeFuer` trägt den Namen des Inhabers. */
+            mithilfe: components["schemas"]["BoardCaseDto"][];
             routeStops: components["schemas"]["BoardRouteStopDto"][];
             /** @description Engine-Packs (Starter- + Folge-Packs) des Tages in chronologischer Reihenfolge; manuell zugewiesene Belege gehören keinem Pack an. */
             packs: components["schemas"]["BoardPackDto"][];

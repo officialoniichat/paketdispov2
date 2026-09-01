@@ -285,6 +285,9 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
     .map((id) => row.cases.find((c) => c.caseId === id))
     .filter((c): c is BoardRow['cases'][number] => c !== undefined);
   const dirty = draft.join() !== row.cases.map((c) => c.caseId).join();
+  // Mithilfe (§4): fremde Belege, an denen der MA mitarbeitet — bewusst NICHT im
+  // Bündel-Entwurf, sonst würde die Reihenfolge fremder Arbeit mitgespeichert.
+  const mithilfe = row.mithilfe ?? [];
   const geteiltBeleg = geteiltMenu
     ? (row.cases.find((c) => c.caseId === geteiltMenu.caseId) ?? null)
     : null;
@@ -480,6 +483,44 @@ function EmployeeRow({ row, requestReason, requestMove }: EmployeeRowProps): JSX
               </Stack>
             );
           })}
+
+          {/* Mithilfe (Zusammenarbeit §4): Belege aus FREMDEN Bündeln, an denen
+              diese Person als Helfer beteiligt ist. Sie stehen unter dem eigenen
+              Bündel und tragen keine Bündel-Aktionen (Reihenfolge, Entziehen,
+              Verschieben) — die gehören zur Zeile des Inhabers. */}
+          {mithilfe.length > 0 && (
+            <>
+              <Typography variant="caption" sx={{ fontWeight: 700, pt: 1 }}>
+                Mithilfe ({mithilfe.length})
+              </Typography>
+              {mithilfe.map((c) => (
+                <Stack
+                  key={`mithilfe-${c.caseId}`}
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{
+                    border: '1px solid',
+                    ...GETEILT_KARTE_SX,
+                    borderRadius: 1,
+                    pl: 1,
+                    py: 0.25,
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 600 }}>{c.weBelegNo}</Typography>
+                  <CaseStatusChip status={c.status} size="small" />
+                  <LieferungChip group={c.deliveryGroup} />
+                  <Typography variant="body2" sx={{ color: ltColors.shared, fontWeight: 600 }}>
+                    Mithilfe bei {c.mithilfeFuer}
+                  </Typography>
+                  <Typography variant="body2">{c.totalQuantity} Teile</Typography>
+                  <Button size="small" onClick={() => navigate(`/belege/${c.caseId}`)}>
+                    Details
+                  </Button>
+                </Stack>
+              ))}
+            </>
+          )}
 
           <GeteiltEntfernenMenu
             position={geteiltMenu?.pos ?? null}

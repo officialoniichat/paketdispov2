@@ -36,8 +36,9 @@ Im geteilten Beleg gibt es zwei Rollen:
 - **Inhaber** – die Person, in deren Bündel der Beleg liegt. Sie holt die Ware und hakt den
   Lagerplatz-Stop ab (Kapitel A2).
 - **Helfer** – alle Eingeladenen, die angenommen haben. Der Beleg liegt **nicht** in ihrem Bündel;
-  sie finden ihn **ganz oben** auf dem Startbildschirm im eigenen Abschnitt
-  **`'Geteilt mit dir'`** – noch vor `'1 · Ware holen'`.
+  sie finden ihn auf dem Startbildschirm unter **`'2 · Bearbeiten'`**, dort **ganz oben** vor den
+  eigenen Belegen, golden eingefasst und mit `'Geteilt mit <Name des Inhabers>'`. Unter
+  `'1 · Ware holen'` steht er nicht – die Ware holt der Inhaber.
 
 ## Kolleg:innen einladen (`'Beleg teilen'`)
 
@@ -70,9 +71,9 @@ Die Benachrichtigung **bleibt stehen, bis du reagierst** – nichts blinkt kurz 
 Liegen mehrere Einladungen vor, siehst du zuerst die älteste; die nächste folgt, sobald du geantwortet
 hast.
 
-- **Haken – annehmen:** Der Beleg erscheint bei dir **ganz oben** auf dem Startbildschirm im
-  Abschnitt `'Geteilt mit dir'`. Du kannst ihn sofort öffnen. Die Ware holt der Inhaber – du musst
-  nichts abholen. Ist der Beleg fertig, verschwindet der Abschnitt wieder.
+- **Haken – annehmen:** Der Beleg erscheint bei dir unter `'2 · Bearbeiten'` **ganz oben**, vor
+  deinen eigenen Belegen. Du kannst ihn sofort öffnen – ausgegraut ist er nie. Die Ware holt der
+  Inhaber, du musst nichts abholen. Ist der Beleg fertig, verschwindet er wieder.
 - **Kreuz – ablehnen:** Du wirst nicht weiter behelligt. Die Einladung bleibt nur in deinem Verlauf
   unter `'Nachrichten'` stehen. Der Inhaber kann dich später erneut einladen.
 
@@ -167,12 +168,12 @@ des Belegs.
 ## Wenn die Teamleitung eingreift
 
 - Die Teamleitung kann einzelne **Helfer aus dem geteilten Beleg entfernen** (im Cockpit
-  `'Aus geteiltem Beleg entfernen'`, mit Grund). Der Beleg verschwindet dann aus deinem Abschnitt
-  `'Geteilt mit dir'`; im Verlauf unter `'Nachrichten'` steht die Einladung als **entfernt**. Deine
+  `'Aus geteiltem Beleg entfernen'`, mit Grund). Der Beleg verschwindet dann aus deinem
+  `'2 · Bearbeiten'`; im Verlauf unter `'Nachrichten'` steht die Einladung als **entfernt**. Deine
   bereits geprüften Positionen bleiben geprüft.
 - Die Teamleitung kann einen Beleg von Anfang an mehreren Personen **gemeinsam zuweisen**. Dann bist
   du ohne Einladung beteiligt: Die zuerst gewählte Person ist Inhaber (der Beleg liegt in ihrem
-  Bündel), alle anderen finden ihn unter `'Geteilt mit dir'`.
+  Bündel), alle anderen finden ihn oben unter `'2 · Bearbeiten'`.
 - Wird der Beleg dem Inhaber **entzogen**, zu jemand anderem **verschoben**, **storniert** oder
   **geparkt** – auch durch `'Rest parken'` (Kapitel A2) –, endet die Zusammenarbeit für alle. Was
   geprüft war, bleibt geprüft.
@@ -184,7 +185,7 @@ flowchart TD
     A["Inhaber tippt das Teilen-Symbol<br/>am Beleg unter '1 · Ware holen'"] --> B["'Beleg teilen': Kolleg:innen anhaken,<br/>'Nachricht (optional)', 'Einladen'"]
     B --> C["Eingeladene: Zahl am Profilkreis +<br/>Benachrichtigung mit Haken / Kreuz"]
     C -- Kreuz --> D["Abgelehnt: keine weitere Anzeige,<br/>bleibt im Verlauf 'Nachrichten'"]
-    C -- Haken --> E["Beleg unter 'Geteilt mit dir' (Helfer),<br/>golden beim Inhaber"]
+    C -- Haken --> E["Beleg oben unter '2 · Bearbeiten' (Helfer),<br/>golden beim Inhaber"]
     E --> F["Alle sehen alle Positionen,<br/>'Position geprüft' mit Initialen,<br/>'Team-Ansicht' zeigt den Stand"]
     F --> G{Eigene Positionen fertig?}
     G -- "ja, andere noch offen" --> H["'Teilbeleg erledigt'<br/>grau bei den anderen, weiterhelfen erlaubt"]
@@ -199,14 +200,15 @@ flowchart TD
 - Beim Teilabschluss liegt der Beleg wie gewohnt zur Klärung bei der Teamleitung (Kapitel A5); die
   Beteiligung bleibt bestehen, nach der Klärung arbeitet ihr gemeinsam weiter.
 - Die Teamleitung sieht im Cockpit an der goldenen Karte, dass an dem Beleg zusammengearbeitet wird –
-  und auch später noch, dass zusammengearbeitet **wurde**.
+  und auch später noch, dass zusammengearbeitet **wurde**. In der Mitarbeiter-Matrix taucht der Beleg
+  zusätzlich in **deiner** Spalte auf, im goldenen Kasten `'Mithilfe'` mit `'Mithilfe bei <Inhaber>'`.
 - Deine Leistung wird beim Tagesabschluss anteilig nach deinen geprüften Positionen gezählt.
 
 ## Häufige Fehler / FAQ
 
 - **Ich sehe kein Teilen-Symbol** – es gibt es nur an Belegen unter `'1 · Ware holen'`, also in
-  deinem eigenen Bündel, und nicht bei rot geparkten Problemfällen. Belege unter `'Geteilt mit dir'`
-  gehören dem Inhaber – bitte ihn, weitere Kolleg:innen einzuladen.
+  deinem eigenen Bündel, und nicht bei rot geparkten Problemfällen. Geteilte Belege oben in
+  `'2 · Bearbeiten'` gehören dem Inhaber – bitte ihn, weitere Kolleg:innen einzuladen.
 - **`'Beleg erledigt'` ist grau, obwohl ich fertig bin** – bei einem geteilten Beleg müssen **alle**
   Positionen geprüft sein, auch die der anderen. Melde deinen Anteil mit `'Teilbeleg erledigt'` und
   hilf weiter oder hol dir Neues.
@@ -216,7 +218,7 @@ flowchart TD
 - **Eine Position ist plötzlich wieder ungeprüft** – ein anderer Beteiligter hat den Haken
   zurückgenommen (ein Tipp auf einen gesetzten Haken nimmt ihn zurück – für alle). Sprecht euch über
   die `'Team-Ansicht'` ab, wer welche Positionen übernimmt.
-- **Der Beleg ist aus `'Geteilt mit dir'` verschwunden** – die Teamleitung hat dich entfernt oder die
+- **Der geteilte Beleg ist aus `'2 · Bearbeiten'` verschwunden** – die Teamleitung hat dich entfernt oder die
   Zusammenarbeit beendet (Beleg entzogen, verschoben oder geparkt). Den Stand siehst du unter
   `'Nachrichten'`.
 - **Die Benachrichtigung ist weg, obwohl ich nichts getippt habe** – die Zusammenarbeit wurde

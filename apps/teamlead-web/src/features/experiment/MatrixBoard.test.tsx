@@ -99,9 +99,12 @@ function row(
 }
 
 const BOARD: BoardRow[] = [
-  row('emp1', 'Anna Berger', [bc('k1', 'in_progress'), bc('k2', 'assigned', GROUP)], [
-    ['k1', 'k2'],
-  ]),
+  row(
+    'emp1',
+    'Anna Berger',
+    [bc('k1', 'in_progress'), bc('k2', 'assigned', GROUP)],
+    [['k1', 'k2']],
+  ),
   row('emp2', 'Bernd Voss', []),
 ];
 
@@ -133,10 +136,7 @@ const ZWEI_PACKS: BoardRow[] = [
     'emp1',
     'Anna Berger',
     [bc('k1', 'in_progress'), bc('k2', 'assigned'), bc('k3', 'assigned')],
-    [
-      ['k1', 'k2'],
-      ['k3'],
-    ],
+    [['k1', 'k2'], ['k3']],
   ),
   row('emp2', 'Bernd Voss', [bc('k7', 'assigned')], [['k7']]),
 ];
@@ -194,6 +194,33 @@ describe('MatrixBoard', () => {
     expect(screen.getByText('Geplant (1)')).toBeTruthy();
     expect(screen.getByText('WE-k1')).toBeTruthy();
     expect(screen.getByText(/Keine Belege — zum Zuweisen hierher ziehen/)).toBeTruthy();
+  });
+
+  it('der Helfer sieht den geteilten Beleg als Mithilfe — mit Inhaber und ohne Griff', () => {
+    // Zusammenarbeit §4: der Beleg liegt im Bündel von Anna; Bernd hilft nur mit.
+    // In seiner Spalte darf er deshalb weder ein Pack bilden noch ziehbar sein.
+    const helferRow: BoardRow = {
+      ...row('emp2', 'Bernd Voss', []),
+      mithilfe: [
+        {
+          ...bc('k9', 'assigned'),
+          bundleId: 'b-emp1',
+          mithilfeFuer: 'Anna Berger',
+          sharedWith: [{ employeeNo: 'ma-2', displayName: 'Bernd Voss', status: 'angenommen' }],
+        },
+      ],
+    };
+    renderMatrix(null, [BOARD[0]!, helferRow]);
+
+    expect(screen.getByText('Mithilfe · 1 Beleg')).toBeTruthy();
+    expect(screen.getByText('Mithilfe bei Anna Berger')).toBeTruthy();
+    // Kein Pack, keine Teile-Buchung beim Helfer.
+    expect(screen.queryByText(/Pack 1 · 1 Beleg/)).toBeNull();
+    // Gesperrt statt ziehbar — verschoben wird nur in Annas Zeile.
+    expect(screen.queryByLabelText('WE-k9 aus Bündel ziehen')).toBeNull();
+    expect(
+      screen.getByLabelText('WE-k9 ist gesperrt (Mithilfe bei Anna Berger) — nicht verschiebbar'),
+    ).toBeTruthy();
   });
 
   it('packSections teilt wie die Board-Karte auf — Fertig nur bei Bedarf', () => {

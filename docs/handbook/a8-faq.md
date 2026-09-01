@@ -53,8 +53,8 @@ hast du gerade nichts zugeteilt. Warte auf die Zuteilung oder frage die Teamleit
 
 Am Profilkreis oben rechts steht eine Zahl und oben eine Benachrichtigung „*Name* lädt dich ein,
 WE *Nummer* gemeinsam zu bearbeiten“ mit grünem Haken (annehmen) und rotem Kreuz (ablehnen). Nach dem
-Haken findest du den Beleg unter `'2 · Bearbeiten'` im Abschnitt `'Geteilt mit dir'` – die Ware holt
-der Inhaber. Alles Weitere, auch `'Team-Ansicht'` und `'Teilbeleg erledigt'`, steht in Kapitel A7.
+Haken findest du den Beleg unter `'2 · Bearbeiten'` ganz oben, vor deinen eigenen Belegen – die Ware
+holt der Inhaber. Alles Weitere, auch `'Team-Ansicht'` und `'Teilbeleg erledigt'`, steht in Kapitel A7.
 Den Verlauf deiner Einladungen findest du im Profilkreis unter `'Nachrichten'`.
 
 ## Wie melde ich mich ab?

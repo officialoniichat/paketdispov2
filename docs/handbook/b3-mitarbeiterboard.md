@@ -147,9 +147,21 @@ Belegstrich der Matrix, jeweils mit goldenem Rahmen und Gruppen-Symbol. Zwischen
   alle Helfer mit ihrem Stand (der Inhaber ist die Person, in deren Zeile bzw. Bündel die Karte
   liegt); wer `'Teilbeleg erledigt'` gemeldet hat, steht grau.
 
-Der Beleg liegt weiterhin **nur im Bündel des Inhabers** – dort sehen Sie die Karte. Die Helfer
-haben ihn nicht im Bündel; bei ihnen zählt er nicht als Last. Fertige Belege behalten ihre
-Beteiligten, sodass auch später sichtbar bleibt, dass zusammengearbeitet wurde.
+Der Beleg liegt weiterhin **nur im Bündel des Inhabers** – dort sehen Sie die Karte. Fertige Belege
+behalten ihre Beteiligten, sodass auch später sichtbar bleibt, dass zusammengearbeitet wurde.
+
+**`'Mithilfe'` – der Beleg beim Helfer:** Damit Sie auch beim Helfer sehen, woran er gerade
+tatsächlich arbeitet, erscheint der geteilte Beleg zusätzlich in **seiner** Zeile:
+
+- In der **Matrix** (Experiment DA.M.B) hinter den Packs, in einem eigenen goldenen Kasten
+  **`'Mithilfe · <n> Beleg(e)'`**; jeder Strich nennt darunter **`'Mithilfe bei <Inhaber>'`**.
+- Im **Mitarbeiterboard** unter dem eigenen Bündel im Abschnitt **`'Mithilfe (<n>)'`**.
+- In der Zeilen-Schnellinfo (`'!'`) als eigener Abschnitt **`'Mithilfe (<n>)'`** neben
+  Laufend/Geplant/Fertig.
+
+Die Mithilfe ist reine **Anzeige**: Sie zählt beim Helfer nicht als Last (keine Teile, keine
+Auslastung, kein Pack), lässt sich in seiner Zeile nicht ziehen – der Strich trägt statt der
+Griff-Punkte ein Schloss – und wird nur beim **Inhaber** umsortiert, entzogen oder verschoben.
 
 **Helfer entfernen:** Ein Rechtsklick auf die goldene Karte (oder das kleine Personen-Symbol für
 die Touch-Bedienung) öffnet je Helfer den Eintrag **`'Aus geteiltem Beleg entfernen: <Name>'`**.
@@ -189,7 +201,7 @@ zusammengehörigen Belege möglichst **einer** Person zu (Kapitel B6).
 
 - Zuweisungen/Änderungen erscheinen sofort im Bündel der Person (Mitarbeiter-App) und in der
   Historie des Belegs.
-- Ein entfernter Helfer sieht den Beleg sofort nicht mehr unter `'Geteilt mit dir'`; Entziehen,
+- Ein entfernter Helfer sieht den Beleg sofort nicht mehr in seiner App; Entziehen,
   Verschieben, Stornieren oder Parken eines geteilten Belegs beenden die Zusammenarbeit für alle –
   geprüfte Positionen bleiben geprüft.
 

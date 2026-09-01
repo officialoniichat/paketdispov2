@@ -69,8 +69,8 @@ Ist ein geparkter Beleg mit Kolleg:innen **geteilt**, endet damit auch die Zusam
   starten.'`
 - **Geteilte Belege** (Kapitel A7) sind unter `'2 · Bearbeiten'` golden markiert
   (`'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'`). Belege, bei denen **du** als Helfer
-  eingeladen bist, stehen dort im eigenen Abschnitt `'Geteilt mit dir'` – ihre Ware holt der Inhaber,
-  sie tauchen bei dir unter `'1 · Ware holen'` nicht auf.
+  eingeladen bist, stehen dort **ganz oben** vor deinen eigenen – ihre Ware holt der Inhaber, sie
+  tauchen bei dir unter `'1 · Ware holen'` nicht auf.
 
 ## Nächstes Pack anfordern
 

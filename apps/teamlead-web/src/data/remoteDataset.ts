@@ -196,6 +196,8 @@ function mapBoardRow(row: BoardRowDto): BoardRow {
     shiftEnd: row.shiftEnd,
     absence: row.absence,
     cases: row.cases.map(toBoardCase),
+    // Mithilfe an fremden Belegen (§4) — getrennt von `cases`, siehe BoardRow.
+    mithilfe: row.mithilfe.map(toBoardCase),
     packs: row.packs.map((p) => ({ index: p.index, caseIds: p.caseIds, active: p.active })),
   };
 }
@@ -212,6 +214,7 @@ function toBoardCase(c: BoardCaseDto): BoardCase {
     // BoardCaseDto carries no storage code; the board caption hides it when empty.
     storageCode: '',
     deliveryGroup: c.deliveryGroup ?? null,
+    mithilfeFuer: c.mithilfeFuer,
     // Geteilter Beleg (§4): aktive Helfer treiben die goldene Kennzeichnung.
     sharedWith: c.sharedWith.map((p) => ({
       employeeNo: p.employeeNo,

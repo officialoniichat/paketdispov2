@@ -24,6 +24,7 @@ import {
   type AblagenPoolDto,
   type AuditEventDto,
   type BoardDto,
+  type BoardCaseDto,
   type BoardRowDto,
   type BundleQueueRefDto,
   type CapacityDto,
@@ -742,7 +743,17 @@ export class TeamleadReadService {
                     orderBy: { invitedAt: 'asc' },
                     select: {
                       status: true,
-                      employee: { select: { employeeNo: true, displayName: true } },
+                      // employeeId + Stammdaten: die Mithilfe-Doppel unten braucht sie,
+                      // um dem Helfer notfalls eine eigene Board-Zeile zu geben.
+                      employeeId: true,
+                      employee: {
+                        select: {
+                          employeeNo: true,
+                          displayName: true,
+                          bereiche: true,
+                          skillTier: true,
+                        },
+                      },
                     },
                   },
                   // Effort-driver relations so each case line shows the SAME live effort
@@ -840,6 +851,16 @@ export class TeamleadReadService {
       deliveryGroupReleased: boolean;
     }[] = [];
 
+    // Mithilfe-Doppel (Zusammenarbeit §4): ein geteilter Beleg liegt IMMER im
+    // Bündel seines Inhabers — in der Zeile des Helfers käme er sonst nirgends
+    // vor, obwohl er genau daran arbeitet. Gesammelt wird beim Falten der
+    // Bündel, eingehängt wird danach (die Helfer-Zeile existiert dann sicher).
+    const mithilfeInputs: {
+      boardCase: BoardCaseDto;
+      inhaber: string;
+      helfer: (typeof bundles)[number]['items'][number]['case']['participants'];
+    }[] = [];
+
     const rowByEmployee = new Map<string, BoardRowDto>();
     for (const s of shifts) {
       if (rowByEmployee.has(s.employeeId)) continue;
@@ -857,6 +878,7 @@ export class TeamleadReadService {
         shiftEnd: shiftWindowByEmployee.get(s.employeeId)?.end ?? null,
         absence: absenceByEmployee.get(s.employeeId) ?? null,
         cases: [],
+        mithilfe: [],
         routeStops: [],
         packs: [],
       });
@@ -881,6 +903,7 @@ export class TeamleadReadService {
           shiftEnd: shiftWindowByEmployee.get(b.employeeId)?.end ?? null,
           absence: absenceByEmployee.get(b.employeeId) ?? null,
           cases: [],
+          mithilfe: [],
           routeStops: [],
           packs: [],
         };
@@ -895,7 +918,7 @@ export class TeamleadReadService {
       for (const it of b.items) {
         const effort = resolveCaseEffort(it.case, ruleConfig.effort);
         row.plannedTeile += it.case.totalQuantity;
-        row.cases.push({
+        const boardCase: BoardCaseDto = {
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,
           bundleId: b.id,
@@ -910,7 +933,17 @@ export class TeamleadReadService {
             displayName: p.employee.displayName,
             status: p.status,
           })),
-        });
+          // Hier liegt der Beleg richtig: in der Zeile seines Inhabers.
+          mithilfeFuer: null,
+        };
+        row.cases.push(boardCase);
+        if (it.case.participants.length > 0) {
+          mithilfeInputs.push({
+            boardCase,
+            inhaber: b.employee.displayName,
+            helfer: it.case.participants,
+          });
+        }
         groupInputs.push({
           id: it.case.id,
           weBelegNo: it.case.weBelegNo,
@@ -953,6 +986,44 @@ export class TeamleadReadService {
       }
     }
 
+    // Mithilfe einhängen: derselbe Beleg erscheint zusätzlich in der Zeile jedes
+    // aktiven Helfers — aber in `row.mithilfe`, NICHT in `row.cases`. So bleiben
+    // Auslastung, Teile, Packs und Abhol-Reihenfolge unangetastet beim Inhaber,
+    // und alle Ansichten, die über die Bündel-Belege laufen (Kanban, Vorverteilung,
+    // Schnellaktionen), zählen den Beleg weiterhin genau einmal.
+    const rowByEmployeeNo = new Map<string, BoardRowDto>();
+    for (const r of rowByEmployee.values()) rowByEmployeeNo.set(r.employeeNo, r);
+    for (const { boardCase, inhaber, helfer } of mithilfeInputs) {
+      for (const p of helfer) {
+        let row = rowByEmployeeNo.get(p.employee.employeeNo);
+        if (!row) {
+          // Helfer ohne eigene Schicht/Bündel heute: eigene Zeile aufmachen,
+          // statt seine Mithilfe stillschweigend zu verschlucken.
+          row = {
+            employeeNo: p.employee.employeeNo,
+            employeeName: p.employee.displayName,
+            skillTier: p.employee.skillTier,
+            bundleId: null,
+            bundleStatus: 'idle',
+            plannedEffortMinutes: 0,
+            plannedTeile: 0,
+            capacityMinutes: capacityByEmployee.get(p.employeeId) ?? 0,
+            bereiche: p.employee.bereiche,
+            shiftStart: shiftWindowByEmployee.get(p.employeeId)?.start ?? null,
+            shiftEnd: shiftWindowByEmployee.get(p.employeeId)?.end ?? null,
+            absence: absenceByEmployee.get(p.employeeId) ?? null,
+            cases: [],
+            mithilfe: [],
+            routeStops: [],
+            packs: [],
+          };
+          rowByEmployee.set(p.employeeId, row);
+          rowByEmployeeNo.set(row.employeeNo, row);
+        }
+        row.mithilfe.push({ ...boardCase, mithilfeFuer: inhaber });
+      }
+    }
+
     // Annotate each board case with its delivery group (same Lieferschein OR a
     // consecutive weBelegNo run), using the SAME pure engine detection + the §11
     // configured grouping rule. Standalone Belege keep null / size 1.
@@ -966,7 +1037,7 @@ export class TeamleadReadService {
         a.employeeName.localeCompare(b.employeeName) || a.employeeNo.localeCompare(b.employeeNo),
     );
     for (const row of rows) {
-      for (const c of row.cases) {
+      for (const c of [...row.cases, ...row.mithilfe]) {
         const group = groupById.get(groupIdByCaseId.get(c.id) ?? '');
         if (group) c.deliveryGroup = mapDeliveryGroupRef(group, groupInputById);
       }

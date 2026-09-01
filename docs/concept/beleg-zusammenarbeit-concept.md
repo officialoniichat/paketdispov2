@@ -93,8 +93,10 @@ Wahrheit statt zwei Pfade).
    Zurück-Taste.
 4. **Ablehnen** (`abgelehnt`): keine weitere Anzeige, bleibt im Verlauf. Eine erneute Einladung
    ist möglich.
-5. **Annehmen** (`angenommen`): der Beleg erscheint beim Helfer unter „2 · Bearbeiten“ im
-   Abschnitt `'Geteilt mit dir'`; beim Inhaber ist die Karte golden mit
+5. **Annehmen** (`angenommen`): der Beleg erscheint beim Helfer unter „2 · Bearbeiten“ **ganz
+   oben**, vor den eigenen Belegen (01.09.2026) — golden eingefasst, nie ausgegraut, ohne
+   Holen-Gate, und ohne Eintrag unter „1 · Ware holen“ (die Ware holt der Inhaber). Der Abschnitt
+   erscheint auch, wenn der Helfer selbst kein Bündel hat. Beim Inhaber ist die Karte golden mit
    `'Geteilt mit Anna Berger'` bzw. `'Geteilt · 3 Personen'`.
 6. **Bearbeiten.** Alle sehen alle Positionen; `'Position geprüft'` zeigt die Initialen dessen,
    der geprüft hat. Oben rechts `'Team-Ansicht'`: Splitscreen, links die eigene Tabelle (mind.
@@ -121,6 +123,16 @@ Wahrheit statt zwei Pfade).
   Personen-Icon für Touch) öffnet `'Aus geteiltem Beleg entfernen'` je Helfer → Pflicht-Grund
   → Status `entfernt`. Der Inhaber ist nicht entfernbar (dafür gibt es Entziehen/Verschieben).
   Fertige Belege behalten ihre Beteiligten → „wurde zusammengearbeitet“ bleibt sichtbar.
+- **Mithilfe in der Zeile des Helfers (01.09.2026).** Der geteilte Beleg liegt im Bündel des
+  Inhabers — beim Helfer käme er sonst nirgends vor, obwohl er genau daran arbeitet. Er erscheint
+  deshalb zusätzlich in dessen Zeile, in einer EIGENEN Liste `BoardRowDto.mithilfe` (bewusst nicht
+  in `cases`): in der Matrix als goldener Kasten `'Mithilfe · <n> Beleg(e)'` hinter den Packs, im
+  Mitarbeiterboard als Abschnitt `'Mithilfe (<n>)'` unter dem eigenen Bündel, in der Zeilen-
+  Schnellinfo als vierter Abschnitt. Jeder Eintrag trägt `mithilfeFuer` = Name des Inhabers und
+  wird als `'Mithilfe bei <Inhaber>'` angezeigt. Reine Anzeige: keine Teile, keine Auslastung,
+  kein Pack, nicht ziehbar (Schloss statt Griff) — umsortiert, entzogen und verschoben wird nur
+  beim Inhaber. Kanban, Vorverteilung und Schnellaktionen laufen über `cases` und zählen den
+  Beleg damit weiterhin genau einmal.
 - **Beleg-Detail.** Chip `'Gemeinsam bearbeitet'` + Beteiligtenliste mit Status und
   Entfernen-Aktion; die Historie zeigt Einladung/Annahme/Ablehnung/Teil erledigt/Entfernt.
 - **Dialog „Beleg aufteilen“.** Neuer, **vorausgewählter** Modus `'Gemeinsam bearbeiten'`:

@@ -117,7 +117,7 @@ Belege bleiben im System; DocuWare ist das dauerhafte Archiv.
     mindestens **zwei** Mitarbeitende an – in der Reihenfolge Ihres Anklickens; die erste Person
     trägt `'Karren'` und wird Inhaber –, geben Sie den Pflicht-`'Grund'` an und bestätigen Sie mit
     **`'Gemeinsam zuweisen'`**. Es bleibt **ein** Beleg: Er liegt im Bündel des Inhabers, alle
-    anderen sind Helfer und sehen ihn in ihrer App unter `'Geteilt mit dir'`; im Board ist er golden
+    anderen sind Helfer und sehen ihn in ihrer App oben unter `'2 · Bearbeiten'`; im Board ist er golden
     markiert (Kapitel B3; Ablauf aus Sicht der Mitarbeitenden in Kapitel A7).
   - **`'In Teil-Belege aufteilen'`** – der bisherige Weg: Sie wählen, wie viele Teile mit welcher
     Menge entstehen und ob Sie sie gleich jemandem geben (`'Mitarbeiter wählen'`) oder die

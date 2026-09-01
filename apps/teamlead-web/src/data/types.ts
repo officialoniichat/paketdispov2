@@ -215,6 +215,12 @@ export interface BoardCase {
    * damit Test-Fixtures und optimistische Platzhalter schlank bleiben.
    */
   sharedWith?: BoardParticipant[];
+  /**
+   * MITHILFE (Zusammenarbeit §4): gesetzt, wenn dieser Beleg der Zeile nicht
+   * gehört — er liegt im Bündel des Kollegen mit diesem Namen, die Person hilft
+   * dort nur mit. Nur Einträge aus `BoardRow.mithilfe` tragen den Wert.
+   */
+  mithilfeFuer?: string | null;
 }
 
 export interface BoardRow {
@@ -245,6 +251,13 @@ export interface BoardRow {
   absence?: 'krank' | 'urlaub' | null;
   /** Cases assigned to this bundle, in pickup order (manual-intervention source). */
   cases: BoardCase[];
+  /**
+   * Belege aus FREMDEN Bündeln, an denen diese Person als Helfer beteiligt ist
+   * (Zusammenarbeit §4). Bewusst neben `cases`: Auslastung, Teile, Packs und
+   * Reihenfolge gehören dem Inhaber — hier steht nur, woran mitgearbeitet wird.
+   * Optional, damit Test-Fixtures schlank bleiben.
+   */
+  mithilfe?: BoardCase[];
   /**
    * Engine-Packs (Starter- + Folge-Packs) in Bündel-Reihenfolge, persistiert je
    * Beleg (`AssignmentItem.packIndex`) — jeder Beleg der Zeile gehört genau

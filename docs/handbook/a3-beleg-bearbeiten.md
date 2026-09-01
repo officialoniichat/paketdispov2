@@ -42,9 +42,9 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
   `'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'` und dem gemeinsamen Fortschritt
   `'<geprüft>/<gesamt> geprüft'`.
 
-Belege, bei denen **du** als Helfer mitarbeitest, stehen nicht in deiner Bündel-Liste, sondern im
-eigenen Abschnitt **`'Geteilt mit dir'`** darunter. Sie sind nie ausgegraut – die Ware holt der
-Inhaber.
+Belege, bei denen **du** als Helfer mitarbeitest, gehören nicht zu deinem Bündel, stehen unter
+**`'2 · Bearbeiten'`** aber **ganz oben** – vor deinen eigenen. Sie sind nie ausgegraut, und die
+Ware holt der Inhaber.
 
 ## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
 
