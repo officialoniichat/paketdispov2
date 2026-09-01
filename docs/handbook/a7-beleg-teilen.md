@@ -39,6 +39,11 @@ Im geteilten Beleg gibt es zwei Rollen:
   sie finden ihn auf dem Startbildschirm unter **`'2 · Bearbeiten'`**, dort **ganz oben** vor den
   eigenen Belegen, golden eingefasst und mit `'Geteilt mit <Name des Inhabers>'`.
 
+**Der geteilte Beleg steht bei ALLEN Beteiligten ganz oben** – unter `'2 · Bearbeiten'` wie unter
+`'1 · Ware holen'`, beim Inhaber genauso wie bei den Helfern. Wer Mithilfe angefordert hat, soll
+den Beleg nicht in seiner Liste suchen müssen; an ihm hängt jemand anders. Wartet der Beleg auf die
+Teamleitung, bleibt er unten – daran kann gerade niemand arbeiten.
+
 **Auch Helfer holen die Ware.** Der geteilte Beleg steht bei ihnen ebenfalls unter
 `'1 · Ware holen'`, dort **ganz oben** und golden markiert: Jede:r holt die Ware bzw. ihren/seinen
 Teil davon und hakt **den eigenen** Stop ab – der Haken der anderen zählt nicht für dich, und deiner

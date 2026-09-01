@@ -70,6 +70,42 @@ function kaseWithStatus(id: string, status: string) {
 }
 
 /**
+ * Eigener Beleg, an dem jemand mithilft (Zusammenarbeit): der Inhaber hat
+ * geteilt und ein Helfer hat angenommen. `helferStatus` steuert, ob die
+ * Mithilfe aktiv ist.
+ */
+function kaseGeteilt(id: string, status: string, helferStatus = 'angenommen') {
+  return {
+    id,
+    status,
+    collaboration: {
+      positionCount: 3,
+      confirmedPositionCount: 0,
+      participants: [
+        {
+          participantId: `${id}-inhaber`,
+          employeeNo: '100',
+          displayName: 'Hakan Yilmaz',
+          role: 'inhaber',
+          status: 'angenommen',
+          invitedAt: '2026-09-01T08:00:00.000Z',
+          confirmedPositionCount: 0,
+        },
+        {
+          participantId: `${id}-helfer`,
+          employeeNo: '101',
+          displayName: 'Anna Berger',
+          role: 'helfer',
+          status: helferStatus,
+          invitedAt: '2026-09-01T08:00:00.000Z',
+          confirmedPositionCount: 0,
+        },
+      ],
+    },
+  } as Kase;
+}
+
+/**
  * Beleg mit Meldungen (Instruktions-Loop 04.08.2026): `issueStatuses` sind die
  * Einzel-Status der Meldungen — 'open' = wartet auf die Teamleitung,
  * 'instruction_sent' = vom Teamlead instruiert.
@@ -83,6 +119,32 @@ function kaseWithIssues(id: string, status: string, issueStatuses: string[]) {
 }
 
 describe('casesForDisplay', () => {
+  it('zieht einen Beleg mit aktiver Mithilfe GANZ nach oben — auch beim Inhaber', () => {
+    // Kundenwunsch 01.09.2026: Wer Mithilfe angefordert hat, soll den Beleg
+    // ebenso oben sehen wie der Helfer — an ihm hängt jemand anders.
+    const ordered = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseWithIssues('g', 'problem_resolved', ['instruction_sent']),
+      kaseGeteilt('t', 'in_progress'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['t', 'g', 'a']);
+  });
+
+  it('nur Eingeladene sind noch keine Mithilfe — der Beleg bleibt, wo er war', () => {
+    const ordered = casesForDisplay([
+      kaseWithStatus('a', 'assigned'),
+      kaseGeteilt('t', 'in_progress', 'eingeladen'),
+    ]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 't']);
+  });
+
+  it('ein geteilter Beleg, der auf die Teamleitung wartet, bleibt ganz unten', () => {
+    // Daran kann NIEMAND arbeiten — auch nicht der Helfer.
+    const geparkt = { ...kaseGeteilt('t', 'issue_open'), issues: [{ id: 'i1', status: 'open' }] };
+    const ordered = casesForDisplay([geparkt as never, kaseWithStatus('a', 'assigned')]);
+    expect(ordered.map((c) => c.id)).toEqual(['a', 't']);
+  });
+
   it('listet einen geparkten Problemfall (issue_open) ganz unten — trotz Engine-Sequenz 1', () => {
     const ordered = casesForDisplay([
       kaseWithStatus('p', 'issue_open'),

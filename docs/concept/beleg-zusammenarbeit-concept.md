@@ -94,7 +94,10 @@ Wahrheit statt zwei Pfade).
 4. **Ablehnen** (`abgelehnt`): keine weitere Anzeige, bleibt im Verlauf. Eine erneute Einladung
    ist möglich.
 5. **Annehmen** (`angenommen`): der Beleg erscheint beim Helfer unter „2 · Bearbeiten“ **ganz
-   oben**, vor den eigenen Belegen (01.09.2026) — golden eingefasst, nie ausgegraut, ohne
+   oben**, vor den eigenen Belegen (01.09.2026). Auch beim INHABER steht ein Beleg mit aktiver
+   Mithilfe ganz oben — `displayRank` gibt ihm den neuen Rang −2, „Meldung offen“ (+1) schlägt
+   ihn aber weiterhin: daran kann niemand arbeiten. Grundlage ist `wirdGeteiltBearbeitet`
+   (mindestens ein aktiver HELFER; die Inhaber-Zeile allein ist keine Zusammenarbeit) — golden eingefasst, nie ausgegraut, ohne
    Der Abschnitt erscheint auch, wenn der Helfer selbst kein Bündel hat. Unter „1 · Ware holen“
    steht der Beleg seit dem 01.09.2026 EBENFALLS (Kundenwunsch): der Helfer holt die Ware bzw.
    seinen Teil davon selbst. Sein Container steht dort ganz oben — die Route des fremden Bündels

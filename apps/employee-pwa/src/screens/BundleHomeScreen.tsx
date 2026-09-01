@@ -255,6 +255,19 @@ function isIssueOpen(issue: { status: string }): boolean {
 }
 
 /**
+ * Wird an diesem Beleg gerade GEMEINSAM gearbeitet? Maßgeblich sind aktive
+ * HELFER (`angenommen`/`teil_erledigt`): die Inhaber-Zeile allein ist keine
+ * Zusammenarbeit — sie bleibt stehen, auch wenn der letzte Helfer entfernt
+ * wurde. Aus Sicht des Inhabers ist genau das „ich habe Mithilfe angefordert
+ * und jemand hilft".
+ */
+export function wirdGeteiltBearbeitet(beleg: Pick<CaseSummaryDto, 'collaboration'>): boolean {
+  return (beleg.collaboration?.participants ?? []).some(
+    (p) => p.role === 'helfer' && (p.status === 'angenommen' || p.status === 'teil_erledigt'),
+  );
+}
+
+/**
  * Anzeige-Rang eines Belegs (Kundenfeedback 05.08.2026) — reine Ableitung aus
  * dem vorhandenen Meldungs-/Case-Status. Kein eigener Zustand, keine
  * Statusänderung, kein Umsortieren/Resequencing im Backend: die
@@ -264,6 +277,10 @@ function isIssueOpen(issue: { status: string }): boolean {
  * Instruktions-Loop beantwortet der Teamlead jede Meldung einzeln, und ein
  * Beleg mit teils instruierten, teils offenen Meldungen bleibt gesperrt.
  *
+ *   -2 Geteilter Beleg mit aktiver Mithilfe → GANZ nach oben (Kundenwunsch
+ *      01.09.2026). Beim Helfer steht der Beleg ohnehin oben; beim Inhaber soll
+ *      er es auch, denn an ihm hängt jemand anders. Ein Beleg, der auf die
+ *      Teamleitung wartet, bleibt trotzdem unten — daran kann NIEMAND arbeiten.
  *   -1 Alle Meldungen instruiert → der Beleg ist wieder bearbeitbar. Ganz nach
  *      OBEN, damit er dem MA sofort ins Auge fällt und schnell abgeschlossen
  *      werden kann — gerade bei vielen kleinen Belegen. Er bleibt oben, bis er
@@ -280,24 +297,26 @@ function isIssueOpen(issue: { status: string }): boolean {
  * erst auf `problem_resolved`, wenn keine Meldung mehr offen ist). Sie bleiben
  * hier als Fallback stehen — schlanke DTO-Listen liefern `issues` nicht mit.
  */
-function displayRank(beleg: Pick<CaseSummaryDto, 'status' | 'issues'>): -1 | 0 | 1 {
+function displayRank(
+  beleg: Pick<CaseSummaryDto, 'status' | 'issues' | 'collaboration'>,
+): -2 | -1 | 0 | 1 {
   const issues = beleg.issues ?? [];
   if (isCaseParked(beleg.status) || issues.some(isIssueOpen)) return 1;
+  if (wirdGeteiltBearbeitet(beleg)) return -2;
   if (beleg.status === 'problem_resolved' || issues.length > 0) return -1;
   return 0;
 }
 
+/** Die Ränge von `displayRank`, von oben nach unten. */
+const DISPLAY_RANKS = [-2, -1, 0, 1] as const;
+
 /**
- * Stabile Partition nach `displayRank`: innerhalb jeder der drei Gruppen bleibt
- * die übergebene Reihenfolge (Bündel- bzw. Routen-Reihenfolge der Engine)
- * exakt erhalten.
+ * Stabile Partition nach `displayRank`: innerhalb jeder Gruppe bleibt die
+ * übergebene Reihenfolge (Bündel- bzw. Routen-Reihenfolge der Engine) exakt
+ * erhalten.
  */
-function byDisplayRank<T>(items: readonly T[], rankOf: (item: T) => -1 | 0 | 1): T[] {
-  return [
-    ...items.filter((i) => rankOf(i) === -1),
-    ...items.filter((i) => rankOf(i) === 0),
-    ...items.filter((i) => rankOf(i) === 1),
-  ];
+function byDisplayRank<T>(items: readonly T[], rankOf: (item: T) => -2 | -1 | 0 | 1): T[] {
+  return DISPLAY_RANKS.flatMap((rank) => items.filter((i) => rankOf(i) === rank));
 }
 
 /**

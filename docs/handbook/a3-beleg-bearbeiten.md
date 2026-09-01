@@ -42,10 +42,14 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
   `'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'` und dem gemeinsamen Fortschritt
   `'<geprüft>/<gesamt> geprüft'`.
 
-Belege, bei denen **du** als Helfer mitarbeitest, gehören nicht zu deinem Bündel, stehen unter
-**`'2 · Bearbeiten'`** aber **ganz oben** – vor deinen eigenen. Auch sie musst du erst holen: Sie
-stehen ebenfalls unter `'1 · Ware holen'` und bleiben ausgegraut, bis du deinen Stop abgehakt
-hast (Kapitel A7).
+Geteilte Belege stehen unter **`'2 · Bearbeiten'`** immer **ganz oben** – egal ob du der Inhaber
+bist und Mithilfe angefordert hast oder selbst mithilfst. So verliert ihn keiner der Beteiligten
+aus dem Blick. Nur wenn der Beleg auf die Teamleitung wartet, bleibt er unten: daran kann gerade
+niemand arbeiten.
+
+Belege, bei denen **du** als Helfer mitarbeitest, gehören nicht zu deinem Bündel. Auch sie musst
+du erst holen: Sie stehen ebenfalls unter `'1 · Ware holen'` und bleiben ausgegraut, bis du deinen
+Stop abgehakt hast (Kapitel A7).
 
 ## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
 
