@@ -136,13 +136,17 @@ Wahrheit statt zwei Pfade).
 - **Mithilfe in der Zeile des Helfers (01.09.2026).** Der geteilte Beleg liegt im Bündel des
   Inhabers — beim Helfer käme er sonst nirgends vor, obwohl er genau daran arbeitet. Er erscheint
   deshalb zusätzlich in dessen Zeile, in einer EIGENEN Liste `BoardRowDto.mithilfe` (bewusst nicht
-  in `cases`): in der Matrix als goldener Kasten `'Mithilfe · <n> Beleg(e)'` hinter den Packs, im
-  Mitarbeiterboard als Abschnitt `'Mithilfe (<n>)'` unter dem eigenen Bündel, in der Zeilen-
-  Schnellinfo als vierter Abschnitt. Jeder Eintrag trägt `mithilfeFuer` = Name des Inhabers und
-  wird als `'Mithilfe bei <Inhaber>'` angezeigt. Reine Anzeige: keine Teile, keine Auslastung,
-  kein Pack, nicht ziehbar (Schloss statt Griff) — umsortiert, entzogen und verschoben wird nur
-  beim Inhaber. Kanban, Vorverteilung und Schnellaktionen laufen über `cases` und zählen den
-  Beleg damit weiterhin genau einmal.
+  in `cases`). Angezeigt wird sie DORT, WO DIE ARBEIT STEHT (Kundenwunsch 01.09.2026): in der
+  Matrix im AKTIVEN Pack unter `'Laufend'`/`'Geplant'` — nicht in einem Extra-Kasten daneben —,
+  ebenso in der Zeilen-Schnellinfo; im Mitarbeiterboard bleibt es ein eigener Abschnitt
+  `'Mithilfe (<n>)'`, weil dessen Liste eine nummerierte Abholreihenfolge des Bündels ist.
+  Jeder Eintrag trägt `mithilfeFuer` = Name des Inhabers und wird als `'Mithilfe bei <Inhaber>'`
+  angezeigt. Reine Anzeige: Kopfzeile des Packs (Beleg-Zahl, Teile), `plannedTeile` und
+  Auslastung der Zeile bleiben eigenes Bündel; nicht ziehbar (Schloss statt Griff), und
+  `packDropAction` sieht über `eigeneCaseIds` nur die eigenen Belege. Ohne eigenes Bündel bekommt
+  der Helfer einen Kasten `'Mithilfe'`, der bewusst KEIN Drop-Ziel ist (es gäbe kein Ziel-Pack).
+  Kanban, Vorverteilung und Schnellaktionen laufen über `cases` und zählen den Beleg damit
+  weiterhin genau einmal.
 - **Beleg-Detail.** Chip `'Gemeinsam bearbeitet'` + Beteiligtenliste mit Status und
   Entfernen-Aktion; die Historie zeigt Einladung/Annahme/Ablehnung/Teil erledigt/Entfernt.
 - **Dialog „Beleg aufteilen“.** Neuer, **vorausgewählter** Modus `'Gemeinsam bearbeiten'`:

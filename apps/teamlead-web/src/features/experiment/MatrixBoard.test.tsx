@@ -196,26 +196,36 @@ describe('MatrixBoard', () => {
     expect(screen.getByText(/Keine Belege — zum Zuweisen hierher ziehen/)).toBeTruthy();
   });
 
-  it('der Helfer sieht den geteilten Beleg als Mithilfe — mit Inhaber und ohne Griff', () => {
-    // Zusammenarbeit §4: der Beleg liegt im Bündel von Anna; Bernd hilft nur mit.
-    // In seiner Spalte darf er deshalb weder ein Pack bilden noch ziehbar sein.
+  const MITHILFE: BoardCase = {
+    ...bc('k9', 'assigned'),
+    bundleId: 'b-emp1',
+    mithilfeFuer: 'Anna Berger',
+    sharedWith: [{ employeeNo: 'ma-2', displayName: 'Bernd Voss', status: 'angenommen' }],
+  };
+
+  it('die Mithilfe steht im AKTIVEN Pack unter Geplant — nicht in einem Extra-Kasten', () => {
+    // Kundenwunsch 01.09.2026: der geteilte Beleg gehört dorthin, wo die Arbeit
+    // steht. Teile und Beleg-Zahl der Kopfzeile bleiben die des eigenen Bündels.
     const helferRow: BoardRow = {
-      ...row('emp2', 'Bernd Voss', []),
-      mithilfe: [
-        {
-          ...bc('k9', 'assigned'),
-          bundleId: 'b-emp1',
-          mithilfeFuer: 'Anna Berger',
-          sharedWith: [{ employeeNo: 'ma-2', displayName: 'Bernd Voss', status: 'angenommen' }],
-        },
-      ],
+      ...row('emp2', 'Bernd Voss', [bc('e1', 'assigned')], [['e1']]),
+      mithilfe: [MITHILFE],
     };
+    renderMatrix(null, [helferRow]);
+
+    expect(screen.getByText('Pack 1 · 1 Beleg · 10 Teile')).toBeTruthy();
+    expect(screen.getByText('· +1 Mithilfe')).toBeTruthy();
+    expect(screen.getByText('Geplant (2)')).toBeTruthy();
+    expect(screen.getByText('Mithilfe bei Anna Berger')).toBeTruthy();
+  });
+
+  it('ohne eigenes Bündel bekommt der Helfer einen eigenen Mithilfe-Kasten', () => {
+    const helferRow: BoardRow = { ...row('emp2', 'Bernd Voss', []), mithilfe: [MITHILFE] };
     renderMatrix(null, [BOARD[0]!, helferRow]);
 
     expect(screen.getByText('Mithilfe · 1 Beleg')).toBeTruthy();
     expect(screen.getByText('Mithilfe bei Anna Berger')).toBeTruthy();
-    // Kein Pack, keine Teile-Buchung beim Helfer.
-    expect(screen.queryByText(/Pack 1 · 1 Beleg/)).toBeNull();
+    // Keine eigene Teile-Buchung beim Helfer.
+    expect(screen.queryByText(/Pack 1 · 1 Beleg · 10 Teile/)).toBeNull();
     // Gesperrt statt ziehbar — verschoben wird nur in Annas Zeile.
     expect(screen.queryByLabelText('WE-k9 aus Bündel ziehen')).toBeNull();
     expect(

@@ -23,8 +23,29 @@ export interface MatrixPack {
    * Kasten und die Nummerierung im `label` schließt die Lücke — `index` nicht.
    */
   index: number;
-  /** Belege des Packs, anzeige-geordnet (Laufendes oben, Fertiges unten). */
+  /**
+   * Belege des Kastens, anzeige-geordnet (Laufendes oben, Fertiges unten) —
+   * EIGENE UND MITHILFE. Ein geteilter Beleg soll dort stehen, wo die Arbeit
+   * steht: unter Laufend bzw. Geplant des aktiven Packs (Kundenwunsch
+   * 01.09.2026), nicht in einem Extra-Kasten daneben.
+   */
   cases: BoardCase[];
+  /**
+   * Nur die EIGENEN Belege des Packs — Grundlage jeder Drop-Entscheidung
+   * (`packDropAction`). Eine Mithilfe liegt im Bündel eines anderen; sie darf
+   * weder als „liegt schon hier" gelten noch verschoben werden.
+   */
+  eigeneCaseIds: string[];
+  /** Anzahl eigener Belege (Kopfzeile) — Mithilfe zählt hier nicht mit. */
+  eigene: number;
+  /** Anzahl der Mithilfen in diesem Kasten (Kopfzeile: „+n Mithilfe"). */
+  mithilfe: number;
+  /**
+   * Drop-Ziel? Der Sammelkasten einer Person OHNE eigenes Bündel trägt nur
+   * Mithilfe — dorthin lässt sich nichts zuweisen (es gäbe kein Ziel-Pack).
+   */
+  droppable: boolean;
+  /** Σ Teile der EIGENEN Belege — fremde Arbeit verfälscht die Last nicht. */
   teile: number;
   /**
    * Das Pack, an dem der Mitarbeiter GERADE arbeitet — nur dessen Belege sieht
@@ -89,7 +110,12 @@ export function packSections(cases: readonly BoardCase[]): PackSection[] {
     },
   ];
   if (fertig.length > 0) {
-    sections.push({ key: 'fertig', title: `Fertig (${fertig.length})`, cases: fertig, empty: null });
+    sections.push({
+      key: 'fertig',
+      title: `Fertig (${fertig.length})`,
+      cases: fertig,
+      empty: null,
+    });
   }
   return sections;
 }
@@ -111,6 +137,7 @@ export function orderPackCases(cases: readonly BoardCase[]): BoardCase[] {
 export function derivePacks(
   cases: readonly BoardCase[],
   packs: readonly BoardPack[] | undefined,
+  mithilfe: readonly BoardCase[] = [],
 ): MatrixPack[] {
   const byId = new Map(cases.map((c) => [c.caseId, c]));
   const groups = (packs ?? [])
@@ -128,17 +155,41 @@ export function derivePacks(
     groups.push({ index: 0, active: true, members: [...cases] });
   }
 
+  // Mithilfe gehört in den Kasten, in dem gerade gearbeitet wird: ins AKTIVE
+  // Pack (sonst ins erste). Hat die Person heute gar kein eigenes Bündel, bekommt
+  // sie einen eigenen Kasten „Mithilfe" — der ist bewusst kein Drop-Ziel, es gäbe
+  // kein Pack, in das etwas fallen könnte.
+  const zielIndex = groups.findIndex((g) => g.active);
+  const mithilfeIn = new Map<number, BoardCase[]>();
+  if (mithilfe.length > 0) {
+    if (groups.length === 0) {
+      groups.push({ index: 0, active: false, members: [] });
+      mithilfeIn.set(0, [...mithilfe]);
+    } else {
+      const ziel = zielIndex >= 0 ? zielIndex : 0;
+      mithilfeIn.set(ziel, [...mithilfe]);
+    }
+  }
+
   // `key`/`index` tragen den persistierten Pack-Index (Drop-Ziel, stabil), die
   // Beschriftung zählt fortlaufend durch — ein leergelaufenes Pack hinterlässt
   // beim Teamlead also keine Lücke in der Nummerierung.
-  return groups.map((g, displayIndex) => ({
-    key: `pack-${g.index}`,
-    label: `Pack ${displayIndex + 1}`,
-    index: g.index,
-    active: g.active,
-    cases: orderPackCases(g.members),
-    teile: g.members.reduce((sum, c) => sum + c.totalQuantity, 0),
-  }));
+  return groups.map((g, displayIndex) => {
+    const geholfen = mithilfeIn.get(displayIndex) ?? [];
+    const nurMithilfe = g.members.length === 0;
+    return {
+      key: nurMithilfe ? 'mithilfe' : `pack-${g.index}`,
+      label: nurMithilfe ? 'Mithilfe' : `Pack ${displayIndex + 1}`,
+      index: g.index,
+      active: g.active,
+      cases: orderPackCases([...g.members, ...geholfen]),
+      eigeneCaseIds: g.members.map((c) => c.caseId),
+      eigene: g.members.length,
+      mithilfe: geholfen.length,
+      droppable: !nurMithilfe,
+      teile: g.members.reduce((sum, c) => sum + c.totalQuantity, 0),
+    };
+  });
 }
 
 /**

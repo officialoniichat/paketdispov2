@@ -153,15 +153,20 @@ behalten ihre Beteiligten, sodass auch später sichtbar bleibt, dass zusammengea
 **`'Mithilfe'` – der Beleg beim Helfer:** Damit Sie auch beim Helfer sehen, woran er gerade
 tatsächlich arbeitet, erscheint der geteilte Beleg zusätzlich in **seiner** Zeile:
 
-- In der **Matrix** (Experiment DA.M.B) hinter den Packs, in einem eigenen goldenen Kasten
-  **`'Mithilfe · <n> Beleg(e)'`**; jeder Strich nennt darunter **`'Mithilfe bei <Inhaber>'`**.
-- Im **Mitarbeiterboard** unter dem eigenen Bündel im Abschnitt **`'Mithilfe (<n>)'`**.
-- In der Zeilen-Schnellinfo (`'!'`) als eigener Abschnitt **`'Mithilfe (<n>)'`** neben
-  Laufend/Geplant/Fertig.
+- In der **Matrix** (Experiment DA.M.B) **im aktiven Pack**, unter `'Laufend'` bzw. `'Geplant'` –
+  genau dort, wo die Arbeit steht. Der Strich ist golden und nennt darunter
+  **`'Mithilfe bei <Inhaber>'`**; die Kopfzeile des Packs bleibt die des **eigenen** Bündels und
+  ergänzt golden **`'· +<n> Mithilfe'`**. Hat die Person heute gar kein eigenes Bündel, steht
+  stattdessen ein Kasten **`'Mithilfe · <n> Beleg(e)'`** – in den lässt sich nichts hineinziehen.
+- In der Zeilen-Schnellinfo (`'!'`) ebenfalls unter `'Laufend'`/`'Geplant'`, die Zeile endet mit
+  golden `'· Mithilfe bei <Inhaber>'`.
+- Im **Mitarbeiterboard** unter dem eigenen Bündel im Abschnitt **`'Mithilfe (<n>)'`** – dort ist
+  die Beleg-Liste eine nummerierte Abholreihenfolge, in die ein fremder Beleg nicht gehört.
 
-Die Mithilfe ist reine **Anzeige**: Sie zählt beim Helfer nicht als Last (keine Teile, keine
-Auslastung, kein Pack), lässt sich in seiner Zeile nicht ziehen – der Strich trägt statt der
-Griff-Punkte ein Schloss – und wird nur beim **Inhaber** umsortiert, entzogen oder verschoben.
+Die Mithilfe ist reine **Anzeige**: Sie zählt beim Helfer nicht als Last – weder in `'<n> Teile'`
+und `'% verplant'` der Zeile noch in Beleg-Zahl und Teilen der Pack-Kopfzeile –, lässt sich in
+seiner Zeile nicht ziehen (der Strich trägt statt der Griff-Punkte ein Schloss) und wird nur beim
+**Inhaber** umsortiert, entzogen oder verschoben.
 
 **Helfer entfernen:** Ein Rechtsklick auf die goldene Karte (oder das kleine Personen-Symbol für
 die Touch-Bedienung) öffnet je Helfer den Eintrag **`'Aus geteiltem Beleg entfernen: <Name>'`**.

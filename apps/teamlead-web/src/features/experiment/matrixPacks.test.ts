@@ -73,10 +73,11 @@ describe('derivePacks', () => {
 });
 
 describe('packPullLabel', () => {
+  const leer = { cases: [], eigeneCaseIds: [], eigene: 0, mithilfe: 0, droppable: true, teile: 0 };
   const packs = [
-    { ...pack(0, ['a']), key: 'p0', label: 'Pack 1', cases: [], teile: 0 },
-    { ...pack(1, ['b'], true), key: 'p1', label: 'Pack 2', cases: [], teile: 0 },
-    { ...pack(2, ['c']), key: 'p2', label: 'Pack 3', cases: [], teile: 0 },
+    { ...pack(0, ['a']), key: 'p0', label: 'Pack 1', ...leer },
+    { ...pack(1, ['b'], true), key: 'p1', label: 'Pack 2', ...leer },
+    { ...pack(2, ['c']), key: 'p2', label: 'Pack 3', ...leer },
   ];
 
   it('unterscheidet abgearbeitet / aktiv / vorgeplant am aktiven Pack', () => {
@@ -87,6 +88,42 @@ describe('packPullLabel', () => {
 
   it('bei einem einzigen Pack gibt es nichts zu unterscheiden', () => {
     expect(packPullLabel(packs[1]!, [packs[1]!])).toBeNull();
+  });
+});
+
+describe('derivePacks — Mithilfe', () => {
+  const geteilt = { ...bc('m', 'in_progress', 30), mithilfeFuer: 'Hakan Yilmaz' };
+
+  it('legt die Mithilfe ins AKTIVE Pack, ohne Teile und Beleg-Zahl zu verfälschen', () => {
+    const packs = derivePacks(
+      [bc('a', 'assigned', 180), bc('b', 'assigned', 20)],
+      [pack(0, ['a']), pack(1, ['b'], true)],
+      [geteilt],
+    );
+    // Kundenwunsch 01.09.2026: der geteilte Beleg steht dort, wo gearbeitet wird.
+    expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['a']);
+    expect(packs[1]!.cases.map((c) => c.caseId)).toEqual(['m', 'b']);
+    // Die Kopfzeile bleibt die des eigenen Bündels.
+    expect(packs[1]!.eigene).toBe(1);
+    expect(packs[1]!.teile).toBe(20);
+    expect(packs[1]!.mithilfe).toBe(1);
+    // Drop-Entscheidungen sehen nur die eigenen Belege.
+    expect(packs[1]!.eigeneCaseIds).toEqual(['b']);
+  });
+
+  it('ohne aktives Pack landet sie im ersten', () => {
+    const packs = derivePacks([bc('a', 'assigned')], [pack(0, ['a'])], [geteilt]);
+    expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['m', 'a']);
+  });
+
+  it('ohne eigenes Bündel steht sie in einem eigenen Kasten — und der nimmt nichts an', () => {
+    const packs = derivePacks([], undefined, [geteilt]);
+    expect(packs).toHaveLength(1);
+    expect(packs[0]!.label).toBe('Mithilfe');
+    expect(packs[0]!.eigene).toBe(0);
+    expect(packs[0]!.teile).toBe(0);
+    expect(packs[0]!.droppable).toBe(false);
+    expect(packs[0]!.cases.map((c) => c.caseId)).toEqual(['m']);
   });
 });
 

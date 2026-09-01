@@ -211,7 +211,8 @@ flowchart TD
   Beteiligung bleibt bestehen, nach der Klärung arbeitet ihr gemeinsam weiter.
 - Die Teamleitung sieht im Cockpit an der goldenen Karte, dass an dem Beleg zusammengearbeitet wird –
   und auch später noch, dass zusammengearbeitet **wurde**. In der Mitarbeiter-Matrix taucht der Beleg
-  zusätzlich in **deiner** Spalte auf, im goldenen Kasten `'Mithilfe'` mit `'Mithilfe bei <Inhaber>'`.
+  zusätzlich in **deiner** Spalte auf – in deinem aktiven Pack unter `'Laufend'` bzw. `'Geplant'`,
+  golden und mit `'Mithilfe bei <Inhaber>'`.
 - Deine Leistung wird beim Tagesabschluss anteilig nach deinen geprüften Positionen gezählt.
 
 ## Häufige Fehler / FAQ

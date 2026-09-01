@@ -258,11 +258,12 @@ function MatrixRow({
   const absent = row.absence ?? null;
   const action =
     absent !== null || dragging === null ? null : matrixDropAction(dragging, row.employeeId);
-  const packs = derivePacks(row.cases, row.packs);
   // Mithilfe (§4): Belege aus fremden Bündeln, an denen diese Person mitarbeitet.
-  // Sie gehören in KEIN Pack dieser Zeile — sonst würde die Matrix fremde Arbeit
-  // als eigene Planung ausweisen. Eigener Kasten am Ende der Zeile.
+  // Sie stehen im AKTIVEN Pack unter Laufend bzw. Geplant (Kundenwunsch
+  // 01.09.2026) — dort, wo die Arbeit steht. Gezählt werden sie dort NICHT mit:
+  // Teile und Beleg-Zahl der Kopfzeile bleiben die des eigenen Bündels.
   const mithilfe = row.mithilfe ?? [];
+  const packs = derivePacks(row.cases, row.packs, mithilfe);
   // Pausen-Toggle per Wisch: Linksklick auf den Namen, von links nach rechts ziehen.
   const swipe = useRef<{ x: number; y: number; fired: boolean } | null>(null);
   const fireSwipePause = (): void => {
@@ -510,12 +511,18 @@ function MatrixRow({
             pack={pack}
             pullStatus={packPullLabel(pack, packs)}
             employeeId={row.employeeId}
-            action={packDropAction(dragging, {
-              employeeId: row.employeeId,
-              index: pack.index,
-              caseIds: pack.cases.map((c) => c.caseId),
-              absent: absent !== null,
-            })}
+            action={
+              pack.droppable
+                ? packDropAction(dragging, {
+                    employeeId: row.employeeId,
+                    index: pack.index,
+                    // Nur die EIGENEN: eine Mithilfe liegt im Bündel eines anderen
+                    // und macht diesen Kasten nicht zu ihrem Zuhause.
+                    caseIds: pack.eigeneCaseIds,
+                    absent: absent !== null,
+                  })
+                : null
+            }
             onDropZiel={(targetPackIndex) => handlePackDrop(pack, targetPackIndex)}
           >
             {/* EIN Pack, innen aufgeteilt wie die Board-Karte (Nutzer-Vorgabe):
@@ -554,12 +561,6 @@ function MatrixRow({
           </PackBox>
         </Fragment>
       ))}
-      {mithilfe.length > 0 && (
-        <>
-          <Divider orientation="vertical" flexItem />
-          <MithilfeBox cases={mithilfe} stripFor={stripFor} />
-        </>
-      )}
       {absent === null && packs.length > 0 && (
         <>
           <Divider orientation="vertical" flexItem />
@@ -655,8 +656,23 @@ function PackBox({
       }}
     >
       <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
-        {pack.label} · {pack.cases.length} {pack.cases.length === 1 ? 'Beleg' : 'Belege'} ·{' '}
-        {pack.teile} Teile
+        {pack.eigene > 0 ? (
+          <>
+            {`${pack.label} · ${pack.eigene} ${pack.eigene === 1 ? 'Beleg' : 'Belege'} · ${pack.teile} Teile`}
+            {/* Mithilfe steht IM Kasten, zählt aber nicht als eigene Last — sonst
+                läse sich fremde Arbeit als Auslastung dieser Person. */}
+            {pack.mithilfe > 0 ? (
+              <Box component="span" sx={{ color: ltColors.shared }}>
+                {` · +${pack.mithilfe} Mithilfe`}
+              </Box>
+            ) : null}
+          </>
+        ) : (
+          // Reiner Mithilfe-Kasten: die Person hat heute kein eigenes Bündel.
+          <Box component="span" sx={{ color: ltColors.shared }}>
+            {`${pack.label} · ${pack.mithilfe} ${pack.mithilfe === 1 ? 'Beleg' : 'Belege'}`}
+          </Box>
+        )}
       </Typography>
       {/* Pull-Prinzip: der MA sieht in seiner App NUR sein aktives Pack. Abgearbeitete
           und vorgeplante Packs stehen hier, bei ihm aber nicht (mehr bzw. noch nicht). */}
@@ -674,43 +690,6 @@ function PackBox({
         </Typography>
       )}
       {children}
-    </Box>
-  );
-}
-
-/**
- * „Mithilfe": Belege aus FREMDEN Bündeln, an denen dieser Mitarbeiter als Helfer
- * beteiligt ist (Zusammenarbeit §4). Bewusst ein eigener, goldener Kasten neben
- * den Packs statt eines Packs: die Planung — Auslastung, Teile, Reihenfolge —
- * gehört dem Inhaber. Deshalb auch kein Drop-Ziel; hierher zuweisen geht nicht.
- */
-function MithilfeBox({
-  cases,
-  stripFor,
-}: {
-  cases: readonly BoardCase[];
-  stripFor: (c: BoardCase) => JSX.Element;
-}): JSX.Element {
-  return (
-    <Box
-      data-testid="matrix-mithilfe"
-      sx={{
-        width: 200,
-        flexShrink: 0,
-        border: '1px solid',
-        borderColor: ltColors.shared,
-        borderRadius: 1,
-        bgcolor: alpha(ltColors.shared, 0.06),
-        p: 0.5,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.375,
-      }}
-    >
-      <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'text.secondary' }}>
-        Mithilfe · {cases.length} {cases.length === 1 ? 'Beleg' : 'Belege'}
-      </Typography>
-      {cases.map(stripFor)}
     </Box>
   );
 }
@@ -1148,10 +1127,13 @@ function ShiftPill({ startIso, endIso }: { startIso: string; endIso: string | nu
  */
 function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const laufend = row.cases.filter((c) => LAUFEND_STATUSES.includes(c.status));
-  const geplant = row.cases.filter((c) => c.status === 'assigned');
-  const fertig = row.cases.filter((c) => FERTIG_STATUSES.includes(c.status));
-  const mithilfe = row.mithilfe ?? [];
+  // Dieselbe Aufteilung wie in der Spalte (Kundenwunsch 01.09.2026): Mithilfe
+  // steht unter Laufend/Geplant, nicht in einem eigenen Abschnitt. Welcher Beleg
+  // fremd ist, sagt die Zeile selbst („Mithilfe bei <Inhaber>").
+  const alle = [...row.cases, ...(row.mithilfe ?? [])];
+  const laufend = alle.filter((c) => LAUFEND_STATUSES.includes(c.status));
+  const geplant = alle.filter((c) => c.status === 'assigned');
+  const fertig = alle.filter((c) => FERTIG_STATUSES.includes(c.status));
   return (
     <>
       <IconButton
@@ -1195,10 +1177,6 @@ function RowInfoButton({ row }: { row: BoardRow }): JSX.Element {
           {fertig.length > 0 && (
             <RowInfoSection title={`Fertig (${fertig.length})`} cases={fertig} empty="" />
           )}
-          {mithilfe.length > 0 && (
-            // Getrennt von Laufend/Geplant/Fertig: fremde Belege, kein eigenes Pack.
-            <RowInfoSection title={`Mithilfe (${mithilfe.length})`} cases={mithilfe} empty="" />
-          )}
         </Stack>
       </Popover>
     </>
@@ -1232,6 +1210,11 @@ function RowInfoSection({
             <Typography variant="caption">
               {i + 1}. <b>{c.weBelegNo}</b> · {style?.statusLabel ?? 'Zugewiesen'} ·{' '}
               {c.totalQuantity} Teile · {formatMinutes(c.estimatedMinutes)}
+              {c.mithilfeFuer ? (
+                <Box component="span" sx={{ color: ltColors.shared, fontWeight: 700 }}>
+                  {` · Mithilfe bei ${c.mithilfeFuer}`}
+                </Box>
+              ) : null}
             </Typography>
             {group && (
               <Typography variant="caption" color="text.secondary" sx={{ pl: 1.5 }}>
