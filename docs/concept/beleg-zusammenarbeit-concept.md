@@ -43,7 +43,7 @@ Bearbeitende, alle sehen alles.
 | Begriff | Bedeutung |
 |---|---|
 | **Geteilter Beleg** (gemeinsam bearbeitet) | EIN Beleg, an dem mehrere Mitarbeitende gleichzeitig arbeiten. Alle sehen alle Positionen. |
-| **Inhaber** | Der Mitarbeiter, in dessen Bündel/Karren der Beleg liegt (`assignedBundle`). Er holt die Ware. |
+| **Inhaber** | Der Mitarbeiter, in dessen Bündel/Karren der Beleg liegt (`assignedBundle`). Seit 01.09.2026 holen ALLE Beteiligten die Ware bzw. ihren Teil davon — jeder mit eigenem Haken. |
 | **Helfer** | Weitere Beteiligte. Der Beleg liegt *nicht* in ihrem Bündel, erscheint bei ihnen aber unter „2 · Bearbeiten" (Abschnitt „Geteilt mit dir"). |
 | **Beteiligung** | Die Zeile `CaseParticipant` (Beleg × Mitarbeiter) mit Rolle und Status. |
 | **Teilbeleg erledigt** | Ein Beteiligter meldet seinen Anteil als erledigt (Status `teil_erledigt`). Keine Zustandsänderung am Beleg. |
@@ -95,14 +95,24 @@ Wahrheit statt zwei Pfade).
    ist möglich.
 5. **Annehmen** (`angenommen`): der Beleg erscheint beim Helfer unter „2 · Bearbeiten“ **ganz
    oben**, vor den eigenen Belegen (01.09.2026) — golden eingefasst, nie ausgegraut, ohne
-   Holen-Gate, und ohne Eintrag unter „1 · Ware holen“ (die Ware holt der Inhaber). Der Abschnitt
-   erscheint auch, wenn der Helfer selbst kein Bündel hat. Beim Inhaber ist die Karte golden mit
+   Der Abschnitt erscheint auch, wenn der Helfer selbst kein Bündel hat. Unter „1 · Ware holen“
+   steht der Beleg seit dem 01.09.2026 EBENFALLS (Kundenwunsch): der Helfer holt die Ware bzw.
+   seinen Teil davon selbst. Sein Container steht dort ganz oben — die Route des fremden Bündels
+   kennt er nicht —, golden markiert, mit eigenem Haken; bis er gesetzt ist, bleibt der Beleg
+   unter „2 · Bearbeiten“ ausgegraut wie jeder eigene. Beim Inhaber ist die Karte golden mit
    `'Geteilt mit Anna Berger'` bzw. `'Geteilt · 3 Personen'`.
 6. **Bearbeiten.** Alle sehen alle Positionen; `'Position geprüft'` zeigt die Initialen dessen,
    der geprüft hat. Oben rechts `'Team-Ansicht'`: Splitscreen, links die eigene Tabelle (mind.
    50 %), rechts bei einem anderen Beteiligten dessen Fortschritt (Name, Status, Balken,
    geprüfte Positionen), bei mehreren ein Raster aus Kästchen (Antippen → Einzelansicht →
    `'Zurück zur Übersicht'`). Aktionen anderer lassen deren Kästchen ~1,5 s aufleuchten.
+   ÜBER der Beteiligten-Liste steht seit dem 01.09.2026 der `'Gesamtfortschritt'` des BELEGS
+   (Kundenwunsch): goldener Balken + Prozent, Beschriftung „<erledigt>/<gesamt> Teile ·
+   <geprüft>/<gesamt> Positionen – alle Beteiligten zusammen". Geführt wird die TEILE-Zahl —
+   Positionen allein sagen nichts über den Umfang; eine Position mit 40 Teilen wiegt schwerer
+   als eine mit zweien. Teile einer Position = Σ `expectedQuantity` ihrer Größenzeilen (reine
+   Anzeige-Ableitung, `workflowModel.teileFortschritt`); die Positions-Zahlen kommen weiter
+   fertig vom Server (`collaboration.confirmedPositionCount`/`positionCount`).
 7. **Teilbeleg erledigt.** Solange nicht alle Positionen geprüft sind, ist die Primäraktion für
    einen aktiven Beteiligten `'Teilbeleg erledigt'` → Status `teil_erledigt`, bei den anderen
    grau. Er darf weiter mithelfen; sind alle Positionen geprüft, heißt die Primäraktion für jeden
@@ -152,8 +162,16 @@ Wahrheit statt zwei Pfade).
 ### 5.1 Zugriff (§16.1)
 Ein Mitarbeiter darf einen Beleg sehen und bearbeiten, wenn er Inhaber ist **oder** aktiver
 Beteiligter (`angenommen` | `teil_erledigt`). Das gilt für Aggregat, Starten, Position prüfen,
-Mengen erfassen, Beleg erledigt, Teilabschluss, Rückmeldung. **Nur der Inhaber** setzt den
-Ware-holen-Haken. Eingeladene (noch nicht angenommen) sehen nichts.
+Mengen erfassen, Beleg erledigt, Teilabschluss, Rückmeldung. Eingeladene (noch nicht
+angenommen) sehen nichts.
+
+**Ware holen ist ein eigener Gang JE PERSON (01.09.2026).** Der Helfer holt die Ware bzw. seinen
+Teil davon selbst — vorher hieß es „die Ware holt der Inhaber". Deshalb hat der Haken zwei
+Ablagen: der Inhaber hakt den BELEG ab (`GoodsReceiptCase.collectedAt` — der Beleg liegt auf
+seinem Karren), jeder aktive Helfer seine BETEILIGUNG (`CaseParticipant.collectedAt`). Ein
+gemeinsamer Haken hätte für alle gegolten, sobald einer ihn setzt. `POST
+cases/:id/collected` entscheidet anhand der Rolle des Aufrufers, wohin er schreibt; für einen
+Helfer, dessen Beteiligung inzwischen beendet ist, läuft er ins Leere (404).
 
 ### 5.2 Fertig-Regel geteilter Belege
 - `'Beleg erledigt'`: alle Positionen geprüft (`confirmedById` gesetzt).

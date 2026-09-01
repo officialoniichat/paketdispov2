@@ -47,6 +47,20 @@ function aggregateMit(...beteiligte: ReturnType<typeof participant>[]) {
 afterEach(cleanup);
 
 describe('TeamPane', () => {
+  it('zeigt oben den Gesamtfortschritt des BELEGS in Teilen, nicht je Person', () => {
+    // Beispiel-Beleg: Pos 1 = 1 Teil, Pos 2 = 1 Teil, Pos 3 = 3 Teile (Σ 5).
+    // Geprüft sind Pos 1 + 3 → 4 von 5 Teilen, also 80 % — obwohl es „nur"
+    // 2 von 3 Positionen sind. Genau dafür ist die Leiste da.
+    render(
+      <TeamPane aggregate={aggregateMit(INHABER, ANNA)} meineEmployeeNo={ICH} glow={new Set()} />,
+    );
+
+    expect(screen.getByText('Gesamtfortschritt')).toBeTruthy();
+    expect(screen.getByText('80 %')).toBeTruthy();
+    expect(screen.getByText('4/5 Teile · 2/3 Positionen – alle Beteiligten zusammen')).toBeTruthy();
+    expect(screen.getByLabelText('4 von 5 Teilen abgearbeitet')).toBeTruthy();
+  });
+
   it('zeigt bei genau einer anderen Person direkt deren Einzelansicht', () => {
     render(
       <TeamPane aggregate={aggregateMit(INHABER, ANNA)} meineEmployeeNo={ICH} glow={new Set()} />,

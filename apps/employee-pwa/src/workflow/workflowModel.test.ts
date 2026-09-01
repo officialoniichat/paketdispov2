@@ -23,6 +23,7 @@ import {
   scanMatches,
   skuQuantitiesBody,
   totalConfirmedQuantity,
+  teileFortschritt,
 } from './workflowModel.js';
 
 const agg = exampleAggregate;
@@ -209,6 +210,21 @@ describe('geteilter Beleg (Beteiligte)', () => {
     );
     expect(checkedPositionNos(gearbeitet, 'ma-1')).toEqual([1, 3]);
     expect(checkedPositionNos(gearbeitet, 'ma-9')).toEqual([]);
+  });
+
+  it('misst den Gesamtfortschritt in TEILEN, nicht in Positionen', () => {
+    // Beispiel-Beleg: Pos 1 = 1 Teil, Pos 2 = 1 Teil, Pos 3 = 3 Teile (Σ 5).
+    expect(teileFortschritt(agg)).toEqual({ erledigt: 0, gesamt: 5 });
+    // Eine geprüfte Position mit 3 Teilen wiegt schwerer als 2 von 3 Positionen.
+    const grosse = withConfirmedPositions(agg, ICH, ['pos-3656860-3']);
+    expect(teileFortschritt(grosse)).toEqual({ erledigt: 3, gesamt: 5 });
+    // Gezählt wird der BELEG, nicht die Person: fremde Haken zählen mit.
+    const gemischt = withConfirmedPositions(
+      withConfirmedPositions(agg, ICH, ['pos-3656860-1']),
+      { employeeNo: 'ma-1', displayName: 'Anna Berger' },
+      ['pos-3656860-3'],
+    );
+    expect(teileFortschritt(gemischt)).toEqual({ erledigt: 4, gesamt: 5 });
   });
 });
 

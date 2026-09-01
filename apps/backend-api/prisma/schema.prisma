@@ -618,6 +618,11 @@ model CaseParticipant {
   invitedByLabel String
   message        String?
   invitedAt      DateTime              @default(now())
+  // Ware-holen-Haken des HELFERS (01.09.2026): Ware holen ist ein eigener Gang je
+  // Person — der Inhaber hakt den Beleg selbst ab (GoodsReceiptCase.collectedAt),
+  // jeder Helfer hier seinen eigenen. Ein gemeinsamer Haken hätte für alle
+  // gegolten, sobald einer ihn setzt.
+  collectedAt    DateTime?
   respondedAt    DateTime?
   partDoneAt     DateTime?
   removedAt      DateTime?

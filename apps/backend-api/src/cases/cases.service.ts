@@ -273,14 +273,18 @@ export class CasesService {
       },
       orderBy: { weBelegNo: 'asc' },
     });
-    const sharedCases = sharedRows.map((c) =>
-      this.mapSummary(
+    const sharedCases = sharedRows.map((c) => ({
+      ...this.mapSummary(
         c,
         c.assignedBundle?.employee?.displayName ?? null,
         c.issues.length > 0 ? c.issues.map((i) => mapIssueSummary(i, c.positions)) : undefined,
         toCollaborationDto(c.participants, c.positions),
       ),
-    );
+      // Ware holen ist ein eigener Gang (01.09.2026): hier zählt MEIN Haken aus
+      // der Beteiligung, nicht der des Inhabers am Beleg — sonst wäre der Beleg
+      // für mich schon geholt, sobald der Inhaber ihn abgehakt hat.
+      collected: c.participants.find((p) => p.employeeId === employee.id)?.collectedAt != null,
+    }));
 
     if (!bundle) {
       return { date: isoDay(today), bundle: null, pack: null, cases: [], sharedCases, workstation };
@@ -471,39 +475,62 @@ export class CasesService {
   }
 
   /**
-   * Ware-holen-Haken (B2): persistiert je Beleg, ob der MA die Ware am
-   * Lagerplatz geholt hat. Tipp in der Liste UND Scanner-Auto-Abhaken
-   * (Lagerplatz-Scan) laufen beide über diesen einen Weg, damit der Zustand
-   * Reload und Gerätewechsel überlebt. Toggle: `collected=false` entfernt den
-   * Haken wieder. Bewusst KEIN Status-Übergang und KEIN Versions-Inkrement —
-   * der Haken ist orthogonaler Arbeitszustand, keine Lifecycle-Transition.
+   * Ware-holen-Haken (B2): persistiert, ob die Ware am Lagerplatz geholt ist.
+   * Tipp in der Liste UND Scanner-Auto-Abhaken (Lagerplatz-Scan) laufen beide
+   * über diesen einen Weg, damit der Zustand Reload und Gerätewechsel überlebt.
+   * Toggle: `collected=false` entfernt den Haken wieder. Bewusst KEIN
+   * Status-Übergang und KEIN Versions-Inkrement — der Haken ist orthogonaler
+   * Arbeitszustand, keine Lifecycle-Transition.
+   *
+   * JE PERSON EIN HAKEN (Kundenwunsch 01.09.2026): Beim geteilten Beleg holt
+   * auch der eingeladene Helfer die Ware bzw. seinen Teil davon. Der Inhaber
+   * hakt den Beleg ab (`GoodsReceiptCase.collectedAt` — der Beleg liegt auf
+   * SEINEM Karren), jeder aktive Helfer seinen eigenen Gang
+   * (`CaseParticipant.collectedAt`). Ein gemeinsamer Haken hätte für alle
+   * gegolten, sobald einer ihn setzt — die anderen stünden ohne Ware da.
    */
   async setCollected(
     principal: Principal,
     caseId: string,
     dto: SetCollectedDto,
   ): Promise<SetCollectedResultDto> {
-    // §5.1: NUR der Inhaber setzt den Ware-holen-Haken — der Beleg liegt
-    // physisch auf SEINEM Karren; Helfer sehen und bearbeiten nur.
-    const owned = await this.requireWorkableCase(principal, caseId, { ownerOnly: true });
+    const found = await this.requireWorkableCase(principal, caseId);
+    const istInhaber = found.ownerEmployeeNo === principal.employeeNo;
+    const employee = istInhaber ? null : await this.resolveEmployee(principal);
+    const collectedAt = dto.collected ? await this.clock.now() : null;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.goodsReceiptCase.update({
-        where: { id: owned.id },
-        data: { collectedAt: dto.collected ? await this.clock.now() : null },
-      });
+      if (istInhaber) {
+        await tx.goodsReceiptCase.update({ where: { id: found.id }, data: { collectedAt } });
+      } else {
+        // `updateMany` mit Status-Vorbedingung: wurde die Beteiligung im selben
+        // Moment beendet, läuft der Haken ins Leere statt eine tote Zeile zu
+        // beschreiben.
+        const hit = await tx.caseParticipant.updateMany({
+          where: {
+            caseId: found.id,
+            employeeId: employee!.id,
+            status: { in: [...ACTIVE_PARTICIPANT_STATUSES] },
+          },
+          data: { collectedAt },
+        });
+        if (hit.count === 0) {
+          throw new NotFoundException(`Case ${caseId} not found`);
+        }
+      }
       await this.events.append(
         {
           eventType: 'case.collected',
           entityType: 'GoodsReceiptCase',
-          entityId: owned.id,
+          entityId: found.id,
           actorType: 'employee',
           actorId: principal.sub,
-          payload: { collected: dto.collected },
+          payload: { collected: dto.collected, rolle: istInhaber ? 'inhaber' : 'helfer' },
         },
         tx,
       );
     });
-    return { caseId: owned.id, collected: dto.collected };
+    return { caseId: found.id, collected: dto.collected };
   }
 
   /**

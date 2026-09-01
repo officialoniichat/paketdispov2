@@ -69,8 +69,10 @@ Ist ein geparkter Beleg mit Kolleg:innen **geteilt**, endet damit auch die Zusam
   starten.'`
 - **Geteilte Belege** (Kapitel A7) sind unter `'2 · Bearbeiten'` golden markiert
   (`'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'`). Belege, bei denen **du** als Helfer
-  eingeladen bist, stehen dort **ganz oben** vor deinen eigenen – ihre Ware holt der Inhaber, sie
-  tauchen bei dir unter `'1 · Ware holen'` nicht auf.
+  eingeladen bist, stehen dort **ganz oben** vor deinen eigenen. Sie stehen seit dem 01.09.2026
+  auch hier unter `'1 · Ware holen'` – ebenfalls ganz oben und golden: Jede:r Beteiligte holt die
+  Ware bzw. ihren/seinen Teil davon und hakt **den eigenen** Stop ab. Der Haken der anderen zählt
+  nicht für dich.
 
 ## Nächstes Pack anfordern
 

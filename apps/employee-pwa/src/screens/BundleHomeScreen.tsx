@@ -558,8 +558,12 @@ export function BundleHomeScreen(): JSX.Element {
   // damit die Zähler korrekt bleiben, obwohl ihre Container nicht mehr
   // gelistet werden.
   const closedIds = new Set(cases.filter((c) => isCaseClosed(c.status)).map((c) => c.id));
+  // Beide Abschnitte lesen aus derselben Liste — der geteilte Beleg hat einen
+  // Abhol-Container wie jeder andere. `collected` ist beim geteilten Beleg MEIN
+  // Haken (Server: CaseParticipant.collectedAt), nicht der des Inhabers.
+  const alleBelege = [...sharedCases, ...cases];
   const collectedIds = new Set(
-    cases.filter((c) => c.collected === true || isCaseClosed(c.status)).map((c) => c.id),
+    alleBelege.filter((c) => c.collected === true || isCaseClosed(c.status)).map((c) => c.id),
   );
 
   // ALLE Container (auch die fertiger Belege) bilden die Zähler-Basis;
@@ -567,8 +571,18 @@ export function BundleHomeScreen(): JSX.Element {
   // — in derselben Anzeige-Reihenfolge wie „2 · Bearbeiten" (05.08.2026).
   // Nur Belege des AKTIVEN Packs: mitgenommene Problem-Belege früherer Packs
   // liegen längst auf dem Tisch, da gibt es nichts mehr zu holen.
-  const stops = deriveStops(bundle?.routeStops ?? [], packCases);
-  const openStops = stopsForDisplay(stops, packCases);
+  // Ware holen umfasst seit dem 01.09.2026 AUCH die geteilten Belege: der
+  // eingeladene Helfer holt die Ware bzw. seinen Teil davon selbst. Die
+  // Route des fremden Bündels kennt er nicht — seine Container stehen deshalb
+  // GANZ OBEN, in derselben Ordnung wie unter „2 · Bearbeiten".
+  const geteilteStops = deriveStops([], sharedCases);
+  const eigeneStops = deriveStops(bundle?.routeStops ?? [], packCases);
+  const stops = [...geteilteStops, ...eigeneStops];
+  const openStops = [
+    ...stopsForDisplay(geteilteStops, sharedCases),
+    ...stopsForDisplay(eigeneStops, packCases),
+  ];
+  const geteilteStopIds = new Set(geteilteStops.map((s) => s.id));
 
   const toggleStop = (stopId: string): void => {
     setCollected.mutate({ caseId: stopId, collected: !collectedIds.has(stopId) });
@@ -607,7 +621,11 @@ export function BundleHomeScreen(): JSX.Element {
   };
 
   // B4 Parkposition: the Belege of not-yet-fetched stops go back to the pool.
-  const uncollectedCaseIds = stops.filter((s) => !collectedIds.has(s.id)).flatMap((s) => s.caseIds);
+  // Bewusst nur die EIGENEN: ein geteilter Beleg gehört ins Bündel des Inhabers,
+  // der Helfer kann ihn nicht in den Pool zurückgeben.
+  const uncollectedCaseIds = eigeneStops
+    .filter((s) => !collectedIds.has(s.id))
+    .flatMap((s) => s.caseIds);
 
   const handlePark = async (): Promise<void> => {
     setParkMsg(undefined);
@@ -675,11 +693,16 @@ export function BundleHomeScreen(): JSX.Element {
   // „2 · Bearbeiten" zeigt eigene UND geteilte Belege. Deshalb haengt der
   // Abschnitt nicht mehr am eigenen Bündel: wer nur mithilft, sieht ihn auch.
   const bearbeitenSichtbar = (Boolean(bundle) && !allClosed) || sharedCases.length > 0;
+  // Wie „2 · Bearbeiten": wer nur mithilft, hat kein eigenes Bündel — soll die
+  // Ware seines geteilten Belegs aber trotzdem holen.
+  const wareHolenSichtbar = (Boolean(bundle) && !allClosed) || geteilteStops.length > 0;
 
   // Punkt 4: keine erzwungene Sequenz mehr — jeder GEHOLTE Beleg ist direkt
   // startbar. Nur das Holen selbst gated noch: ein Beleg, dessen Lagerplatz-Stop
   // nicht abgehakt ist, bleibt ausgegraut.
-  const uncollectedCaseIdSet = new Set(uncollectedCaseIds);
+  const uncollectedCaseIdSet = new Set(
+    stops.filter((s) => !collectedIds.has(s.id)).flatMap((s) => s.caseIds),
+  );
   const isBelegStartable = (caseId: string): boolean => !uncollectedCaseIdSet.has(caseId);
 
   // „Pack 1 von 2" — nur wenn es überhaupt mehr als ein Pack gibt; bei einem
@@ -744,99 +767,123 @@ export function BundleHomeScreen(): JSX.Element {
                 {packCases.length}/{packCases.length} erledigt — hol dir unten das nächste Pack.
               </Typography>
             </Paper>
-          ) : (
-            <>
-              {/* 1 · Ware holen — inline pick list, check off right here (B1/B2).
+          ) : null}
+        </>
+      )}
+
+      {/* Sichtbar, solange es etwas zu holen gibt: eigenes offenes Pack ODER ein
+          geteilter Beleg, dessen Ware ich als Helfer selbst mitholen soll. */}
+      {wareHolenSichtbar ? (
+        <>
+          {/* 1 · Ware holen — inline pick list, check off right here (B1/B2).
                   Container fertiger Belege sind ausgeblendet (fertig = raus), die
                   Zähler laufen über ALLE Belege weiter. */}
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                1 · Ware holen
-                {stops.length > 0 ? (
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ ml: 1 }}
-                  >
-                    {counts.collected}/{counts.total} Belege
-                  </Typography>
-                ) : null}
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            1 · Ware holen
+            {stops.length > 0 ? (
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                {counts.collected}/{counts.total} Belege
               </Typography>
-              <Stack spacing={1} sx={{ mb: 1 }}>
-                {openStops.map((stop, index) => {
-                  const isDone = collectedIds.has(stop.id);
-                  const stopBelege = stop.caseIds
-                    .map((id) => cases.find((c) => c.id === id))
-                    .filter((c): c is NonNullable<typeof c> => Boolean(c));
-                  // `deriveStops` baut EINEN Container je Beleg — am (einzigen)
-                  // Beleg des Stops hängt das Teilen-Symbol (Zusammenarbeit §3.1).
-                  const ersterBeleg = stopBelege[0];
-                  return (
-                    <Paper
-                      key={stop.id}
-                      variant="outlined"
-                      onClick={() => toggleStop(stop.id)}
-                      sx={{
-                        p: 1.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        cursor: 'pointer',
-                        borderColor: isDone ? 'success.main' : 'divider',
-                        bgcolor: isDone ? 'action.hover' : 'background.paper',
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: isDone ? 'success.main' : 'action.selected',
-                          color: isDone ? 'common.white' : 'text.primary',
-                          fontWeight: 700,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isDone ? <CheckIcon fontSize="small" /> : index + 1}
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
-                        <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
-                          {stop.locationCode}
-                        </Typography>
-                        {/* Kundenfeedback 15.07.2026, Punkte 1+2: je Beleg dieselben
+            ) : null}
+          </Typography>
+          <Stack spacing={1} sx={{ mb: 1 }}>
+            {openStops.map((stop, index) => {
+              const isDone = collectedIds.has(stop.id);
+              const stopBelege = stop.caseIds
+                .map((id) => alleBelege.find((c) => c.id === id))
+                .filter((c): c is NonNullable<typeof c> => Boolean(c));
+              // `deriveStops` baut EINEN Container je Beleg — am (einzigen)
+              // Beleg des Stops hängt das Teilen-Symbol (Zusammenarbeit §3.1).
+              const ersterBeleg = stopBelege[0];
+              // Geteilter Beleg (Zusammenarbeit §4): golden markiert, damit sofort
+              // klar ist, dass hier gemeinsam geholt wird. Als Helfer steht der
+              // Inhaber im Chip, als Inhaber die Zahl der Helfer.
+              const stopGeteilt =
+                ersterBeleg !== undefined ? geteiltInfo(ersterBeleg, session?.employeeNo) : null;
+              const stopGeteiltLabel =
+                ersterBeleg === undefined
+                  ? null
+                  : (stopGeteilt?.label ??
+                    (geteilteStopIds.has(stop.id) && ersterBeleg.assignedEmployeeName
+                      ? `Geteilt mit ${ersterBeleg.assignedEmployeeName}`
+                      : null));
+              return (
+                <Paper
+                  key={stop.id}
+                  variant="outlined"
+                  onClick={() => toggleStop(stop.id)}
+                  sx={{
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    borderColor: isDone ? 'success.main' : 'divider',
+                    bgcolor: isDone ? 'action.hover' : 'background.paper',
+                    ...(stopGeteiltLabel !== null
+                      ? { borderLeft: `4px solid ${ltColors.shared}` }
+                      : {}),
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: isDone ? 'success.main' : 'action.selected',
+                      color: isDone ? 'common.white' : 'text.primary',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isDone ? <CheckIcon fontSize="small" /> : index + 1}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {/* B7: Lagerplatz 1:1 aus der Arbeitsanweisung, keine Transformation. */}
+                    <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
+                      {stop.locationCode}
+                    </Typography>
+                    {stopGeteiltLabel !== null ? (
+                      <Chip
+                        size="small"
+                        icon={<GroupsIcon />}
+                        label={stopGeteiltLabel}
+                        sx={{ ...GETEILT_CHIP_SX, mt: 0.5 }}
+                      />
+                    ) : null}
+                    {/* Kundenfeedback 15.07.2026, Punkte 1+2: je Beleg dieselben
                             Kopf-Infos wie unter „2 · Bearbeiten" plus „Barcode anzeigen"
                             (WE-Nr als Code-128-Pop-up) direkt beim Holen. */}
-                        <Stack spacing={1} sx={{ mt: 0.5 }}>
-                          {stopBelege.map((b) => (
-                            <Box key={b.id}>
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
-                                {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
-                                {b.goodsType ? (
-                                  <Chip size="small" variant="outlined" label={b.goodsType} />
-                                ) : null}
-                              </Stack>
-                              <BelegInfoLine beleg={b} referenceDay={referenceDay} />
-                              <Button
-                                size="small"
-                                onClick={(event) => {
-                                  // Der Button liegt in der abhakbaren Stop-Zeile — der
-                                  // Klick darf den Stop nicht auf „geholt" togglen.
-                                  event.stopPropagation();
-                                  setBarcodeCaseId(b.id);
-                                }}
-                              >
-                                Barcode anzeigen
-                              </Button>
-                            </Box>
-                          ))}
-                        </Stack>
-                      </Box>
-                      {/* Rechte Spalte (Kundenwunsch 01.09.2026): der Status-Chip ist
+                    <Stack spacing={1} sx={{ mt: 0.5 }}>
+                      {stopBelege.map((b) => (
+                        <Box key={b.id}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography sx={{ fontWeight: 700 }}>WE {b.weBelegNo}</Typography>
+                            {/* B8: Abschnitt-Semantik (NOS/EB/Vororder/…) zur Selbst-Priorisierung. */}
+                            {b.goodsType ? (
+                              <Chip size="small" variant="outlined" label={b.goodsType} />
+                            ) : null}
+                          </Stack>
+                          <BelegInfoLine beleg={b} referenceDay={referenceDay} />
+                          <Button
+                            size="small"
+                            onClick={(event) => {
+                              // Der Button liegt in der abhakbaren Stop-Zeile — der
+                              // Klick darf den Stop nicht auf „geholt" togglen.
+                              event.stopPropagation();
+                              setBarcodeCaseId(b.id);
+                            }}
+                          >
+                            Barcode anzeigen
+                          </Button>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+                  {/* Rechte Spalte (Kundenwunsch 01.09.2026): der Status-Chip ist
                           das EINZIGE Element im Fluss und bleibt dadurch exakt
                           vertikal mittig; der runde Teilen-Knopf schwebt direkt
                           darüber, ohne den Chip zu verschieben. Chip-Text „geholt"/„offen"
@@ -844,64 +891,62 @@ export function BundleHomeScreen(): JSX.Element {
                           Fertige Belege stehen hier gar nicht mehr, und
                           `istTeilbar` schließt sie zusätzlich aus: ein
                           abgearbeiteter Beleg lässt sich nicht mehr teilen. */}
-                      <Box sx={{ position: 'relative', flexShrink: 0 }}>
-                        {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
-                          <IconButton
-                            aria-label="Beleg teilen"
-                            size="small"
-                            onClick={(event) => {
-                              // Der Klick liegt in der abhakbaren Stop-Zeile —
-                              // er darf den Stop nicht auf „geholt" togglen.
-                              event.stopPropagation();
-                              setTeilenCaseId(ersterBeleg.id);
-                            }}
-                            sx={{
-                              // Schwebt ÜBER dem Chip, statt ihn aus der Mitte zu
-                              // drängen: der Chip ist das einzige Element im Fluss.
-                              position: 'absolute',
-                              bottom: '100%',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              mb: 0.5,
-                              width: 32,
-                              height: 32,
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              bgcolor: 'background.paper',
-                              color: 'text.secondary',
-                              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                            }}
-                          >
-                            <TeilenIcon sx={{ fontSize: 18 }} />
-                          </IconButton>
-                        ) : null}
-                        <Chip
-                          size="small"
-                          color={isDone ? 'success' : 'default'}
-                          label={isDone ? 'geholt' : 'offen'}
-                        />
-                      </Box>
-                    </Paper>
-                  );
-                })}
-              </Stack>
-              {/* B4: Karren voll → Rest (noch nicht geholte Belege) parken. */}
-              {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
-                <Button
-                  size="small"
-                  disabled={parkRemaining.isPending}
-                  onClick={() => void handlePark()}
-                  sx={{ mb: 1 }}
-                >
-                  {parkRemaining.isPending
-                    ? 'Parken…'
-                    : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
-                </Button>
-              ) : null}
-            </>
-          )}
+                  <Box sx={{ position: 'relative', flexShrink: 0 }}>
+                    {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
+                      <IconButton
+                        aria-label="Beleg teilen"
+                        size="small"
+                        onClick={(event) => {
+                          // Der Klick liegt in der abhakbaren Stop-Zeile —
+                          // er darf den Stop nicht auf „geholt" togglen.
+                          event.stopPropagation();
+                          setTeilenCaseId(ersterBeleg.id);
+                        }}
+                        sx={{
+                          // Schwebt ÜBER dem Chip, statt ihn aus der Mitte zu
+                          // drängen: der Chip ist das einzige Element im Fluss.
+                          position: 'absolute',
+                          bottom: '100%',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          mb: 0.5,
+                          width: 32,
+                          height: 32,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          bgcolor: 'background.paper',
+                          color: 'text.secondary',
+                          '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                        }}
+                      >
+                        <TeilenIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    ) : null}
+                    <Chip
+                      size="small"
+                      color={isDone ? 'success' : 'default'}
+                      label={isDone ? 'geholt' : 'offen'}
+                    />
+                  </Box>
+                </Paper>
+              );
+            })}
+          </Stack>
+          {/* B4: Karren voll → Rest (noch nicht geholte Belege) parken. */}
+          {!collectComplete && counts.collected > 0 && uncollectedCaseIds.length > 0 ? (
+            <Button
+              size="small"
+              disabled={parkRemaining.isPending}
+              onClick={() => void handlePark()}
+              sx={{ mb: 1 }}
+            >
+              {parkRemaining.isPending
+                ? 'Parken…'
+                : `Rest parken (${uncollectedCaseIds.length} Beleg${uncollectedCaseIds.length === 1 ? '' : 'e'})`}
+            </Button>
+          ) : null}
         </>
-      )}
+      ) : null}
 
       {/* Sichtbar, solange es etwas zu bearbeiten gibt: eigenes offenes Pack ODER
           ein geteilter Beleg — auch ohne eigenes Bündel und nach dem eigenen Pack. */}
@@ -941,13 +986,16 @@ export function BundleHomeScreen(): JSX.Element {
                 <Paper
                   key={b.id}
                   variant="outlined"
-                  onClick={() => navigate(caseProcessPath(b.id))}
+                  onClick={() => openBeleg(b.id)}
                   sx={{
                     p: 1.5,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
-                    cursor: 'pointer',
+                    // Seit dem 01.09.2026 holt auch der Helfer die Ware selbst —
+                    // deshalb gilt hier dasselbe Holen-Gate wie bei eigenen Belegen.
+                    cursor: isBelegStartable(b.id) ? 'pointer' : 'not-allowed',
+                    opacity: isBelegStartable(b.id) ? 1 : 0.5,
                     borderLeft: `4px solid ${ltColors.shared}`,
                   }}
                 >

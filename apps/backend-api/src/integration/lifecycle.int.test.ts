@@ -494,6 +494,91 @@ describe('Problem-Loop (Kundenfeedback 14.07.2026 + §17.1 Problemfall)', () => 
     expect(zstRecords.reduce((sum, z) => sum + z.completedQuantity, 0)).toBe(20);
   });
 
+  it('Ware holen ist ein eigener Gang je Person: der Helfer hakt seinen selbst ab', async () => {
+    // Kundenwunsch 01.09.2026: Der eingeladene Helfer holt die Ware bzw. seinen
+    // Teil davon selbst. Sein Haken darf deshalb NICHT der des Inhabers sein —
+    // sonst wäre der Beleg für ihn geholt, sobald der Inhaber ihn abhakt.
+    const emp = await prisma.user.findUniqueOrThrow({ where: { employeeNo: 'E100' } });
+    const helper = await prisma.user.upsert({
+      where: { employeeNo: 'E101' },
+      update: {},
+      create: { employeeNo: 'E101', displayName: 'Ben Beispiel' },
+    });
+    const helperPrincipal: Principal = {
+      sub: 'oidc-emp-101',
+      employeeNo: 'E101',
+      roles: [Role.Employee],
+      claims: {},
+    };
+    const loc = await prisma.location.findUniqueOrThrow({ where: { code: 'R27' } });
+    const day = todayMidnightUtc();
+    const bundle =
+      (await prisma.assignmentBundle.findFirst({
+        where: { employeeId: emp.id, date: day, status: { notIn: ['completed', 'cancelled'] } },
+      })) ??
+      (await prisma.assignmentBundle.create({
+        data: { employeeId: emp.id, date: day, status: 'assigned', createdBy: 'system' },
+      }));
+    const gcase = await prisma.goodsReceiptCase.create({
+      data: {
+        source: 'manual',
+        externalRef: 'itest-collect-shared',
+        weBelegNo: 'WE-COLLECT-1',
+        bookingDate: day,
+        branchNo: '1',
+        storageLocationId: loc.id,
+        section: 7,
+        totalQuantity: 5,
+        status: 'assigned',
+        effortPoints: 5,
+        estimatedMinutes: 10,
+        assignedBundleId: bundle.id,
+      },
+    });
+    await prisma.caseParticipant.create({
+      data: {
+        caseId: gcase.id,
+        employeeId: helper.id,
+        role: 'helfer',
+        status: 'angenommen',
+        invitedById: emp.id,
+        invitedByLabel: 'Anna Beispiel',
+        respondedAt: new Date(),
+      },
+    });
+
+    // Der Inhaber hakt ab — für den Helfer ändert das nichts.
+    await cases.setCollected(employee, gcase.id, { collected: true });
+    const vorher = await cases.getToday(helperPrincipal);
+    const geteiltVorher = vorher.sharedCases.find((c) => c.id === gcase.id);
+    expect(geteiltVorher?.collected).toBe(false);
+    expect(
+      (await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: gcase.id } })).collectedAt,
+    ).not.toBeNull();
+
+    // Der Helfer hakt seinen eigenen Gang ab: er landet an SEINER Beteiligung.
+    await cases.setCollected(helperPrincipal, gcase.id, { collected: true });
+    const nachher = await cases.getToday(helperPrincipal);
+    expect(nachher.sharedCases.find((c) => c.id === gcase.id)?.collected).toBe(true);
+    const beteiligung = await prisma.caseParticipant.findFirstOrThrow({
+      where: { caseId: gcase.id, employeeId: helper.id },
+    });
+    expect(beteiligung.collectedAt).not.toBeNull();
+
+    // Zurücknehmen wirkt ebenfalls nur auf den eigenen Haken.
+    await cases.setCollected(helperPrincipal, gcase.id, { collected: false });
+    expect(
+      (
+        await prisma.caseParticipant.findFirstOrThrow({
+          where: { caseId: gcase.id, employeeId: helper.id },
+        })
+      ).collectedAt,
+    ).toBeNull();
+    expect(
+      (await prisma.goodsReceiptCase.findUniqueOrThrow({ where: { id: gcase.id } })).collectedAt,
+    ).not.toBeNull();
+  });
+
   it('Zähl-Endpunkt: Teil-Updates lassen das jeweils andere Feld unangetastet (§7)', async () => {
     const { caseId, skuMId } = await seedAssignedCaseWithPositions('WE-COUNT-1');
     await cases.startPreparation(employee, caseId);

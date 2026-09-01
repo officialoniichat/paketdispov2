@@ -28,17 +28,22 @@ Zwei ähnliche Wörter, zwei verschiedene Dinge:
 | | **Geteilter Beleg** (dieses Kapitel) | **Aufgeteilter Beleg** (macht die Teamleitung) |
 |---|---|---|
 | Was passiert | **Ein** Beleg, mehrere Personen. Alle sehen **alle** Positionen. | Ein großer Beleg wird in **eigenständige Teil-Belege** zerlegt (`'WE-… (1)'`, `'WE-… (2)'`). |
-| Wer holt die Ware | Der **Inhaber** – der Beleg bleibt in seinem Bündel. | Jeder holt die Ware seines eigenen Teil-Belegs. |
+| Wer holt die Ware | **Alle Beteiligten** – jede:r holt die Ware bzw. ihren/seinen Teil davon und hakt selbst ab. Der Beleg bleibt trotzdem im Bündel des Inhabers. | Jeder holt die Ware seines eigenen Teil-Belegs. |
 | Woran du es erkennst | Goldene Markierung mit `'Geteilt mit <Name>'` bzw. `'Geteilt · <n> Personen'`. | Ein ganz normaler Beleg mit Teil-Nummer. |
 
 Im geteilten Beleg gibt es zwei Rollen:
 
-- **Inhaber** – die Person, in deren Bündel der Beleg liegt. Sie holt die Ware und hakt den
+- **Inhaber** – die Person, in deren Bündel der Beleg liegt. Sie holt die Ware und hakt ihren
   Lagerplatz-Stop ab (Kapitel A2).
 - **Helfer** – alle Eingeladenen, die angenommen haben. Der Beleg liegt **nicht** in ihrem Bündel;
   sie finden ihn auf dem Startbildschirm unter **`'2 · Bearbeiten'`**, dort **ganz oben** vor den
-  eigenen Belegen, golden eingefasst und mit `'Geteilt mit <Name des Inhabers>'`. Unter
-  `'1 · Ware holen'` steht er nicht – die Ware holt der Inhaber.
+  eigenen Belegen, golden eingefasst und mit `'Geteilt mit <Name des Inhabers>'`.
+
+**Auch Helfer holen die Ware.** Der geteilte Beleg steht bei ihnen ebenfalls unter
+`'1 · Ware holen'`, dort **ganz oben** und golden markiert: Jede:r holt die Ware bzw. ihren/seinen
+Teil davon und hakt **den eigenen** Stop ab – der Haken der anderen zählt nicht für dich, und deiner
+nicht für sie. Solange dein Haken fehlt, bleibt der Beleg unter `'2 · Bearbeiten'` ausgegraut, genau
+wie ein eigener. Liegt die Ware schon auf dem Tisch, tippst du den Stop einfach ab.
 
 ## Kolleg:innen einladen (`'Beleg teilen'`)
 
@@ -73,7 +78,8 @@ hast.
 
 - **Haken – annehmen:** Der Beleg erscheint bei dir unter `'2 · Bearbeiten'` **ganz oben**, vor
   deinen eigenen Belegen. Du kannst ihn sofort öffnen – ausgegraut ist er nie. Die Ware holt der
-  Inhaber, du musst nichts abholen. Ist der Beleg fertig, verschwindet er wieder.
+  Inhaber – hol dir dort deinen Teil der Ware und hak den Stop ab. Ist der Beleg fertig,
+  verschwindet er wieder.
 - **Kreuz – ablehnen:** Du wirst nicht weiter behelligt. Die Einladung bleibt nur in deinem Verlauf
   unter `'Nachrichten'` stehen. Der Inhaber kann dich später erneut einladen.
 
@@ -116,7 +122,11 @@ Bildschirm:
 
 - **Links** – mindestens die halbe Breite – bleibt deine eigene Positionstabelle; du arbeitest
   normal weiter.
-- **Rechts** siehst du die anderen Beteiligten:
+- **Rechts** steht ganz oben der **`'Gesamtfortschritt'`** des BELEGS: ein goldener Balken mit
+  Prozentzahl und darunter `'<erledigt>/<gesamt> Teile · <geprüft>/<gesamt> Positionen – alle
+  Beteiligten zusammen'`. Gezählt wird in **Teilen** (Stückzahl), weil eine Position mit 40 Teilen
+  mehr Arbeit ist als eine mit zweien; deine eigenen Haken zählen mit.
+- Darunter siehst du die anderen Beteiligten:
   - Bei **einer** anderen Person: ihr Name, ihr Stand (`'Inhaber'`, `'hilft'` oder – grau –
     `'Teil erledigt'`), ein Fortschrittsbalken „geprüft von gesamt“ und die Nummern der Positionen,
     die sie geprüft hat.
@@ -206,9 +216,12 @@ flowchart TD
 
 ## Häufige Fehler / FAQ
 
-- **Ich sehe kein Teilen-Symbol** – es gibt es nur an Belegen unter `'1 · Ware holen'`, also in
-  deinem eigenen Bündel, und nicht bei rot geparkten Problemfällen. Geteilte Belege oben in
-  `'2 · Bearbeiten'` gehören dem Inhaber – bitte ihn, weitere Kolleg:innen einzuladen.
+- **Ich sehe kein Teilen-Symbol** – es gibt es nur an Belegen unter `'1 · Ware holen'` und nicht
+  bei rot geparkten Problemfällen. An einem geteilten Beleg, an dem du beteiligt bist, steht es
+  ebenfalls: Auch Helfer dürfen weitere Kolleg:innen einladen.
+- **Der geteilte Beleg ist unter `'2 · Bearbeiten'` ausgegraut** – du hast deinen eigenen
+  Ware-holen-Stop noch nicht abgehakt. Er steht oben unter `'1 · Ware holen'`; ein Tipp darauf gibt
+  den Beleg frei. Dass ein anderer Beteiligter schon abgehakt hat, zählt nicht für dich.
 - **`'Beleg erledigt'` ist grau, obwohl ich fertig bin** – bei einem geteilten Beleg müssen **alle**
   Positionen geprüft sein, auch die der anderen. Melde deinen Anteil mit `'Teilbeleg erledigt'` und
   hilf weiter oder hol dir Neues.

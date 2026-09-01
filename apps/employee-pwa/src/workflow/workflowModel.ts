@@ -237,6 +237,32 @@ export function myParticipation(
   return aggregate.collaboration?.participants.find((p) => p.employeeNo === meineEmployeeNo);
 }
 
+/**
+ * Gesamt-Fortschritt des Belegs in TEILEN (Kundenwunsch 01.09.2026): Die
+ * Team-Ansicht zeigt je Beteiligtem geprüfte POSITIONEN — wie viel Arbeit das
+ * ist, sagt erst die Stückzahl. Eine Position mit 40 Teilen wiegt schwerer als
+ * eine mit zweien.
+ *
+ * Reine Anzeige-Ableitung aus Daten, die der Server ohnehin mitschickt: Teile
+ * einer Position = Σ `expectedQuantity` ihrer Größenzeilen (die SOLL-Menge —
+ * gezählte Abweichungen ändern den Umfang der Arbeit nicht). „Erledigt" ist
+ * eine Position, sobald sie geprüft ist, egal von wem: gezählt wird der Beleg,
+ * nicht die Person.
+ */
+export function teileFortschritt(aggregate: CaseAggregate): {
+  erledigt: number;
+  gesamt: number;
+} {
+  let erledigt = 0;
+  let gesamt = 0;
+  for (const pos of aggregate.positions) {
+    const teile = pos.skuLines.reduce((sum, line) => sum + line.expectedQuantity, 0);
+    gesamt += teile;
+    if (pos.confirmedBy !== undefined) erledigt += teile;
+  }
+  return { erledigt, gesamt };
+}
+
 /** Positionsnummern, die dieser Beteiligte geprüft hat — aufsteigend sortiert. */
 export function checkedPositionNos(aggregate: CaseAggregate, employeeNo: string): number[] {
   return aggregate.positions

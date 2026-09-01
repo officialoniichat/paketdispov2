@@ -27,7 +27,12 @@ import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 import { ltColors, touchTarget } from '@paket/ui';
 import type { CaseAggregate, CaseParticipant } from '../domain/types.js';
-import { checkedPositionNos, otherActiveParticipants } from '../workflow/workflowModel.js';
+import {
+  checkedPositionNos,
+  isPositionChecked,
+  otherActiveParticipants,
+  teileFortschritt,
+} from '../workflow/workflowModel.js';
 import { GLOW_DURATION_MS } from '../data/useTeamGlow.js';
 import { initials } from './ProfileMenu.js';
 
@@ -67,6 +72,53 @@ function ProgressBar({ geprueft, gesamt }: { geprueft: number; gesamt: number })
         {geprueft}/{gesamt} Positionen geprüft
       </Typography>
     </Box>
+  );
+}
+
+/**
+ * Gesamt-Leiste über der Beteiligten-Liste (Kundenwunsch 01.09.2026): wie weit
+ * ist der BELEG — nicht eine einzelne Person. Die Kästchen darunter zeigen je
+ * Beteiligtem geprüfte Positionen; wie viel Arbeit davon erledigt ist, sagt erst
+ * die Stückzahl, deshalb führt hier die TEILE-Zahl und die Positionen stehen
+ * als Zusatz daneben. Gezählt wird über ALLE Beteiligten, mich eingeschlossen.
+ */
+function GesamtFortschritt({ aggregate }: { aggregate: CaseAggregate }): JSX.Element {
+  const teile = teileFortschritt(aggregate);
+  const positionen = aggregate.collaboration?.positionCount ?? aggregate.positions.length;
+  const geprueft =
+    aggregate.collaboration?.confirmedPositionCount ??
+    aggregate.positions.filter(isPositionChecked).length;
+  const value = teile.gesamt > 0 ? Math.min(100, (teile.erledigt / teile.gesamt) * 100) : 0;
+  return (
+    <Paper
+      variant="outlined"
+      data-testid="team-gesamt"
+      sx={{ p: 1.5, borderLeft: `4px solid ${ltColors.shared}` }}
+    >
+      <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Gesamtfortschritt
+        </Typography>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          {Math.round(value)} %
+        </Typography>
+      </Stack>
+      <LinearProgress
+        variant="determinate"
+        value={value}
+        aria-label={`${teile.erledigt} von ${teile.gesamt} Teilen abgearbeitet`}
+        sx={{
+          my: 0.5,
+          height: 10,
+          borderRadius: 5,
+          '& .MuiLinearProgress-bar': { bgcolor: ltColors.shared },
+        }}
+      />
+      <Typography variant="caption" color="text.secondary">
+        {teile.erledigt}/{teile.gesamt} Teile · {geprueft}/{positionen} Positionen – alle
+        Beteiligten zusammen
+      </Typography>
+    </Paper>
   );
 }
 
@@ -161,6 +213,7 @@ export function TeamPane({ aggregate, meineEmployeeNo, glow }: TeamPaneProps): J
 
   return (
     <Stack spacing={1.5} data-testid="team-pane">
+      <GesamtFortschritt aggregate={aggregate} />
       <Typography variant="subtitle2">Beteiligte</Typography>
       {selected ? (
         <ParticipantDetail

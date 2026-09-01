@@ -43,8 +43,9 @@ Jede Beleg-Karte zeigt (in dieser Reihenfolge):
   `'<geprüft>/<gesamt> geprüft'`.
 
 Belege, bei denen **du** als Helfer mitarbeitest, gehören nicht zu deinem Bündel, stehen unter
-**`'2 · Bearbeiten'`** aber **ganz oben** – vor deinen eigenen. Sie sind nie ausgegraut, und die
-Ware holt der Inhaber.
+**`'2 · Bearbeiten'`** aber **ganz oben** – vor deinen eigenen. Auch sie musst du erst holen: Sie
+stehen ebenfalls unter `'1 · Ware holen'` und bleiben ausgegraut, bis du deinen Stop abgehakt
+hast (Kapitel A7).
 
 ## WE-Nummer als Barcode (Etiketten per Scanner anfordern)
 
