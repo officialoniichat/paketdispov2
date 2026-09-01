@@ -42,8 +42,9 @@ Im geteilten Beleg gibt es zwei Rollen:
 ## Kolleg:innen einladen (`'Beleg teilen'`)
 
 1. Unter `'1 · Ware holen'` trägt jeder Beleg am rechten Rand einen runden Knopf mit dem
-   **Teilen-Symbol** (Kasten mit Pfeil nach oben, `'Beleg teilen'`) – direkt **über** dem Status-Chip
-   `'offen'` / `'geholt'`. Tippe den Knopf an; der Stop wird dadurch **nicht** abgehakt.
+   **Teilen-Symbol** (Kasten mit Pfeil nach oben, `'Beleg teilen'`) – er schwebt direkt **über** dem
+   Status-Chip `'offen'` / `'geholt'`, der weiterhin mittig zur Karte steht. Tippe den Knopf an; der
+   Stop wird dadurch **nicht** abgehakt.
    Ist ein Beleg fertig, verschwindet er aus der Liste – teilen lässt er sich dann nicht mehr.
 2. Es öffnet sich **`'Beleg teilen'`**: eine Liste aller aktiven Kolleg:innen mit einem Haken links,
    den Initialen, dem Namen und – wer heute eingeteilt ist – dem Zusatz `'heute im Dienst'`. Wer

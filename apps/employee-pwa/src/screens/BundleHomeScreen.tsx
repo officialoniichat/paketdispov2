@@ -903,14 +903,15 @@ export function BundleHomeScreen(): JSX.Element {
                           ))}
                         </Stack>
                       </Box>
-                      {/* Rechte Spalte: runder Teilen-Knopf ÜBER dem Status-Chip
-                          (Kundenwunsch 01.09.2026); die Spalte als Ganzes steht
-                          vertikal mittig in der Karte. Chip-Text „geholt"/„offen"
+                      {/* Rechte Spalte (Kundenwunsch 01.09.2026): der Status-Chip ist
+                          das EINZIGE Element im Fluss und bleibt dadurch exakt
+                          vertikal mittig; der runde Teilen-Knopf schwebt direkt
+                          darüber, ohne den Chip zu verschieben. Chip-Text „geholt"/„offen"
                           bleibt unverändert — die E2E-Helfer ankern darauf.
                           Fertige Belege stehen hier gar nicht mehr, und
                           `istTeilbar` schließt sie zusätzlich aus: ein
                           abgearbeiteter Beleg lässt sich nicht mehr teilen. */}
-                      <Stack spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
+                      <Box sx={{ position: 'relative', flexShrink: 0 }}>
                         {ersterBeleg !== undefined && istTeilbar(ersterBeleg.status) ? (
                           <IconButton
                             aria-label="Beleg teilen"
@@ -922,10 +923,18 @@ export function BundleHomeScreen(): JSX.Element {
                               setTeilenCaseId(ersterBeleg.id);
                             }}
                             sx={{
+                              // Schwebt ÜBER dem Chip, statt ihn aus der Mitte zu
+                              // drängen: der Chip ist das einzige Element im Fluss.
+                              position: 'absolute',
+                              bottom: '100%',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              mb: 0.5,
                               width: 32,
                               height: 32,
                               border: '1px solid',
                               borderColor: 'divider',
+                              bgcolor: 'background.paper',
                               color: 'text.secondary',
                               '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
                             }}
@@ -938,7 +947,7 @@ export function BundleHomeScreen(): JSX.Element {
                           color={isDone ? 'success' : 'default'}
                           label={isDone ? 'geholt' : 'offen'}
                         />
-                      </Stack>
+                      </Box>
                     </Paper>
                   );
                 })}
