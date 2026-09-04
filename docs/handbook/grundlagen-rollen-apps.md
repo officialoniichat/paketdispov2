@@ -45,7 +45,6 @@ Reiter (in dieser Reihenfolge):
 | `'Mitarbeiterboard'` | B3 |
 | `'Belege'` | B2 |
 | `'Admin & Regeln'` | B7 |
-| `'Experiment DA.M.B'` | Experimentier-Arbeitsfläche (Ablagen + Matrix); ohne eigenes Kapitel |
 
 Unter der Navigation liegt der Knopf `'Zur Mitarbeiter-App'`. Mit `'Navigation einklappen'` wird die
 Leiste auf Symbole verschmälert; `'DA.M.B'`, der Pfeil und die Reiter bleiben dort als Symbole mit
