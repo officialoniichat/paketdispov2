@@ -1,8 +1,8 @@
 /**
- * Experiment DA.M.B — Digitale Ablagen (Fenster): bettet das ORIGINAL-Board
+ * DA.M.B — Digitale Ablagen (Fenster): bettet das ORIGINAL-Board
  * (AblagenBoard, §10.2 — gleiches Design, gleiche Aktionen inkl. Kebab-Menü,
  * Filter, Gruppierung) mit eigenem Saved-View-Key ein und verdrahtet nur die
- * Drag-&-Drop-Hooks des Experiments: Karten auf legale Lanes ziehen (parken/
+ * Drag-&-Drop-Hooks des DA.M.B: Karten auf legale Lanes ziehen (parken/
  * entparken/priorisieren/weiterleiten/zurückholen — nur wo ein echter Endpoint
  * existiert) oder auf Matrix-Zeilen (zuweisen). Während ein Matrix-Beleg
  * gezogen wird, liegt die Pool-Rückgabe als BLAUER Schleier mit Recycling-Icon

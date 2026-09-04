@@ -59,7 +59,7 @@ export interface DataTableProps<T> {
   /** When set, the body scrolls within this height and rows are virtualized. */
   maxHeight?: number;
   /**
-   * Füll-Modus (Experiment-Pane/Vollbild): der Container nimmt die verfügbare
+   * Füll-Modus (DA.M.B-Pane/Vollbild): der Container nimmt die verfügbare
    * Höhe des Flex-Elters ein (flex:1, bis ganz unten) statt einer festen
    * maxHeight — Zeilen sind ebenfalls virtualisiert.
    */

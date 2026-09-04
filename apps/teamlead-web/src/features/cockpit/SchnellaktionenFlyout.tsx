@@ -130,7 +130,7 @@ export function SchnellaktionenFlyout({ onOpenChange }: SchnellaktionenFlyoutPro
               <SchnellaktionenListe
                 decisions={decisions}
                 onAbhaken={abhaken}
-                // Sprung ins Experiment: nur das Panel schließen — die Meldung
+                // Sprung ins DA.M.B: nur das Panel schließen — die Meldung
                 // bleibt offen (abgehakt wird ausschließlich über den Haken).
                 onAktion={() => setOpen(false)}
               />

@@ -877,7 +877,7 @@ export function CaseQuickInfoContent({ c }: { c: BoardCase }): JSX.Element {
 
 /**
  * Hover-Schnellinfo um ein beliebiges Element (z. B. die Beleg-Striche der
- * Experiment-Matrix): öffnet nach kurzer Verzögerung dieselbe Karte wie das
+ * DA.M.B-Matrix): öffnet nach kurzer Verzögerung dieselbe Karte wie das
  * „!" des Mitarbeiterboards.
  */
 export function CaseQuickInfoTooltip({

@@ -1,6 +1,6 @@
 /**
  * Schnellaktion-Fokus — der Sprungauftrag einer Schnellaktion (Tagescockpit/
- * Sidebar-Ausklapper) an das Experiment DA.M.B: welches Fenster in Vollbild
+ * Sidebar-Ausklapper) an das DA.M.B: welches Fenster in Vollbild
  * geht und welche Fälle bzw. Mitarbeiter-Zeilen dort für 3 Sekunden markiert
  * und ins Bild gescrollt werden. Reist als Router-State
  * (`navigate('/experiment', { state: { fokus } })`) und wird dort sofort

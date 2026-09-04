@@ -1,6 +1,6 @@
 /**
- * Vorverteilung — die RÜCKSEITE des Beleg-Übersicht-Fensters im Experiment
- * DA.M.B (Flip-Karte, Leitstand-Konzept „Als Nächstes / Wagen vorbereiten").
+ * Vorverteilung — die RÜCKSEITE des Beleg-Übersicht-Fensters im DA.M.B
+ * (Flip-Karte, Leitstand-Konzept „Als Nächstes / Wagen vorbereiten").
  *
  * Die Packung kommt ausschließlich aus dem Engine-Dry-Run
  * (POST /assignments/preview → PreviewResult.bundles) — hier wird NICHTS

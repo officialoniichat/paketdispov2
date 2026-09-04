@@ -1,5 +1,5 @@
 /**
- * Vorverteilungs-Dialoge der Mitarbeiter-Matrix (Experiment DA.M.B).
+ * Vorverteilungs-Dialoge der Mitarbeiter-Matrix (DA.M.B).
  *
  * NaechstesPackDialog — Drop auf den „+ Nächstes Pack"-Slot hinter der
  * Trennwand: der Beleg wird ein eigenes, VORGEPLANTES Pack im Tages-Bündel

@@ -1,5 +1,5 @@
 /**
- * Experiment DA.M.B — reines Drag-&-Drop-Regelwerk (Anzeige-Schicht).
+ * DA.M.B — reines Drag-&-Drop-Regelwerk (Anzeige-Schicht).
  *
  * Jede Geste mappt 1:1 auf eine EXISTIERENDE auditierte Teamlead-Aktion
  * (park/unpark/prioritise/deprioritise/forward/unforward bzw. assign/move/

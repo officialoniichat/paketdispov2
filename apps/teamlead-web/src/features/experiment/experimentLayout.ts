@@ -1,5 +1,5 @@
 /**
- * Experiment DA.M.B — reines Layout-Modell des 3-Fenster-Workspace.
+ * DA.M.B — reines Layout-Modell des 3-Fenster-Workspace.
  *
  * Der Workspace rendert IMMER dieselben drei Fenster (Belege, Ablagen, Matrix)
  * als stabile Geschwister — dieses Modul rechnet nur ihre absoluten

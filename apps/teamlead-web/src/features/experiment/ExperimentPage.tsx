@@ -1,8 +1,8 @@
 /**
- * Experiment DA.M.B — 3-Fenster-Workspace (Digitale Ablagen · Mitarbeiter-
- * Matrix · Belege) als EIGENER experimenteller Reiter. Die Basis-Tabs bleiben
+ * DA.M.B — 3-Fenster-Workspace (Digitale Ablagen · Mitarbeiter-
+ * Matrix · Belege) als Haupteintrag der Nav-Rail (Route /experiment). Die Basis-Tabs bleiben
  * unberührt: die Beleg-Liste wird unverändert eingebettet, Ablagen und Matrix
- * sind Experiment-eigene Ansichten über denselben Daten (useCockpitData).
+ * sind DA.M.B-eigene Ansichten über denselben Daten (useCockpitData).
  *
  * Layout: randlos bis an die Fenster-Kanten (AppShell rendert /experiment ohne
  * Container). Drei Anordnungen — Matrix unten/rechts/links, s.
@@ -315,7 +315,7 @@ export function ExperimentPage(): JSX.Element {
               bgcolor: 'background.paper',
             }}
           >
-            {/* Eigener Saved-View-Key: das Experiment darf /belege nicht umkonfigurieren. */}
+            {/* Eigener Saved-View-Key: DA.M.B darf /belege nicht umkonfigurieren. */}
             <BelegListPage viewStateKey={EXPERIMENT_BELEGE_VIEW_KEY} fill />
           </Box>
           <Box

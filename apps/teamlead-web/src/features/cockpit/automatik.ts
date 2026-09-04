@@ -1,7 +1,7 @@
 /**
  * Automatik-Schalter (Anhang E.4) — EIN persistierter Zustand für alle
  * Oberflächen: das Tagescockpit (Auto-Commit neuer freier Arbeit) und die
- * Vorverteilungs-Rückseite im Experiment DA.M.B teilen denselben
+ * Vorverteilungs-Rückseite im DA.M.B teilen denselben
  * localStorage-Schalter, statt je eine eigene Kopie zu halten.
  */
 import { useState } from 'react';

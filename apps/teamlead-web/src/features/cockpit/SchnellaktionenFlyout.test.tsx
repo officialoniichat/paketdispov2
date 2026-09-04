@@ -82,7 +82,7 @@ describe('SchnellaktionenFlyout', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Schnellaktionen ausklappen — 1 Meldung' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ansehen →' }));
-    // Panel schließt (Sprung ins Experiment), aber die Meldung bleibt offen …
+    // Panel schließt (Sprung ins DA.M.B), aber die Meldung bleibt offen …
     expect(onOpenChange).toHaveBeenLastCalledWith(false);
     // … und der Knopf bleibt ausgefahren: weiterhin 1 un-abgehakte Meldung.
     expect(

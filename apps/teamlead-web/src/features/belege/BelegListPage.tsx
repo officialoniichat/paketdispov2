@@ -143,11 +143,11 @@ const DEFAULT_SAVED_VIEW: BelegeSavedView = { scope: 'aktiv', sorting: [], filte
 export interface BelegListPageProps {
   /**
    * localStorage-Key der Saved View. Default ist der Basis-Tab-Key; eingebettete
-   * Instanzen (Experiment DA.M.B) übergeben einen eigenen Key, damit sie den
+   * Instanzen (DA.M.B) übergeben einen eigenen Key, damit sie den
    * Basis-Tab /belege nicht umkonfigurieren.
    */
   viewStateKey?: string;
-  /** Experiment DA.M.B: Tabelle füllt die verfügbare Höhe (Pane/Vollbild) bis ganz unten. */
+  /** DA.M.B: Tabelle füllt die verfügbare Höhe (Pane/Vollbild) bis ganz unten. */
   fill?: boolean;
 }
 
@@ -1022,7 +1022,7 @@ export function BelegListPage({
           ))}
         </Stack>
       ) : (
-        // Füll-Modus (Experiment): Tabelle nimmt die Resthöhe bis ganz unten ein,
+        // Füll-Modus (DA.M.B): Tabelle nimmt die Resthöhe bis ganz unten ein,
         // die Paginierung bleibt darunter sichtbar.
         <Box
           sx={

@@ -1,7 +1,7 @@
 /**
  * Schichtfarben (Nutzer-Vorgabe): Frühschicht hellblau, Spätschicht helllila,
  * Frei orange — EINE Quelle für das Wochenmuster (Admin & Regeln), den
- * Schichtplan-Kalender und die Mitarbeiter-Matrix (Experiment DA.M.B).
+ * Schichtplan-Kalender und die Mitarbeiter-Matrix (DA.M.B).
  */
 
 export type ShiftModelName = 'Frühschicht' | 'Spätschicht' | 'Frei';

@@ -1,5 +1,5 @@
 /**
- * Experiment DA.M.B — Pack-Ableitung für die Mitarbeiter-Matrix (reine Anzeige).
+ * DA.M.B — Pack-Ableitung für die Mitarbeiter-Matrix (reine Anzeige).
  *
  * Ein „Pack" ist die Engine-Einheit der Tagesplanung (Starter-Pack + Folge-
  * Packs, Konfig starterPackMin/MaxTeile). Mehrere Packs werden flach in EIN

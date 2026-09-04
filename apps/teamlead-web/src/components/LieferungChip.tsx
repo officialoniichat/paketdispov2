@@ -48,7 +48,7 @@ export function buildGroupColorMap(
 
 /**
  * Der Zugehörigkeits-Satz eines Gruppen-Belegs — exakt der Chip-Wortlaut, damit
- * Board, Beleg-Liste und die Matrix-Striche (Experiment DA.M.B) identisch sprechen.
+ * Board, Beleg-Liste und die Matrix-Striche (DA.M.B) identisch sprechen.
  */
 export function lieferungSatz(group: DeliveryGroupRef): string {
   const meta = CONFIDENCE_META[group.confidence];

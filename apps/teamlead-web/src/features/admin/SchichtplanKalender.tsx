@@ -4,7 +4,7 @@
  * Schichtmodell (Früh hellblau · Spät helllila · Frei orange, aggregiert).
  * Klick (links) auf einen Mitarbeiter-Block: Krankschreibung/Urlaub ab diesem Tag
  * „bis wann mindestens" (EmployeeAbsence im Backend); abwesende Diensttage sind
- * durchgestrichen. Die Mitarbeiter-Matrix (Experiment DA.M.B) zeigt dieselben
+ * durchgestrichen. Die Mitarbeiter-Matrix (DA.M.B) zeigt dieselben
  * Abwesenheiten ganz unten, ebenfalls durchgestrichen.
  */
 import { useMemo, useState, type JSX } from 'react';

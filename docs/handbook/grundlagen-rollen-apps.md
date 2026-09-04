@@ -30,8 +30,13 @@ erscheint der eigentliche Arbeitsbildschirm, mit dem von der Teamleitung hinterl
 
 ## Navigation im Cockpit
 
-Das Cockpit hat links eine feste Navigationsleiste mit der Marke `'L&T Cockpit'` /
-`'Logistik Warenauszeichnung'`. Die Einträge (in dieser Reihenfolge):
+Das Cockpit hat links eine Navigationsleiste mit der Marke `'L&T Cockpit'` /
+`'Logistik Warenauszeichnung'`. Fester Haupteintrag ist `'DA.M.B'` – der 3-Fenster-Arbeitsplatz aus
+Digitalen Ablagen, Mitarbeiter-Matrix und Belegen. Der Pfeil rechts neben `'DA.M.B'` klappt die
+weiteren Reiter aus bzw. ein (`'Reiter ausklappen'` / `'Reiter einklappen'`); eingeklappt zeigt die
+Leiste nur `'DA.M.B'`. Sobald Sie einen der Reiter öffnen, ist die Gruppe aufgeklappt, damit der
+aktive Eintrag sichtbar bleibt; der zuletzt gewählte Zustand bleibt im Browser gespeichert. Die
+Reiter (in dieser Reihenfolge):
 
 | Navigationseintrag | Handbuch-Kapitel |
 |---|---|
@@ -41,6 +46,10 @@ Das Cockpit hat links eine feste Navigationsleiste mit der Marke `'L&T Cockpit'`
 | `'Belege'` | B2 |
 | `'Admin & Regeln'` | B7 |
 | `'Experiment DA.M.B'` | Experimentier-Arbeitsfläche (Ablagen + Matrix); ohne eigenes Kapitel |
+
+Unter der Navigation liegt der Knopf `'Zur Mitarbeiter-App'`. Mit `'Navigation einklappen'` wird die
+Leiste auf Symbole verschmälert; `'DA.M.B'`, der Pfeil und die Reiter bleiben dort als Symbole mit
+Tooltip bedienbar.
 
 > Hinweis: Der Menüpunkt heißt `'Tagescockpit'`, die Überschrift auf der Seite selbst lautet
 > `'Heute – Logistik Warenauszeichnung'`. Ebenso: Menüpunkt `'Admin & Regeln'` → Seitenüberschrift

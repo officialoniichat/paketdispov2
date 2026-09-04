@@ -1,5 +1,5 @@
 /**
- * Experiment DA.M.B — Mitarbeiter-Matrix (unteres Fenster).
+ * DA.M.B — Mitarbeiter-Matrix (unteres Fenster).
  *
  * Eine Zeile je Mitarbeiter: Name sticky links (farbiger Schicht-Streifen =
  * Pausen-Schieber, der beim Ziehen als Farbband über die Zelle wächst; „!"-

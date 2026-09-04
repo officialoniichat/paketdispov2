@@ -5,7 +5,7 @@
  * (Probleme, Überbuchung, Topf, unvollständige Lieferungen, Überlast,
  * Schichtende). Genutzt vom Tagescockpit UND vom Hexagon-Ausklapper der
  * Sidebar (SchnellaktionenFlyout) — die Fachsignale werden nur EINMAL
- * abgeleitet, nie doppelt. Jede Aktion springt ins Experiment DA.M.B: das
+ * abgeleitet, nie doppelt. Jede Aktion springt ins DA.M.B: das
  * betroffene Fenster geht in Vollbild, die betroffenen Fälle/Zeilen werden
  * 3 s markiert und ins Bild gescrollt (Router-State, s. experiment/fokus.ts).
  * Abgehakt wird AUSSCHLIESSLICH über den Haken — nie durch den Aktions-Klick.
@@ -112,7 +112,7 @@ export function useSchnellaktionen(): DecisionItem[] {
   const navigate = useNavigate();
   const { capacity, pool } = cockpit;
 
-  // Sprung einer Schnellaktion: Experiment DA.M.B öffnen, Fenster in Vollbild,
+  // Sprung einer Schnellaktion: DA.M.B öffnen, Fenster in Vollbild,
   // betroffene Fälle/Zeilen 3 s markieren (ExperimentPage verbraucht den State).
   const oeffneFokus = (fokus: SchnellaktionFokus) => (): void => {
     void navigate('/experiment', { state: { fokus } });

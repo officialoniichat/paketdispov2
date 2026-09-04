@@ -9,7 +9,7 @@
  * + note. C5: „Weiterleiten an …" + Weitergeleitet lane grouped by recipient.
  *
  * Ohne eigene Überschrift (Platz für die Lanes); die Filterleiste sitzt hinter
- * einem Ausklapp-Button. Die Komponente ist einbettbar (Experiment DA.M.B):
+ * einem Ausklapp-Button. Die Komponente ist einbettbar (DA.M.B):
  * `embedded` + eigener `viewStateKey` + generische `dnd`-Hooks — Karten werden
  * als GANZES gezogen (voller Geist, nicht nur die Griff-Punkte).
  *
@@ -84,7 +84,7 @@ export interface AblagenCardDragInfo {
 }
 
 /**
- * Generische DnD-Hooks des Einbetters (Experiment DA.M.B): Karten ziehen,
+ * Generische DnD-Hooks des Einbetters (DA.M.B): Karten ziehen,
  * Lanes als Ziele markieren/bedienen, optionales Overlay (Entziehen-Zone).
  * Ohne `dnd` (Original-Reiter) sind die Karten nicht ziehbar.
  */
@@ -98,12 +98,12 @@ export interface AblagenDnd {
 }
 
 export interface AblagenBoardProps {
-  /** Experiment DA.M.B: füllt den Pane (100 %). */
+  /** DA.M.B: füllt den Pane (100 %). */
   embedded?: boolean;
   /** Saved-View-Key; eingebettete Instanzen isolieren sich vom Basis-Tab. */
   viewStateKey?: string;
   dnd?: AblagenDnd;
-  /** Schnellaktion-Fokus (Experiment): diese Belege 3 s markieren + Lane aufklappen. */
+  /** Schnellaktion-Fokus (DA.M.B): diese Belege 3 s markieren + Lane aufklappen. */
   fokusCaseIds?: ReadonlySet<string> | null;
 }
 
@@ -285,7 +285,7 @@ export function AblagenBoard({
     unflagAttention,
   };
 
-  // Karten sind nur über die dnd-Hooks des Einbetters (Experiment) ziehbar.
+  // Karten sind nur über die dnd-Hooks des Einbetters (DA.M.B) ziehbar.
   const cardDraggable = (card: LaneCard): boolean => (dnd ? dnd.cardDraggable(card) : false);
   const handleCardDragStart = (info: AblagenCardDragInfo, e: ReactDragEvent): void => {
     dnd?.onCardDragStart(info, e);
